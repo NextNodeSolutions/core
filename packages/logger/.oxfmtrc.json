@@ -10,7 +10,6 @@
 	"singleQuote": true,
 	"jsxSingleQuote": false,
 	"bracketSameLine": false,
-	"experimentalTailwindcss": {},
 	"experimentalSortImports": {
 		"groups": [
 			["side-effect"],
