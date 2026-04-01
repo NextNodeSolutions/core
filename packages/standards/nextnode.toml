@@ -1,0 +1,7 @@
+[project]
+name = "standards"
+type = "package"
+
+[package]
+access = "public"
+canary_on_label = true

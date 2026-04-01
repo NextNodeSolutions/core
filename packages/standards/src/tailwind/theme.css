@@ -1,0 +1,13 @@
+/*
+ * NextNode Tailwind CSS v4 Theme
+ * Brand-agnostic defaults for all NextNode projects
+ *
+ * Usage in consuming project's CSS:
+ *
+ *   @import "tailwindcss";
+ *   @import "@nextnode-solutions/standards/tailwind";
+ */
+
+@theme {
+	--breakpoint-xs: 30rem;
+}

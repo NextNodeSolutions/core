@@ -1,0 +1,33 @@
+{
+	"compilerOptions": {
+		// Target & Module Configuration
+		"target": "ES2023",
+		"lib": ["dom", "dom.iterable", "esnext"],
+		"module": "esnext",
+		"moduleResolution": "bundler",
+
+		// JavaScript & JSON Support
+		"allowJs": true,
+		"resolveJsonModule": true,
+		"skipLibCheck": true,
+
+		// Type Safety
+		"strict": true,
+		"noUncheckedIndexedAccess": true,
+		"forceConsistentCasingInFileNames": true,
+		"noImplicitOverride": true,
+		"noImplicitReturns": true,
+		"noFallthroughCasesInSwitch": true,
+
+		// Module System
+		"esModuleInterop": true,
+		"isolatedModules": true,
+
+		// JSX Configuration
+		"jsx": "preserve",
+
+		// Build Configuration
+		"incremental": true,
+		"noEmit": true
+	}
+}
