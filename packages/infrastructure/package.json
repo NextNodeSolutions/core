@@ -1,0 +1,55 @@
+{
+  "name": "@nextnode-solutions/infrastructure",
+  "version": "0.0.0-development",
+  "description": "NextNode infrastructure CLI — deploy to VPS, Cloudflare Pages, or serverless targets",
+  "keywords": [
+    "cli",
+    "deploy",
+    "infrastructure",
+    "nextnode"
+  ],
+  "homepage": "https://github.com/NextNodeSolutions/core#readme",
+  "license": "MIT",
+  "author": "NextNode Solutions",
+  "files": [
+    "dist"
+  ],
+  "bin": {
+    "infra": "./dist/index.js"
+  },
+  "repository": {
+    "directory": "packages/infrastructure",
+    "type": "git",
+    "url": "https://github.com/NextNodeSolutions/core.git"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "dev": "tsx src/index.ts",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "lint": "oxlint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@nextnode-solutions/standards": "workspace:*",
+    "oxfmt": "^0.28.0",
+    "oxlint": "^1.43.0",
+    "tsup": "^8.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "packageManager": "pnpm@10.11.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  }
+}
