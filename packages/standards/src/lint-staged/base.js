@@ -1,5 +1,8 @@
 export default {
 	'package.json': ['better-sort-package-json'],
-	'*': ['oxlint'],
-	'*.{js,mjs,cjs,jsx,ts,mts,cts,tsx}': ['oxfmt --write'],
+	'*.{js,mjs,cjs,jsx,ts,mts,cts,tsx,vue,svelte,astro}': [
+		'oxlint',
+		'oxfmt --write',
+	],
+	'*.json': ['oxfmt --write'],
 }
