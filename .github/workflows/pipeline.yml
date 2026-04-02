@@ -1,0 +1,71 @@
+name: NextNode Pipeline
+
+on:
+  workflow_call:
+    inputs:
+      action:
+        type: string
+        default: "ci"
+        description: "Pipeline action: ci, deploy, destroy, rollback"
+      environment:
+        type: string
+        default: "development"
+        description: "Target environment: development or production"
+      config_file:
+        type: string
+        default: "nextnode.toml"
+        description: "Path to nextnode.toml in the calling repo"
+      force:
+        type: boolean
+        default: false
+      pr_number:
+        type: string
+        default: ""
+    secrets:
+      inherit
+
+permissions:
+  contents: read
+  packages: write
+  pull-requests: write
+  deployments: write
+
+jobs:
+  pipeline:
+    name: Pipeline
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout caller repo
+        uses: actions/checkout@v4
+
+      - name: Checkout infrastructure
+        uses: actions/checkout@v4
+        with:
+          repository: NextNodeSolutions/core
+          path: .infra
+          sparse-checkout: packages/infrastructure
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install infrastructure deps
+        run: pnpm install --frozen-lockfile
+        working-directory: .infra/packages/infrastructure
+
+      - name: Run pipeline
+        run: pnpm exec tsx src/index.ts
+        working-directory: .infra/packages/infrastructure
+        env:
+          PIPELINE_ACTION: ${{ inputs.action }}
+          PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
+          PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
+          PIPELINE_FORCE: ${{ inputs.force }}
+          PIPELINE_PR_NUMBER: ${{ inputs.pr_number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
