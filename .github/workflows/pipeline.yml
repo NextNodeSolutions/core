@@ -21,8 +21,6 @@ on:
       pr_number:
         type: string
         default: ""
-    secrets:
-      inherit
 
 permissions:
   contents: read
