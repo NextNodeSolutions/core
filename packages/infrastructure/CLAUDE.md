@@ -88,11 +88,23 @@ All behavior is driven by `nextnode.toml` in the calling project.
 The default values come from `nextnode.default.toml` at the core repo root.
 This is the same config system as the previous infra — it works well.
 
-## What We Keep From the Old Infra
+## Porting Rules — NO Blind Copy
 
-- `nextnode.toml` config system — excellent, no changes needed
-- `ENV_TABLE` two-phase env resolution — clean design
-- Service strategy pattern — extensible
+This is a rewrite, not a migration. Even for concepts we keep, every file must be evaluated before porting:
+
+- **Read the old code** and understand what it does
+- **Decide if the design is sound** — the old infra has vicious bugs born from implicit assumptions
+- **Rewrite from the spec**, not from the implementation — use the old code as reference, not as source
+- **If a pattern caused bugs** (see `docs/audit-merged.md` bug timeline), redesign it entirely
+- **Never copy error handling patterns** from the old code — they are the #1 source of production issues
+
+The old codebase is at `/Users/walid-mos/Development/nextnode/infrastructure/`.
+
+## What We Keep (Concepts, Not Code)
+
+- `nextnode.toml` config system — excellent concept, rewrite the parser
+- `ENV_TABLE` two-phase env resolution — clean design, rewrite
+- Service strategy pattern — extensible concept
 - Terraform for VPS provisioning — right tool
 - Tailscale mesh networking — no public SSH
 - R2 for Caddy cert storage — survives VPS destruction

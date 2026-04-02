@@ -32,6 +32,9 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "smol-toml": "^1.6.1"
+  },
   "devDependencies": {
     "@nextnode-solutions/standards": "workspace:*",
     "oxfmt": "^0.28.0",
