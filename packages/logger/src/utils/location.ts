@@ -3,7 +3,7 @@
  * Extracts file, line, and function information from stack traces
  */
 
-import type { Environment, LocationInfo, ProductionLocationInfo } from "../types.js";
+import type { DevelopmentLocationInfo, Environment, ProductionLocationInfo } from "../types.js";
 
 // Constants for better performance and maintainability
 /**
@@ -112,7 +112,9 @@ const getCallerStackLine = (stack: string): string => {
 	return lines[1] ?? "";
 };
 
-export const parseLocation = (isProduction: boolean): LocationInfo | ProductionLocationInfo => {
+export const parseLocation = (
+	isProduction: boolean,
+): DevelopmentLocationInfo | ProductionLocationInfo => {
 	try {
 		const stack = new Error().stack ?? "";
 		const stackLine = getCallerStackLine(stack);

@@ -27,9 +27,6 @@ export interface ProductionLocationInfo {
 	readonly function: string;
 }
 
-// Backward compatibility alias
-export type LocationInfo = DevelopmentLocationInfo;
-
 // Log object with optional fields
 export interface LogObject {
 	readonly scope?: string;

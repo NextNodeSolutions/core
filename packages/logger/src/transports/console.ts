@@ -50,20 +50,17 @@ export class ConsoleTransport implements Transport {
 
 		// Production always uses JSON regardless of format setting
 		if (environment === "production" && format !== "json") {
-			// biome-ignore lint/suspicious/noConsole: Logger library must use console
 			console[method](formatAsJson(entry));
 			return;
 		}
 
 		// Explicit format override
 		if (format === "json") {
-			// biome-ignore lint/suspicious/noConsole: Logger library must use console
 			console[method](formatAsJson(entry));
 			return;
 		}
 
 		if (format === "node") {
-			// biome-ignore lint/suspicious/noConsole: Logger library must use console
 			console[method](formatForNode(entry));
 			return;
 		}
@@ -80,7 +77,6 @@ export class ConsoleTransport implements Transport {
 		}
 
 		// Node.js or unknown - use ANSI
-		// biome-ignore lint/suspicious/noConsole: Logger library must use console
 		console[method](formatForNode(entry));
 	}
 
@@ -91,16 +87,12 @@ export class ConsoleTransport implements Transport {
 		const { format, styles, objects } = formatForBrowser(entry);
 
 		if (objects.length > 0) {
-			// biome-ignore lint/suspicious/noConsole: Logger library must use console
 			console.groupCollapsed(format, ...styles);
 			for (const obj of objects) {
-				// biome-ignore lint/suspicious/noConsole: Logger library must use console
 				console.dir(obj, { depth: null });
 			}
-			// biome-ignore lint/suspicious/noConsole: Logger library must use console
 			console.groupEnd();
 		} else {
-			// biome-ignore lint/suspicious/noConsole: Logger library must use console
 			console[method](format, ...styles);
 		}
 	}
