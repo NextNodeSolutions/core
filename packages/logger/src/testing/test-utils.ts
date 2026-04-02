@@ -3,7 +3,14 @@
  * Provides spy logger and mock utilities for use in vitest/jest tests
  */
 
-import type { LogEntry, Logger, LogLevel, LogObject, SpyLogger } from "../types.js";
+import type {
+	ChildLoggerConfig,
+	LogEntry,
+	Logger,
+	LogLevel,
+	LogObject,
+	SpyLogger,
+} from "../types.js";
 import { generateRequestId } from "../utils/crypto.js";
 import { parseLocation } from "../utils/location.js";
 import { extractScope } from "../utils/scope.js";
@@ -35,19 +42,28 @@ import { getCurrentTimestamp } from "../utils/time.js";
  * })
  * ```
  */
-export const createSpyLogger = (): SpyLogger => {
-	const calls: LogEntry[] = [];
+export const createSpyLogger = (
+	sharedCalls?: LogEntry[],
+	parentScope?: string,
+	parentRequestId?: string,
+): SpyLogger => {
+	const calls = sharedCalls ?? [];
+	const instanceRequestId = parentRequestId ?? generateRequestId();
 
 	const createEntry = (level: LogLevel, message: string, object?: LogObject): LogEntry => {
-		const { scope, cleanObject } = extractScope(object);
+		const {
+			scope: perCallScope,
+			requestId: perCallRequestId,
+			cleanObject,
+		} = extractScope(object);
 
 		return {
 			level,
 			message,
 			timestamp: getCurrentTimestamp(),
 			location: parseLocation(false),
-			requestId: generateRequestId(),
-			scope,
+			requestId: perCallRequestId ?? instanceRequestId,
+			scope: perCallScope ?? parentScope,
 			object: cleanObject,
 		};
 	};
@@ -97,6 +113,14 @@ export const createSpyLogger = (): SpyLogger => {
 		clear(): void {
 			calls.length = 0;
 		},
+
+		child(config: ChildLoggerConfig): SpyLogger {
+			return createSpyLogger(
+				calls,
+				config.scope ?? parentScope,
+				config.requestId ?? instanceRequestId,
+			);
+		},
 	};
 };
 
@@ -117,6 +141,7 @@ export const createNoopLogger = (): Logger => ({
 	info: (): void => {},
 	warn: (): void => {},
 	error: (): void => {},
+	child: (): Logger => createNoopLogger(),
 });
 
 /**
@@ -137,6 +162,7 @@ export interface MockLogger extends Logger {
 	info: MockFn;
 	warn: MockFn;
 	error: MockFn;
+	child: (config: ChildLoggerConfig) => MockLogger;
 }
 
 // Helper to create a mock function that works without vitest/jest
@@ -184,6 +210,7 @@ export const createMockLogger = (): MockLogger => ({
 	info: createMockFn(),
 	warn: createMockFn(),
 	error: createMockFn(),
+	child: (): MockLogger => createMockLogger(),
 });
 
 // Re-export types for convenience

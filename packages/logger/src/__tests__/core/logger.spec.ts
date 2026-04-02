@@ -5,7 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createLogger, logger, NextNodeLogger } from "@/logger.js";
-import type { LoggerConfig } from "@/types.js";
+import type { LogEntry, LoggerConfig, Transport } from "@/types.js";
 
 import type { ConsoleMocks } from "../test-setup.js";
 import { createConsoleMocks, restoreConsoleMocks } from "../test-setup.js";
@@ -296,20 +296,84 @@ describe("NextNodeLogger", () => {
 	});
 
 	describe("location handling", () => {
-		it("should include location by default", () => {
-			const testLogger = new NextNodeLogger();
+		it("should include location by default in development", () => {
+			const entries: LogEntry[] = [];
+			const capture: Transport = {
+				log: (entry) => {
+					entries.push(entry);
+				},
+			};
+			const testLogger = new NextNodeLogger({
+				transports: [capture],
+				environment: "development",
+			});
+
 			testLogger.info("Test message");
 
-			expect(consoleMocks.log).toHaveBeenCalledOnce();
-			// Should contain location information
-			expect(consoleMocks.log).toHaveBeenCalledWith(expect.stringMatching(/\([^)]+\)/));
+			expect(entries).toHaveLength(1);
+			expect("file" in entries[0]!.location).toBe(true);
+			expect("line" in entries[0]!.location).toBe(true);
 		});
 
-		it("should disable location when configured", () => {
-			const testLogger = new NextNodeLogger({ includeLocation: false });
+		it("should disable location by default in production", () => {
+			const entries: LogEntry[] = [];
+			const capture: Transport = {
+				log: (entry) => {
+					entries.push(entry);
+				},
+			};
+			const testLogger = new NextNodeLogger({
+				transports: [capture],
+				environment: "production",
+			});
+
 			testLogger.info("Test message");
 
-			expect(consoleMocks.log).toHaveBeenCalledWith(expect.stringContaining("disabled"));
+			expect(entries).toHaveLength(1);
+			expect("file" in entries[0]!.location).toBe(false);
+			expect("line" in entries[0]!.location).toBe(false);
+			expect(entries[0]!.location.function).toBeDefined();
+		});
+
+		it("should force location parsing when includeLocation is true in production", () => {
+			const entries: LogEntry[] = [];
+			const capture: Transport = {
+				log: (entry) => {
+					entries.push(entry);
+				},
+			};
+			const testLogger = new NextNodeLogger({
+				transports: [capture],
+				environment: "production",
+				includeLocation: true,
+			});
+
+			testLogger.info("Test message");
+
+			expect(entries).toHaveLength(1);
+			expect("file" in entries[0]!.location).toBe(true);
+			expect("line" in entries[0]!.location).toBe(true);
+		});
+
+		it("should use production location format when disabled explicitly", () => {
+			const entries: LogEntry[] = [];
+			const capture: Transport = {
+				log: (entry) => {
+					entries.push(entry);
+				},
+			};
+			const testLogger = new NextNodeLogger({
+				transports: [capture],
+				environment: "development",
+				includeLocation: false,
+			});
+
+			testLogger.info("Test message");
+
+			expect(entries).toHaveLength(1);
+			expect("file" in entries[0]!.location).toBe(false);
+			expect("line" in entries[0]!.location).toBe(false);
+			expect(entries[0]!.location.function).toBeDefined();
 		});
 	});
 
@@ -355,25 +419,301 @@ describe("NextNodeLogger", () => {
 	});
 
 	describe("request ID generation", () => {
-		it("should include unique request IDs", () => {
-			const testLogger = new NextNodeLogger();
+		it("should use the same requestId for all logs on the same instance", () => {
+			const entries: LogEntry[] = [];
+			const capture: Transport = {
+				log: (entry) => {
+					entries.push(entry);
+				},
+			};
+			const testLogger = new NextNodeLogger({ transports: [capture] });
 
 			testLogger.info("First message");
 			testLogger.info("Second message");
 
-			expect(consoleMocks.log).toHaveBeenCalledTimes(2);
+			expect(entries).toHaveLength(2);
+			expect(entries[0]!.requestId).toMatch(/^req_[a-f0-9]{8}$/);
+			expect(entries[0]!.requestId).toBe(entries[1]!.requestId);
+		});
 
-			const firstMessage = consoleMocks.log.mock.calls[0]?.[0];
-			const secondMessage = consoleMocks.log.mock.calls[1]?.[0];
+		it("should use different requestIds for different logger instances", () => {
+			const entries: LogEntry[] = [];
+			const capture: Transport = {
+				log: (entry) => {
+					entries.push(entry);
+				},
+			};
+			const logger1 = new NextNodeLogger({ transports: [capture] });
+			const logger2 = new NextNodeLogger({ transports: [capture] });
 
-			// Both should have request IDs
-			expect(firstMessage).toMatch(/req_[a-f0-9]{8}/);
-			expect(secondMessage).toMatch(/req_[a-f0-9]{8}/);
+			logger1.info("from logger1");
+			logger2.info("from logger2");
 
-			// Request IDs should be different
-			const firstId = firstMessage.match(/req_[a-f0-9]{8}/)?.[0];
-			const secondId = secondMessage.match(/req_[a-f0-9]{8}/)?.[0];
-			expect(firstId).not.toBe(secondId);
+			expect(entries).toHaveLength(2);
+			expect(entries[0]!.requestId).not.toBe(entries[1]!.requestId);
+		});
+
+		it("should allow overriding requestId via config", () => {
+			const entries: LogEntry[] = [];
+			const capture: Transport = {
+				log: (entry) => {
+					entries.push(entry);
+				},
+			};
+			const testLogger = new NextNodeLogger({
+				transports: [capture],
+				requestId: "req_custom01",
+			});
+
+			testLogger.info("Test message");
+
+			expect(entries[0]!.requestId).toBe("req_custom01");
+		});
+
+		it("should allow overriding requestId per call via LogObject", () => {
+			const entries: LogEntry[] = [];
+			const capture: Transport = {
+				log: (entry) => {
+					entries.push(entry);
+				},
+			};
+			const testLogger = new NextNodeLogger({ transports: [capture] });
+
+			testLogger.info("with override", { requestId: "req_perCall1" });
+			testLogger.info("without override");
+
+			expect(entries[0]!.requestId).toBe("req_perCall1");
+			expect(entries[1]!.requestId).not.toBe("req_perCall1");
+			expect(entries[1]!.requestId).toMatch(/^req_[a-f0-9]{8}$/);
+		});
+	});
+	describe("child logger", () => {
+		it("should auto-attach scope to every log entry", () => {
+			const entries: LogEntry[] = [];
+			const capture: Transport = {
+				log: (entry) => {
+					entries.push(entry);
+				},
+			};
+			const parent = new NextNodeLogger({ transports: [capture] });
+			const child = parent.child({ scope: "Auth" });
+
+			child.info("user logged in");
+
+			expect(entries).toHaveLength(1);
+			expect(entries[0]!.scope).toBe("Auth");
+		});
+
+		it("should share transports with parent", () => {
+			const entries: LogEntry[] = [];
+			const capture: Transport = {
+				log: (entry) => {
+					entries.push(entry);
+				},
+			};
+			const parent = new NextNodeLogger({ transports: [capture] });
+			const child = parent.child({ scope: "DB" });
+
+			parent.info("from parent");
+			child.info("from child");
+
+			expect(entries).toHaveLength(2);
+			expect(entries[0]!.scope).toBeUndefined();
+			expect(entries[1]!.scope).toBe("DB");
+		});
+
+		it("should inherit parent requestId", () => {
+			const entries: LogEntry[] = [];
+			const capture: Transport = {
+				log: (entry) => {
+					entries.push(entry);
+				},
+			};
+			const parent = new NextNodeLogger({
+				transports: [capture],
+				requestId: "req_parent01",
+			});
+			const child = parent.child({ scope: "Auth" });
+
+			parent.info("parent msg");
+			child.info("child msg");
+
+			expect(entries[0]!.requestId).toBe("req_parent01");
+			expect(entries[1]!.requestId).toBe("req_parent01");
+		});
+
+		it("should allow overriding requestId in child", () => {
+			const entries: LogEntry[] = [];
+			const capture: Transport = {
+				log: (entry) => {
+					entries.push(entry);
+				},
+			};
+			const parent = new NextNodeLogger({
+				transports: [capture],
+				requestId: "req_parent01",
+			});
+			const child = parent.child({
+				scope: "Auth",
+				requestId: "req_child001",
+			});
+
+			child.info("child msg");
+
+			expect(entries[0]!.requestId).toBe("req_child001");
+		});
+
+		it("should allow overriding scope per call", () => {
+			const entries: LogEntry[] = [];
+			const capture: Transport = {
+				log: (entry) => {
+					entries.push(entry);
+				},
+			};
+			const parent = new NextNodeLogger({ transports: [capture] });
+			const child = parent.child({ scope: "Auth" });
+
+			child.info("overridden", { scope: "Custom" });
+
+			expect(entries[0]!.scope).toBe("Custom");
+		});
+
+		it("should allow overriding prefix in child", () => {
+			const entries: LogEntry[] = [];
+			const capture: Transport = {
+				log: (entry) => {
+					entries.push(entry);
+				},
+			};
+			const parent = new NextNodeLogger({
+				transports: [capture],
+				prefix: "[PARENT]",
+			});
+			const child = parent.child({
+				scope: "Auth",
+				prefix: "[CHILD]",
+			});
+
+			child.info("hello");
+
+			expect(entries[0]!.message).toBe("[CHILD] hello");
+		});
+
+		it("should allow overriding minLevel in child", () => {
+			const entries: LogEntry[] = [];
+			const capture: Transport = {
+				log: (entry) => {
+					entries.push(entry);
+				},
+			};
+			const parent = new NextNodeLogger({
+				transports: [capture],
+				minLevel: "debug",
+			});
+			const child = parent.child({
+				scope: "Verbose",
+				minLevel: "warn",
+			});
+
+			child.debug("should be filtered");
+			child.warn("should pass");
+
+			expect(entries).toHaveLength(1);
+			expect(entries[0]!.message).toBe("should pass");
+		});
+	});
+
+	describe("dispose", () => {
+		it("should call dispose on transports that implement it", async () => {
+			let disposed = false;
+			const transport: Transport = {
+				log: () => {},
+				dispose: () => {
+					disposed = true;
+				},
+			};
+			const testLogger = new NextNodeLogger({ transports: [transport] });
+
+			await testLogger.dispose();
+
+			expect(disposed).toBe(true);
+		});
+
+		it("should not fail when transports lack dispose", async () => {
+			const transport: Transport = {
+				log: () => {},
+			};
+			const testLogger = new NextNodeLogger({ transports: [transport] });
+
+			await expect(testLogger.dispose()).resolves.toBeUndefined();
+		});
+	});
+
+	describe("transport error handling", () => {
+		it("should deliver log to remaining transports when one throws", () => {
+			const entries: LogEntry[] = [];
+			const failingTransport: Transport = {
+				log: () => {
+					throw new Error("transport failure");
+				},
+			};
+			const workingTransport: Transport = {
+				log: (entry) => {
+					entries.push(entry);
+				},
+			};
+			const testLogger = new NextNodeLogger({
+				transports: [failingTransport, workingTransport],
+			});
+
+			testLogger.info("should reach second transport");
+
+			expect(entries).toHaveLength(1);
+			expect(entries[0]!.message).toBe("should reach second transport");
+		});
+
+		it("should log transport errors to console.error", () => {
+			const failingTransport: Transport = {
+				log: () => {
+					throw new Error("transport failure");
+				},
+			};
+			const testLogger = new NextNodeLogger({
+				transports: [failingTransport],
+			});
+
+			testLogger.info("test message");
+
+			expect(consoleMocks.error).toHaveBeenCalledWith(
+				expect.stringContaining("transport failure"),
+			);
+		});
+
+		it("should handle multiple transport failures without cascading", () => {
+			const entries: LogEntry[] = [];
+			const failing1: Transport = {
+				log: () => {
+					throw new Error("fail 1");
+				},
+			};
+			const failing2: Transport = {
+				log: () => {
+					throw new Error("fail 2");
+				},
+			};
+			const working: Transport = {
+				log: (entry) => {
+					entries.push(entry);
+				},
+			};
+			const testLogger = new NextNodeLogger({
+				transports: [failing1, failing2, working],
+			});
+
+			testLogger.info("still works");
+
+			expect(entries).toHaveLength(1);
+			expect(entries[0]!.message).toBe("still works");
 		});
 	});
 });

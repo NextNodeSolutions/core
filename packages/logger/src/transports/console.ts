@@ -6,10 +6,8 @@
 import { formatForBrowser } from "../formatters/console-browser.js";
 import { formatForNode } from "../formatters/console-node.js";
 import { formatAsJson } from "../formatters/json.js";
-import type { Environment, LogEntry, LogLevel } from "../types.js";
+import type { Environment, LogEntry, LogLevel, Transport } from "../types.js";
 import { detectRuntime } from "../utils/environment.js";
-
-import type { Transport, TransportConfig } from "./transport.js";
 
 // Console methods mapping for type safety
 const CONSOLE_METHODS: Record<LogLevel, keyof Pick<Console, "log" | "warn" | "error" | "debug">> = {
@@ -19,7 +17,7 @@ const CONSOLE_METHODS: Record<LogLevel, keyof Pick<Console, "log" | "warn" | "er
 	error: "error",
 } as const;
 
-export interface ConsoleTransportConfig extends TransportConfig {
+export interface ConsoleTransportConfig {
 	/**
 	 * Force a specific environment format.
 	 * If not specified, auto-detects based on NODE_ENV.

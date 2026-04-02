@@ -35,6 +35,7 @@ export interface LogObject {
 	readonly scope?: string;
 	readonly details?: unknown;
 	readonly status?: number;
+	readonly requestId?: string;
 	readonly [key: string]: unknown;
 }
 
@@ -53,16 +54,27 @@ export interface LogEntry {
 // Transport interface for pluggable log destinations
 export interface Transport {
 	log(entry: LogEntry): void | Promise<void>;
+	dispose?(): void | Promise<void>;
 }
 
 // Logger configuration with strict typing
 export interface LoggerConfig {
 	readonly prefix?: string;
+	readonly scope?: string;
 	readonly environment?: Environment;
 	readonly includeLocation?: boolean;
 	readonly minLevel?: LogLevel;
 	readonly silent?: boolean;
 	readonly transports?: Transport[];
+	readonly requestId?: string;
+}
+
+// Configuration for child loggers
+export interface ChildLoggerConfig {
+	readonly scope?: string;
+	readonly prefix?: string;
+	readonly minLevel?: LogLevel;
+	readonly requestId?: string;
 }
 
 // Logger interface with method signatures
@@ -71,6 +83,7 @@ export interface Logger {
 	info(message: string, object?: LogObject): void;
 	warn(message: string, object?: LogObject): void;
 	error(message: string, object?: LogObject): void;
+	child(config: ChildLoggerConfig): Logger;
 }
 
 // Spy logger interface for testing
@@ -81,6 +94,7 @@ export interface SpyLogger extends Logger {
 	wasCalledWith(message: string): boolean;
 	wasCalledWithLevel(level: LogLevel, message: string): boolean;
 	clear(): void;
+	child(config: ChildLoggerConfig): SpyLogger;
 }
 
 // Type guards for runtime type checking
