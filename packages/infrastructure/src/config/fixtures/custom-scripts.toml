@@ -1,0 +1,7 @@
+[project]
+name = "my-app"
+type = "app"
+
+[scripts]
+lint = "check"
+test = false
