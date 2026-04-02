@@ -38,6 +38,9 @@ importers:
 
   packages/infrastructure:
     dependencies:
+      '@nextnode-solutions/logger':
+        specifier: ^1.0.0
+        version: 1.0.0
       smol-toml:
         specifier: ^1.6.1
         version: 1.6.1
@@ -342,6 +345,10 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@nextnode-solutions/logger@1.0.0':
+    resolution: {integrity: sha512-McQXvFDyDZ3p0lq8HXxQjKdRFxwofLJPXN5E72GGIlK1EnenPo716g4xnnjBRMNbuS5IF6SglBBS/ez/V7pFrw==}
+    engines: {node: '>=20.0.0'}
 
   '@oxfmt/darwin-arm64@0.28.0':
     resolution: {integrity: sha512-jmUfF7cNJPw57bEK7sMIqrYRgn4LH428tSgtgLTCtjuGuu1ShREyrkeB7y8HtkXRfhBs4lVY+HMLhqElJvZ6ww==}
@@ -1964,6 +1971,8 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
+
+  '@nextnode-solutions/logger@1.0.0': {}
 
   '@oxfmt/darwin-arm64@0.28.0':
     optional: true

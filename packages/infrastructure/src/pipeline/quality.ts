@@ -1,6 +1,6 @@
 import { execSync } from "node:child_process";
 import type { ScriptsSection } from "../config/schema.js";
-import { logger } from "../lib/logger.js";
+import { logger } from "@nextnode-solutions/logger";
 
 interface QualityTask {
 	id: string;

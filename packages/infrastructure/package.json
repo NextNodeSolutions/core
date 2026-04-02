@@ -33,6 +33,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@nextnode-solutions/logger": "^1.0.0",
     "smol-toml": "^1.6.1"
   },
   "devDependencies": {
