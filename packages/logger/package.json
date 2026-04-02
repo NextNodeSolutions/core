@@ -23,13 +23,10 @@
   "files": [
     "CHANGELOG.md",
     "README.md",
-    "dist/**/*.d.ts",
-    "dist/**/*.js"
+    "dist"
   ],
   "scripts": {
-    "prebuild": "pnpm clean",
     "build": "tsup",
-    "clean": "rm -rf dist",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "lint": "oxlint",
