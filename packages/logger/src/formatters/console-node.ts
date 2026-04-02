@@ -7,7 +7,7 @@ import type { LogEntry, LogLevel } from "../types.js";
 import { safeStringify } from "../utils/serialization.js";
 import { formatTimeForDisplay } from "../utils/time.js";
 
-import { formatLocationForDisplay } from "./shared.js";
+import { LOG_LEVEL_ICONS, formatLocationForDisplay } from "./shared.js";
 
 const COLORS = {
 	reset: "\x1b[0m",
@@ -28,13 +28,6 @@ const LOG_LEVEL_COLORS: Record<LogLevel, string> = {
 	info: COLORS.blue,
 	warn: COLORS.yellow,
 	error: COLORS.red,
-} as const;
-
-const LOG_LEVEL_ICONS: Record<LogLevel, string> = {
-	debug: "🔍",
-	info: "🔵",
-	warn: "⚠️ ",
-	error: "🔴",
 } as const;
 
 const SCOPE_COLORS = [
@@ -137,12 +130,7 @@ export const formatForNode = (entry: LogEntry): string => {
 	return lines.join("\n");
 };
 
-// Export for testing
-export const __testing__ = {
-	getScopeColor,
-	formatObjectDetails,
-	resetScopeCache: (): void => {
-		scopeColorMap.clear();
-		scopeColorIndex = 0;
-	},
+export const resetScopeCache = (): void => {
+	scopeColorMap.clear();
+	scopeColorIndex = 0;
 };

@@ -3,8 +3,15 @@
  * Common formatting functions used by console formatters
  */
 
-import type { LogEntry } from "../types.js";
+import type { LogEntry, LogLevel } from "../types.js";
 import { isDevelopmentLocation } from "../types.js";
+
+export const LOG_LEVEL_ICONS: Record<LogLevel, string> = {
+	debug: "🔍",
+	info: "🔵",
+	warn: "⚠️",
+	error: "🔴",
+} as const;
 
 /**
  * Formats location info for console output.

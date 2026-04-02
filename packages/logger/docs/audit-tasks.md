@@ -50,25 +50,25 @@ Audit complet du 2 avril 2026. Toutes les taches a executer pour amener le packa
 - **Fix** : supprime automatiquement avec la suppression de `transport.ts` (tache A1). `ConsoleTransportConfig` et `HttpTransportConfig` deviennent des interfaces standalone.
 - **Fichiers** : `src/transports/console.ts`, `src/transports/http.ts`
 
-### [ ] A3 — supprimer LocationInfo alias
+### [x] A3 — supprimer LocationInfo alias
 
 - **Probleme** : `types.ts:31` — `type LocationInfo = DevelopmentLocationInfo` labelle "backward compat" pour un package v0.0.0-development. Aucun consumer a casser.
 - **Fix** : supprimer le type alias, supprimer le re-export depuis `logger.ts`, remplacer les usages par `DevelopmentLocationInfo`.
 - **Fichiers** : `src/types.ts`, `src/logger.ts`, `src/utils/location.ts`
 
-### [ ] A4 — supprimer les biome-ignore
+### [x] A4 — supprimer les biome-ignore
 
 - **Probleme** : 8 commentaires `// biome-ignore lint/suspicious/noConsole` dans `console.ts`. Le projet utilise oxlint (pas biome), et oxlint a `no-console: off` dans `.oxlintrc.json`. Code mort.
 - **Fix** : supprimer les 8 lignes.
 - **Fichiers** : `src/transports/console.ts`
 
-### [ ] A5 — nettoyer **testing** exports
+### [x] A5 — nettoyer **testing** exports
 
 - **Probleme** : `console-node.ts:141` et `console-browser.ts:142` exposent `__testing__` avec des helpers internes. Pollue le namespace du module.
 - **Fix** : supprimer `export const __testing__`. Exporter `resetScopeCache` directement (sans re-export depuis `logger.ts`). Mettre a jour les tests.
 - **Fichiers** : `src/formatters/console-node.ts`, `src/formatters/console-browser.ts`, `src/__tests__/core/formatters.spec.ts`
 
-### [ ] A8 — supprimer scope ?? undefined redondant
+### [x] A8 — supprimer scope ?? undefined redondant
 
 - **Probleme** : `scope.ts:26` — `scope ?? undefined` est redondant, le type est deja `string | undefined`.
 - **Fix** : remplacer par `scope`.
@@ -78,7 +78,7 @@ Audit complet du 2 avril 2026. Toutes les taches a executer pour amener le packa
 
 ## P3 — Deduplications
 
-### [ ] A6 — extraire LOG_LEVEL_ICONS en shared
+### [x] A6 — extraire LOG_LEVEL_ICONS en shared
 
 - **Probleme** : mapping identique `LOG_LEVEL_ICONS` dans `console-node.ts:33` et `console-browser.ts:39`.
 - **Fix** : deplacer dans `formatters/shared.ts`.

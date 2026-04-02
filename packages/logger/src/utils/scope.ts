@@ -28,8 +28,8 @@ export const extractScope = (
 	const hasOtherProperties = Object.keys(rest).length > 0;
 
 	return {
-		scope: scope ?? undefined,
-		requestId: requestId ?? undefined,
+		scope,
+		requestId,
 		cleanObject: hasOtherProperties ? rest : undefined,
 	};
 };

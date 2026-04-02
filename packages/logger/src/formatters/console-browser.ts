@@ -6,7 +6,7 @@
 import type { LogEntry, LogLevel } from "../types.js";
 import { formatTimeForDisplay } from "../utils/time.js";
 
-import { formatLocationForDisplay } from "./shared.js";
+import { LOG_LEVEL_ICONS, formatLocationForDisplay } from "./shared.js";
 
 // CSS styles for browser DevTools
 const STYLES = {
@@ -34,13 +34,6 @@ const LOG_LEVEL_STYLES: Record<LogLevel, string> = {
 	info: STYLES.info,
 	warn: STYLES.warn,
 	error: STYLES.error,
-} as const;
-
-const LOG_LEVEL_ICONS: Record<LogLevel, string> = {
-	debug: "🔍",
-	info: "🔵",
-	warn: "⚠️",
-	error: "🔴",
 } as const;
 
 const SCOPE_STYLE_KEYS = ["green", "magenta", "cyan", "yellow", "blue"] as const;
@@ -135,11 +128,7 @@ export const createBrowserLogArgs = (entry: LogEntry): unknown[] => {
 	return [format, ...styles, ...objects];
 };
 
-// Export for testing
-export const __testing__ = {
-	getScopeStyle,
-	resetScopeCache: (): void => {
-		scopeStyleMap.clear();
-		scopeStyleIndex = 0;
-	},
+export const resetScopeCache = (): void => {
+	scopeStyleMap.clear();
+	scopeStyleIndex = 0;
 };

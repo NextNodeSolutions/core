@@ -197,7 +197,6 @@ export type {
 	ChildLoggerConfig,
 	DevelopmentLocationInfo,
 	Environment,
-	LocationInfo,
 	LogEntry,
 	Logger,
 	LoggerConfig,

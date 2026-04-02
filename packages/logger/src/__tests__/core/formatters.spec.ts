@@ -4,8 +4,14 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { __testing__ as browserTestUtils, formatForBrowser } from "@/formatters/console-browser.js";
-import { formatForNode, __testing__ as nodeTestUtils } from "@/formatters/console-node.js";
+import {
+	formatForBrowser,
+	resetScopeCache as resetBrowserScopeCache,
+} from "@/formatters/console-browser.js";
+import {
+	formatForNode,
+	resetScopeCache as resetNodeScopeCache,
+} from "@/formatters/console-node.js";
 import { formatAsJson, formatAsJsonPretty } from "@/formatters/json.js";
 import type { LogEntry } from "@/types.js";
 
@@ -19,7 +25,7 @@ describe("formatForNode", () => {
 		vi.setSystemTime(mockDate);
 
 		// Reset scope color cache
-		nodeTestUtils.resetScopeCache();
+		resetNodeScopeCache();
 
 		baseEntry = {
 			level: "info",
@@ -117,7 +123,7 @@ describe("formatForBrowser", () => {
 		mockDate = new Date("2024-08-21T10:30:15.123Z");
 		vi.setSystemTime(mockDate);
 
-		browserTestUtils.resetScopeCache();
+		resetBrowserScopeCache();
 
 		baseEntry = {
 			level: "info",
