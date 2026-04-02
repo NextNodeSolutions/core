@@ -10,8 +10,6 @@ export default defineConfig({
 	dts: true,
 	treeshake: true,
 	clean: true,
-	sourcemap: true,
 	target: "es2023",
 	splitting: true,
-	outDir: "dist",
 });
