@@ -13,17 +13,23 @@ export const extractScope = (
 	object?: LogObject,
 ): {
 	scope: string | undefined;
-	cleanObject: Omit<LogObject, "scope"> | undefined;
+	requestId: string | undefined;
+	cleanObject: Omit<LogObject, "scope" | "requestId"> | undefined;
 } => {
 	if (!object) {
-		return { scope: undefined, cleanObject: undefined };
+		return {
+			scope: undefined,
+			requestId: undefined,
+			cleanObject: undefined,
+		};
 	}
 
-	const { scope, ...rest } = object;
+	const { scope, requestId, ...rest } = object;
 	const hasOtherProperties = Object.keys(rest).length > 0;
 
 	return {
 		scope: scope ?? undefined,
+		requestId: requestId ?? undefined,
 		cleanObject: hasOtherProperties ? rest : undefined,
 	};
 };

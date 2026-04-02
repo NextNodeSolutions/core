@@ -5,6 +5,7 @@
 
 import { ConsoleTransport } from "./transports/console.js";
 import type {
+	ChildLoggerConfig,
 	Environment,
 	LogEntry,
 	Logger,
@@ -25,19 +26,25 @@ import { getCurrentTimestamp } from "./utils/time.js";
 export class NextNodeLogger implements Logger {
 	private readonly environment: Environment;
 	private readonly prefix?: string;
+	private readonly scope?: string;
 	private readonly includeLocation: boolean;
 	private readonly minLevel: LogLevel;
 	private readonly silent: boolean;
 	private readonly transports: Transport[];
+	private readonly requestId: string;
 
 	constructor(config: LoggerConfig = {}) {
 		this.environment = config.environment ?? detectEnvironment();
 		if (config.prefix !== undefined) {
 			this.prefix = config.prefix;
 		}
-		this.includeLocation = config.includeLocation ?? true;
+		if (config.scope !== undefined) {
+			this.scope = config.scope;
+		}
+		this.includeLocation = config.includeLocation ?? this.environment === "development";
 		this.minLevel = config.minLevel ?? "debug";
 		this.silent = config.silent ?? false;
+		this.requestId = config.requestId ?? generateRequestId();
 
 		// Use provided transports or default to console
 		this.transports = config.transports ?? [
@@ -51,7 +58,11 @@ export class NextNodeLogger implements Logger {
 	}
 
 	private createLogEntry(level: LogLevel, message: string, object?: LogObject): LogEntry {
-		const { scope, cleanObject } = extractScope(object);
+		const {
+			scope: perCallScope,
+			requestId: perCallRequestId,
+			cleanObject,
+		} = extractScope(object);
 
 		// Add prefix to message if configured
 		const finalMessage = this.prefix ? `${this.prefix} ${message}` : message;
@@ -60,11 +71,9 @@ export class NextNodeLogger implements Logger {
 			level,
 			message: finalMessage,
 			timestamp: getCurrentTimestamp(),
-			location: this.includeLocation
-				? parseLocation(this.environment === "production")
-				: { function: "disabled" },
-			requestId: generateRequestId(),
-			scope,
+			location: this.includeLocation ? parseLocation(false) : parseLocation(true),
+			requestId: perCallRequestId ?? this.requestId,
+			scope: perCallScope ?? this.scope,
 			object: cleanObject,
 		};
 	}
@@ -75,7 +84,13 @@ export class NextNodeLogger implements Logger {
 		const entry = this.createLogEntry(level, message, object);
 
 		for (const transport of this.transports) {
-			transport.log(entry);
+			try {
+				transport.log(entry);
+			} catch (error) {
+				console.error(
+					`[NextNodeLogger] Transport failed: ${error instanceof Error ? error.message : String(error)}`,
+				);
+			}
 		}
 	}
 
@@ -95,17 +110,30 @@ export class NextNodeLogger implements Logger {
 		this.log("error", message, object);
 	}
 
+	child(config: ChildLoggerConfig): NextNodeLogger {
+		const childPrefix = config.prefix ?? this.prefix;
+		const childScope = config.scope ?? this.scope;
+
+		return new NextNodeLogger({
+			environment: this.environment,
+			includeLocation: this.includeLocation,
+			minLevel: config.minLevel ?? this.minLevel,
+			silent: this.silent,
+			transports: this.transports,
+			requestId: config.requestId ?? this.requestId,
+			...(childPrefix !== undefined && { prefix: childPrefix }),
+			...(childScope !== undefined && { scope: childScope }),
+		});
+	}
+
 	/**
 	 * Disposes all transports that support disposal.
 	 * Call this when shutting down to flush any buffered logs.
 	 */
 	async dispose(): Promise<void> {
 		const disposals = this.transports
-			.filter(
-				(t): t is Transport & { dispose(): Promise<void> } =>
-					"dispose" in t && typeof t.dispose === "function",
-			)
-			.map((t) => t.dispose());
+			.filter((t) => t.dispose !== undefined)
+			.map((t) => t.dispose!());
 
 		await Promise.all(disposals);
 	}
@@ -166,6 +194,7 @@ export type { ConsoleTransportConfig } from "./transports/console.js";
 export { ConsoleTransport, createConsoleTransport } from "./transports/console.js";
 // Re-export types for convenience
 export type {
+	ChildLoggerConfig,
 	DevelopmentLocationInfo,
 	Environment,
 	LocationInfo,

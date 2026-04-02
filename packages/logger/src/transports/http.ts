@@ -3,11 +3,9 @@
  * Sends logs to a remote endpoint with batching and error handling
  */
 
-import type { LogEntry } from "../types.js";
+import type { LogEntry, Transport } from "../types.js";
 
-import type { Transport, TransportConfig } from "./transport.js";
-
-export interface HttpTransportConfig extends TransportConfig {
+export interface HttpTransportConfig {
 	/**
 	 * The URL endpoint to send logs to.
 	 */
