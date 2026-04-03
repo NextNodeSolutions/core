@@ -29,9 +29,13 @@ permissions:
   deployments: write
 
 jobs:
-  pipeline:
-    name: Pipeline
+  plan:
+    name: Plan
     runs-on: ubuntu-latest
+    outputs:
+      quality_matrix: ${{ steps.plan.outputs.quality_matrix }}
+      project_name: ${{ steps.plan.outputs.project_name }}
+      project_type: ${{ steps.plan.outputs.project_type }}
     steps:
       - name: Checkout caller repo
         uses: actions/checkout@v6
@@ -55,13 +59,41 @@ jobs:
         run: pnpm install --frozen-lockfile
         working-directory: .infra/packages/infrastructure
 
-      - name: Run pipeline
+      - name: Plan pipeline
+        id: plan
         run: pnpm exec tsx src/index.ts
         working-directory: .infra/packages/infrastructure
         env:
-          PIPELINE_ACTION: ${{ inputs.action }}
+          PIPELINE_ACTION: plan
           PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
           PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
           PIPELINE_FORCE: ${{ inputs.force }}
           PIPELINE_PR_NUMBER: ${{ inputs.pr_number }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  quality:
+    name: ${{ matrix.task.name }}
+    needs: plan
+    if: fromJSON(needs.plan.outputs.quality_matrix)[0].id != 'skip'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        task: ${{ fromJSON(needs.plan.outputs.quality_matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+
+      - name: Install project dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: ${{ matrix.task.name }}
+        run: ${{ matrix.task.cmd }}

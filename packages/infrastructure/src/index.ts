@@ -1,9 +1,10 @@
 import { dirname } from "node:path";
 import { logger } from "@nextnode-solutions/logger";
 import { loadConfig } from "./config/load.js";
-import { buildQualityMatrix, runQualityGate } from "./pipeline/quality.js";
+import { buildQualityMatrix } from "./pipeline/quality.js";
+import { writePlanOutputs } from "./pipeline/plan.js";
 
-const VALID_ACTIONS = new Set(["ci"]) as ReadonlySet<string>;
+const VALID_ACTIONS = new Set(["plan"]) as ReadonlySet<string>;
 
 function main(): void {
 	const configPath = process.env["PIPELINE_CONFIG_FILE"];
@@ -26,16 +27,13 @@ function main(): void {
 	logger.info(`Config: ${configPath}`);
 
 	const config = loadConfig(configPath);
+	const projectDir = dirname(configPath);
+
 	logger.info(`Project: ${config.project.name} (${config.project.type})`);
+	logger.info(`Project dir: ${projectDir}`);
 
 	const tasks = buildQualityMatrix(config.scripts);
-	const projectDir = dirname(configPath);
-	const results = runQualityGate(tasks, projectDir);
-	const failed = results.some((r) => !r.success);
-
-	if (failed) {
-		process.exit(1);
-	}
+	writePlanOutputs({ config, tasks });
 }
 
 main();
