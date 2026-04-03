@@ -34,24 +34,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout caller repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Checkout infrastructure
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: NextNodeSolutions/core
           path: .infra
           sparse-checkout: packages/infrastructure
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 24
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
+        uses: pnpm/action-setup@v5
 
       - name: Install infrastructure deps
         run: pnpm install --frozen-lockfile
