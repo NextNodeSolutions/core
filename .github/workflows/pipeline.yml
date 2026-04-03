@@ -54,8 +54,6 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 24
-          cache: pnpm
-          cache-dependency-path: .infra/packages/infrastructure/pnpm-lock.yaml
 
       - name: Install infrastructure deps
         run: pnpm install --frozen-lockfile
