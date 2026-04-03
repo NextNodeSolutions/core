@@ -73,14 +73,8 @@ export function parseConfig(raw: RawConfig): ParseConfigResult {
 		}
 	}
 
-	if (errors.length > 0) {
+	if (errors.length > 0 || typeof name !== "string" || !isValidProjectType(type)) {
 		return { ok: false, errors };
-	}
-
-	// All guards passed — narrow safely via type guards
-	if (typeof name !== "string" || !isValidProjectType(type)) {
-		// Unreachable — errors would have been pushed above
-		return { ok: false, errors: ["Internal validation error"] };
 	}
 
 	const scriptValues = scripts ?? {};
