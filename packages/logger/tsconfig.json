@@ -2,9 +2,8 @@
 	"extends": "@nextnode-solutions/standards/typescript/library",
 	"compilerOptions": {
 		"lib": ["ES2023", "DOM", "WebWorker"],
-		"baseUrl": ".",
 		"paths": {
-			"@/*": ["src/*"]
+			"@/*": ["./src/*"]
 		},
 		"types": ["node", "vitest/globals"]
 	},
