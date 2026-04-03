@@ -45,7 +45,9 @@ jobs:
         with:
           repository: NextNodeSolutions/core
           path: .infra
-          sparse-checkout: packages/infrastructure
+          sparse-checkout: |
+            packages/infrastructure
+            pnpm-lock.yaml
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v5
@@ -54,6 +56,8 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 24
+          cache: pnpm
+          cache-dependency-path: .infra/pnpm-lock.yaml
 
       - name: Install infrastructure deps
         run: pnpm install --frozen-lockfile
