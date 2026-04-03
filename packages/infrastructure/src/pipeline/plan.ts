@@ -3,7 +3,7 @@ import { logger } from "@nextnode-solutions/logger";
 import type { NextNodeConfig } from "../config/schema.js";
 import type { QualityTask } from "./quality.js";
 
-const SKIP_MATRIX: ReadonlyArray<{ id: string; name: string; cmd: string }> = [
+const SKIP_MATRIX: ReadonlyArray<QualityTask> = [
 	{ id: "skip", name: "No quality checks", cmd: "echo skipped" },
 ];
 

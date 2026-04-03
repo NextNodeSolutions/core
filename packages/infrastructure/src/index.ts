@@ -4,7 +4,7 @@ import { loadConfig } from "./config/load.js";
 import { buildQualityMatrix } from "./pipeline/quality.js";
 import { writePlanOutputs } from "./pipeline/plan.js";
 
-const VALID_ACTIONS = new Set(["plan"]) as ReadonlySet<string>;
+const VALID_ACTIONS: ReadonlySet<string> = new Set(["plan"]);
 
 function main(): void {
 	const configPath = process.env["PIPELINE_CONFIG_FILE"];
