@@ -1,0 +1,43 @@
+name: "Route: App Dev"
+
+on:
+  workflow_call:
+    inputs:
+      quality_matrix:
+        type: string
+        required: true
+        description: "JSON quality matrix from plan"
+      project_name:
+        type: string
+        required: true
+        description: "Project name from nextnode.toml"
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: ${{ matrix.task.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        task: ${{ fromJSON(inputs.quality_matrix) }}
+    steps:
+      - uses: NextNodeSolutions/core/.github/actions/setup@main
+
+      - name: ${{ matrix.task.name }}
+        run: ${{ matrix.task.cmd }}
+
+  deploy:
+    name: Deploy
+    needs: quality
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "══════════════════════════════════════════"
+          echo "  DEPLOY — development"
+          echo "══════════════════════════════════════════"
+          echo "Project:  ${{ inputs.project_name }}"
+          echo "Route:    app → deploy → development"
+          echo "══════════════════════════════════════════"
