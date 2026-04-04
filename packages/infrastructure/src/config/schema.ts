@@ -38,13 +38,6 @@ export const DEFAULT_ENVIRONMENT: EnvironmentSection = {
 	development: true,
 }
 
-export interface RawConfig {
-	project?: Record<string, unknown>
-	scripts?: Record<string, unknown>
-	package?: Record<string, unknown>
-	environment?: Record<string, unknown>
-}
-
 function isBoolean(value: unknown): value is boolean {
 	return typeof value === 'boolean'
 }
@@ -60,6 +53,10 @@ function isScriptValue(value: unknown): value is string | false {
 	return typeof value === 'string' || value === false
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 function resolveScript(
 	value: unknown,
 	fallback: string | false,
@@ -68,20 +65,15 @@ function resolveScript(
 	return fallback
 }
 
-/**
- * Validates and parses a raw config into a typed NextNodeConfig.
- * Returns a discriminated union — either the typed config or validation errors.
- */
-export function parseConfig(raw: RawConfig): ParseConfigResult {
+export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 	const errors: string[] = []
-	const project = raw.project
 
-	if (!project) {
+	const project = raw['project']
+	if (!isRecord(project)) {
 		return { ok: false, errors: ['[project] section is required'] }
 	}
 
 	const name = project['name']
-
 	if (!name || typeof name !== 'string') {
 		errors.push('project.name is required and must be a string')
 	}
@@ -98,8 +90,12 @@ export function parseConfig(raw: RawConfig): ParseConfigResult {
 		errors.push('project.filter must be a string or false')
 	}
 
-	const scripts = raw.scripts
-	if (scripts) {
+	const scripts = raw['scripts']
+	if (scripts !== undefined && !isRecord(scripts)) {
+		errors.push('[scripts] must be a table')
+	}
+
+	if (isRecord(scripts)) {
 		for (const key of ['lint', 'test', 'build'] as const) {
 			const value = scripts[key]
 			if (value !== undefined && !isScriptValue(value)) {
@@ -110,7 +106,14 @@ export function parseConfig(raw: RawConfig): ParseConfigResult {
 		}
 	}
 
-	const development = raw.environment?.['development']
+	const environment = raw['environment']
+	if (environment !== undefined && !isRecord(environment)) {
+		errors.push('[environment] must be a table')
+	}
+
+	const development = isRecord(environment)
+		? environment['development']
+		: undefined
 	if (development !== undefined && !isBoolean(development)) {
 		errors.push('environment.development must be a boolean')
 	}
@@ -119,11 +122,11 @@ export function parseConfig(raw: RawConfig): ParseConfigResult {
 		return { ok: false, errors }
 	}
 
-	const scriptValues = scripts ?? {}
-	const pkg = raw.package
+	const scriptValues = isRecord(scripts) ? scripts : {}
+	const pkg = raw['package']
 
 	let packageSection: PackageSection | false = false
-	if (pkg) {
+	if (isRecord(pkg)) {
 		const access = pkg['access']
 		if (!access || typeof access !== 'string') {
 			errors.push('package.access is required and must be a string')
