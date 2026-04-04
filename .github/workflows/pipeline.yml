@@ -16,6 +16,11 @@ permissions:
   contents: read
 
 jobs:
+  # ── Router ──────────────────────────────────────────────────────────
+  # Reads nextnode.toml via the infra CLI and outputs project_type +
+  # quality_matrix.  Exactly one route activates per run — the other
+  # two appear as a single skipped line in the UI.
+
   plan:
     name: Plan
     runs-on: ubuntu-latest
@@ -36,68 +41,31 @@ jobs:
         env:
           PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
 
-  quality:
-    name: ${{ matrix.task.name }}
+  # ── Routes ──────────────────────────────────────────────────────────
+
+  package:
     needs: plan
-    if: fromJSON(needs.plan.outputs.quality_matrix)[0].id != 'skip'
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        task: ${{ fromJSON(needs.plan.outputs.quality_matrix) }}
-    steps:
-      - uses: NextNodeSolutions/core/.github/actions/setup@main
-
-      - name: ${{ matrix.task.name }}
-        run: ${{ matrix.task.cmd }}
-
-  # ── Post-quality routes ─────────────────────────────────────────────
-  # Exactly one of these runs per pipeline invocation, based on
-  # project type (app vs package) and target environment.
-
-  publish:
-    name: Publish
-    needs: [plan, quality]
     if: needs.plan.outputs.project_type == 'package'
-    runs-on: ubuntu-latest
-    steps:
-      - run: |
-          echo "══════════════════════════════════════════"
-          echo "  PUBLISH — npm registry"
-          echo "══════════════════════════════════════════"
-          echo "Project:  ${{ needs.plan.outputs.project_name }}"
-          echo "Type:     ${{ needs.plan.outputs.project_type }}"
-          echo "Route:    package → publish"
-          echo "══════════════════════════════════════════"
+    uses: ./.github/workflows/route-package.yml
+    with:
+      quality_matrix: ${{ needs.plan.outputs.quality_matrix }}
+      project_name: ${{ needs.plan.outputs.project_name }}
+    secrets: inherit
 
-  deploy-dev:
-    name: Deploy (development)
-    needs: [plan, quality]
+  app-dev:
+    needs: plan
     if: needs.plan.outputs.project_type == 'app' && inputs.environment == 'development'
-    runs-on: ubuntu-latest
-    steps:
-      - run: |
-          echo "══════════════════════════════════════════"
-          echo "  DEPLOY — development"
-          echo "══════════════════════════════════════════"
-          echo "Project:  ${{ needs.plan.outputs.project_name }}"
-          echo "Type:     ${{ needs.plan.outputs.project_type }}"
-          echo "Env:      ${{ inputs.environment }}"
-          echo "Route:    app → deploy → development"
-          echo "══════════════════════════════════════════"
+    uses: ./.github/workflows/route-app-dev.yml
+    with:
+      quality_matrix: ${{ needs.plan.outputs.quality_matrix }}
+      project_name: ${{ needs.plan.outputs.project_name }}
+    secrets: inherit
 
-  deploy-prod:
-    name: Deploy (production)
-    needs: [plan, quality]
+  app-prod:
+    needs: plan
     if: needs.plan.outputs.project_type == 'app' && inputs.environment == 'production'
-    runs-on: ubuntu-latest
-    steps:
-      - run: |
-          echo "══════════════════════════════════════════"
-          echo "  DEPLOY — production"
-          echo "══════════════════════════════════════════"
-          echo "Project:  ${{ needs.plan.outputs.project_name }}"
-          echo "Type:     ${{ needs.plan.outputs.project_type }}"
-          echo "Env:      ${{ inputs.environment }}"
-          echo "Route:    app → deploy → production"
-          echo "══════════════════════════════════════════"
+    uses: ./.github/workflows/route-app-prod.yml
+    with:
+      quality_matrix: ${{ needs.plan.outputs.quality_matrix }}
+      project_name: ${{ needs.plan.outputs.project_name }}
+    secrets: inherit
