@@ -3,7 +3,7 @@
  * Provides clean detection between Node.js and browser environments
  */
 
-import type { RuntimeEnvironment } from "../types.js";
+import type { RuntimeEnvironment } from '../types.js'
 
 /**
  * Detect the current runtime environment
@@ -12,33 +12,33 @@ import type { RuntimeEnvironment } from "../types.js";
 export const detectRuntime = (): RuntimeEnvironment => {
 	// Check for Node.js - most reliable method
 	if (
-		typeof process === "object" &&
-		typeof process.versions === "object" &&
-		typeof process.versions.node === "string"
+		typeof process === 'object' &&
+		typeof process.versions === 'object' &&
+		typeof process.versions.node === 'string'
 	) {
-		return "node";
+		return 'node'
 	}
 
 	// Check for Web Worker environment
-	if (typeof importScripts === "function") {
-		return "webworker";
+	if (typeof importScripts === 'function') {
+		return 'webworker'
 	}
 
 	// Check for Browser environment
-	if (typeof window === "object" && typeof document === "object") {
-		return "browser";
+	if (typeof window === 'object' && typeof document === 'object') {
+		return 'browser'
 	}
 
-	return "unknown";
-};
+	return 'unknown'
+}
 
 /**
  * Check if Web Crypto API is available in current environment
  */
 export const hasCryptoSupport = (): boolean => {
 	try {
-		return !!(crypto && typeof crypto.randomUUID === "function");
+		return !!(crypto && typeof crypto.randomUUID === 'function')
 	} catch {
-		return false;
+		return false
 	}
-};
+}
