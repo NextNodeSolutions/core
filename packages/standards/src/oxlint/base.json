@@ -1,5 +1,6 @@
 {
 	"$schema": "https://raw.githubusercontent.com/oxc-project/oxc/main/npm/oxlint/configuration_schema.json",
+	"jsPlugins": ["./plugins/no-type-assertion.js"],
 	"categories": {
 		"correctness": "error",
 		"suspicious": "warn",
@@ -41,7 +42,8 @@
 		],
 		"react/exhaustive-deps": "warn",
 		"react/rules-of-hooks": "error",
-		"import/consistent-type-specifier-style": ["error", "prefer-top-level"]
+		"import/consistent-type-specifier-style": ["error", "prefer-top-level"],
+		"nextnode/no-type-assertion": "error"
 	},
 	"overrides": [
 		{
