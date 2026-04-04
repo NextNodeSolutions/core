@@ -1,103 +1,103 @@
 {
-	"name": "@nextnode-solutions/standards",
-	"version": "0.0.0-development",
-	"description": "Centralized development standards for NextNode projects: oxlint, oxfmt, TypeScript, Tailwind, Vitest, commitlint",
-	"keywords": [
-		"commitlint",
-		"formatting",
-		"linting",
-		"nextnode",
-		"oxfmt",
-		"oxlint",
-		"standards"
-	],
-	"homepage": "https://github.com/NextNodeSolutions/standards#readme",
-	"bugs": {
-		"url": "https://github.com/NextNodeSolutions/standards/issues"
-	},
-	"license": "MIT",
-	"author": "NextNode Solutions",
-	"repository": {
-		"type": "git",
-		"url": "https://github.com/NextNodeSolutions/standards.git"
-	},
-	"files": [
-		"README.md",
-		"src"
-	],
-	"type": "module",
-	"exports": {
-		"./oxlint": "./src/oxlint/base.json",
-		"./oxfmt": "./src/oxfmt/base.json",
-		"./typescript/library": "./src/typescript/tsconfig.library.json",
-		"./typescript/nextjs": "./src/typescript/tsconfig.nextjs.json",
-		"./typescript/astro": "./src/typescript/tsconfig.astro.json",
-		"./tailwind": "./src/tailwind/theme.css",
-		"./vitest/frontend": {
-			"types": "./src/vitest/vitest.frontend.d.ts",
-			"default": "./src/vitest/vitest.frontend.js"
-		},
-		"./vitest/backend": {
-			"types": "./src/vitest/vitest.backend.d.ts",
-			"default": "./src/vitest/vitest.backend.js"
-		},
-		"./commitlint": "./src/commitlint/base.js",
-		"./editorconfig": "./src/editorconfig/base.editorconfig",
-		"./npmrc": "./src/npmrc/base.npmrc",
-		"./lint-staged": "./src/lint-staged/base.js",
-		"./semantic-release": "./src/semantic-release/base.js"
-	},
-	"publishConfig": {
-		"access": "public",
-		"registry": "https://registry.npmjs.org/"
-	},
-	"scripts": {
-		"build": "echo 'No build step needed for config package'",
-		"format": "oxfmt --write .",
-		"format:check": "oxfmt --check .",
-		"lint": "oxlint",
-		"prepare": "husky",
-		"test": "echo 'Configuration package — no tests needed'"
-	},
-	"devDependencies": {
-		"@commitlint/cli": "^19.8.1",
-		"@commitlint/config-conventional": "^19.8.1",
-		"better-sort-package-json": "^1.1.1",
-		"husky": "^9.0.11",
-		"lint-staged": "^15.2.2",
-		"oxfmt": "^0.28.0",
-		"oxlint": "^1.43.0"
-	},
-	"peerDependencies": {
-		"@commitlint/cli": "^19.0.0",
-		"@commitlint/config-conventional": "^19.0.0",
-		"oxfmt": ">=0.7.0",
-		"oxlint": ">=0.16.0",
-		"tailwindcss": "^4.0.0",
-		"vitest": "^3.0.0 || ^4.0.0"
-	},
-	"peerDependenciesMeta": {
-		"@commitlint/cli": {
-			"optional": true
-		},
-		"@commitlint/config-conventional": {
-			"optional": true
-		},
-		"oxfmt": {
-			"optional": false
-		},
-		"oxlint": {
-			"optional": false
-		},
-		"tailwindcss": {
-			"optional": true
-		},
-		"vitest": {
-			"optional": true
-		}
-	},
-	"engines": {
-		"node": ">=24.0.0"
-	},
-	"packageManager": "pnpm@10.11.0"
+  "name": "@nextnode-solutions/standards",
+  "version": "0.0.0-development",
+  "description": "Centralized development standards for NextNode projects: oxlint, oxfmt, TypeScript, Tailwind, Vitest, commitlint",
+  "keywords": [
+    "commitlint",
+    "formatting",
+    "linting",
+    "nextnode",
+    "oxfmt",
+    "oxlint",
+    "standards"
+  ],
+  "homepage": "https://github.com/NextNodeSolutions/core#readme",
+  "bugs": {
+    "url": "https://github.com/NextNodeSolutions/core/issues"
+  },
+  "license": "MIT",
+  "author": "NextNode Solutions",
+  "files": [
+    "README.md",
+    "src"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/NextNodeSolutions/core.git"
+  },
+  "scripts": {
+    "build": "echo 'No build step needed for config package'",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "lint": "oxlint",
+    "prepare": "husky",
+    "test": "echo 'Configuration package — no tests needed'"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.8.1",
+    "@commitlint/config-conventional": "^19.8.1",
+    "better-sort-package-json": "^1.1.1",
+    "husky": "^9.0.11",
+    "lint-staged": "^15.2.2",
+    "oxfmt": "^0.28.0",
+    "oxlint": "^1.43.0"
+  },
+  "peerDependencies": {
+    "@commitlint/cli": "^19.0.0",
+    "@commitlint/config-conventional": "^19.0.0",
+    "oxfmt": ">=0.7.0",
+    "oxlint": ">=0.16.0",
+    "tailwindcss": "^4.0.0",
+    "vitest": "^3.0.0 || ^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@commitlint/cli": {
+      "optional": true
+    },
+    "@commitlint/config-conventional": {
+      "optional": true
+    },
+    "oxfmt": {
+      "optional": false
+    },
+    "oxlint": {
+      "optional": false
+    },
+    "tailwindcss": {
+      "optional": true
+    },
+    "vitest": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "packageManager": "pnpm@10.11.0",
+  "type": "module",
+  "exports": {
+    "./oxlint": "./src/oxlint/base.json",
+    "./oxfmt": "./src/oxfmt/base.json",
+    "./typescript/library": "./src/typescript/tsconfig.library.json",
+    "./typescript/nextjs": "./src/typescript/tsconfig.nextjs.json",
+    "./typescript/astro": "./src/typescript/tsconfig.astro.json",
+    "./tailwind": "./src/tailwind/theme.css",
+    "./vitest/frontend": {
+      "types": "./src/vitest/vitest.frontend.d.ts",
+      "default": "./src/vitest/vitest.frontend.js"
+    },
+    "./vitest/backend": {
+      "types": "./src/vitest/vitest.backend.d.ts",
+      "default": "./src/vitest/vitest.backend.js"
+    },
+    "./commitlint": "./src/commitlint/base.js",
+    "./editorconfig": "./src/editorconfig/base.editorconfig",
+    "./npmrc": "./src/npmrc/base.npmrc",
+    "./lint-staged": "./src/lint-staged/base.js",
+    "./semantic-release": "./src/semantic-release/base.js"
+  }
 }
