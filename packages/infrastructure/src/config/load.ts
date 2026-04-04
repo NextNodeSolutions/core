@@ -34,6 +34,11 @@ function readTOML(path: string): RawConfig {
 		raw.scripts = scripts
 	}
 
+	const pkg = parsed['package']
+	if (isRecord(pkg)) {
+		raw.package = pkg
+	}
+
 	const environment = parsed['environment']
 	if (isRecord(environment)) {
 		raw.environment = environment
