@@ -18,11 +18,12 @@ describe('loadConfig', () => {
 		expect(config.scripts.build).toBe('build')
 	})
 
-	it('loads a monorepo package config with filter', () => {
+	it('loads a monorepo package config with filter and package section', () => {
 		const config = loadConfig(fixture('monorepo-package.toml'))
 
 		expect(config.project.name).toBe('logger')
 		expect(config.project.filter).toBe('@nextnode-solutions/logger')
+		expect(config.package).toEqual({ access: 'public' })
 	})
 
 	it('defaults filter to false when not specified', () => {
