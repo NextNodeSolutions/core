@@ -1,4 +1,1 @@
-export default {
-	'package.json': ['better-sort-package-json'],
-	'*': ['oxlint', 'oxfmt --write'],
-}
+export { default } from './src/lint-staged/base.js'
