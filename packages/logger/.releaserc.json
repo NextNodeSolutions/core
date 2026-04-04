@@ -1,0 +1,4 @@
+{
+	"extends": "@nextnode-solutions/standards/semantic-release",
+	"tagFormat": "@nextnode-solutions/logger-v${version}"
+}
