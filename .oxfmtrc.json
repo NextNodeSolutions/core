@@ -13,7 +13,6 @@
 	"experimentalTailwindcss": {},
 	"experimentalSortImports": {
 		"groups": [
-			["side-effect"],
 			["builtin"],
 			["external", "type-external"],
 			["internal", "type-internal"],
