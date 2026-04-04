@@ -17,6 +17,7 @@ describe("parseConfig", () => {
 			expect(result.config.scripts.lint).toBe("lint");
 			expect(result.config.scripts.test).toBe("test");
 			expect(result.config.scripts.build).toBe("build");
+			expect(result.config.package).toBe(false);
 		});
 
 		it("parses a valid package config", () => {
@@ -184,6 +185,55 @@ describe("parseConfig", () => {
 			if (result.ok) return;
 
 			expect(result.errors).toContain("project.filter must be a string or false");
+		});
+	});
+
+	describe("package section", () => {
+		it("defaults package to false when not provided", () => {
+			const result = parseConfig({
+				project: { name: "my-lib", type: "package" },
+			});
+
+			expect(result.ok).toBe(true);
+			if (!result.ok) return;
+
+			expect(result.config.package).toBe(false);
+		});
+
+		it("parses package section with access", () => {
+			const result = parseConfig({
+				project: { name: "my-lib", type: "package" },
+				package: { access: "public" },
+			});
+
+			expect(result.ok).toBe(true);
+			if (!result.ok) return;
+
+			expect(result.config.package).toEqual({ access: "public" });
+		});
+
+		it("rejects package section without access", () => {
+			const result = parseConfig({
+				project: { name: "my-lib", type: "package" },
+				package: {},
+			});
+
+			expect(result.ok).toBe(false);
+			if (result.ok) return;
+
+			expect(result.errors).toContain("package.access is required and must be a string");
+		});
+
+		it("rejects non-string access", () => {
+			const result = parseConfig({
+				project: { name: "my-lib", type: "package" },
+				package: { access: 42 },
+			});
+
+			expect(result.ok).toBe(false);
+			if (result.ok) return;
+
+			expect(result.errors).toContain("package.access is required and must be a string");
 		});
 	});
 

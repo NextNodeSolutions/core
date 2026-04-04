@@ -28,6 +28,8 @@ jobs:
       quality_matrix: ${{ steps.plan.outputs.quality_matrix }}
       project_name: ${{ steps.plan.outputs.project_name }}
       project_type: ${{ steps.plan.outputs.project_type }}
+      project_filter: ${{ steps.plan.outputs.project_filter }}
+      publish: ${{ steps.plan.outputs.publish }}
     steps:
       - uses: NextNodeSolutions/core/.github/actions/setup@main
         with:
@@ -50,6 +52,8 @@ jobs:
     with:
       quality_matrix: ${{ needs.plan.outputs.quality_matrix }}
       project_name: ${{ needs.plan.outputs.project_name }}
+      project_filter: ${{ needs.plan.outputs.project_filter }}
+      publish: ${{ needs.plan.outputs.publish }}
     secrets: inherit
 
   app-dev:

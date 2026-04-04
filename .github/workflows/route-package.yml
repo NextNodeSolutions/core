@@ -11,6 +11,14 @@ on:
         type: string
         required: true
         description: "Project name from nextnode.toml"
+      project_filter:
+        type: string
+        required: true
+        description: "Turbo filter for the package (e.g. @nextnode-solutions/logger)"
+      publish:
+        type: string
+        required: true
+        description: "Whether to publish to npm (true/false), driven by [package] in nextnode.toml"
 
 permissions:
   contents: read
@@ -32,12 +40,69 @@ jobs:
   publish:
     name: Publish
     needs: quality
+    if: github.ref == 'refs/heads/main' && inputs.publish == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
-      - run: |
-          echo "══════════════════════════════════════════"
-          echo "  PUBLISH — npm registry"
-          echo "══════════════════════════════════════════"
-          echo "Project:  ${{ inputs.project_name }}"
-          echo "Route:    package → publish"
-          echo "══════════════════════════════════════════"
+      - uses: NextNodeSolutions/core/.github/actions/setup@main
+        with:
+          fetch-depth: "0"
+
+      - name: Build
+        run: pnpm turbo run build --filter=${{ inputs.project_filter }}
+
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.NEXTNODE_APP_ID }}
+          private-key: ${{ secrets.NEXTNODE_APP_PRIVATE_KEY }}
+          owner: NextNodeSolutions
+
+      - name: Publish
+        id: publish
+        working-directory: packages/${{ inputs.project_name }}
+        run: |
+          pnpm --package=semantic-release \
+               --package=semantic-release-monorepo \
+               --package=@semantic-release/github \
+               dlx semantic-release -e semantic-release-monorepo 2>&1 | tee /tmp/sr-output.txt
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          HUSKY: "0"
+          NPM_CONFIG_PROVENANCE: "true"
+
+      - name: Parse result
+        id: result
+        if: always()
+        run: |
+          if [ ! -f /tmp/sr-output.txt ]; then
+            echo "status=failure" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          VERSION=$(grep -oP 'Published release \K[0-9]+\.[0-9]+\.[0-9]+' /tmp/sr-output.txt || echo "")
+          if [ -n "$VERSION" ]; then
+            echo "status=published" >> "$GITHUB_OUTPUT"
+            echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          elif grep -qE 'no new version|There are no relevant changes' /tmp/sr-output.txt; then
+            echo "status=no-release" >> "$GITHUB_OUTPUT"
+          else
+            echo "status=${{ job.status }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          STATUS="${{ steps.result.outputs.status }}"
+          VERSION="${{ steps.result.outputs.version }}"
+          case "$STATUS" in
+            published)
+              echo "### :white_check_mark: Published ${{ inputs.project_filter }} v${VERSION}" >> "$GITHUB_STEP_SUMMARY" ;;
+            no-release)
+              echo "### :fast_forward: No new release for ${{ inputs.project_filter }}" >> "$GITHUB_STEP_SUMMARY" ;;
+            *)
+              echo "### :x: Publish failed for ${{ inputs.project_filter }}" >> "$GITHUB_STEP_SUMMARY" ;;
+          esac
