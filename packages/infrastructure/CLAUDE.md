@@ -55,45 +55,6 @@ Follow the global CLAUDE.md rules without exception:
 - Integration tests with real temp files for plan output writing
 - Use vitest with `@nextnode-solutions/standards/vitest/backend`
 
-## Rewrite Context
+## Origin
 
-This is a **rewrite** of the previous `NextNodeSolutions/infrastructure` repo.
-The old codebase is at `/Users/walid-mos/Development/nextnode/infrastructure/`.
-
-### Porting Rules
-
-- **Read the old code** and understand what it does
-- **Rewrite from the spec**, not from the implementation
-- **Never copy error handling patterns** from the old code
-- See `docs/audit-merged.md` at repo root for the full old-infra audit
-
-### Concepts to Port (when needed, not before)
-
-- Deploy target abstraction (VPS, Cloudflare Pages, serverless)
-- `ENV_TABLE` two-phase env resolution
-- Service strategy pattern (r2, supabase, redis)
-- Terraform for VPS provisioning
-- Tailscale mesh networking
-- SSH connection pooling via ControlMaster
-- Caddy JSON API (not Caddyfile text mutation)
-- Docker Compose direct generation (not AST transforms)
-
-### What We Drop
-
-- Blue-green deployment (unnecessary at our scale)
-- Sablier integration (not worth complexity at 7 EUR/VPS)
-- AST-based compose transforms
-- Checkpoint system (make steps idempotent instead)
-- Caddyfile text mutation
-
-### Key Secrets (for future deploy phases)
-
-| Secret                                           | Purpose              |
-| ------------------------------------------------ | -------------------- |
-| `TF_CLOUD_TOKEN`                                 | Terraform Cloud auth |
-| `TS_OAUTH_CLIENT_ID` / `TS_OAUTH_SECRET`         | Tailscale OAuth      |
-| `HETZNER_API_TOKEN`                              | VPS provider         |
-| `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` | DNS + R2 + Pages     |
-| `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`      | Cert storage         |
-| `VPS_SSH_KEY`                                    | SSH access to VPS    |
-| `NEXTNODE_APP_ID` / `NEXTNODE_APP_PRIVATE_KEY`   | GitHub App           |
+Rewrite of the old `NextNodeSolutions/infrastructure` repo (local: `/Users/walid-mos/Development/nextnode/infrastructure/`). See `docs/audit-merged.md` for the full old-infra audit. When porting features, rewrite from spec — never copy old error handling patterns.

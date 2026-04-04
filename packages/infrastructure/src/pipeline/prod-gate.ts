@@ -1,44 +1,32 @@
 import { logger } from '@nextnode-solutions/logger'
 
-interface CheckRun {
-	readonly name: string
+const DEV_WORKFLOW_PATH = '.github/workflows/deploy-dev.yml'
+
+interface WorkflowRun {
+	readonly path: string
 	readonly status: string
 	readonly conclusion: string | null
+	readonly html_url: string
 }
 
-interface CheckRunsResponse {
-	readonly check_runs: ReadonlyArray<CheckRun>
+interface WorkflowRunsResponse {
+	readonly total_count: number
+	readonly workflow_runs: ReadonlyArray<WorkflowRun>
 }
 
-interface GateResult {
-	readonly total: number
-	readonly passed: number
-	readonly failed: ReadonlyArray<CheckRun>
+export function findDevRun(
+	runs: ReadonlyArray<WorkflowRun>,
+): WorkflowRun | undefined {
+	return runs.find(run => run.path === DEV_WORKFLOW_PATH)
 }
 
-export function evaluateDevRuns(
-	checkRuns: ReadonlyArray<CheckRun>,
-): GateResult {
-	const devRuns = checkRuns.filter(run => run.name.includes('app-dev'))
-
-	const passed = devRuns.filter(
-		run => run.status === 'completed' && run.conclusion === 'success',
-	)
-
-	const failed = devRuns.filter(
-		run => run.status !== 'completed' || run.conclusion !== 'success',
-	)
-
-	return { total: devRuns.length, passed: passed.length, failed }
-}
-
-async function fetchCheckRuns(
+async function fetchWorkflowRuns(
 	repo: string,
 	sha: string,
 	token: string,
-): Promise<CheckRunsResponse> {
+): Promise<WorkflowRunsResponse> {
 	const response = await fetch(
-		`https://api.github.com/repos/${repo}/commits/${sha}/check-runs?per_page=100`,
+		`https://api.github.com/repos/${repo}/actions/runs?head_sha=${sha}&per_page=100`,
 		{
 			headers: {
 				Authorization: `Bearer ${token}`,
@@ -54,7 +42,7 @@ async function fetchCheckRuns(
 		)
 	}
 
-	return (await response.json()) as CheckRunsResponse
+	return (await response.json()) as WorkflowRunsResponse
 }
 
 export async function prodGate(): Promise<void> {
@@ -68,25 +56,20 @@ export async function prodGate(): Promise<void> {
 
 	logger.info(`Checking dev pipeline status for ${sha}...`)
 
-	const data = await fetchCheckRuns(repo, sha, token)
-	const result = evaluateDevRuns(data.check_runs)
+	const data = await fetchWorkflowRuns(repo, sha, token)
+	const devRun = findDevRun(data.workflow_runs)
 
-	if (result.total === 0) {
+	if (!devRun) {
 		throw new Error(
-			`No dev pipeline runs found for ${sha}. Deploy to development first.`,
+			`No dev pipeline run found for ${sha}. Deploy to development first.`,
 		)
 	}
 
-	if (result.passed !== result.total) {
-		const failDetails = result.failed
-			.map(run => `  ${run.name}: ${run.status}/${run.conclusion}`)
-			.join('\n')
+	if (devRun.status !== 'completed' || devRun.conclusion !== 'success') {
 		throw new Error(
-			`Dev pipeline has not fully passed (${result.passed}/${result.total} checks succeeded)\n${failDetails}`,
+			`Dev pipeline has not passed: ${devRun.status}/${devRun.conclusion} (${devRun.html_url})`,
 		)
 	}
 
-	logger.info(
-		`Prod gate passed: ${result.passed}/${result.total} dev checks succeeded for ${sha}`,
-	)
+	logger.info(`Prod gate passed: dev pipeline succeeded for ${sha}`)
 }
