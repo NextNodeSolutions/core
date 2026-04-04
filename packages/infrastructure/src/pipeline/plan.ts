@@ -19,6 +19,8 @@ export function writePlanOutputs({ config, tasks }: PlanInput): void {
 	writeOutput("quality_matrix", matrixJson);
 	writeOutput("project_name", config.project.name);
 	writeOutput("project_type", config.project.type);
+	writeOutput("project_filter", config.project.filter || "");
+	writeOutput("publish", config.package ? "true" : "false");
 
 	logger.info(`Quality matrix: ${matrixJson}`);
 	logger.info("Plan outputs written to GITHUB_OUTPUT");

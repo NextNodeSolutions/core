@@ -1,6 +1,7 @@
 export interface NextNodeConfig {
 	readonly project: ProjectSection;
 	readonly scripts: ScriptsSection;
+	readonly package: PackageSection | false;
 }
 
 const PROJECT_TYPES = ["app", "package"] as const;
@@ -18,6 +19,10 @@ export interface ScriptsSection {
 	readonly build: string | false;
 }
 
+export interface PackageSection {
+	readonly access: string;
+}
+
 export const DEFAULT_SCRIPTS: ScriptsSection = {
 	lint: "lint",
 	test: "test",
@@ -27,6 +32,7 @@ export const DEFAULT_SCRIPTS: ScriptsSection = {
 export interface RawConfig {
 	project?: Record<string, unknown>;
 	scripts?: Record<string, unknown>;
+	package?: Record<string, unknown>;
 }
 
 function isProjectType(value: unknown): value is ProjectType {
@@ -85,6 +91,21 @@ export function parseConfig(raw: RawConfig): ParseConfigResult {
 	}
 
 	const scriptValues = scripts ?? {};
+	const pkg = raw.package;
+
+	let packageSection: PackageSection | false = false;
+	if (pkg) {
+		const access = pkg["access"];
+		if (!access || typeof access !== "string") {
+			errors.push("package.access is required and must be a string");
+		} else {
+			packageSection = { access };
+		}
+	}
+
+	if (errors.length > 0) {
+		return { ok: false, errors };
+	}
 
 	return {
 		ok: true,
@@ -95,6 +116,7 @@ export function parseConfig(raw: RawConfig): ParseConfigResult {
 				test: resolveScript(scriptValues["test"], DEFAULT_SCRIPTS.test),
 				build: resolveScript(scriptValues["build"], DEFAULT_SCRIPTS.build),
 			},
+			package: packageSection,
 		},
 	};
 }
