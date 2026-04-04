@@ -44,7 +44,8 @@
 		"./commitlint": "./src/commitlint/base.js",
 		"./editorconfig": "./src/editorconfig/base.editorconfig",
 		"./npmrc": "./src/npmrc/base.npmrc",
-		"./lint-staged": "./src/lint-staged/base.js"
+		"./lint-staged": "./src/lint-staged/base.js",
+		"./semantic-release": "./src/semantic-release/base.js"
 	},
 	"publishConfig": {
 		"access": "public",

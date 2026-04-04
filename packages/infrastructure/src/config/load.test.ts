@@ -1,65 +1,69 @@
-import { join } from "node:path";
-import { describe, expect, it } from "vitest";
-import { loadConfig } from "./load.js";
+import { join } from 'node:path'
 
-const FIXTURES = join(import.meta.dirname, "fixtures");
-const fixture = (name: string): string => join(FIXTURES, name);
+import { describe, expect, it } from 'vitest'
 
-describe("loadConfig", () => {
-	it("loads a minimal valid config with defaults", () => {
-		const config = loadConfig(fixture("valid.toml"));
+import { loadConfig } from './load.js'
 
-		expect(config.project.name).toBe("my-app");
-		expect(config.project.type).toBe("app");
-		expect(config.scripts.lint).toBe("lint");
-		expect(config.scripts.test).toBe("test");
-		expect(config.scripts.build).toBe("build");
-	});
+const FIXTURES = join(import.meta.dirname, 'fixtures')
+const fixture = (name: string): string => join(FIXTURES, name)
 
-	it("loads a monorepo package config with filter", () => {
-		const config = loadConfig(fixture("monorepo-package.toml"));
+describe('loadConfig', () => {
+	it('loads a minimal valid config with defaults', () => {
+		const config = loadConfig(fixture('valid.toml'))
 
-		expect(config.project.name).toBe("logger");
-		expect(config.project.filter).toBe("@nextnode-solutions/logger");
-	});
+		expect(config.project.name).toBe('my-app')
+		expect(config.project.type).toBe('app')
+		expect(config.scripts.lint).toBe('lint')
+		expect(config.scripts.test).toBe('test')
+		expect(config.scripts.build).toBe('build')
+	})
 
-	it("defaults filter to false when not specified", () => {
-		const config = loadConfig(fixture("valid.toml"));
+	it('loads a monorepo package config with filter', () => {
+		const config = loadConfig(fixture('monorepo-package.toml'))
 
-		expect(config.project.filter).toBe(false);
-	});
+		expect(config.project.name).toBe('logger')
+		expect(config.project.filter).toBe('@nextnode-solutions/logger')
+	})
 
-	it("allows overriding scripts", () => {
-		const config = loadConfig(fixture("custom-scripts.toml"));
+	it('defaults filter to false when not specified', () => {
+		const config = loadConfig(fixture('valid.toml'))
 
-		expect(config.scripts.lint).toBe("check");
-		expect(config.scripts.test).toBe(false);
-		expect(config.scripts.build).toBe("build");
-	});
+		expect(config.project.filter).toBe(false)
+	})
 
-	it("throws with all validation errors listed in message", () => {
-		expect(() => loadConfig(fixture("empty.toml"))).toThrow(
-			"Invalid nextnode.toml:\n  - [project] section is required",
-		);
-	});
+	it('allows overriding scripts', () => {
+		const config = loadConfig(fixture('custom-scripts.toml'))
 
-	it("throws ENOENT error for missing file", () => {
-		expect(() => loadConfig("/nonexistent/nextnode.toml")).toThrow("ENOENT");
-	});
+		expect(config.scripts.lint).toBe('check')
+		expect(config.scripts.test).toBe(false)
+		expect(config.scripts.build).toBe('build')
+	})
 
-	it("throws on invalid TOML syntax", () => {
-		expect(() => loadConfig(fixture("invalid-syntax.toml"))).toThrow("Invalid TOML document");
-	});
+	it('throws with all validation errors listed in message', () => {
+		expect(() => loadConfig(fixture('empty.toml'))).toThrow(
+			'Invalid nextnode.toml:\n  - [project] section is required',
+		)
+	})
 
-	it("defaults environment.development to true when not in TOML", () => {
-		const config = loadConfig(fixture("valid.toml"));
+	it('throws ENOENT error for missing file', () => {
+		expect(() => loadConfig('/nonexistent/nextnode.toml')).toThrow('ENOENT')
+	})
 
-		expect(config.environment.development).toBe(true);
-	});
+	it('throws on invalid TOML syntax', () => {
+		expect(() => loadConfig(fixture('invalid-syntax.toml'))).toThrow(
+			'Invalid TOML document',
+		)
+	})
 
-	it("reads environment.development = false from TOML", () => {
-		const config = loadConfig(fixture("dev-disabled.toml"));
+	it('defaults environment.development to true when not in TOML', () => {
+		const config = loadConfig(fixture('valid.toml'))
 
-		expect(config.environment.development).toBe(false);
-	});
-});
+		expect(config.environment.development).toBe(true)
+	})
+
+	it('reads environment.development = false from TOML', () => {
+		const config = loadConfig(fixture('dev-disabled.toml'))
+
+		expect(config.environment.development).toBe(false)
+	})
+})

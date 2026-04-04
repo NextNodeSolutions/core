@@ -1,1 +1,1 @@
-export { default } from "@nextnode-solutions/standards/vitest/backend";
+export { default } from '@nextnode-solutions/standards/vitest/backend'
