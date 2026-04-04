@@ -52,6 +52,7 @@ export function publishResult(): void {
 		logger.error(`Semantic-release output not found: ${outputPath}`)
 		writeOutput('status', 'failure')
 		writeSummary(buildSummary({ status: 'failure' }, projectFilter))
+		process.exitCode = 1
 		return
 	}
 
@@ -66,4 +67,8 @@ export function publishResult(): void {
 	logger.info(
 		`Publish result: ${result.status}${result.version ? ` v${result.version}` : ''}`,
 	)
+
+	if (result.status === 'failure') {
+		process.exitCode = 1
+	}
 }
