@@ -1,6 +1,10 @@
 [project]
 name = "standards"
 type = "package"
+filter = "@nextnode-solutions/standards"
+
+[scripts]
+test = false
 
 [package]
 access = "public"
