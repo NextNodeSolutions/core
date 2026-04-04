@@ -79,12 +79,7 @@ jobs:
         id: publish
         working-directory: packages/${{ needs.plan.outputs.project_name }}
         shell: bash -eo pipefail {0}
-        run: |
-          pnpm --package=semantic-release \
-               --package=semantic-release-monorepo \
-               --package=@semantic-release/github \
-               --package=@semantic-release/git \
-               dlx semantic-release -e semantic-release-monorepo 2>&1 | tee /tmp/sr-output.txt
+        run: pnpm exec semantic-release 2>&1 | tee /tmp/sr-output.txt
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}

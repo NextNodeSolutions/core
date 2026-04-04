@@ -33,6 +33,11 @@
     "prepare": "husky",
     "test": "echo 'Configuration package — no tests needed'"
   },
+  "dependencies": {
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/github": "^12.0.6",
+    "semantic-release-monorepo": "^8.0.2"
+  },
   "devDependencies": {
     "@commitlint/cli": "^19.8.1",
     "@commitlint/config-conventional": "^19.8.1",
