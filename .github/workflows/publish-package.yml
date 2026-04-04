@@ -58,6 +58,7 @@ jobs:
     steps:
       - uses: NextNodeSolutions/core/.github/actions/setup@main
         with:
+          infra: "true"
           fetch-depth: "0"
 
       - name: Build
@@ -86,34 +87,10 @@ jobs:
           HUSKY: "0"
           NPM_CONFIG_PROVENANCE: "true"
 
-      - name: Parse result
-        id: result
+      - name: Parse result and summary
         if: always()
-        run: |
-          if [ ! -f /tmp/sr-output.txt ]; then
-            echo "status=failure" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          VERSION=$(grep -oP 'Published release \K[0-9]+\.[0-9]+\.[0-9]+' /tmp/sr-output.txt || echo "")
-          if [ -n "$VERSION" ]; then
-            echo "status=published" >> "$GITHUB_OUTPUT"
-            echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          elif grep -qE 'no new version|There are no relevant changes' /tmp/sr-output.txt; then
-            echo "status=no-release" >> "$GITHUB_OUTPUT"
-          else
-            echo "status=${{ job.status }}" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Summary
-        if: always()
-        run: |
-          STATUS="${{ steps.result.outputs.status }}"
-          VERSION="${{ steps.result.outputs.version }}"
-          case "$STATUS" in
-            published)
-              echo "### :white_check_mark: Published ${{ needs.plan.outputs.project_filter }} v${VERSION}" >> "$GITHUB_STEP_SUMMARY" ;;
-            no-release)
-              echo "### :fast_forward: No new release for ${{ needs.plan.outputs.project_filter }}" >> "$GITHUB_STEP_SUMMARY" ;;
-            *)
-              echo "### :x: Publish failed for ${{ needs.plan.outputs.project_filter }}" >> "$GITHUB_STEP_SUMMARY" ;;
-          esac
+        run: pnpm exec tsx src/index.ts publish-result
+        working-directory: .infra/packages/infrastructure
+        env:
+          SR_OUTPUT_FILE: /tmp/sr-output.txt
+          PROJECT_FILTER: ${{ needs.plan.outputs.project_filter }}
