@@ -50,4 +50,16 @@ describe("loadConfig", () => {
 	it("throws on invalid TOML syntax", () => {
 		expect(() => loadConfig(fixture("invalid-syntax.toml"))).toThrow("Invalid TOML document");
 	});
+
+	it("defaults environment.development to true when not in TOML", () => {
+		const config = loadConfig(fixture("valid.toml"));
+
+		expect(config.environment.development).toBe(true);
+	});
+
+	it("reads environment.development = false from TOML", () => {
+		const config = loadConfig(fixture("dev-disabled.toml"));
+
+		expect(config.environment.development).toBe(false);
+	});
 });

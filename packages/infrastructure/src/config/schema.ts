@@ -1,6 +1,7 @@
 export interface NextNodeConfig {
 	readonly project: ProjectSection;
 	readonly scripts: ScriptsSection;
+	readonly environment: EnvironmentSection;
 }
 
 const PROJECT_TYPES = ["app", "package"] as const;
@@ -18,19 +19,32 @@ export interface ScriptsSection {
 	readonly build: string | false;
 }
 
+export interface EnvironmentSection {
+	readonly development: boolean;
+}
+
 export const DEFAULT_SCRIPTS: ScriptsSection = {
 	lint: "lint",
 	test: "test",
 	build: "build",
 };
 
+export const DEFAULT_ENVIRONMENT: EnvironmentSection = {
+	development: true,
+};
+
 export interface RawConfig {
 	project?: Record<string, unknown>;
 	scripts?: Record<string, unknown>;
+	environment?: Record<string, unknown>;
 }
 
 function isProjectType(value: unknown): value is ProjectType {
 	return typeof value === "string" && PROJECT_TYPES.includes(value as ProjectType);
+}
+
+function isBoolean(value: unknown): value is boolean {
+	return typeof value === "boolean";
 }
 
 function isScriptValue(value: unknown): value is string | false {
@@ -80,6 +94,11 @@ export function parseConfig(raw: RawConfig): ParseConfigResult {
 		}
 	}
 
+	const development = raw.environment?.["development"];
+	if (development !== undefined && !isBoolean(development)) {
+		errors.push("environment.development must be a boolean");
+	}
+
 	if (errors.length > 0 || typeof name !== "string" || !isProjectType(type)) {
 		return { ok: false, errors };
 	}
@@ -94,6 +113,9 @@ export function parseConfig(raw: RawConfig): ParseConfigResult {
 				lint: resolveScript(scriptValues["lint"], DEFAULT_SCRIPTS.lint),
 				test: resolveScript(scriptValues["test"], DEFAULT_SCRIPTS.test),
 				build: resolveScript(scriptValues["build"], DEFAULT_SCRIPTS.build),
+			},
+			environment: {
+				development: isBoolean(development) ? development : DEFAULT_ENVIRONMENT.development,
 			},
 		},
 	};

@@ -28,6 +28,7 @@ jobs:
       quality_matrix: ${{ steps.plan.outputs.quality_matrix }}
       project_name: ${{ steps.plan.outputs.project_name }}
       project_type: ${{ steps.plan.outputs.project_type }}
+      development_enabled: ${{ steps.plan.outputs.development_enabled }}
     steps:
       - uses: NextNodeSolutions/core/.github/actions/setup@main
         with:
@@ -68,4 +69,5 @@ jobs:
     with:
       quality_matrix: ${{ needs.plan.outputs.quality_matrix }}
       project_name: ${{ needs.plan.outputs.project_name }}
+      development_enabled: ${{ needs.plan.outputs.development_enabled }}
     secrets: inherit

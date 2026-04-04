@@ -1,0 +1,6 @@
+[project]
+name = "prod-only-app"
+type = "app"
+
+[environment]
+development = false
