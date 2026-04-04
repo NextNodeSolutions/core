@@ -1,0 +1,76 @@
+# Shared setup for all NextNode pipeline jobs.
+#
+# Two modes controlled by inputs:
+#   - "infra" mode: checks out the core monorepo's infrastructure package so
+#     the job can run the pipeline TypeScript CLI (tsx src/index.ts).
+#     Used by orchestration jobs (plan, deploy).
+#   - "deps" mode: installs the caller project's own dependencies so the job
+#     can run project scripts (lint, test, build, publish).
+#     Used by project jobs (quality, publish).
+#
+# Both can be combined if a future job needs both.
+
+name: Setup NextNode
+description: Checkout, install pnpm/Node, and optionally install infra or project deps
+
+inputs:
+  infra:
+    description: >
+      Checkout the core infrastructure package into .infra/ and install its
+      deps. Needed by jobs that run the pipeline CLI (plan, deploy).
+    default: "false"
+  deps:
+    description: >
+      Install the caller project's dependencies. Needed by jobs that run
+      the project's own scripts (lint, test, build, publish).
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Checkout caller repo
+      uses: actions/checkout@v6
+
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v5
+
+    # When infra mode is on, the pnpm lockfile lives in .infra/ (checked out
+    # in a later step). We point cache-dependency-path there so Node's cache
+    # key matches the infra deps, not the caller's.
+    - name: Setup Node (infra cache)
+      if: inputs.infra == 'true'
+      uses: actions/setup-node@v6
+      with:
+        node-version: 24
+        cache: pnpm
+        cache-dependency-path: .infra/pnpm-lock.yaml
+
+    - name: Setup Node (project cache)
+      if: inputs.infra != 'true'
+      uses: actions/setup-node@v6
+      with:
+        node-version: 24
+        cache: pnpm
+
+    # Sparse-checkout only the infrastructure package and the root lockfile
+    # so the pipeline CLI can run without cloning the entire monorepo.
+    - name: Checkout infrastructure
+      if: inputs.infra == 'true'
+      uses: actions/checkout@v6
+      with:
+        repository: NextNodeSolutions/core
+        path: .infra
+        sparse-checkout: |
+          packages/infrastructure
+          pnpm-lock.yaml
+
+    - name: Install infrastructure deps
+      if: inputs.infra == 'true'
+      run: pnpm install --frozen-lockfile
+      shell: bash
+      working-directory: .infra/packages/infrastructure
+
+    - name: Install project deps
+      if: inputs.deps == 'true'
+      run: pnpm install --frozen-lockfile
+      shell: bash

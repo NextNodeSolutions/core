@@ -1,5 +1,6 @@
 [project]
 name = "my-app"
+type = "package"
 
 [scripts]
 lint = "check"

@@ -7,6 +7,10 @@ on:
         type: string
         default: "nextnode.toml"
         description: "Path to nextnode.toml in the calling repo"
+      environment:
+        type: string
+        default: "development"
+        description: "Target environment: development or production"
 
 permissions:
   contents: read
@@ -17,32 +21,13 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       quality_matrix: ${{ steps.plan.outputs.quality_matrix }}
+      project_name: ${{ steps.plan.outputs.project_name }}
+      project_type: ${{ steps.plan.outputs.project_type }}
     steps:
-      - name: Checkout caller repo
-        uses: actions/checkout@v6
-
-      - name: Checkout infrastructure
-        uses: actions/checkout@v6
+      - uses: NextNodeSolutions/core/.github/actions/setup@main
         with:
-          repository: NextNodeSolutions/core
-          path: .infra
-          sparse-checkout: |
-            packages/infrastructure
-            pnpm-lock.yaml
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v5
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: pnpm
-          cache-dependency-path: .infra/pnpm-lock.yaml
-
-      - name: Install infrastructure deps
-        run: pnpm install --frozen-lockfile
-        working-directory: .infra/packages/infrastructure
+          infra: "true"
+          deps: "false"
 
       - name: Plan pipeline
         id: plan
@@ -61,20 +46,58 @@ jobs:
       matrix:
         task: ${{ fromJSON(needs.plan.outputs.quality_matrix) }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v5
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: pnpm
-
-      - name: Install project dependencies
-        run: pnpm install --frozen-lockfile
+      - uses: NextNodeSolutions/core/.github/actions/setup@main
 
       - name: ${{ matrix.task.name }}
         run: ${{ matrix.task.cmd }}
+
+  # ── Post-quality routes ─────────────────────────────────────────────
+  # Exactly one of these runs per pipeline invocation, based on
+  # project type (app vs package) and target environment.
+
+  publish:
+    name: Publish
+    needs: [plan, quality]
+    if: needs.plan.outputs.project_type == 'package'
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "══════════════════════════════════════════"
+          echo "  PUBLISH — npm registry"
+          echo "══════════════════════════════════════════"
+          echo "Project:  ${{ needs.plan.outputs.project_name }}"
+          echo "Type:     ${{ needs.plan.outputs.project_type }}"
+          echo "Route:    package → publish"
+          echo "══════════════════════════════════════════"
+
+  deploy-dev:
+    name: Deploy (development)
+    needs: [plan, quality]
+    if: needs.plan.outputs.project_type == 'app' && inputs.environment == 'development'
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "══════════════════════════════════════════"
+          echo "  DEPLOY — development"
+          echo "══════════════════════════════════════════"
+          echo "Project:  ${{ needs.plan.outputs.project_name }}"
+          echo "Type:     ${{ needs.plan.outputs.project_type }}"
+          echo "Env:      ${{ inputs.environment }}"
+          echo "Route:    app → deploy → development"
+          echo "══════════════════════════════════════════"
+
+  deploy-prod:
+    name: Deploy (production)
+    needs: [plan, quality]
+    if: needs.plan.outputs.project_type == 'app' && inputs.environment == 'production'
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "══════════════════════════════════════════"
+          echo "  DEPLOY — production"
+          echo "══════════════════════════════════════════"
+          echo "Project:  ${{ needs.plan.outputs.project_name }}"
+          echo "Type:     ${{ needs.plan.outputs.project_type }}"
+          echo "Env:      ${{ inputs.environment }}"
+          echo "Route:    app → deploy → production"
+          echo "══════════════════════════════════════════"

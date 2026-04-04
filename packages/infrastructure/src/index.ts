@@ -16,8 +16,8 @@ function main(): void {
 	logger.info(`Project: ${config.project.name}`);
 	logger.info(`Project dir: ${dirname(configPath)}`);
 
-	const tasks = buildQualityMatrix(config.scripts);
-	writePlanOutputs(tasks);
+	const tasks = buildQualityMatrix(config.scripts, config.project);
+	writePlanOutputs({ config, tasks });
 }
 
 main();
