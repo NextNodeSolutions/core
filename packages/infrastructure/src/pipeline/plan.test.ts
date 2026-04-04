@@ -13,12 +13,14 @@ const APP_CONFIG: NextNodeConfig = {
 	project: { name: 'my-app', type: 'app', filter: false },
 	scripts: { lint: 'lint', test: 'test', build: 'build' },
 	package: false,
+	environment: { development: true },
 }
 
 const PACKAGE_CONFIG: NextNodeConfig = {
 	project: { name: 'my-lib', type: 'package', filter: false },
 	scripts: { lint: 'lint', test: 'test', build: 'build' },
 	package: false,
+	environment: { development: true },
 }
 
 const PUBLISHABLE_CONFIG: NextNodeConfig = {
@@ -29,6 +31,7 @@ const PUBLISHABLE_CONFIG: NextNodeConfig = {
 	},
 	scripts: { lint: 'lint', test: 'test', build: 'build' },
 	package: { access: 'public' },
+	environment: { development: true },
 }
 
 describe('writePlanOutputs', () => {
@@ -67,7 +70,7 @@ describe('writePlanOutputs', () => {
 			{ id: 'test', name: 'Test', cmd: 'pnpm test' },
 		])
 		expect(output).toBe(
-			`quality_matrix=${matrixJson}\nproject_name=my-app\nproject_type=app\nproject_filter=\npublish=false\n`,
+			`quality_matrix=${matrixJson}\nproject_name=my-app\nproject_type=app\nproject_filter=\npublish=false\ndevelopment_enabled=true\n`,
 		)
 	})
 
@@ -96,6 +99,18 @@ describe('writePlanOutputs', () => {
 		const output = readFileSync(outputFile, 'utf-8')
 		expect(output).toContain('project_filter=@nextnode-solutions/logger\n')
 		expect(output).toContain('publish=true\n')
+	})
+
+	it('writes development_enabled=false when development is disabled', () => {
+		const config: NextNodeConfig = {
+			...APP_CONFIG,
+			environment: { development: false },
+		}
+
+		writePlanOutputs({ config, tasks: [] })
+
+		const output = readFileSync(outputFile, 'utf-8')
+		expect(output).toContain('development_enabled=false\n')
 	})
 
 	it('throws when GITHUB_OUTPUT is not set', () => {

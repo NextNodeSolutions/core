@@ -262,6 +262,66 @@ describe('parseConfig', () => {
 		})
 	})
 
+	describe('environment', () => {
+		it('defaults development to true when environment section not provided', () => {
+			const result = parseConfig({
+				project: { name: 'my-app', type: 'app' },
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok) return
+
+			expect(result.config.environment.development).toBe(true)
+		})
+
+		it('accepts development set to true', () => {
+			const result = parseConfig({
+				project: { name: 'my-app', type: 'app' },
+				environment: { development: true },
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok) return
+
+			expect(result.config.environment.development).toBe(true)
+		})
+
+		it('accepts development set to false', () => {
+			const result = parseConfig({
+				project: { name: 'my-app', type: 'app' },
+				environment: { development: false },
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok) return
+
+			expect(result.config.environment.development).toBe(false)
+		})
+
+		it('rejects non-boolean development value', () => {
+			const result = parseConfig({
+				project: { name: 'my-app', type: 'app' },
+				environment: { development: 'yes' },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'environment.development must be a boolean',
+			)
+		})
+
+		it('ignores unknown environment keys without error', () => {
+			const result = parseConfig({
+				project: { name: 'my-app', type: 'app' },
+				environment: { development: true, unknown_key: 'whatever' },
+			})
+
+			expect(result.ok).toBe(true)
+		})
+	})
+
 	describe('edge cases', () => {
 		it('ignores unknown script keys without error', () => {
 			const result = parseConfig({

@@ -11,13 +11,60 @@ on:
         type: string
         required: true
         description: "Project name from nextnode.toml"
+      development_enabled:
+        type: string
+        required: true
+        description: "Whether dev environment is enabled (true/false from plan)"
 
 permissions:
   contents: read
+  checks: read
 
 jobs:
+  # ── Prod Gate (standard flow) ────────────────────────────────────────
+  # When dev is enabled, verify the dev pipeline already passed on this
+  # commit via the GitHub Check Runs API.  Skipped in direct-to-prod mode.
+
+  prod-gate:
+    name: Prod Gate
+    if: inputs.development_enabled == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify dev pipeline passed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          REPO="${{ github.repository }}"
+          SHA="${{ github.sha }}"
+
+          echo "Checking dev pipeline status for ${SHA}..."
+
+          DEV_RUNS=$(gh api "repos/${REPO}/commits/${SHA}/check-runs?per_page=100" \
+            --jq '[.check_runs[] | select(.name | contains("app-dev"))]')
+
+          TOTAL=$(echo "$DEV_RUNS" | jq 'length')
+          PASSED=$(echo "$DEV_RUNS" | jq '[.[] | select(.status == "completed" and .conclusion == "success")] | length')
+
+          if [ "$TOTAL" -eq 0 ]; then
+            echo "::error::No dev pipeline runs found for ${SHA}. Deploy to development first."
+            exit 1
+          fi
+
+          if [ "$PASSED" -ne "$TOTAL" ]; then
+            echo "::error::Dev pipeline has not fully passed (${PASSED}/${TOTAL} checks succeeded)"
+            echo "$DEV_RUNS" | jq -r '.[] | select(.status != "completed" or .conclusion != "success") | "  \(.name): \(.status)/\(.conclusion)"'
+            exit 1
+          fi
+
+          echo "Prod gate passed: ${PASSED}/${TOTAL} dev checks succeeded for ${SHA}"
+
+  # ── Quality (direct-to-prod) ─────────────────────────────────────────
+  # When dev is disabled, quality checks run inline before prod deploy.
+  # Skipped in standard flow (dev already ran them).
+
   quality:
     name: ${{ matrix.task.name }}
+    if: inputs.development_enabled != 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -29,9 +76,12 @@ jobs:
       - name: ${{ matrix.task.name }}
         run: ${{ matrix.task.cmd }}
 
+  # ── Deploy ───────────────────────────────────────────────────────────
+
   deploy:
     name: Deploy
-    needs: quality
+    needs: [prod-gate, quality]
+    if: always() && !failure() && !cancelled()
     runs-on: ubuntu-latest
     steps:
       - run: |
@@ -40,4 +90,5 @@ jobs:
           echo "══════════════════════════════════════════"
           echo "Project:  ${{ inputs.project_name }}"
           echo "Route:    app → deploy → production"
+          echo "Gate:     ${{ inputs.development_enabled == 'true' && 'prod-gate (dev verified)' || 'inline quality (direct-to-prod)' }}"
           echo "══════════════════════════════════════════"
