@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
     pipeline:
-        uses: NextNodeSolutions/infrastructure/.github/workflows/pipeline-package.yml@main
+        uses: NextNodeSolutions/core/.github/workflows/pipeline.yml@main
         permissions:
             contents: write
             issues: write
