@@ -1,8 +1,7 @@
-import { appendFileSync } from 'node:fs'
-
 import { logger } from '@nextnode-solutions/logger'
 
 import type { NextNodeConfig } from '../config/schema.js'
+import { writeOutput } from '../github/output.js'
 
 import type { QualityTask } from './quality.js'
 
@@ -28,14 +27,4 @@ export function writePlanOutputs({ config, tasks }: PlanInput): void {
 
 	logger.info(`Quality matrix: ${matrixJson}`)
 	logger.info('Plan outputs written to GITHUB_OUTPUT')
-}
-
-function writeOutput(key: string, value: string): void {
-	const outputFile = process.env['GITHUB_OUTPUT']
-	if (!outputFile) {
-		throw new Error(
-			'GITHUB_OUTPUT env var is not set — are you running in GitHub Actions?',
-		)
-	}
-	appendFileSync(outputFile, `${key}=${value}\n`)
 }
