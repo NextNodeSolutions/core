@@ -34,9 +34,18 @@ runs:
     - name: Setup pnpm
       uses: pnpm/action-setup@v5
 
-    # When infra mode is on, the pnpm lockfile lives in .infra/ (checked out
-    # in a later step). We point cache-dependency-path there so Node's cache
-    # key matches the infra deps, not the caller's.
+    # Sparse-checkout infra BEFORE setup-node so the lockfile exists for
+    # cache-dependency-path resolution.
+    - name: Checkout infrastructure
+      if: inputs.infra == 'true'
+      uses: actions/checkout@v6
+      with:
+        repository: NextNodeSolutions/core
+        path: .infra
+        sparse-checkout: |
+          packages/infrastructure
+          pnpm-lock.yaml
+
     - name: Setup Node (infra cache)
       if: inputs.infra == 'true'
       uses: actions/setup-node@v6
@@ -51,18 +60,6 @@ runs:
       with:
         node-version: 24
         cache: pnpm
-
-    # Sparse-checkout only the infrastructure package and the root lockfile
-    # so the pipeline CLI can run without cloning the entire monorepo.
-    - name: Checkout infrastructure
-      if: inputs.infra == 'true'
-      uses: actions/checkout@v6
-      with:
-        repository: NextNodeSolutions/core
-        path: .infra
-        sparse-checkout: |
-          packages/infrastructure
-          pnpm-lock.yaml
 
     - name: Install infrastructure deps
       if: inputs.infra == 'true'
