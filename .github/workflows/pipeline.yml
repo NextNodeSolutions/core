@@ -30,6 +30,7 @@ jobs:
       project_type: ${{ steps.plan.outputs.project_type }}
       project_filter: ${{ steps.plan.outputs.project_filter }}
       publish: ${{ steps.plan.outputs.publish }}
+      development_enabled: ${{ steps.plan.outputs.development_enabled }}
     steps:
       - uses: NextNodeSolutions/core/.github/actions/setup@main
         with:
@@ -72,4 +73,5 @@ jobs:
     with:
       quality_matrix: ${{ needs.plan.outputs.quality_matrix }}
       project_name: ${{ needs.plan.outputs.project_name }}
+      development_enabled: ${{ needs.plan.outputs.development_enabled }}
     secrets: inherit
