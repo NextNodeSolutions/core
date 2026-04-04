@@ -13,6 +13,7 @@ describe("parseConfig", () => {
 
 			expect(result.config.project.name).toBe("my-app");
 			expect(result.config.project.type).toBe("app");
+			expect(result.config.project.filter).toBe(false);
 			expect(result.config.scripts.lint).toBe("lint");
 			expect(result.config.scripts.test).toBe("test");
 			expect(result.config.scripts.build).toBe("build");
@@ -137,6 +138,52 @@ describe("parseConfig", () => {
 			if (result.ok) return;
 
 			expect(result.errors).toContain("project.name is required and must be a string");
+		});
+	});
+
+	describe("project.filter", () => {
+		it("defaults filter to false when not provided", () => {
+			const result = parseConfig({
+				project: { name: "my-app", type: "app" },
+			});
+
+			expect(result.ok).toBe(true);
+			if (!result.ok) return;
+
+			expect(result.config.project.filter).toBe(false);
+		});
+
+		it("accepts a string filter", () => {
+			const result = parseConfig({
+				project: { name: "logger", type: "package", filter: "@nextnode-solutions/logger" },
+			});
+
+			expect(result.ok).toBe(true);
+			if (!result.ok) return;
+
+			expect(result.config.project.filter).toBe("@nextnode-solutions/logger");
+		});
+
+		it("accepts false to explicitly disable filter", () => {
+			const result = parseConfig({
+				project: { name: "my-app", type: "app", filter: false },
+			});
+
+			expect(result.ok).toBe(true);
+			if (!result.ok) return;
+
+			expect(result.config.project.filter).toBe(false);
+		});
+
+		it("rejects non-string non-false filter values", () => {
+			const result = parseConfig({
+				project: { name: "my-app", type: "app", filter: 42 },
+			});
+
+			expect(result.ok).toBe(false);
+			if (result.ok) return;
+
+			expect(result.errors).toContain("project.filter must be a string or false");
 		});
 	});
 

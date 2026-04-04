@@ -1,0 +1,4 @@
+[project]
+name = "logger"
+type = "package"
+filter = "@nextnode-solutions/logger"
