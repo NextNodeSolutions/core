@@ -32,6 +32,11 @@ function readTOML(path: string): RawConfig {
 		raw.scripts = scripts;
 	}
 
+	const environment = parsed["environment"];
+	if (isRecord(environment)) {
+		raw.environment = environment;
+	}
+
 	return raw;
 }
 
