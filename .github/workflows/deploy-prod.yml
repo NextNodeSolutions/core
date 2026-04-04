@@ -1,33 +1,42 @@
-name: "Route: App Prod"
+name: Deploy Prod
 
 on:
   workflow_call:
     inputs:
-      quality_matrix:
+      config_file:
         type: string
-        required: true
-        description: "JSON quality matrix from plan"
-      project_name:
-        type: string
-        required: true
-        description: "Project name from nextnode.toml"
-      development_enabled:
-        type: string
-        required: true
-        description: "Whether dev environment is enabled (true/false from plan)"
+        default: "nextnode.toml"
+        description: "Path to nextnode.toml in the calling repo"
 
 permissions:
   contents: read
   checks: read
 
 jobs:
-  # ── Prod Gate (standard flow) ────────────────────────────────────────
-  # When dev is enabled, verify the dev pipeline already passed on this
-  # commit via the GitHub Check Runs API.  Skipped in direct-to-prod mode.
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    outputs:
+      quality_matrix: ${{ steps.plan.outputs.quality_matrix }}
+      project_name: ${{ steps.plan.outputs.project_name }}
+      development_enabled: ${{ steps.plan.outputs.development_enabled }}
+    steps:
+      - uses: NextNodeSolutions/core/.github/actions/setup@main
+        with:
+          infra: "true"
+          deps: "false"
+
+      - name: Plan pipeline
+        id: plan
+        run: pnpm exec tsx src/index.ts
+        working-directory: .infra/packages/infrastructure
+        env:
+          PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
 
   prod-gate:
     name: Prod Gate
-    if: inputs.development_enabled == 'true'
+    needs: plan
+    if: needs.plan.outputs.development_enabled == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Verify dev pipeline passed
@@ -58,29 +67,24 @@ jobs:
 
           echo "Prod gate passed: ${PASSED}/${TOTAL} dev checks succeeded for ${SHA}"
 
-  # ── Quality (direct-to-prod) ─────────────────────────────────────────
-  # When dev is disabled, quality checks run inline before prod deploy.
-  # Skipped in standard flow (dev already ran them).
-
   quality:
     name: ${{ matrix.task.name }}
-    if: inputs.development_enabled != 'true'
+    needs: plan
+    if: needs.plan.outputs.development_enabled != 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        task: ${{ fromJSON(inputs.quality_matrix) }}
+        task: ${{ fromJSON(needs.plan.outputs.quality_matrix) }}
     steps:
       - uses: NextNodeSolutions/core/.github/actions/setup@main
 
       - name: ${{ matrix.task.name }}
         run: ${{ matrix.task.cmd }}
 
-  # ── Deploy ───────────────────────────────────────────────────────────
-
   deploy:
     name: Deploy
-    needs: [prod-gate, quality]
+    needs: [plan, prod-gate, quality]
     if: always() && !failure() && !cancelled()
     runs-on: ubuntu-latest
     steps:
@@ -88,7 +92,6 @@ jobs:
           echo "══════════════════════════════════════════"
           echo "  DEPLOY — production"
           echo "══════════════════════════════════════════"
-          echo "Project:  ${{ inputs.project_name }}"
-          echo "Route:    app → deploy → production"
-          echo "Gate:     ${{ inputs.development_enabled == 'true' && 'prod-gate (dev verified)' || 'inline quality (direct-to-prod)' }}"
+          echo "Project:  ${{ needs.plan.outputs.project_name }}"
+          echo "Gate:     ${{ needs.plan.outputs.development_enabled == 'true' && 'prod-gate (dev verified)' || 'inline quality (direct-to-prod)' }}"
           echo "══════════════════════════════════════════"

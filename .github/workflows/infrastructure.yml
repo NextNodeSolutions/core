@@ -9,7 +9,7 @@ on:
 
 jobs:
   pipeline:
-    uses: ./.github/workflows/pipeline.yml
+    uses: ./.github/workflows/publish-package.yml
     with:
       config_file: packages/infrastructure/nextnode.toml
     secrets: inherit

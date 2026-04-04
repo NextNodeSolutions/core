@@ -1,36 +1,46 @@
-name: "Route: Package"
+name: Publish Package
 
 on:
   workflow_call:
     inputs:
-      quality_matrix:
+      config_file:
         type: string
-        required: true
-        description: "JSON quality matrix from plan"
-      project_name:
-        type: string
-        required: true
-        description: "Project name from nextnode.toml"
-      project_filter:
-        type: string
-        required: true
-        description: "Turbo filter for the package (e.g. @nextnode-solutions/logger)"
-      publish:
-        type: string
-        required: true
-        description: "Whether to publish to npm (true/false), driven by [package] in nextnode.toml"
+        default: "nextnode.toml"
+        description: "Path to nextnode.toml in the calling repo"
 
 permissions:
   contents: read
 
 jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    outputs:
+      quality_matrix: ${{ steps.plan.outputs.quality_matrix }}
+      project_name: ${{ steps.plan.outputs.project_name }}
+      project_filter: ${{ steps.plan.outputs.project_filter }}
+      publish: ${{ steps.plan.outputs.publish }}
+    steps:
+      - uses: NextNodeSolutions/core/.github/actions/setup@main
+        with:
+          infra: "true"
+          deps: "false"
+
+      - name: Plan pipeline
+        id: plan
+        run: pnpm exec tsx src/index.ts
+        working-directory: .infra/packages/infrastructure
+        env:
+          PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
+
   quality:
     name: ${{ matrix.task.name }}
+    needs: plan
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        task: ${{ fromJSON(inputs.quality_matrix) }}
+        task: ${{ fromJSON(needs.plan.outputs.quality_matrix) }}
     steps:
       - uses: NextNodeSolutions/core/.github/actions/setup@main
 
@@ -39,8 +49,8 @@ jobs:
 
   publish:
     name: Publish
-    needs: quality
-    if: github.ref == 'refs/heads/main' && inputs.publish == 'true'
+    needs: [plan, quality]
+    if: github.ref == 'refs/heads/main' && needs.plan.outputs.publish == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -51,7 +61,7 @@ jobs:
           fetch-depth: "0"
 
       - name: Build
-        run: pnpm turbo run build --filter=${{ inputs.project_filter }}
+        run: pnpm turbo run build --filter=${{ needs.plan.outputs.project_filter }}
 
       - name: Generate GitHub App token
         id: app-token
@@ -63,7 +73,7 @@ jobs:
 
       - name: Publish
         id: publish
-        working-directory: packages/${{ inputs.project_name }}
+        working-directory: packages/${{ needs.plan.outputs.project_name }}
         run: |
           pnpm --package=semantic-release \
                --package=semantic-release-monorepo \
@@ -101,9 +111,9 @@ jobs:
           VERSION="${{ steps.result.outputs.version }}"
           case "$STATUS" in
             published)
-              echo "### :white_check_mark: Published ${{ inputs.project_filter }} v${VERSION}" >> "$GITHUB_STEP_SUMMARY" ;;
+              echo "### :white_check_mark: Published ${{ needs.plan.outputs.project_filter }} v${VERSION}" >> "$GITHUB_STEP_SUMMARY" ;;
             no-release)
-              echo "### :fast_forward: No new release for ${{ inputs.project_filter }}" >> "$GITHUB_STEP_SUMMARY" ;;
+              echo "### :fast_forward: No new release for ${{ needs.plan.outputs.project_filter }}" >> "$GITHUB_STEP_SUMMARY" ;;
             *)
-              echo "### :x: Publish failed for ${{ inputs.project_filter }}" >> "$GITHUB_STEP_SUMMARY" ;;
+              echo "### :x: Publish failed for ${{ needs.plan.outputs.project_filter }}" >> "$GITHUB_STEP_SUMMARY" ;;
           esac
