@@ -1,101 +1,43 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { evaluateDevRuns, prodGate } from './prod-gate.js'
+import { findDevRun, prodGate } from './prod-gate.js'
 
-describe('evaluateDevRuns', () => {
-	it('counts all passing dev runs', () => {
-		const runs = [
-			{
-				name: 'app-dev / Lint',
-				status: 'completed',
-				conclusion: 'success',
-			},
-			{
-				name: 'app-dev / Test',
-				status: 'completed',
-				conclusion: 'success',
-			},
-		]
-
-		const result = evaluateDevRuns(runs)
-
-		expect(result).toEqual({ total: 2, passed: 2, failed: [] })
-	})
-
-	it('identifies failed dev runs', () => {
-		const failedRun = {
-			name: 'app-dev / Test',
+describe('findDevRun', () => {
+	it('finds the dev workflow run by path', () => {
+		const devRun = {
+			path: '.github/workflows/deploy-dev.yml',
 			status: 'completed',
-			conclusion: 'failure',
+			conclusion: 'success',
+			html_url: 'https://github.com/org/repo/actions/runs/1',
 		}
 		const runs = [
+			devRun,
 			{
-				name: 'app-dev / Lint',
+				path: '.github/workflows/deploy-prod.yml',
 				status: 'completed',
 				conclusion: 'success',
+				html_url: 'https://github.com/org/repo/actions/runs/2',
 			},
-			failedRun,
 		]
 
-		const result = evaluateDevRuns(runs)
-
-		expect(result.total).toBe(2)
-		expect(result.passed).toBe(1)
-		expect(result.failed).toEqual([failedRun])
+		expect(findDevRun(runs)).toEqual(devRun)
 	})
 
-	it('identifies in-progress runs as not passed', () => {
-		const pendingRun = {
-			name: 'app-dev / Lint',
-			status: 'in_progress',
-			conclusion: null,
-		}
-		const runs = [pendingRun]
-
-		const result = evaluateDevRuns(runs)
-
-		expect(result.total).toBe(1)
-		expect(result.passed).toBe(0)
-		expect(result.failed).toEqual([pendingRun])
-	})
-
-	it('filters out non-dev runs', () => {
+	it('returns undefined when no dev run exists', () => {
 		const runs = [
 			{
-				name: 'app-dev / Lint',
+				path: '.github/workflows/deploy-prod.yml',
 				status: 'completed',
 				conclusion: 'success',
-			},
-			{
-				name: 'app-prod / Deploy',
-				status: 'completed',
-				conclusion: 'success',
-			},
-			{
-				name: 'quality / Build',
-				status: 'completed',
-				conclusion: 'success',
+				html_url: 'https://github.com/org/repo/actions/runs/1',
 			},
 		]
 
-		const result = evaluateDevRuns(runs)
-
-		expect(result.total).toBe(1)
-		expect(result.passed).toBe(1)
+		expect(findDevRun(runs)).toBeUndefined()
 	})
 
-	it('returns zero counts when no dev runs exist', () => {
-		const runs = [
-			{
-				name: 'app-prod / Deploy',
-				status: 'completed',
-				conclusion: 'success',
-			},
-		]
-
-		const result = evaluateDevRuns(runs)
-
-		expect(result).toEqual({ total: 0, passed: 0, failed: [] })
+	it('returns undefined for empty runs', () => {
+		expect(findDevRun([])).toBeUndefined()
 	})
 })
 
@@ -123,23 +65,28 @@ describe('prodGate', () => {
 		vi.restoreAllMocks()
 	})
 
-	it('passes when all dev runs succeeded', async () => {
+	it('passes when dev workflow run succeeded', async () => {
 		vi.stubGlobal(
 			'fetch',
 			vi.fn().mockResolvedValue({
 				ok: true,
 				json: () =>
 					Promise.resolve({
-						check_runs: [
+						total_count: 2,
+						workflow_runs: [
 							{
-								name: 'app-dev / Lint',
+								path: '.github/workflows/deploy-dev.yml',
 								status: 'completed',
 								conclusion: 'success',
+								html_url:
+									'https://github.com/org/repo/actions/runs/1',
 							},
 							{
-								name: 'app-dev / Test',
+								path: '.github/workflows/deploy-prod.yml',
 								status: 'completed',
 								conclusion: 'success',
+								html_url:
+									'https://github.com/org/repo/actions/runs/2',
 							},
 						],
 					}),
@@ -149,37 +96,36 @@ describe('prodGate', () => {
 		await expect(prodGate()).resolves.toBeUndefined()
 	})
 
-	it('throws when no dev runs found', async () => {
+	it('throws when no dev run found', async () => {
 		vi.stubGlobal(
 			'fetch',
 			vi.fn().mockResolvedValue({
 				ok: true,
-				json: () => Promise.resolve({ check_runs: [] }),
+				json: () =>
+					Promise.resolve({ total_count: 0, workflow_runs: [] }),
 			}),
 		)
 
 		await expect(prodGate()).rejects.toThrow(
-			'No dev pipeline runs found for abc123',
+			'No dev pipeline run found for abc123',
 		)
 	})
 
-	it('throws when some dev runs failed', async () => {
+	it('throws when dev run failed', async () => {
 		vi.stubGlobal(
 			'fetch',
 			vi.fn().mockResolvedValue({
 				ok: true,
 				json: () =>
 					Promise.resolve({
-						check_runs: [
+						total_count: 1,
+						workflow_runs: [
 							{
-								name: 'app-dev / Lint',
-								status: 'completed',
-								conclusion: 'success',
-							},
-							{
-								name: 'app-dev / Test',
+								path: '.github/workflows/deploy-dev.yml',
 								status: 'completed',
 								conclusion: 'failure',
+								html_url:
+									'https://github.com/org/repo/actions/runs/1',
 							},
 						],
 					}),
@@ -187,7 +133,33 @@ describe('prodGate', () => {
 		)
 
 		await expect(prodGate()).rejects.toThrow(
-			'Dev pipeline has not fully passed (1/2 checks succeeded)',
+			'Dev pipeline has not passed: completed/failure',
+		)
+	})
+
+	it('throws when dev run is still in progress', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						total_count: 1,
+						workflow_runs: [
+							{
+								path: '.github/workflows/deploy-dev.yml',
+								status: 'in_progress',
+								conclusion: null,
+								html_url:
+									'https://github.com/org/repo/actions/runs/1',
+							},
+						],
+					}),
+			}),
+		)
+
+		await expect(prodGate()).rejects.toThrow(
+			'Dev pipeline has not passed: in_progress/null',
 		)
 	})
 
