@@ -1,28 +1,44 @@
-name: "Route: App Dev"
+name: Deploy Dev
 
 on:
   workflow_call:
     inputs:
-      quality_matrix:
+      config_file:
         type: string
-        required: true
-        description: "JSON quality matrix from plan"
-      project_name:
-        type: string
-        required: true
-        description: "Project name from nextnode.toml"
+        default: "nextnode.toml"
+        description: "Path to nextnode.toml in the calling repo"
 
 permissions:
   contents: read
 
 jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    outputs:
+      quality_matrix: ${{ steps.plan.outputs.quality_matrix }}
+      project_name: ${{ steps.plan.outputs.project_name }}
+    steps:
+      - uses: NextNodeSolutions/core/.github/actions/setup@main
+        with:
+          infra: "true"
+          deps: "false"
+
+      - name: Plan pipeline
+        id: plan
+        run: pnpm exec tsx src/index.ts
+        working-directory: .infra/packages/infrastructure
+        env:
+          PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
+
   quality:
     name: ${{ matrix.task.name }}
+    needs: plan
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        task: ${{ fromJSON(inputs.quality_matrix) }}
+        task: ${{ fromJSON(needs.plan.outputs.quality_matrix) }}
     steps:
       - uses: NextNodeSolutions/core/.github/actions/setup@main
 
@@ -31,13 +47,12 @@ jobs:
 
   deploy:
     name: Deploy
-    needs: quality
+    needs: [plan, quality]
     runs-on: ubuntu-latest
     steps:
       - run: |
           echo "══════════════════════════════════════════"
           echo "  DEPLOY — development"
           echo "══════════════════════════════════════════"
-          echo "Project:  ${{ inputs.project_name }}"
-          echo "Route:    app → deploy → development"
+          echo "Project:  ${{ needs.plan.outputs.project_name }}"
           echo "══════════════════════════════════════════"
