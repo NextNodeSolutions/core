@@ -1,0 +1,15 @@
+name: Logger
+
+on:
+  push:
+    branches: [main]
+    paths: ["packages/logger/**"]
+  pull_request:
+    paths: ["packages/logger/**"]
+
+jobs:
+  pipeline:
+    uses: ./.github/workflows/pipeline.yml
+    with:
+      config_file: packages/logger/nextnode.toml
+    secrets: inherit
