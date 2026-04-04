@@ -16,6 +16,19 @@ describe("loadConfig", () => {
 		expect(config.scripts.build).toBe("build");
 	});
 
+	it("loads a monorepo package config with filter", () => {
+		const config = loadConfig(fixture("monorepo-package.toml"));
+
+		expect(config.project.name).toBe("logger");
+		expect(config.project.filter).toBe("@nextnode-solutions/logger");
+	});
+
+	it("defaults filter to false when not specified", () => {
+		const config = loadConfig(fixture("valid.toml"));
+
+		expect(config.project.filter).toBe(false);
+	});
+
 	it("allows overriding scripts", () => {
 		const config = loadConfig(fixture("custom-scripts.toml"));
 
