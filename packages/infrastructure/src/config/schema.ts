@@ -5,7 +5,6 @@ export interface NextNodeConfig {
 
 export interface ProjectSection {
 	readonly name: string;
-	readonly type: "app" | "package";
 }
 
 export interface ScriptsSection {
@@ -23,10 +22,6 @@ export const DEFAULT_SCRIPTS: ScriptsSection = {
 export interface RawConfig {
 	project?: Record<string, unknown>;
 	scripts?: Record<string, unknown>;
-}
-
-function isValidProjectType(value: unknown): value is "app" | "package" {
-	return value === "app" || value === "package";
 }
 
 function isScriptValue(value: unknown): value is string | false {
@@ -51,16 +46,9 @@ export function parseConfig(raw: RawConfig): ParseConfigResult {
 	}
 
 	const name = project["name"];
-	const type = project["type"];
 
 	if (!name || typeof name !== "string") {
 		errors.push("project.name is required and must be a string");
-	}
-
-	if (!type || typeof type !== "string") {
-		errors.push('project.type is required and must be "app" or "package"');
-	} else if (!isValidProjectType(type)) {
-		errors.push(`project.type must be "app" or "package", got "${type}"`);
 	}
 
 	const scripts = raw.scripts;
@@ -73,7 +61,7 @@ export function parseConfig(raw: RawConfig): ParseConfigResult {
 		}
 	}
 
-	if (errors.length > 0 || typeof name !== "string" || !isValidProjectType(type)) {
+	if (errors.length > 0 || typeof name !== "string") {
 		return { ok: false, errors };
 	}
 
@@ -82,7 +70,7 @@ export function parseConfig(raw: RawConfig): ParseConfigResult {
 	return {
 		ok: true,
 		config: {
-			project: { name, type },
+			project: { name },
 			scripts: {
 				lint: resolveScript(scriptValues["lint"], DEFAULT_SCRIPTS.lint),
 				test: resolveScript(scriptValues["test"], DEFAULT_SCRIPTS.test),
