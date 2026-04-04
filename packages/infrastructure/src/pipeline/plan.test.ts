@@ -2,8 +2,19 @@ import { readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { NextNodeConfig } from "../config/schema.js";
 import type { QualityTask } from "./quality.js";
 import { writePlanOutputs } from "./plan.js";
+
+const APP_CONFIG: NextNodeConfig = {
+	project: { name: "my-app", type: "app", filter: false },
+	scripts: { lint: "lint", test: "test", build: "build" },
+};
+
+const PACKAGE_CONFIG: NextNodeConfig = {
+	project: { name: "my-lib", type: "package", filter: false },
+	scripts: { lint: "lint", test: "test", build: "build" },
+};
 
 describe("writePlanOutputs", () => {
 	let outputFile: string;
@@ -27,35 +38,46 @@ describe("writePlanOutputs", () => {
 		vi.restoreAllMocks();
 	});
 
-	it("writes quality matrix with tasks to GITHUB_OUTPUT", () => {
-		const tasks: QualityTask[] = [
+	it("writes quality matrix, project name, and project type", () => {
+		const tasks: ReadonlyArray<QualityTask> = [
 			{ id: "lint", name: "Lint", cmd: "pnpm lint" },
 			{ id: "test", name: "Test", cmd: "pnpm test" },
 		];
 
-		writePlanOutputs(tasks);
+		writePlanOutputs({ config: APP_CONFIG, tasks });
 
 		const output = readFileSync(outputFile, "utf-8");
+		const matrixJson = JSON.stringify([
+			{ id: "lint", name: "Lint", cmd: "pnpm lint" },
+			{ id: "test", name: "Test", cmd: "pnpm test" },
+		]);
 		expect(output).toBe(
-			`quality_matrix=${JSON.stringify([
-				{ id: "lint", name: "Lint", cmd: "pnpm lint" },
-				{ id: "test", name: "Test", cmd: "pnpm test" },
-			])}\n`,
+			`quality_matrix=${matrixJson}\nproject_name=my-app\nproject_type=app\n`,
 		);
 	});
 
 	it("writes skip sentinel when no tasks", () => {
-		writePlanOutputs([]);
+		writePlanOutputs({ config: APP_CONFIG, tasks: [] });
 
 		const output = readFileSync(outputFile, "utf-8");
-		expect(output).toBe(
-			`quality_matrix=${JSON.stringify([{ id: "skip", name: "No quality checks", cmd: "echo skipped" }])}\n`,
+		expect(output).toContain(
+			`quality_matrix=${JSON.stringify([{ id: "skip", name: "No quality checks", cmd: "echo skipped" }])}`,
 		);
+	});
+
+	it("writes package type for package projects", () => {
+		writePlanOutputs({ config: PACKAGE_CONFIG, tasks: [] });
+
+		const output = readFileSync(outputFile, "utf-8");
+		expect(output).toContain("project_name=my-lib\n");
+		expect(output).toContain("project_type=package\n");
 	});
 
 	it("throws when GITHUB_OUTPUT is not set", () => {
 		delete process.env["GITHUB_OUTPUT"];
 
-		expect(() => writePlanOutputs([])).toThrow("GITHUB_OUTPUT env var");
+		expect(() => writePlanOutputs({ config: APP_CONFIG, tasks: [] })).toThrow(
+			"GITHUB_OUTPUT env var",
+		);
 	});
 });

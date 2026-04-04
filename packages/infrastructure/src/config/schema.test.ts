@@ -3,23 +3,35 @@ import { parseConfig } from "./schema.js";
 
 describe("parseConfig", () => {
 	describe("valid configs", () => {
-		it("parses a valid config with script defaults", () => {
+		it("parses a valid app config with script defaults", () => {
 			const result = parseConfig({
-				project: { name: "my-app" },
+				project: { name: "my-app", type: "app" },
 			});
 
 			expect(result.ok).toBe(true);
 			if (!result.ok) return;
 
 			expect(result.config.project.name).toBe("my-app");
+			expect(result.config.project.type).toBe("app");
 			expect(result.config.scripts.lint).toBe("lint");
 			expect(result.config.scripts.test).toBe("test");
 			expect(result.config.scripts.build).toBe("build");
 		});
 
+		it("parses a valid package config", () => {
+			const result = parseConfig({
+				project: { name: "my-lib", type: "package" },
+			});
+
+			expect(result.ok).toBe(true);
+			if (!result.ok) return;
+
+			expect(result.config.project.type).toBe("package");
+		});
+
 		it("accepts scripts set to false", () => {
 			const result = parseConfig({
-				project: { name: "test" },
+				project: { name: "test", type: "app" },
 				scripts: { lint: false, test: false, build: false },
 			});
 
@@ -33,7 +45,7 @@ describe("parseConfig", () => {
 
 		it("uses custom script names when provided", () => {
 			const result = parseConfig({
-				project: { name: "my-app" },
+				project: { name: "my-app", type: "app" },
 				scripts: { lint: "check:lint", test: "check:test" },
 			});
 
@@ -57,12 +69,34 @@ describe("parseConfig", () => {
 		});
 
 		it("rejects missing project.name", () => {
-			const result = parseConfig({ project: {} });
+			const result = parseConfig({ project: { type: "app" } });
 
 			expect(result.ok).toBe(false);
 			if (result.ok) return;
 
 			expect(result.errors).toContain("project.name is required and must be a string");
+		});
+
+		it("rejects missing project.type", () => {
+			const result = parseConfig({ project: { name: "my-app" } });
+
+			expect(result.ok).toBe(false);
+			if (result.ok) return;
+
+			expect(result.errors).toContain(
+				"project.type is required and must be one of: app, package",
+			);
+		});
+
+		it("rejects invalid project.type", () => {
+			const result = parseConfig({ project: { name: "my-app", type: "service" } });
+
+			expect(result.ok).toBe(false);
+			if (result.ok) return;
+
+			expect(result.errors).toContain(
+				"project.type is required and must be one of: app, package",
+			);
 		});
 	});
 
@@ -76,14 +110,17 @@ describe("parseConfig", () => {
 			expect(result.ok).toBe(false);
 			if (result.ok) return;
 
-			expect(result.errors).toHaveLength(2);
+			expect(result.errors).toHaveLength(3);
 			expect(result.errors).toContain("project.name is required and must be a string");
+			expect(result.errors).toContain(
+				"project.type is required and must be one of: app, package",
+			);
 			expect(result.errors).toContain("scripts.lint must be a string or false, got number");
 		});
 
 		it("rejects non-string non-false script values", () => {
 			const result = parseConfig({
-				project: { name: "test" },
+				project: { name: "test", type: "app" },
 				scripts: { lint: 42 },
 			});
 
@@ -94,7 +131,7 @@ describe("parseConfig", () => {
 		});
 
 		it("rejects empty string project.name", () => {
-			const result = parseConfig({ project: { name: "" } });
+			const result = parseConfig({ project: { name: "", type: "app" } });
 
 			expect(result.ok).toBe(false);
 			if (result.ok) return;
@@ -106,7 +143,7 @@ describe("parseConfig", () => {
 	describe("edge cases", () => {
 		it("ignores unknown script keys without error", () => {
 			const result = parseConfig({
-				project: { name: "test" },
+				project: { name: "test", type: "app" },
 				scripts: { lint: "lint", unknown_key: "whatever" },
 			});
 
@@ -115,7 +152,7 @@ describe("parseConfig", () => {
 
 		it("handles undefined scripts section by using defaults", () => {
 			const result = parseConfig({
-				project: { name: "test" },
+				project: { name: "test", type: "package" },
 			});
 
 			expect(result.ok).toBe(true);

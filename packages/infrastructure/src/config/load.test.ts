@@ -10,6 +10,7 @@ describe("loadConfig", () => {
 		const config = loadConfig(fixture("valid.toml"));
 
 		expect(config.project.name).toBe("my-app");
+		expect(config.project.type).toBe("app");
 		expect(config.scripts.lint).toBe("lint");
 		expect(config.scripts.test).toBe("test");
 		expect(config.scripts.build).toBe("build");

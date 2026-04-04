@@ -3,8 +3,13 @@ export interface NextNodeConfig {
 	readonly scripts: ScriptsSection;
 }
 
+const PROJECT_TYPES = ["app", "package"] as const;
+type ProjectType = (typeof PROJECT_TYPES)[number];
+
 export interface ProjectSection {
 	readonly name: string;
+	readonly type: ProjectType;
+	readonly filter: string | false;
 }
 
 export interface ScriptsSection {
@@ -22,6 +27,10 @@ export const DEFAULT_SCRIPTS: ScriptsSection = {
 export interface RawConfig {
 	project?: Record<string, unknown>;
 	scripts?: Record<string, unknown>;
+}
+
+function isProjectType(value: unknown): value is ProjectType {
+	return typeof value === "string" && PROJECT_TYPES.includes(value as ProjectType);
 }
 
 function isScriptValue(value: unknown): value is string | false {
@@ -51,6 +60,16 @@ export function parseConfig(raw: RawConfig): ParseConfigResult {
 		errors.push("project.name is required and must be a string");
 	}
 
+	const type = project["type"];
+	if (!type || !isProjectType(type)) {
+		errors.push(`project.type is required and must be one of: ${PROJECT_TYPES.join(", ")}`);
+	}
+
+	const filter = project["filter"];
+	if (filter !== undefined && !isScriptValue(filter)) {
+		errors.push("project.filter must be a string or false");
+	}
+
 	const scripts = raw.scripts;
 	if (scripts) {
 		for (const key of ["lint", "test", "build"] as const) {
@@ -61,7 +80,7 @@ export function parseConfig(raw: RawConfig): ParseConfigResult {
 		}
 	}
 
-	if (errors.length > 0 || typeof name !== "string") {
+	if (errors.length > 0 || typeof name !== "string" || !isProjectType(type)) {
 		return { ok: false, errors };
 	}
 
@@ -70,7 +89,7 @@ export function parseConfig(raw: RawConfig): ParseConfigResult {
 	return {
 		ok: true,
 		config: {
-			project: { name },
+			project: { name, type, filter: isScriptValue(filter) ? filter : false },
 			scripts: {
 				lint: resolveScript(scriptValues["lint"], DEFAULT_SCRIPTS.lint),
 				test: resolveScript(scriptValues["test"], DEFAULT_SCRIPTS.test),
