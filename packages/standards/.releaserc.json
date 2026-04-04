@@ -1,4 +1,7 @@
 {
-	"extends": "@nextnode-solutions/standards/semantic-release",
+	"extends": [
+		"semantic-release-monorepo",
+		"@nextnode-solutions/standards/semantic-release"
+	],
 	"tagFormat": "@nextnode-solutions/standards-v${version}"
 }
