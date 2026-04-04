@@ -2,141 +2,87 @@
 
 ## What This Is
 
-A **complete rewrite** of the NextNode infrastructure system (previously at `NextNodeSolutions/infrastructure`).
-This package is the single entry point for all CI/CD, provisioning, and deployment logic.
+NextNode infrastructure CLI — runs in GitHub Actions to orchestrate CI quality gates.
+Currently implements the **plan** phase: parse `nextnode.toml`, generate a quality matrix (lint/test), and write outputs for downstream jobs.
 
-## Why We're Rewriting
-
-The previous infrastructure works but has accumulated critical debt:
-
-- `deploy.ts` was a 2587-line god object with 3 deploy strategies entangled
-- 39 SSH calls per deploy with no connection pooling (15-45s wasted)
-- Caddy management via string mutation with brace counting — fragile
-- Zero monitoring, no auto-rollback, no database backups
-- Error handling inconsistent (silent swallows, warn-only on critical failures)
-- Over-engineered in places (blue-green at 1K scale, Sablier, AST compose transforms)
-
-Full audit details: `docs/audit-merged.md` at repo root.
-
-## Core Design Principles
-
-### 1. GitHub Action is a thin shell
-
-The `.github/workflows/pipeline.yml` is called by ALL NextNode projects via `workflow_call`.
-It does ONE thing: checkout, install, and call `tsx src/index.ts`.
-**ALL logic lives in TypeScript.** The workflow never grows beyond ~50 lines.
-
-### 2. Deploy target abstraction (future-proof)
-
-The system supports multiple deploy targets behind a common interface:
-
-```
-DeployTarget { plan() -> provision() -> deploy(image) -> verify() -> URL }
-  HetznerVPSTarget    — Docker Compose on bare-metal (current, primary)
-  CloudflarePagesTarget — Static/SSR sites on Cloudflare Pages (planned)
-  ServerlessTarget     — AWS Lambda, Cloud Run, etc. (planned)
-```
-
-The target is selected via `nextnode.toml`:
-
-```toml
-[target]
-type = "vps"        # or "cloudflare-pages", "serverless"
-```
-
-### 3. Build and deploy are decoupled
-
-Image is an immutable artifact, independent of deploy target.
-Pipeline: `build -> push to registry -> deploy (target-agnostic)`.
-
-### 4. Strategy pattern for deploy modes
-
-Each deploy mode is a separate strategy — no entangled if/else:
-
-- `MaintenanceStrategy` — show maintenance page, swap, restore
-- `RollingStrategy` — zero-downtime restart (replaces old blue-green)
-- `PRPreviewStrategy` — ephemeral preview environments
-
-### 5. SSH connection pooling
-
-All SSH commands within a deploy share a single connection via ControlMaster.
-
-### 6. Caddy via JSON API
-
-Use Caddy's admin API instead of Caddyfile text mutation.
-Atomic validation + rollback built-in, no string parsing.
-
-## Architecture
+## Current Scope
 
 ```
 src/
-  index.ts              — CLI entry point, reads env vars, dispatches to pipeline
-  pipeline/             — Pipeline orchestration (plan, quality, build, deploy)
-  targets/              — Deploy target implementations (vps, cloudflare-pages, serverless)
-  services/             — Cloud service strategies (r2, supabase, redis, etc.)
-  config/               — nextnode.toml parsing, validation, env resolution
-  providers/            — External API clients (hetzner, cloudflare, tailscale, terraform)
-  ssh/                  — SSH session with connection pooling
-  caddy/                — Caddy JSON API client
-  compose/              — Docker Compose generation (not AST transform — direct generation)
-  lib/                  — Shared utilities (logging, constants, errors)
+  index.ts              — CLI entry point, reads PIPELINE_CONFIG_FILE env var
+  config/               — nextnode.toml parsing and validation
+  pipeline/             — Plan outputs (quality matrix -> GITHUB_OUTPUT)
 ```
 
-## Config-Driven via nextnode.toml
+## Config Format
 
-All behavior is driven by `nextnode.toml` in the calling project.
-The default values come from `nextnode.default.toml` at the core repo root.
-This is the same config system as the previous infra — it works well.
+```toml
+[project]
+name = "my-app"
 
-## Porting Rules — NO Blind Copy
+[scripts]
+lint = "lint"       # or false to disable
+test = "test"       # or false to disable
+build = "build"     # or false to disable
+```
 
-This is a rewrite, not a migration. Even for concepts we keep, every file must be evaluated before porting:
+All scripts default to their key name. Set to `false` to skip.
 
-- **Read the old code** and understand what it does
-- **Decide if the design is sound** — the old infra has vicious bugs born from implicit assumptions
-- **Rewrite from the spec**, not from the implementation — use the old code as reference, not as source
-- **If a pattern caused bugs** (see `docs/audit-merged.md` bug timeline), redesign it entirely
-- **Never copy error handling patterns** from the old code — they are the #1 source of production issues
+## How It Runs
 
-The old codebase is at `/Users/walid-mos/Development/nextnode/infrastructure/`.
+Called by `.github/workflows/pipeline.yml` via `workflow_call`:
 
-## What We Keep (Concepts, Not Code)
+1. Caller repo checks out this package
+2. Runs `tsx src/index.ts` with `PIPELINE_CONFIG_FILE` pointing to the caller's `nextnode.toml`
+3. Outputs `quality_matrix` to `GITHUB_OUTPUT`
+4. Downstream `quality` job runs each matrix entry (lint, test) in parallel
 
-- `nextnode.toml` config system — excellent concept, rewrite the parser
-- `ENV_TABLE` two-phase env resolution — clean design, rewrite
-- Service strategy pattern — extensible concept
-- Terraform for VPS provisioning — right tool
-- Tailscale mesh networking — no public SSH
-- R2 for Caddy cert storage — survives VPS destruction
-- Docker Compose at VPS scale — right choice (not K8s)
-- Hetzner for cost efficiency — 7 EUR/app/month
-
-## What We Drop
-
-- Blue-green deployment (unnecessary at our scale, adds ~400 lines of complexity)
-- Sablier integration (saves ~5% on a 7 EUR VPS, not worth the complexity)
-- AST-based compose transforms (generate prod compose directly instead)
-- Checkpoint system (make steps idempotent instead)
-- Caddyfile text mutation (use JSON API)
-
-## Error Handling — Strict Rules
+## Error Handling
 
 Follow the global CLAUDE.md rules without exception:
 
 - No silent swallows. Every error is logged and propagated.
 - No technical fallbacks without explicit business rule.
-- Critical operations (credentials, provisioning, deploy) fail hard.
-- Only cleanup operations may catch-and-warn (and must still log).
 
 ## Testing
 
-- Integration tests for each deploy target
-- Unit tests for config parsing, env resolution, compose generation
-- Mock SSH via interface, not implementation
-- Test each deploy strategy independently
+- Unit tests for config parsing and validation
+- Unit tests for quality matrix generation
+- Integration tests with real temp files for plan output writing
 - Use vitest with `@nextnode-solutions/standards/vitest/backend`
 
-## Key Secrets (passed via GitHub Actions `secrets: inherit`)
+## Rewrite Context
+
+This is a **rewrite** of the previous `NextNodeSolutions/infrastructure` repo.
+The old codebase is at `/Users/walid-mos/Development/nextnode/infrastructure/`.
+
+### Porting Rules
+
+- **Read the old code** and understand what it does
+- **Rewrite from the spec**, not from the implementation
+- **Never copy error handling patterns** from the old code
+- See `docs/audit-merged.md` at repo root for the full old-infra audit
+
+### Concepts to Port (when needed, not before)
+
+- Deploy target abstraction (VPS, Cloudflare Pages, serverless)
+- `ENV_TABLE` two-phase env resolution
+- Service strategy pattern (r2, supabase, redis)
+- Terraform for VPS provisioning
+- Tailscale mesh networking
+- SSH connection pooling via ControlMaster
+- Caddy JSON API (not Caddyfile text mutation)
+- Docker Compose direct generation (not AST transforms)
+
+### What We Drop
+
+- Blue-green deployment (unnecessary at our scale)
+- Sablier integration (not worth complexity at 7 EUR/VPS)
+- AST-based compose transforms
+- Checkpoint system (make steps idempotent instead)
+- Caddyfile text mutation
+
+### Key Secrets (for future deploy phases)
 
 | Secret                                           | Purpose              |
 | ------------------------------------------------ | -------------------- |
