@@ -75,6 +75,7 @@ jobs:
       - name: Publish
         id: publish
         working-directory: packages/${{ needs.plan.outputs.project_name }}
+        shell: bash -eo pipefail {0}
         run: |
           pnpm --package=semantic-release \
                --package=semantic-release-monorepo \

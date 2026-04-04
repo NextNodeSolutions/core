@@ -81,6 +81,7 @@ describe('publishResult', () => {
 				process.env[key] = value
 			}
 		}
+		process.exitCode = undefined
 		rmSync(outputFile, { force: true })
 		rmSync(summaryFile, { force: true })
 		rmSync(srOutputFile, { force: true })
@@ -135,6 +136,16 @@ describe('publishResult', () => {
 		expect(summary).toContain(
 			':x: Publish failed for @nextnode-solutions/logger',
 		)
+
+		expect(process.exitCode).toBe(1)
+	})
+
+	it('sets exit code 1 when semantic-release output is unrecognized', () => {
+		writeFileSync(srOutputFile, 'ENOENT: something went terribly wrong')
+
+		publishResult()
+
+		expect(process.exitCode).toBe(1)
 	})
 
 	it('throws when PROJECT_FILTER is not set', () => {
