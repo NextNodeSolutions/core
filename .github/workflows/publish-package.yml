@@ -72,6 +72,9 @@ jobs:
           private-key: ${{ secrets.NEXTNODE_APP_PRIVATE_KEY }}
           owner: NextNodeSolutions
 
+      - name: Clear local tags for semantic-release
+        run: git tag -l | xargs -r git tag -d
+
       - name: Publish
         id: publish
         working-directory: packages/${{ needs.plan.outputs.project_name }}
