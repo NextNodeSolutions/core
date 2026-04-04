@@ -53,14 +53,14 @@ jobs:
   quality:
     name: ${{ matrix.task.name }}
     needs: plan
-    if: needs.plan.outputs.development_enabled != 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        task: ${{ fromJSON(needs.plan.outputs.quality_matrix) }}
+        task: ${{ fromJSON(needs.plan.outputs.development_enabled == 'true' && '[{"id":"skip","name":"Quality (via dev pipeline)","cmd":"echo skipped"}]' || needs.plan.outputs.quality_matrix) }}
     steps:
       - uses: NextNodeSolutions/core/.github/actions/setup@main
+        if: matrix.task.id != 'skip'
 
       - name: ${{ matrix.task.name }}
         run: ${{ matrix.task.cmd }}
