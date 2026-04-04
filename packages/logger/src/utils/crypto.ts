@@ -3,20 +3,20 @@
  * Universal crypto support for Node.js and browser environments
  */
 
-import { detectRuntime, hasCryptoSupport } from "./environment.js";
+import { detectRuntime, hasCryptoSupport } from './environment.js'
 
 export const generateRequestId = (): string => {
 	// Use modern Web Crypto API available in both Node.js v20+ and browsers
 	if (hasCryptoSupport()) {
-		const uuid = crypto.randomUUID();
+		const uuid = crypto.randomUUID()
 		// Create a shorter, more readable request ID
-		return `req_${uuid.slice(0, 8)}`;
+		return `req_${uuid.slice(0, 8)}`
 	}
 
 	// This should not happen with proper environment support
-	const runtime = detectRuntime();
+	const runtime = detectRuntime()
 	throw new Error(
 		`Web Crypto API not available in ${runtime} environment. ` +
 			`Please ensure you're using Node.js v20+ or a modern browser.`,
-	);
-};
+	)
+}

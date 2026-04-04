@@ -10,11 +10,11 @@ import type {
 	LogLevel,
 	LogObject,
 	SpyLogger,
-} from "../types.js";
-import { generateRequestId } from "../utils/crypto.js";
-import { parseLocation } from "../utils/location.js";
-import { extractScope } from "../utils/scope.js";
-import { getCurrentTimestamp } from "../utils/time.js";
+} from '../types.js'
+import { generateRequestId } from '../utils/crypto.js'
+import { parseLocation } from '../utils/location.js'
+import { extractScope } from '../utils/scope.js'
+import { getCurrentTimestamp } from '../utils/time.js'
 
 /**
  * Creates a spy logger that tracks all log calls without producing any output.
@@ -47,15 +47,19 @@ export const createSpyLogger = (
 	parentScope?: string,
 	parentRequestId?: string,
 ): SpyLogger => {
-	const calls = sharedCalls ?? [];
-	const instanceRequestId = parentRequestId ?? generateRequestId();
+	const calls = sharedCalls ?? []
+	const instanceRequestId = parentRequestId ?? generateRequestId()
 
-	const createEntry = (level: LogLevel, message: string, object?: LogObject): LogEntry => {
+	const createEntry = (
+		level: LogLevel,
+		message: string,
+		object?: LogObject,
+	): LogEntry => {
 		const {
 			scope: perCallScope,
 			requestId: perCallRequestId,
 			cleanObject,
-		} = extractScope(object);
+		} = extractScope(object)
 
 		return {
 			level,
@@ -65,53 +69,59 @@ export const createSpyLogger = (
 			requestId: perCallRequestId ?? instanceRequestId,
 			scope: perCallScope ?? parentScope,
 			object: cleanObject,
-		};
-	};
+		}
+	}
 
-	const log = (level: LogLevel, message: string, object?: LogObject): void => {
-		const entry = createEntry(level, message, object);
-		calls.push(entry);
-	};
+	const log = (
+		level: LogLevel,
+		message: string,
+		object?: LogObject,
+	): void => {
+		const entry = createEntry(level, message, object)
+		calls.push(entry)
+	}
 
 	return {
 		get calls(): LogEntry[] {
-			return calls;
+			return calls
 		},
 
 		debug(message: string, object?: LogObject): void {
-			log("debug", message, object);
+			log('debug', message, object)
 		},
 
 		info(message: string, object?: LogObject): void {
-			log("info", message, object);
+			log('info', message, object)
 		},
 
 		warn(message: string, object?: LogObject): void {
-			log("warn", message, object);
+			log('warn', message, object)
 		},
 
 		error(message: string, object?: LogObject): void {
-			log("error", message, object);
+			log('error', message, object)
 		},
 
 		getCallsByLevel(level: LogLevel): LogEntry[] {
-			return calls.filter((call) => call.level === level);
+			return calls.filter(call => call.level === level)
 		},
 
 		getLastCall(): LogEntry | undefined {
-			return calls[calls.length - 1];
+			return calls[calls.length - 1]
 		},
 
 		wasCalledWith(message: string): boolean {
-			return calls.some((call) => call.message.includes(message));
+			return calls.some(call => call.message.includes(message))
 		},
 
 		wasCalledWithLevel(level: LogLevel, message: string): boolean {
-			return calls.some((call) => call.level === level && call.message.includes(message));
+			return calls.some(
+				call => call.level === level && call.message.includes(message),
+			)
 		},
 
 		clear(): void {
-			calls.length = 0;
+			calls.length = 0
 		},
 
 		child(config: ChildLoggerConfig): SpyLogger {
@@ -119,10 +129,10 @@ export const createSpyLogger = (
 				calls,
 				config.scope ?? parentScope,
 				config.requestId ?? instanceRequestId,
-			);
+			)
 		},
-	};
-};
+	}
+}
 
 /**
  * Creates a no-op logger that discards all log calls.
@@ -142,15 +152,15 @@ export const createNoopLogger = (): Logger => ({
 	warn: (): void => {},
 	error: (): void => {},
 	child: (): Logger => createNoopLogger(),
-});
+})
 
 /**
  * Mock function interface for testing
  */
 interface MockFn {
-	(message: string, object?: LogObject): void;
-	mock: { calls: Array<[string, (LogObject | undefined)?]> };
-	mockClear: () => void;
+	(message: string, object?: LogObject): void
+	mock: { calls: Array<[string, (LogObject | undefined)?]> }
+	mockClear: () => void
 }
 
 /**
@@ -158,25 +168,25 @@ interface MockFn {
  * Each method is a mock function that can be spied on.
  */
 export interface MockLogger extends Logger {
-	debug: MockFn;
-	info: MockFn;
-	warn: MockFn;
-	error: MockFn;
-	child: (config: ChildLoggerConfig) => MockLogger;
+	debug: MockFn
+	info: MockFn
+	warn: MockFn
+	error: MockFn
+	child: (config: ChildLoggerConfig) => MockLogger
 }
 
 // Helper to create a mock function that works without vitest/jest
 const createMockFn = (): MockFn => {
-	const calls: Array<[string, (LogObject | undefined)?]> = [];
+	const calls: Array<[string, (LogObject | undefined)?]> = []
 	const fn = (message: string, object?: LogObject): void => {
-		calls.push([message, object]);
-	};
-	fn.mock = { calls };
+		calls.push([message, object])
+	}
+	fn.mock = { calls }
 	fn.mockClear = (): void => {
-		calls.length = 0;
-	};
-	return fn;
-};
+		calls.length = 0
+	}
+	return fn
+}
 
 /**
  * Creates a mock logger with trackable mock functions.
@@ -211,7 +221,13 @@ export const createMockLogger = (): MockLogger => ({
 	warn: createMockFn(),
 	error: createMockFn(),
 	child: (): MockLogger => createMockLogger(),
-});
+})
 
 // Re-export types for convenience
-export type { LogEntry, Logger, LogLevel, LogObject, SpyLogger } from "../types.js";
+export type {
+	LogEntry,
+	Logger,
+	LogLevel,
+	LogObject,
+	SpyLogger,
+} from '../types.js'

@@ -3,224 +3,224 @@
  * Tests URL validation, header sanitization, and SSRF prevention
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { createHttpTransport, HttpTransport } from "@/transports/http.js";
+import { createHttpTransport, HttpTransport } from '@/transports/http.js'
 
-describe("HttpTransport Security", () => {
+describe('HttpTransport Security', () => {
 	beforeEach(() => {
-		vi.useFakeTimers();
-	});
+		vi.useFakeTimers()
+	})
 
 	afterEach(() => {
-		vi.useRealTimers();
-	});
+		vi.useRealTimers()
+	})
 
-	describe("URL Validation", () => {
-		it("should accept valid HTTP URLs", () => {
+	describe('URL Validation', () => {
+		it('should accept valid HTTP URLs', () => {
 			expect(
 				() =>
 					new HttpTransport({
-						endpoint: "http://example.com/logs",
+						endpoint: 'http://example.com/logs',
 					}),
-			).not.toThrow();
-		});
+			).not.toThrow()
+		})
 
-		it("should accept valid HTTPS URLs", () => {
+		it('should accept valid HTTPS URLs', () => {
 			expect(
 				() =>
 					new HttpTransport({
-						endpoint: "https://example.com/logs",
+						endpoint: 'https://example.com/logs',
 					}),
-			).not.toThrow();
-		});
+			).not.toThrow()
+		})
 
-		it("should accept localhost URLs", () => {
+		it('should accept localhost URLs', () => {
 			expect(
 				() =>
 					new HttpTransport({
-						endpoint: "http://localhost:3000/logs",
+						endpoint: 'http://localhost:3000/logs',
 					}),
-			).not.toThrow();
-		});
+			).not.toThrow()
+		})
 
-		it("should reject javascript: protocol (XSS prevention)", () => {
+		it('should reject javascript: protocol (XSS prevention)', () => {
 			expect(
 				() =>
 					new HttpTransport({
-						endpoint: "javascript:alert(1)",
+						endpoint: 'javascript:alert(1)',
 					}),
-			).toThrow("Invalid protocol");
-		});
+			).toThrow('Invalid protocol')
+		})
 
-		it("should reject file: protocol (local file access)", () => {
+		it('should reject file: protocol (local file access)', () => {
 			expect(
 				() =>
 					new HttpTransport({
-						endpoint: "file:///etc/passwd",
+						endpoint: 'file:///etc/passwd',
 					}),
-			).toThrow("Invalid protocol");
-		});
+			).toThrow('Invalid protocol')
+		})
 
-		it("should reject data: protocol", () => {
+		it('should reject data: protocol', () => {
 			expect(
 				() =>
 					new HttpTransport({
-						endpoint: "data:text/html,<script>alert(1)</script>",
+						endpoint: 'data:text/html,<script>alert(1)</script>',
 					}),
-			).toThrow("Invalid protocol");
-		});
+			).toThrow('Invalid protocol')
+		})
 
-		it("should reject ftp: protocol", () => {
+		it('should reject ftp: protocol', () => {
 			expect(
 				() =>
 					new HttpTransport({
-						endpoint: "ftp://example.com/logs",
+						endpoint: 'ftp://example.com/logs',
 					}),
-			).toThrow("Invalid protocol");
-		});
+			).toThrow('Invalid protocol')
+		})
 
-		it("should reject invalid URLs", () => {
+		it('should reject invalid URLs', () => {
 			expect(
 				() =>
 					new HttpTransport({
-						endpoint: "not-a-valid-url",
+						endpoint: 'not-a-valid-url',
 					}),
-			).toThrow("Invalid endpoint URL");
-		});
+			).toThrow('Invalid endpoint URL')
+		})
 
-		it("should reject empty endpoint", () => {
+		it('should reject empty endpoint', () => {
 			expect(
 				() =>
 					new HttpTransport({
-						endpoint: "",
+						endpoint: '',
 					}),
-			).toThrow("Invalid endpoint URL");
-		});
+			).toThrow('Invalid endpoint URL')
+		})
 
-		it("should reject URLs with only protocol", () => {
+		it('should reject URLs with only protocol', () => {
 			expect(
 				() =>
 					new HttpTransport({
-						endpoint: "http://",
+						endpoint: 'http://',
 					}),
-			).toThrow("Invalid endpoint URL");
-		});
-	});
+			).toThrow('Invalid endpoint URL')
+		})
+	})
 
-	describe("Header Sanitization", () => {
-		it("should accept custom authorization headers", () => {
+	describe('Header Sanitization', () => {
+		it('should accept custom authorization headers', () => {
 			expect(
 				() =>
 					new HttpTransport({
-						endpoint: "https://example.com/logs",
+						endpoint: 'https://example.com/logs',
 						headers: {
-							Authorization: "Bearer token123",
+							Authorization: 'Bearer token123',
 						},
 					}),
-			).not.toThrow();
-		});
+			).not.toThrow()
+		})
 
-		it("should accept custom x-api-key headers", () => {
+		it('should accept custom x-api-key headers', () => {
 			expect(
 				() =>
 					new HttpTransport({
-						endpoint: "https://example.com/logs",
+						endpoint: 'https://example.com/logs',
 						headers: {
-							"X-API-Key": "secret-key",
+							'X-API-Key': 'secret-key',
 						},
 					}),
-			).not.toThrow();
-		});
+			).not.toThrow()
+		})
 
-		it("should reject Host header override", () => {
+		it('should reject Host header override', () => {
 			expect(
 				() =>
 					new HttpTransport({
-						endpoint: "https://example.com/logs",
+						endpoint: 'https://example.com/logs',
 						headers: {
-							Host: "attacker.com",
+							Host: 'attacker.com',
 						},
 					}),
-			).toThrow('Header "Host" is restricted');
-		});
+			).toThrow('Header "Host" is restricted')
+		})
 
-		it("should reject host header override (lowercase)", () => {
+		it('should reject host header override (lowercase)', () => {
 			expect(
 				() =>
 					new HttpTransport({
-						endpoint: "https://example.com/logs",
+						endpoint: 'https://example.com/logs',
 						headers: {
-							host: "attacker.com",
+							host: 'attacker.com',
 						},
 					}),
-			).toThrow('Header "host" is restricted');
-		});
+			).toThrow('Header "host" is restricted')
+		})
 
-		it("should reject Content-Length header override", () => {
+		it('should reject Content-Length header override', () => {
 			expect(
 				() =>
 					new HttpTransport({
-						endpoint: "https://example.com/logs",
+						endpoint: 'https://example.com/logs',
 						headers: {
-							"Content-Length": "999999",
+							'Content-Length': '999999',
 						},
 					}),
-			).toThrow('Header "Content-Length" is restricted');
-		});
+			).toThrow('Header "Content-Length" is restricted')
+		})
 
-		it("should reject Transfer-Encoding header override", () => {
+		it('should reject Transfer-Encoding header override', () => {
 			expect(
 				() =>
 					new HttpTransport({
-						endpoint: "https://example.com/logs",
+						endpoint: 'https://example.com/logs',
 						headers: {
-							"Transfer-Encoding": "chunked",
+							'Transfer-Encoding': 'chunked',
 						},
 					}),
-			).toThrow('Header "Transfer-Encoding" is restricted');
-		});
+			).toThrow('Header "Transfer-Encoding" is restricted')
+		})
 
-		it("should allow multiple safe headers", () => {
+		it('should allow multiple safe headers', () => {
 			expect(
 				() =>
 					new HttpTransport({
-						endpoint: "https://example.com/logs",
+						endpoint: 'https://example.com/logs',
 						headers: {
-							Authorization: "Bearer token",
-							"X-Request-ID": "12345",
-							"X-Custom-Header": "value",
+							Authorization: 'Bearer token',
+							'X-Request-ID': '12345',
+							'X-Custom-Header': 'value',
 						},
 					}),
-			).not.toThrow();
-		});
+			).not.toThrow()
+		})
 
-		it("should handle missing headers gracefully", () => {
+		it('should handle missing headers gracefully', () => {
 			expect(
 				() =>
 					new HttpTransport({
-						endpoint: "https://example.com/logs",
+						endpoint: 'https://example.com/logs',
 					}),
-			).not.toThrow();
-		});
-	});
+			).not.toThrow()
+		})
+	})
 
-	describe("createHttpTransport factory", () => {
-		it("should apply same validation as constructor", () => {
+	describe('createHttpTransport factory', () => {
+		it('should apply same validation as constructor', () => {
 			expect(() =>
 				createHttpTransport({
-					endpoint: "javascript:alert(1)",
+					endpoint: 'javascript:alert(1)',
 				}),
-			).toThrow("Invalid protocol");
-		});
+			).toThrow('Invalid protocol')
+		})
 
-		it("should validate headers through factory", () => {
+		it('should validate headers through factory', () => {
 			expect(() =>
 				createHttpTransport({
-					endpoint: "https://example.com/logs",
-					headers: { Host: "evil.com" },
+					endpoint: 'https://example.com/logs',
+					headers: { Host: 'evil.com' },
 				}),
-			).toThrow('Header "Host" is restricted');
-		});
-	});
-});
+			).toThrow('Header "Host" is restricted')
+		})
+	})
+})
