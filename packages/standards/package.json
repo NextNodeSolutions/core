@@ -30,7 +30,7 @@
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "lint": "oxlint",
-    "prepare": "husky",
+    "prepare": "[ -n \"$CI\" ] || husky",
     "test": "echo 'Configuration package — no tests needed'"
   },
   "dependencies": {
