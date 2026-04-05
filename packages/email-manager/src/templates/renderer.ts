@@ -3,23 +3,23 @@
  * React Email template rendering utilities
  */
 
-import { render } from "@react-email/render";
+import { render } from '@react-email/render'
 
 import type {
-  EmailTemplateComponent,
-  RenderedTemplate,
-  TemplateRenderOptions,
-} from "../types/email.js";
-import type { EmailError, Result } from "../types/result.js";
-import { emailFail } from "../types/result.js";
+	EmailTemplateComponent,
+	RenderedTemplate,
+	TemplateRenderOptions,
+} from '../types/email.js'
+import type { EmailError, Result } from '../types/result.js'
+import { emailFail } from '../types/result.js'
 
 /**
  * Default render options
  */
 const DEFAULT_OPTIONS: Required<TemplateRenderOptions> = {
-  plainText: true,
-  pretty: false,
-};
+	plainText: true,
+	pretty: false,
+}
 
 /**
  * Render a React Email template to HTML and optionally plain text (FR-11)
@@ -33,40 +33,40 @@ const DEFAULT_OPTIONS: Required<TemplateRenderOptions> = {
  * @returns Result with rendered HTML and optional text
  */
 export async function renderTemplate<TProps>(
-  template: EmailTemplateComponent<TProps>,
-  props: TProps,
-  options: TemplateRenderOptions = {},
+	template: EmailTemplateComponent<TProps>,
+	props: TProps,
+	options: TemplateRenderOptions = {},
 ): Promise<Result<RenderedTemplate, EmailError>> {
-  const config = { ...DEFAULT_OPTIONS, ...options };
+	const config = { ...DEFAULT_OPTIONS, ...options }
 
-  try {
-    // Create React element from the template component (FR-13)
-    const element = template(props);
+	try {
+		// Create React element from the template component (FR-13)
+		const element = template(props)
 
-    // Render to HTML using @react-email/render (FR-14)
-    const html = await render(element as React.ReactElement, {
-      ...(config.pretty !== undefined && {
-        pretty: config.pretty,
-      }),
-    });
+		// Render to HTML using @react-email/render (FR-14)
+		const html = await render(element as React.ReactElement, {
+			...(config.pretty !== undefined && {
+				pretty: config.pretty,
+			}),
+		})
 
-    // Optionally generate plain text version
-    let text: string | undefined;
-    if (config.plainText) {
-      text = await render(element as React.ReactElement, {
-        plainText: true,
-      });
-    }
+		// Optionally generate plain text version
+		let text: string | undefined
+		if (config.plainText) {
+			text = await render(element as React.ReactElement, {
+				plainText: true,
+			})
+		}
 
-    return { success: true, data: { html, text } };
-  } catch (error) {
-    // EC-1: Template rendering fails → return TEMPLATE_ERROR, never throw
-    return emailFail(
-      "TEMPLATE_ERROR",
-      error instanceof Error
-        ? `Template rendering failed: ${error.message}`
-        : "Template rendering failed: unknown error",
-      { originalError: error },
-    );
-  }
+		return { success: true, data: { html, text } }
+	} catch (error) {
+		// EC-1: Template rendering fails → return TEMPLATE_ERROR, never throw
+		return emailFail(
+			'TEMPLATE_ERROR',
+			error instanceof Error
+				? `Template rendering failed: ${error.message}`
+				: 'Template rendering failed: unknown error',
+			{ originalError: error },
+		)
+	}
 }

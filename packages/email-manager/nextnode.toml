@@ -1,14 +1,7 @@
 [project]
 name = "email-manager"
 type = "package"
-description = "Template-first email sending library for NextNode projects"
-
-[scripts]
-lint = "lint"
-test = "test"
-build = "build"
+filter = "@nextnode-solutions/email-manager"
 
 [package]
-scope = "@nextnode-solutions"
 access = "public"
-canary_on_label = true

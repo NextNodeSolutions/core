@@ -1,97 +1,81 @@
 {
-  "name": "@nextnode-solutions/email-manager",
-  "version": "0.0.0-development",
-  "description": "Template-first email sending library for NextNode projects",
-  "keywords": [
-    "email",
-    "nextnode",
-    "react-email",
-    "resend",
-    "templates",
-    "typescript"
-  ],
-  "homepage": "https://github.com/NextNodeSolutions/email-manager#readme",
-  "bugs": {
-    "url": "https://github.com/NextNodeSolutions/email-manager/issues"
-  },
-  "license": "MIT",
-  "author": "NextNode Solutions",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/NextNodeSolutions/email-manager.git"
-  },
-  "files": [
-    "CHANGELOG.md",
-    "README.md",
-    "dist/**/*.d.ts",
-    "dist/**/*.js"
-  ],
-  "type": "module",
-  "sideEffects": false,
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    }
-  },
-  "publishConfig": {
-    "access": "public"
-  },
-  "scripts": {
-    "prebuild": "pnpm clean",
-    "build": "tsup",
-    "clean": "rm -rf dist",
-    "commitlint": "commitlint --edit",
-    "format": "oxfmt --write .",
-    "format:check": "oxfmt --check .",
-    "lint": "oxlint",
-    "lint-staged": "lint-staged",
-    "prepare": "husky",
-    "prepublishOnly": "pnpm build",
-    "test": "vitest run",
-    "test:coverage": "vitest run --coverage",
-    "test:watch": "vitest",
-    "type-check": "tsc --noEmit"
-  },
-  "devDependencies": {
-    "@commitlint/cli": "^19",
-    "@commitlint/config-conventional": "^19.8.1",
-    "@nextnode-solutions/logger": "link:../logger",
-    "@nextnode-solutions/standards": "^1",
-    "@react-email/render": "^1.0.0",
-    "@types/node": "^22",
-    "@types/react": "^19",
-    "@vitest/coverage-v8": "^3",
-    "better-sort-package-json": "^1",
-    "husky": "^9",
-    "lint-staged": "^16",
-    "oxfmt": "^0.28.0",
-    "oxlint": "^1.43.0",
-    "react": "^19",
-    "resend": "^6.6.0",
-    "tsup": "^8",
-    "typescript": "^5",
-    "vitest": "^3"
-  },
-  "peerDependencies": {
-    "@nextnode-solutions/logger": ">=0.3.0",
-    "@react-email/render": ">=1.0.0",
-    "react": ">=18.0.0",
-    "resend": ">=6.0.0"
-  },
-  "peerDependenciesMeta": {
-    "resend": {
-      "optional": true
-    }
-  },
-  "engines": {
-    "node": ">=24.0.0"
-  },
-  "packageManager": "pnpm@10.11.0",
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "unrs-resolver"
-    ]
-  }
+	"name": "@nextnode-solutions/email-manager",
+	"version": "0.0.0-development",
+	"description": "Template-first email sending library for NextNode projects",
+	"keywords": [
+		"email",
+		"nextnode",
+		"react-email",
+		"resend",
+		"templates",
+		"typescript"
+	],
+	"homepage": "https://github.com/NextNodeSolutions/core#readme",
+	"bugs": {
+		"url": "https://github.com/NextNodeSolutions/core/issues"
+	},
+	"license": "MIT",
+	"author": "NextNode Solutions",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/NextNodeSolutions/core.git",
+		"directory": "packages/email-manager"
+	},
+	"files": [
+		"CHANGELOG.md",
+		"README.md",
+		"dist/**/*.d.ts",
+		"dist/**/*.js"
+	],
+	"type": "module",
+	"sideEffects": false,
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"scripts": {
+		"build": "tsup",
+		"format": "oxfmt --write .",
+		"format:check": "oxfmt --check .",
+		"lint": "oxlint",
+		"test": "vitest run",
+		"test:coverage": "vitest run --coverage",
+		"test:watch": "vitest",
+		"type-check": "tsc --noEmit"
+	},
+	"devDependencies": {
+		"@nextnode-solutions/logger": "workspace:*",
+		"@nextnode-solutions/standards": "workspace:*",
+		"@react-email/render": "^1.0.0",
+		"@types/node": "^22",
+		"@types/react": "^19",
+		"@vitest/coverage-v8": "^3",
+		"oxfmt": "^0.28.0",
+		"oxlint": "^1.43.0",
+		"react": "^19",
+		"resend": "^6.6.0",
+		"tsup": "^8",
+		"typescript": "^5",
+		"vitest": "^3"
+	},
+	"peerDependencies": {
+		"@nextnode-solutions/logger": ">=0.3.0",
+		"@react-email/render": ">=1.0.0",
+		"react": ">=18.0.0",
+		"resend": ">=6.0.0"
+	},
+	"peerDependenciesMeta": {
+		"resend": {
+			"optional": true
+		}
+	},
+	"engines": {
+		"node": ">=24.0.0"
+	},
+	"packageManager": "pnpm@10.11.0"
 }

@@ -1,0 +1,16 @@
+name: Email Manager
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["packages/email-manager/**"]
+  pull_request:
+    paths: ["packages/email-manager/**"]
+
+jobs:
+  pipeline:
+    uses: ./.github/workflows/publish-package.yml
+    with:
+      config_file: packages/email-manager/nextnode.toml
+    secrets: inherit

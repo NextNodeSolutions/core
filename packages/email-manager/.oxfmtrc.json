@@ -1,3 +1,33 @@
 {
-  "extends": ["@nextnode-solutions/standards/oxfmt"]
+	"useTabs": true,
+	"tabWidth": 4,
+	"endOfLine": "lf",
+	"printWidth": 80,
+	"trailingComma": "all",
+	"semi": false,
+	"arrowParens": "avoid",
+	"bracketSpacing": true,
+	"singleQuote": true,
+	"jsxSingleQuote": false,
+	"bracketSameLine": false,
+	"experimentalTailwindcss": {},
+	"experimentalSortImports": {
+		"groups": [
+			["builtin"],
+			["external", "type-external"],
+			["internal", "type-internal"],
+			["parent", "type-parent"],
+			["sibling", "type-sibling"],
+			["index", "type-index"]
+		],
+		"newlinesBetween": true
+	},
+	"overrides": [
+		{
+			"files": ["*.json"],
+			"options": {
+				"trailingComma": "none"
+			}
+		}
+	]
 }
