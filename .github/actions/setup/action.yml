@@ -4,15 +4,18 @@
 #   - "infra" mode: checks out the core monorepo's infrastructure package so
 #     the job can run the pipeline TypeScript CLI (node src/index.ts).
 #     Node 24 strips types natively, so no runtime loader is needed. The
-#     install uses --prod to skip tooling deps (vitest, oxlint, tsup, ...)
-#     and --ignore-scripts to skip the monorepo root `prepare` hook which
-#     runs husky (a devDep, absent from the --prod install).
+#     install uses --prod to skip tooling deps (vitest, oxlint, tsup, ...).
 #     Used by orchestration jobs (plan, deploy).
 #   - "deps" mode: installs the caller project's own dependencies so the job
 #     can run project scripts (lint, test, build, publish).
 #     Used by project jobs (quality, publish).
 #
 # Both can be combined if a future job needs both.
+#
+# Note: the `prepare` hook in root/workspace package.json files is guarded
+# with `[ -n "$CI" ] || husky`, so husky is skipped in CI without having
+# to pass --ignore-scripts. Legitimate postinstall scripts (e.g. native
+# binding builds) are still allowed to run.
 
 name: Setup NextNode
 description: Checkout, install pnpm/Node, and optionally install infra or project deps
@@ -74,7 +77,7 @@ runs:
 
     - name: Install infrastructure deps
       if: inputs.infra == 'true'
-      run: pnpm install --frozen-lockfile --prefer-offline --prod --ignore-scripts
+      run: pnpm install --frozen-lockfile --prefer-offline --prod
       shell: bash
       working-directory: .infra/packages/infrastructure
 
