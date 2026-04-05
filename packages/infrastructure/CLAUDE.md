@@ -82,7 +82,7 @@ All scripts default to their key name. Set to `false` to skip.
 
 Called by `.github/workflows/pipeline.yml` via `workflow_call`:
 
-1. `plan` job checks out this package, runs `tsx src/index.ts` with `PIPELINE_CONFIG_FILE`
+1. `plan` job checks out this package, runs `node src/index.ts` with `PIPELINE_CONFIG_FILE`
 2. Outputs `quality_matrix`, `project_name`, `project_type` to `GITHUB_OUTPUT`
 3. `pipeline.yml` routes to one of three nested reusable workflows based on plan outputs:
     - `route-package.yml` (`type == "package"`): quality → publish

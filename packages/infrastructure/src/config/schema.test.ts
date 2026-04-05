@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { parseConfig } from './schema.js'
+import { parseConfig } from './schema.ts'
 
 describe('parseConfig', () => {
 	describe('valid configs', () => {

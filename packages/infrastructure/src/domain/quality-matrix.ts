@@ -1,6 +1,6 @@
-import type { ProjectSection, ScriptsSection } from '../config/schema.js'
+import type { ProjectSection, ScriptsSection } from '../config/schema.ts'
 
-import type { PipelineEnvironment } from './environment.js'
+import type { PipelineEnvironment } from './environment.ts'
 
 export interface PipelineContext {
 	readonly environment: PipelineEnvironment

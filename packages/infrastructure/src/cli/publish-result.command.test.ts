@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { publishResultCommand } from './publish-result.command.js'
+import { publishResultCommand } from './publish-result.command.ts'
 
 describe('publishResultCommand', () => {
 	let outputFile: string

@@ -28,7 +28,7 @@ jobs:
 
       - name: Plan pipeline
         id: plan
-        run: pnpm exec tsx src/index.ts
+        run: node src/index.ts
         working-directory: .infra/packages/infrastructure
         env:
           PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
@@ -94,7 +94,7 @@ jobs:
 
       - name: Parse result and summary
         if: always()
-        run: pnpm exec tsx src/index.ts publish-result
+        run: node src/index.ts publish-result
         working-directory: .infra/packages/infrastructure
         env:
           SR_OUTPUT_FILE: /tmp/sr-output.txt

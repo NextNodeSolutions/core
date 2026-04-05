@@ -4,10 +4,10 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { NextNodeConfig } from '../config/schema.js'
-import type { QualityTask } from '../domain/quality-matrix.js'
+import type { NextNodeConfig } from '../config/schema.ts'
+import type { QualityTask } from '../domain/quality-matrix.ts'
 
-import { writePlanOutputs } from './plan-outputs.js'
+import { writePlanOutputs } from './plan-outputs.ts'
 
 const APP_CONFIG: NextNodeConfig = {
 	project: {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildSummary, parseSemanticReleaseOutput } from './publish-result.js'
+import { buildSummary, parseSemanticReleaseOutput } from './publish-result.ts'
 
 describe('parseSemanticReleaseOutput', () => {
 	it('detects a published release with version', () => {

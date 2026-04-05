@@ -1,4 +1,4 @@
-import type { WorkflowRun } from '../domain/prod-gate.js'
+import type { WorkflowRun } from '../domain/prod-gate.ts'
 
 interface WorkflowRunsResponse {
 	readonly total_count: number

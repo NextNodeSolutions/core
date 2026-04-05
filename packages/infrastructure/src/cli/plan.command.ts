@@ -2,15 +2,15 @@ import { dirname } from 'node:path'
 
 import { logger } from '@nextnode-solutions/logger'
 
-import { writePlanOutputs } from '../adapters/plan-outputs.js'
-import { loadConfig } from '../config/load.js'
-import { resolveEnvironment } from '../domain/environment.js'
-import { buildQualityMatrix } from '../domain/quality-matrix.js'
+import { writePlanOutputs } from '../adapters/plan-outputs.ts'
+import { loadConfig } from '../config/load.ts'
+import { resolveEnvironment } from '../domain/environment.ts'
+import { buildQualityMatrix } from '../domain/quality-matrix.ts'
 
-import { getEnv, requireEnv } from './env.js'
+import { getEnv, requireEnv } from './env.ts'
 
 const PROD_GATE_COMMAND =
-	'cd .infra/packages/infrastructure && pnpm exec tsx src/index.ts prod-gate'
+	'cd .infra/packages/infrastructure && node src/index.ts prod-gate'
 
 export function planCommand(): void {
 	const configPath = requireEnv('PIPELINE_CONFIG_FILE')

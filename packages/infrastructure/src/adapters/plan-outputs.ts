@@ -1,10 +1,10 @@
 import { logger } from '@nextnode-solutions/logger'
 
-import type { NextNodeConfig } from '../config/schema.js'
-import { hasProdGate } from '../domain/quality-matrix.js'
-import type { QualityTask } from '../domain/quality-matrix.js'
+import type { NextNodeConfig } from '../config/schema.ts'
+import { hasProdGate } from '../domain/quality-matrix.ts'
+import type { QualityTask } from '../domain/quality-matrix.ts'
 
-import { writeOutput } from './github-output.js'
+import { writeOutput } from './github-output.ts'
 
 const SKIP_MATRIX: ReadonlyArray<QualityTask> = [
 	{ id: 'skip', name: 'No quality checks', cmd: 'echo skipped' },

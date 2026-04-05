@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { prodGateCommand } from './prod-gate.command.js'
+import { prodGateCommand } from './prod-gate.command.ts'
 
 describe('prodGateCommand', () => {
 	const savedEnv: Record<string, string | undefined> = {}

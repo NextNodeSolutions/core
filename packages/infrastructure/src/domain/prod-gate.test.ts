@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { evaluateDevRun, findDevRun } from './prod-gate.js'
-import type { WorkflowRun } from './prod-gate.js'
+import { evaluateDevRun, findDevRun } from './prod-gate.ts'
+import type { WorkflowRun } from './prod-gate.ts'
 
 const DEV_RUN: WorkflowRun = {
 	path: '.github/workflows/deploy-dev.yml',

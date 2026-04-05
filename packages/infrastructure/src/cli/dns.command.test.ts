@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { dnsCommand } from './dns.command.js'
+import { dnsCommand } from './dns.command.ts'
 
 interface MockResponse {
 	ok: boolean

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { resolveEnvironment } from './environment.js'
+import { resolveEnvironment } from './environment.ts'
 
 describe('resolveEnvironment', () => {
 	it('returns "none" for package projects regardless of env var', () => {
