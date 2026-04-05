@@ -1,6 +1,7 @@
 /**
  * Resend provider tests
- * Mock Resend SDK to test request mapping, error mapping, edge cases
+ * Mock the Resend SDK (external boundary) to verify request mapping,
+ * error mapping, and message validation
  */
 import { createNoopLogger } from '@nextnode-solutions/logger/testing'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -10,7 +11,7 @@ import { createProvider } from '../src/providers/registry.js'
 import { createResendProvider } from '../src/providers/resend.js'
 import type { EmailMessage } from '../src/types/email.js'
 
-// Mock Resend SDK
+// Mock the Resend SDK — external API boundary, no real HTTP
 vi.mock('resend', () => ({
 	Resend: vi.fn().mockImplementation((apiKey: string) => ({
 		emails: { send: vi.fn() },
@@ -19,7 +20,6 @@ vi.mock('resend', () => ({
 	})),
 }))
 
-// Mock Resend client for direct provider tests
 const createMockClient = () => ({
 	emails: { send: vi.fn() },
 	domains: { list: vi.fn() },
@@ -34,50 +34,170 @@ const baseMessage: EmailMessage = {
 
 describe('Resend Provider', () => {
 	let mockClient: ReturnType<typeof createMockClient>
+	let provider: ReturnType<typeof createResendProvider>
 
 	beforeEach(() => {
 		mockClient = createMockClient()
+		provider = createResendProvider(mockClient as never, createNoopLogger())
 	})
 
-	describe('createResendProvider', () => {
-		it('creates provider with name "resend"', () => {
-			const provider = createResendProvider(
-				mockClient as never,
-				createNoopLogger(),
-			)
-			expect(provider.name).toBe('resend')
-		})
-
-		it('sends email successfully', async () => {
+	describe('send() — happy path', () => {
+		it('returns a success result with the Resend message id', async () => {
 			mockClient.emails.send.mockResolvedValue({
 				data: { id: 'msg_123' },
 				error: null,
 			})
 
-			const provider = createResendProvider(
-				mockClient as never,
-				createNoopLogger(),
-			)
 			const result = await provider.send(baseMessage)
 
-			expect(result.success).toBe(true)
-			if (result.success) {
-				expect(result.data.id).toBe('msg_123')
-				expect(result.data.provider).toBe('resend')
-				expect(result.data.sentAt).toBeInstanceOf(Date)
+			expect(result).toEqual({
+				success: true,
+				data: {
+					id: 'msg_123',
+					provider: 'resend',
+					sentAt: expect.any(Date),
+				},
+			})
+		})
+
+		it('has name "resend"', () => {
+			expect(provider.name).toBe('resend')
+		})
+	})
+
+	describe('send() — EmailMessage → Resend payload mapping', () => {
+		beforeEach(() => {
+			mockClient.emails.send.mockResolvedValue({
+				data: { id: 'msg_ok' },
+				error: null,
+			})
+		})
+
+		it('formats a recipient object as "Name <email>"', async () => {
+			await provider.send({
+				from: { email: 'sender@example.com', name: 'Sender' },
+				to: { email: 'recipient@example.com', name: 'Recipient' },
+				subject: 'Test',
+				html: '<p>Hi</p>',
+			})
+
+			expect(mockClient.emails.send).toHaveBeenCalledWith(
+				expect.objectContaining({
+					from: 'Sender <sender@example.com>',
+					to: ['Recipient <recipient@example.com>'],
+				}),
+			)
+		})
+
+		it.each([
+			{
+				name: 'cc/bcc/replyTo recipients (strings & arrays)',
+				input: {
+					cc: 'cc@example.com',
+					bcc: ['bcc1@example.com', 'bcc2@example.com'],
+					replyTo: 'reply@example.com',
+				},
+				expected: {
+					cc: ['cc@example.com'],
+					bcc: ['bcc1@example.com', 'bcc2@example.com'],
+					replyTo: ['reply@example.com'],
+				},
+			},
+			{
+				name: 'attachments with contentType renamed to content_type',
+				input: {
+					attachments: [
+						{
+							filename: 'test.pdf',
+							content: Buffer.from('data'),
+							contentType: 'application/pdf',
+						},
+					],
+				},
+				expected: {
+					attachments: [
+						{
+							filename: 'test.pdf',
+							content: Buffer.from('data'),
+							content_type: 'application/pdf',
+						},
+					],
+				},
+			},
+			{
+				name: 'headers array converted to Record<string,string>',
+				input: { headers: [{ name: 'X-Custom', value: 'test' }] },
+				expected: { headers: { 'X-Custom': 'test' } },
+			},
+			{
+				name: 'tags forwarded as-is',
+				input: { tags: [{ name: 'campaign', value: 'launch' }] },
+				expected: { tags: [{ name: 'campaign', value: 'launch' }] },
+			},
+			{
+				name: 'scheduledAt Date → ISO string (renamed to scheduled_at)',
+				input: { scheduledAt: new Date('2026-03-01T10:00:00Z') },
+				expected: { scheduled_at: '2026-03-01T10:00:00.000Z' },
+			},
+			{
+				name: 'scheduledAt string passed as-is',
+				input: { scheduledAt: '2026-03-01T10:00:00Z' },
+				expected: { scheduled_at: '2026-03-01T10:00:00Z' },
+			},
+		])('maps $name', async ({ input, expected }) => {
+			await provider.send({ ...baseMessage, ...input })
+
+			expect(mockClient.emails.send).toHaveBeenCalledWith(
+				expect.objectContaining(expected),
+			)
+		})
+	})
+
+	describe('send() — error mapping (FR-20)', () => {
+		it.each([
+			{
+				label: 'rate limit exception → RATE_LIMIT_ERROR',
+				rejection: new Error('Rate limit exceeded'),
+				expectedCode: 'RATE_LIMIT_ERROR',
+			},
+			{
+				label: 'validation exception → VALIDATION_ERROR',
+				rejection: new Error('Validation failed'),
+				expectedCode: 'VALIDATION_ERROR',
+			},
+			{
+				label: 'network exception → NETWORK_ERROR',
+				rejection: new Error('Network failure'),
+				expectedCode: 'NETWORK_ERROR',
+			},
+			{
+				label: 'generic exception → PROVIDER_ERROR',
+				rejection: new Error('Something unexpected'),
+				expectedCode: 'PROVIDER_ERROR',
+			},
+			{
+				label: 'non-Error throw → UNKNOWN_ERROR',
+				rejection: 'string error',
+				expectedCode: 'UNKNOWN_ERROR',
+			},
+		])('maps $label', async ({ rejection, expectedCode }) => {
+			mockClient.emails.send.mockRejectedValue(rejection)
+
+			const result = await provider.send(baseMessage)
+
+			expect(result.success).toBe(false)
+			if (!result.success) {
+				expect(result.error.code).toBe(expectedCode)
+				expect(result.error.provider).toBe('resend')
 			}
 		})
 
-		it('maps Resend API error to failure result', async () => {
+		it('maps API error field to AUTHENTICATION_ERROR when message mentions API key', async () => {
 			mockClient.emails.send.mockResolvedValue({
 				data: null,
 				error: { message: 'Invalid API key' },
 			})
 
-			const provider = createResendProvider(
-				mockClient as never,
-				createNoopLogger(),
-			)
 			const result = await provider.send(baseMessage)
 
 			expect(result.success).toBe(false)
@@ -87,427 +207,151 @@ describe('Resend Provider', () => {
 			}
 		})
 
-		it('handles no data returned from Resend', async () => {
+		it('returns PROVIDER_ERROR when Resend returns no data and no error', async () => {
 			mockClient.emails.send.mockResolvedValue({
 				data: null,
 				error: null,
 			})
 
-			const provider = createResendProvider(
-				mockClient as never,
-				createNoopLogger(),
-			)
 			const result = await provider.send(baseMessage)
 
 			expect(result.success).toBe(false)
 			if (!result.success) {
 				expect(result.error.code).toBe('PROVIDER_ERROR')
+				expect(result.error.message).toContain('No data')
 			}
-		})
-
-		it('handles thrown exceptions', async () => {
-			mockClient.emails.send.mockRejectedValue(
-				new Error('Network failure'),
-			)
-
-			const provider = createResendProvider(
-				mockClient as never,
-				createNoopLogger(),
-			)
-			const result = await provider.send(baseMessage)
-
-			expect(result.success).toBe(false)
-			if (!result.success) {
-				expect(result.error.code).toBe('NETWORK_ERROR')
-			}
-		})
-
-		it('handles recipient object format', async () => {
-			mockClient.emails.send.mockResolvedValue({
-				data: { id: 'msg_456' },
-				error: null,
-			})
-
-			const provider = createResendProvider(
-				mockClient as never,
-				createNoopLogger(),
-			)
-			const message: EmailMessage = {
-				from: {
-					email: 'sender@example.com',
-					name: 'Sender',
-				},
-				to: {
-					email: 'recipient@example.com',
-					name: 'Recipient',
-				},
-				subject: 'Test',
-				html: '<p>Hi</p>',
-			}
-
-			const result = await provider.send(message)
-
-			expect(result.success).toBe(true)
-			expect(mockClient.emails.send).toHaveBeenCalledWith(
-				expect.objectContaining({
-					from: 'Sender <sender@example.com>',
-					to: ['Recipient <recipient@example.com>'],
-				}),
-			)
-		})
-
-		it('maps cc, bcc, replyTo recipients', async () => {
-			mockClient.emails.send.mockResolvedValue({
-				data: { id: 'msg_789' },
-				error: null,
-			})
-
-			const provider = createResendProvider(
-				mockClient as never,
-				createNoopLogger(),
-			)
-			const message: EmailMessage = {
-				...baseMessage,
-				cc: 'cc@example.com',
-				bcc: ['bcc1@example.com', 'bcc2@example.com'],
-				replyTo: 'reply@example.com',
-			}
-
-			await provider.send(message)
-
-			expect(mockClient.emails.send).toHaveBeenCalledWith(
-				expect.objectContaining({
-					cc: ['cc@example.com'],
-					bcc: ['bcc1@example.com', 'bcc2@example.com'],
-					replyTo: ['reply@example.com'],
-				}),
-			)
-		})
-
-		it('maps attachments with content type', async () => {
-			mockClient.emails.send.mockResolvedValue({
-				data: { id: 'msg_att' },
-				error: null,
-			})
-
-			const provider = createResendProvider(
-				mockClient as never,
-				createNoopLogger(),
-			)
-			const message: EmailMessage = {
-				...baseMessage,
-				attachments: [
-					{
-						filename: 'test.pdf',
-						content: Buffer.from('data'),
-						contentType: 'application/pdf',
-					},
-				],
-			}
-
-			await provider.send(message)
-
-			expect(mockClient.emails.send).toHaveBeenCalledWith(
-				expect.objectContaining({
-					attachments: [
-						{
-							filename: 'test.pdf',
-							content: Buffer.from('data'),
-							content_type: 'application/pdf',
-						},
-					],
-				}),
-			)
-		})
-
-		it('maps headers and tags', async () => {
-			mockClient.emails.send.mockResolvedValue({
-				data: { id: 'msg_meta' },
-				error: null,
-			})
-
-			const provider = createResendProvider(
-				mockClient as never,
-				createNoopLogger(),
-			)
-			const message: EmailMessage = {
-				...baseMessage,
-				headers: [{ name: 'X-Custom', value: 'test' }],
-				tags: [{ name: 'campaign', value: 'launch' }],
-			}
-
-			await provider.send(message)
-
-			expect(mockClient.emails.send).toHaveBeenCalledWith(
-				expect.objectContaining({
-					headers: { 'X-Custom': 'test' },
-					tags: [{ name: 'campaign', value: 'launch' }],
-				}),
-			)
-		})
-
-		it('maps scheduledAt Date to ISO string', async () => {
-			mockClient.emails.send.mockResolvedValue({
-				data: { id: 'msg_sched' },
-				error: null,
-			})
-
-			const provider = createResendProvider(
-				mockClient as never,
-				createNoopLogger(),
-			)
-			const scheduledDate = new Date('2026-03-01T10:00:00Z')
-			const message: EmailMessage = {
-				...baseMessage,
-				scheduledAt: scheduledDate,
-			}
-
-			await provider.send(message)
-
-			expect(mockClient.emails.send).toHaveBeenCalledWith(
-				expect.objectContaining({
-					scheduled_at: scheduledDate.toISOString(),
-				}),
-			)
-		})
-
-		it('passes scheduledAt string as-is', async () => {
-			mockClient.emails.send.mockResolvedValue({
-				data: { id: 'msg_sched2' },
-				error: null,
-			})
-
-			const provider = createResendProvider(
-				mockClient as never,
-				createNoopLogger(),
-			)
-			const message: EmailMessage = {
-				...baseMessage,
-				scheduledAt: '2026-03-01T10:00:00Z',
-			}
-
-			await provider.send(message)
-
-			expect(mockClient.emails.send).toHaveBeenCalledWith(
-				expect.objectContaining({
-					scheduled_at: '2026-03-01T10:00:00Z',
-				}),
-			)
 		})
 	})
 
-	describe('error mapping (FR-20)', () => {
-		it('maps rate limit error', async () => {
-			mockClient.emails.send.mockRejectedValue(
-				new Error('Rate limit exceeded'),
-			)
+	describe('send() — message validation', () => {
+		it('rejects an empty recipients array with VALIDATION_ERROR (EC-3)', async () => {
+			const result = await provider.send({
+				from: 'sender@example.com',
+				to: [],
+				subject: 'Test',
+				html: '<p>Hi</p>',
+			})
 
-			const provider = createResendProvider(
-				mockClient as never,
-				createNoopLogger(),
-			)
-			const result = await provider.send(baseMessage)
-
-			if (!result.success) {
-				expect(result.error.code).toBe('RATE_LIMIT_ERROR')
-			}
-		})
-
-		it('maps validation error', async () => {
-			mockClient.emails.send.mockRejectedValue(
-				new Error('Validation failed'),
-			)
-
-			const provider = createResendProvider(
-				mockClient as never,
-				createNoopLogger(),
-			)
-			const result = await provider.send(baseMessage)
-
+			expect(result.success).toBe(false)
 			if (!result.success) {
 				expect(result.error.code).toBe('VALIDATION_ERROR')
 			}
+			expect(mockClient.emails.send).not.toHaveBeenCalled()
 		})
 
-		it('maps unknown non-Error to UNKNOWN_ERROR', async () => {
-			mockClient.emails.send.mockRejectedValue('string error')
+		it('rejects a message with no html or text content', async () => {
+			const result = await provider.send({
+				from: 'sender@example.com',
+				to: 'recipient@example.com',
+				subject: 'Test',
+				html: '',
+			} as EmailMessage)
 
-			const provider = createResendProvider(
-				mockClient as never,
-				createNoopLogger(),
-			)
-			const result = await provider.send(baseMessage)
-
+			expect(result.success).toBe(false)
 			if (!result.success) {
-				expect(result.error.code).toBe('UNKNOWN_ERROR')
+				expect(result.error.code).toBe('VALIDATION_ERROR')
 			}
-		})
-
-		it('maps generic Error to PROVIDER_ERROR', async () => {
-			mockClient.emails.send.mockRejectedValue(
-				new Error('Something unexpected'),
-			)
-
-			const provider = createResendProvider(
-				mockClient as never,
-				createNoopLogger(),
-			)
-			const result = await provider.send(baseMessage)
-
-			if (!result.success) {
-				expect(result.error.code).toBe('PROVIDER_ERROR')
-			}
+			expect(mockClient.emails.send).not.toHaveBeenCalled()
 		})
 	})
 
-	describe('validateConfig', () => {
-		it('returns true when domains.list succeeds', async () => {
-			mockClient.domains.list.mockResolvedValue({
-				data: [],
-			})
+	describe('validateConfig()', () => {
+		it('returns true when domains.list resolves', async () => {
+			mockClient.domains.list.mockResolvedValue({ data: [] })
 
-			const provider = createResendProvider(
-				mockClient as never,
-				createNoopLogger(),
-			)
-			const isValid = await provider.validateConfig()
-
-			expect(isValid).toBe(true)
+			await expect(provider.validateConfig()).resolves.toBe(true)
 		})
 
 		it('returns false when domains.list throws', async () => {
 			mockClient.domains.list.mockRejectedValue(new Error('Unauthorized'))
 
-			const provider = createResendProvider(
-				mockClient as never,
-				createNoopLogger(),
-			)
-			const isValid = await provider.validateConfig()
-
-			expect(isValid).toBe(false)
-		})
-	})
-
-	describe('message validation', () => {
-		it('rejects message without recipients (EC-3)', async () => {
-			const provider = createResendProvider(
-				mockClient as never,
-				createNoopLogger(),
-			)
-			const message: EmailMessage = {
-				from: 'sender@example.com',
-				to: [],
-				subject: 'Test',
-				html: '<p>Hi</p>',
-			}
-
-			const result = await provider.send(message)
-
-			expect(result.success).toBe(false)
-			if (!result.success) {
-				expect(result.error.code).toBe('VALIDATION_ERROR')
-			}
-		})
-
-		it('rejects message without content', async () => {
-			const provider = createResendProvider(
-				mockClient as never,
-				createNoopLogger(),
-			)
-			const message = {
-				from: 'sender@example.com',
-				to: 'recipient@example.com',
-				subject: 'Test',
-				html: '',
-			} as EmailMessage
-
-			const result = await provider.send(message)
-
-			expect(result.success).toBe(false)
-			if (!result.success) {
-				expect(result.error.code).toBe('VALIDATION_ERROR')
-			}
+			await expect(provider.validateConfig()).resolves.toBe(false)
 		})
 	})
 })
 
-describe('Provider Registry (FR-16)', () => {
-	it('creates resend provider via createProvider', async () => {
+describe('createProvider() — registry (FR-16)', () => {
+	it('returns a functional Resend provider that forwards send() to the SDK', async () => {
 		const provider = await createProvider('resend', {
 			apiKey: 're_test_key',
 		})
+
 		expect(provider.name).toBe('resend')
+		// The provider should implement the EmailProvider contract
+		expect(typeof provider.send).toBe('function')
+		expect(typeof provider.validateConfig).toBe('function')
 	})
 
-	it('throws for empty API key (EC-2)', async () => {
-		await expect(createProvider('resend', { apiKey: '' })).rejects.toThrow(
+	it.each([
+		{ label: 'empty string', apiKey: '' },
+		{ label: 'whitespace only', apiKey: '   ' },
+	])('throws for $label API key (EC-2 fail-fast)', async ({ apiKey }) => {
+		await expect(createProvider('resend', { apiKey })).rejects.toThrow(
 			'Resend API key is required',
 		)
-	})
-
-	it('throws for whitespace-only API key (EC-2)', async () => {
-		await expect(
-			createProvider('resend', { apiKey: '   ' }),
-		).rejects.toThrow('Resend API key is required')
 	})
 })
 
 describe('Provider utils (base)', () => {
 	const utils = createProviderUtils('test')
 
-	it('normalizes string recipient', () => {
-		expect(utils.normalizeRecipient('user@test.com')).toBe('user@test.com')
-	})
-
-	it('normalizes object recipient with name', () => {
-		expect(
-			utils.normalizeRecipient({
-				email: 'user@test.com',
-				name: 'User',
-			}),
-		).toBe('User <user@test.com>')
-	})
-
-	it('normalizes object recipient without name', () => {
-		expect(utils.normalizeRecipient({ email: 'user@test.com' })).toBe(
-			'user@test.com',
-		)
-	})
-
-	it('normalizes single recipient to array', () => {
-		expect(utils.normalizeRecipients('user@test.com')).toEqual([
-			'user@test.com',
-		])
-	})
-
-	it('normalizes array of recipients', () => {
-		expect(
-			utils.normalizeRecipients([
-				'a@test.com',
-				{ email: 'b@test.com', name: 'B' },
-			]),
-		).toEqual(['a@test.com', 'B <b@test.com>'])
-	})
-
-	it('validates message with all required fields', () => {
-		const result = utils.validateMessage(baseMessage)
-		expect(result.success).toBe(true)
-	})
-
-	it('rejects message exceeding 50 recipients (EC-6)', () => {
-		const recipients = Array.from(
-			{ length: 51 },
-			(_, i) => `user${String(i)}@test.com`,
-		)
-		const result = utils.validateMessage({
-			...baseMessage,
-			to: recipients,
+	describe('normalizeRecipient()', () => {
+		it.each([
+			{ input: 'user@test.com', expected: 'user@test.com' },
+			{
+				input: { email: 'user@test.com', name: 'User' },
+				expected: 'User <user@test.com>',
+			},
+			{
+				input: { email: 'user@test.com' },
+				expected: 'user@test.com',
+			},
+		])('formats $input → "$expected"', ({ input, expected }) => {
+			expect(utils.normalizeRecipient(input)).toBe(expected)
 		})
-		expect(result.success).toBe(false)
-		if (!result.success) {
-			expect(result.error.code).toBe('VALIDATION_ERROR')
-			expect(result.error.message).toContain('51')
-			expect(result.error.message).toContain('50')
-		}
+	})
+
+	describe('normalizeRecipients()', () => {
+		it('wraps a single recipient in an array', () => {
+			expect(utils.normalizeRecipients('user@test.com')).toEqual([
+				'user@test.com',
+			])
+		})
+
+		it('maps an array of mixed string/object recipients', () => {
+			expect(
+				utils.normalizeRecipients([
+					'a@test.com',
+					{ email: 'b@test.com', name: 'B' },
+				]),
+			).toEqual(['a@test.com', 'B <b@test.com>'])
+		})
+	})
+
+	describe('validateMessage()', () => {
+		it('accepts a message with all required fields', () => {
+			const result = utils.validateMessage(baseMessage)
+
+			expect(result).toEqual({ success: true, data: undefined })
+		})
+
+		it('rejects more than 50 recipients with a message citing both counts (EC-6)', () => {
+			const recipients = Array.from(
+				{ length: 51 },
+				(_, i) => `user${String(i)}@test.com`,
+			)
+
+			const result = utils.validateMessage({
+				...baseMessage,
+				to: recipients,
+			})
+
+			expect(result.success).toBe(false)
+			if (!result.success) {
+				expect(result.error.code).toBe('VALIDATION_ERROR')
+				expect(result.error.message).toContain('51')
+				expect(result.error.message).toContain('50')
+			}
+		})
 	})
 })
