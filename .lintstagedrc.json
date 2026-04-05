@@ -1,0 +1,4 @@
+{
+  "package.json": ["better-sort-package-json"],
+  "*": ["pnpm lint", "pnpm format"]
+}
