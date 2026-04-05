@@ -4,7 +4,9 @@
 #   - "infra" mode: checks out the core monorepo's infrastructure package so
 #     the job can run the pipeline TypeScript CLI (node src/index.ts).
 #     Node 24 strips types natively, so no runtime loader is needed. The
-#     install uses --prod to skip tooling deps (vitest, oxlint, tsup, ...).
+#     install uses --prod to skip tooling deps (vitest, oxlint, tsup, ...)
+#     and --ignore-scripts to skip the monorepo root `prepare` hook which
+#     runs husky (a devDep, absent from the --prod install).
 #     Used by orchestration jobs (plan, deploy).
 #   - "deps" mode: installs the caller project's own dependencies so the job
 #     can run project scripts (lint, test, build, publish).
@@ -72,7 +74,7 @@ runs:
 
     - name: Install infrastructure deps
       if: inputs.infra == 'true'
-      run: pnpm install --frozen-lockfile --prefer-offline --prod
+      run: pnpm install --frozen-lockfile --prefer-offline --prod --ignore-scripts
       shell: bash
       working-directory: .infra/packages/infrastructure
 
