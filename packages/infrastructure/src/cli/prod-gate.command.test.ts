@@ -1,47 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { findDevRun, prodGate } from './prod-gate.js'
+import { prodGateCommand } from './prod-gate.command.js'
 
-describe('findDevRun', () => {
-	it('finds the dev workflow run by path', () => {
-		const devRun = {
-			path: '.github/workflows/deploy-dev.yml',
-			status: 'completed',
-			conclusion: 'success',
-			html_url: 'https://github.com/org/repo/actions/runs/1',
-		}
-		const runs = [
-			devRun,
-			{
-				path: '.github/workflows/deploy-prod.yml',
-				status: 'completed',
-				conclusion: 'success',
-				html_url: 'https://github.com/org/repo/actions/runs/2',
-			},
-		]
-
-		expect(findDevRun(runs)).toEqual(devRun)
-	})
-
-	it('returns undefined when no dev run exists', () => {
-		const runs = [
-			{
-				path: '.github/workflows/deploy-prod.yml',
-				status: 'completed',
-				conclusion: 'success',
-				html_url: 'https://github.com/org/repo/actions/runs/1',
-			},
-		]
-
-		expect(findDevRun(runs)).toBeUndefined()
-	})
-
-	it('returns undefined for empty runs', () => {
-		expect(findDevRun([])).toBeUndefined()
-	})
-})
-
-describe('prodGate', () => {
+describe('prodGateCommand', () => {
 	const savedEnv: Record<string, string | undefined> = {}
 
 	beforeEach(() => {
@@ -93,7 +54,7 @@ describe('prodGate', () => {
 			}),
 		)
 
-		await expect(prodGate()).resolves.toBeUndefined()
+		await expect(prodGateCommand()).resolves.toBeUndefined()
 	})
 
 	it('throws when no dev run found', async () => {
@@ -106,7 +67,7 @@ describe('prodGate', () => {
 			}),
 		)
 
-		await expect(prodGate()).rejects.toThrow(
+		await expect(prodGateCommand()).rejects.toThrow(
 			'No dev pipeline run found for abc123',
 		)
 	})
@@ -132,7 +93,7 @@ describe('prodGate', () => {
 			}),
 		)
 
-		await expect(prodGate()).rejects.toThrow(
+		await expect(prodGateCommand()).rejects.toThrow(
 			'Dev pipeline has not passed: completed/failure',
 		)
 	})
@@ -158,7 +119,7 @@ describe('prodGate', () => {
 			}),
 		)
 
-		await expect(prodGate()).rejects.toThrow(
+		await expect(prodGateCommand()).rejects.toThrow(
 			'Dev pipeline has not passed: in_progress/null',
 		)
 	})
@@ -173,12 +134,16 @@ describe('prodGate', () => {
 			}),
 		)
 
-		await expect(prodGate()).rejects.toThrow('GitHub API returned 403')
+		await expect(prodGateCommand()).rejects.toThrow(
+			'GitHub API returned 403',
+		)
 	})
 
 	it('throws when GITHUB_REPOSITORY is not set', async () => {
 		delete process.env['GITHUB_REPOSITORY']
 
-		await expect(prodGate()).rejects.toThrow('GITHUB_REPOSITORY env var')
+		await expect(prodGateCommand()).rejects.toThrow(
+			'GITHUB_REPOSITORY env var',
+		)
 	})
 })

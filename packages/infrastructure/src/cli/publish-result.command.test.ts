@@ -4,53 +4,9 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { parseSemanticReleaseOutput, publishResult } from './publish-result.js'
+import { publishResultCommand } from './publish-result.command.js'
 
-describe('parseSemanticReleaseOutput', () => {
-	it('detects a published release with version', () => {
-		const output = `
-Analyzing commits...
-Published release 2.1.0 on default channel
-`
-		const result = parseSemanticReleaseOutput(output)
-
-		expect(result).toEqual({ status: 'published', version: '2.1.0' })
-	})
-
-	it('detects no-release when no relevant changes', () => {
-		const output = `
-Analyzing commits...
-There are no relevant changes, so no new version is released.
-`
-		const result = parseSemanticReleaseOutput(output)
-
-		expect(result).toEqual({ status: 'no-release' })
-	})
-
-	it('detects no-release with "no new version" message', () => {
-		const output = 'no new version to publish'
-
-		const result = parseSemanticReleaseOutput(output)
-
-		expect(result).toEqual({ status: 'no-release' })
-	})
-
-	it('returns failure for unrecognized output', () => {
-		const output = 'ENOENT: something went terribly wrong'
-
-		const result = parseSemanticReleaseOutput(output)
-
-		expect(result).toEqual({ status: 'failure' })
-	})
-
-	it('returns failure for empty output', () => {
-		const result = parseSemanticReleaseOutput('')
-
-		expect(result).toEqual({ status: 'failure' })
-	})
-})
-
-describe('publishResult', () => {
+describe('publishResultCommand', () => {
 	let outputFile: string
 	let summaryFile: string
 	let srOutputFile: string
@@ -94,7 +50,7 @@ describe('publishResult', () => {
 			'Published release 3.0.0 on default channel',
 		)
 
-		publishResult()
+		publishResultCommand()
 
 		const output = readFileSync(outputFile, 'utf-8')
 		expect(output).toContain('status=published\n')
@@ -112,7 +68,7 @@ describe('publishResult', () => {
 			'There are no relevant changes, so no new version is released.',
 		)
 
-		publishResult()
+		publishResultCommand()
 
 		const output = readFileSync(outputFile, 'utf-8')
 		expect(output).toContain('status=no-release\n')
@@ -127,7 +83,7 @@ describe('publishResult', () => {
 	it('writes failure status when SR output file is missing', () => {
 		rmSync(srOutputFile, { force: true })
 
-		publishResult()
+		publishResultCommand()
 
 		const output = readFileSync(outputFile, 'utf-8')
 		expect(output).toContain('status=failure\n')
@@ -143,7 +99,7 @@ describe('publishResult', () => {
 	it('sets exit code 1 when semantic-release output is unrecognized', () => {
 		writeFileSync(srOutputFile, 'ENOENT: something went terribly wrong')
 
-		publishResult()
+		publishResultCommand()
 
 		expect(process.exitCode).toBe(1)
 	})
@@ -151,6 +107,6 @@ describe('publishResult', () => {
 	it('throws when PROJECT_FILTER is not set', () => {
 		delete process.env['PROJECT_FILTER']
 
-		expect(() => publishResult()).toThrow('PROJECT_FILTER env var')
+		expect(() => publishResultCommand()).toThrow('PROJECT_FILTER env var')
 	})
 })

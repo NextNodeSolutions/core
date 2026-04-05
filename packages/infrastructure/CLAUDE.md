@@ -5,14 +5,64 @@
 NextNode infrastructure CLI — runs in GitHub Actions to orchestrate CI quality gates.
 Currently implements the **plan** phase: parse `nextnode.toml`, generate a quality matrix (lint/test), and write outputs for downstream jobs.
 
-## Current Scope
+## Architecture — STRICT LAYERED RULE (ABSOLUTE BAN)
+
+The package is organized as **four strict layers**. Each layer has enforced import rules. Violations are bugs, not style preferences.
 
 ```
 src/
-  index.ts              — CLI entry point, reads PIPELINE_CONFIG_FILE env var
-  config/               — nextnode.toml parsing and validation
-  pipeline/             — Plan outputs (quality matrix -> GITHUB_OUTPUT)
+  index.ts            — THIN entry: argv parsing + dispatch only, ZERO business logic
+  cli/                — Command orchestrators: read env vars, call domain + adapters
+    commands.ts       — Command registry + runCommand dispatcher
+    env.ts            — Typed env var readers (requireEnv, getEnv)
+    plan.command.ts
+    prod-gate.command.ts
+    publish-result.command.ts
+  domain/             — PURE business logic. NO IO, NO env vars, NO logger
+    environment.ts    — resolveEnvironment + PipelineEnvironment type
+    quality-matrix.ts — buildQualityMatrix, hasProdGate
+    prod-gate.ts      — findDevRun, evaluateDevRun
+    publish-result.ts — parseSemanticReleaseOutput, buildSummary
+  adapters/           — IO boundary: fs, fetch, GitHub Actions outputs
+    github-output.ts  — writeOutput, writeSummary (GITHUB_OUTPUT / GITHUB_STEP_SUMMARY)
+    github-api.ts     — fetchWorkflowRuns
+    plan-outputs.ts   — writePlanOutputs (bridges domain tasks → GitHub Actions outputs)
+    semantic-release-output.ts
+  config/             — nextnode.toml schema + loader (self-contained layer)
 ```
+
+### Layer import rules — ENFORCED
+
+| Layer         | May import from                                   | STRICTLY FORBIDDEN                           |
+|---------------|---------------------------------------------------|----------------------------------------------|
+| `index.ts`    | `cli/commands` only                               | `domain/`, `adapters/`, env vars, logger     |
+| `cli/*`       | `domain/`, `adapters/`, `config/`, logger         | direct `node:fs`, `fetch`, raw `process.env` outside `cli/env.ts` |
+| `domain/*`    | other `domain/*`, `config/schema` (types only)    | `process.env`, `node:fs`, `fetch`, logger, any adapter |
+| `adapters/*`  | `config/schema` (types), `domain/*` (types only)  | domain business logic, cross-adapter calls   |
+| `config/*`    | nothing in-app (stdlib + smol-toml only)          | domain, cli, adapters                        |
+
+### Hard rules per layer
+
+- **`index.ts` is ~4 lines.** It reads `process.argv[2]`, defaults to `'plan'`, and calls `runCommand`. If you find yourself adding an `import` other than `./cli/commands.js`, you are in the wrong file.
+- **Domain is 100% pure.** Functions take inputs, return outputs. No side effects, no env reads, no logger calls. Domain tests should never need stubs beyond plain value fixtures.
+- **Adapters never contain business decisions.** They translate between the outside world (fs, HTTP, GitHub Actions) and domain types. A conditional inside an adapter that goes beyond "did the IO succeed?" is a smell — push it into the domain.
+- **CLI commands are orchestrators.** They read env vars (via `cli/env.ts`), call domain functions, pass results to adapters, and log at milestones. They hold ZERO business logic — all decisions live in `domain/`.
+- **Infrastructure-specific strings (shell commands, file paths, URLs) live in the CLI layer**, not the domain. The domain exposes a parameter (e.g. `prodGateCommand` on `PipelineContext`); the CLI injects the concrete value.
+
+### Naming
+
+- `*.command.ts` suffix for CLI command orchestrators
+- `*.test.ts` alongside the file it tests, in the same folder/layer
+- Domain files are named after the concept they own (e.g. `quality-matrix.ts`, not `matrix.ts` or `quality.ts`)
+- NEVER `utils.ts`, `helpers.ts`, `common.ts`, `shared.ts`, `pipeline.ts` — these names hide responsibility
+
+### When adding a feature
+
+1. Start in `domain/` — write a pure function + test
+2. Add an `adapter/` if new IO is needed (fs/http/env)
+3. Wire them together in a `cli/*.command.ts` orchestrator
+4. Register the command in `cli/commands.ts`
+5. `index.ts` NEVER changes when adding a new command
 
 ## Config Format
 
@@ -63,10 +113,11 @@ Follow the global CLAUDE.md rules without exception:
 
 ## Testing
 
-- Unit tests for config parsing and validation
-- Unit tests for quality matrix generation
-- Integration tests with real temp files for plan output writing
-- Use vitest with `@nextnode-solutions/standards/vitest/backend`
+- **Domain tests**: pure unit tests with value fixtures. No mocks, no temp files, no env vars. If you need a mock to test a domain function, the logic is in the wrong layer.
+- **Adapter tests**: integration tests with real temp files (`tmpdir()`) for `GITHUB_OUTPUT` / `GITHUB_STEP_SUMMARY`. Network adapters are stubbed via `vi.stubGlobal('fetch', ...)`.
+- **CLI command tests**: end-to-end of a single command, setting env vars + stubbing fetch, asserting against temp output files and `process.exitCode`.
+- **Config tests**: unit tests for TOML parsing + validation, including fixtures in `src/config/fixtures/`.
+- Use vitest with `@nextnode-solutions/standards/vitest/backend`.
 
 ## Origin
 

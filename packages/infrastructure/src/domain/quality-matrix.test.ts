@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 
 import type { ProjectSection, ScriptsSection } from '../config/schema.js'
 
-import { buildQualityMatrix, hasProdGate } from './quality.js'
-import type { PipelineContext, QualityTask } from './quality.js'
+import { buildQualityMatrix, hasProdGate } from './quality-matrix.js'
+import type { PipelineContext, QualityTask } from './quality-matrix.js'
+
+const PROD_GATE_CMD = 'run-prod-gate'
 
 const APP_PROJECT: ProjectSection = {
 	name: 'my-app',
@@ -19,16 +21,19 @@ const FILTERED_PROJECT: ProjectSection = {
 const DEV_PIPELINE: PipelineContext = {
 	environment: 'development',
 	developmentEnabled: true,
+	prodGateCommand: PROD_GATE_CMD,
 }
 
 const PROD_PIPELINE: PipelineContext = {
 	environment: 'production',
 	developmentEnabled: true,
+	prodGateCommand: PROD_GATE_CMD,
 }
 
 const PROD_DIRECT_PIPELINE: PipelineContext = {
 	environment: 'production',
 	developmentEnabled: false,
+	prodGateCommand: PROD_GATE_CMD,
 }
 
 describe('buildQualityMatrix', () => {
@@ -144,7 +149,7 @@ describe('buildQualityMatrix', () => {
 			build: 'build',
 		}
 
-		it('adds prod-gate task when environment is production and dev is enabled', () => {
+		it('adds prod-gate task with injected command when environment is production and dev is enabled', () => {
 			const tasks = buildQualityMatrix(
 				scripts,
 				APP_PROJECT,
@@ -154,7 +159,7 @@ describe('buildQualityMatrix', () => {
 			expect(tasks).toContainEqual({
 				id: 'prod-gate',
 				name: 'Prod Gate',
-				cmd: 'cd .infra/packages/infrastructure && pnpm exec tsx src/index.ts prod-gate',
+				cmd: PROD_GATE_CMD,
 			})
 		})
 
@@ -180,11 +185,7 @@ describe('hasProdGate', () => {
 	it('returns true when prod-gate task is in the matrix', () => {
 		const tasks: QualityTask[] = [
 			{ id: 'lint', name: 'Lint', cmd: 'pnpm lint' },
-			{
-				id: 'prod-gate',
-				name: 'Prod Gate',
-				cmd: 'cd .infra/packages/infrastructure && pnpm exec tsx src/index.ts prod-gate',
-			},
+			{ id: 'prod-gate', name: 'Prod Gate', cmd: PROD_GATE_CMD },
 		]
 
 		expect(hasProdGate(tasks)).toBe(true)

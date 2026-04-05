@@ -1,10 +1,11 @@
 import type { ProjectSection, ScriptsSection } from '../config/schema.js'
 
-export type PipelineEnvironment = 'development' | 'production' | 'none'
+import type { PipelineEnvironment } from './environment.js'
 
 export interface PipelineContext {
 	readonly environment: PipelineEnvironment
 	readonly developmentEnabled: boolean
+	readonly prodGateCommand: string
 }
 
 export interface QualityTask {
@@ -40,7 +41,7 @@ export function buildQualityMatrix(
 		tasks.push({
 			id: 'prod-gate',
 			name: 'Prod Gate',
-			cmd: 'cd .infra/packages/infrastructure && pnpm exec tsx src/index.ts prod-gate',
+			cmd: pipeline.prodGateCommand,
 		})
 	}
 
