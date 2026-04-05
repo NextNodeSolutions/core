@@ -322,6 +322,143 @@ describe('parseConfig', () => {
 		})
 	})
 
+	describe('project.domain', () => {
+		it('defaults domain to undefined when not provided', () => {
+			const result = parseConfig({
+				project: { name: 'my-site', type: 'static' },
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok) return
+
+			expect(result.config.project.domain).toBeUndefined()
+		})
+
+		it('accepts a non-empty string domain', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-site',
+					type: 'static',
+					domain: 'example.com',
+				},
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok) return
+
+			expect(result.config.project.domain).toBe('example.com')
+		})
+
+		it('rejects empty-string domain', () => {
+			const result = parseConfig({
+				project: { name: 'my-site', type: 'static', domain: '' },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'project.domain must be a non-empty string',
+			)
+		})
+
+		it('rejects non-string domain', () => {
+			const result = parseConfig({
+				project: { name: 'my-site', type: 'static', domain: 42 },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'project.domain must be a non-empty string',
+			)
+		})
+	})
+
+	describe('project.redirect_domains', () => {
+		it('defaults redirect_domains to empty array when not provided', () => {
+			const result = parseConfig({
+				project: { name: 'my-site', type: 'static' },
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok) return
+
+			expect(result.config.project.redirectDomains).toEqual([])
+		})
+
+		it('accepts an array of domain strings', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-site',
+					type: 'static',
+					domain: 'example.com',
+					redirect_domains: ['example.fr', 'example.net'],
+				},
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok) return
+
+			expect(result.config.project.redirectDomains).toEqual([
+				'example.fr',
+				'example.net',
+			])
+		})
+
+		it('rejects non-array redirect_domains', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-site',
+					type: 'static',
+					redirect_domains: 'example.fr',
+				},
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'project.redirect_domains must be an array of strings',
+			)
+		})
+
+		it('rejects empty-string entries', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-site',
+					type: 'static',
+					redirect_domains: ['example.fr', ''],
+				},
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'project.redirect_domains entries must be non-empty strings',
+			)
+		})
+
+		it('rejects non-string entries', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-site',
+					type: 'static',
+					redirect_domains: ['example.fr', 42],
+				},
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'project.redirect_domains entries must be non-empty strings',
+			)
+		})
+	})
+
 	describe('static project type', () => {
 		it('parses a valid static config', () => {
 			const result = parseConfig({

@@ -33,13 +33,13 @@ src/
 
 ### Layer import rules — ENFORCED
 
-| Layer         | May import from                                   | STRICTLY FORBIDDEN                           |
-|---------------|---------------------------------------------------|----------------------------------------------|
-| `index.ts`    | `cli/commands` only                               | `domain/`, `adapters/`, env vars, logger     |
-| `cli/*`       | `domain/`, `adapters/`, `config/`, logger         | direct `node:fs`, `fetch`, raw `process.env` outside `cli/env.ts` |
-| `domain/*`    | other `domain/*`, `config/schema` (types only)    | `process.env`, `node:fs`, `fetch`, logger, any adapter |
-| `adapters/*`  | `config/schema` (types), `domain/*` (types only)  | domain business logic, cross-adapter calls   |
-| `config/*`    | nothing in-app (stdlib + smol-toml only)          | domain, cli, adapters                        |
+| Layer        | May import from                                  | STRICTLY FORBIDDEN                                                |
+| ------------ | ------------------------------------------------ | ----------------------------------------------------------------- |
+| `index.ts`   | `cli/commands` only                              | `domain/`, `adapters/`, env vars, logger                          |
+| `cli/*`      | `domain/`, `adapters/`, `config/`, logger        | direct `node:fs`, `fetch`, raw `process.env` outside `cli/env.ts` |
+| `domain/*`   | other `domain/*`, `config/schema` (types only)   | `process.env`, `node:fs`, `fetch`, logger, any adapter            |
+| `adapters/*` | `config/schema` (types), `domain/*` (types only) | domain business logic, cross-adapter calls                        |
+| `config/*`   | nothing in-app (stdlib + smol-toml only)         | domain, cli, adapters                                             |
 
 ### Hard rules per layer
 

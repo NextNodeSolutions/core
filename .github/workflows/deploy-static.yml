@@ -24,6 +24,8 @@ jobs:
       quality_matrix: ${{ steps.plan.outputs.quality_matrix }}
       project_name: ${{ steps.plan.outputs.project_name }}
       has_prod_gate: ${{ steps.plan.outputs.has_prod_gate }}
+      has_domain: ${{ steps.plan.outputs.has_domain }}
+      domain: ${{ steps.plan.outputs.domain }}
     steps:
       - uses: NextNodeSolutions/core/.github/actions/setup@main
         with:
@@ -56,9 +58,28 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
+  ensure-project:
+    name: Ensure Pages Project
+    needs: plan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: NextNodeSolutions/core/.github/actions/setup@main
+        with:
+          infra: "true"
+          deps: "false"
+
+      - name: Ensure Cloudflare Pages project exists
+        run: pnpm exec tsx src/index.ts ensure-pages-project
+        working-directory: .infra/packages/infrastructure
+        env:
+          PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
+          PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
   deploy:
     name: Deploy
-    needs: [plan, quality]
+    needs: [plan, quality, ensure-project]
     runs-on: ubuntu-latest
     steps:
       - uses: NextNodeSolutions/core/.github/actions/setup@main
@@ -73,3 +94,22 @@ jobs:
           production: ${{ inputs.environment == 'production' && 'true' || 'false' }}
           account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+  dns:
+    name: DNS
+    needs: [plan, quality]
+    if: needs.plan.outputs.has_domain == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: NextNodeSolutions/core/.github/actions/setup@main
+        with:
+          infra: "true"
+          deps: "false"
+
+      - name: Reconcile Cloudflare DNS
+        run: pnpm exec tsx src/index.ts dns
+        working-directory: .infra/packages/infrastructure
+        env:
+          PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
+          PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

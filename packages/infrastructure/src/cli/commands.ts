@@ -1,3 +1,5 @@
+import { dnsCommand } from './dns.command.js'
+import { ensurePagesProjectCommand } from './pages-project.command.js'
 import { planCommand } from './plan.command.js'
 import { prodGateCommand } from './prod-gate.command.js'
 import { publishResultCommand } from './publish-result.command.js'
@@ -8,6 +10,8 @@ const COMMANDS: Record<string, Command> = {
 	plan: planCommand,
 	'prod-gate': prodGateCommand,
 	'publish-result': publishResultCommand,
+	dns: dnsCommand,
+	'ensure-pages-project': ensurePagesProjectCommand,
 }
 
 export async function runCommand(name: string): Promise<void> {
