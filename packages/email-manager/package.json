@@ -1,6 +1,6 @@
 {
 	"name": "@nextnode-solutions/email-manager",
-	"version": "0.0.0-development",
+	"version": "1.1.0",
 	"description": "Template-first email sending library for NextNode projects",
 	"keywords": [
 		"email",
