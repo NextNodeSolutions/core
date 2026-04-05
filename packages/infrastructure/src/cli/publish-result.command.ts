@@ -1,0 +1,46 @@
+import { logger } from '@nextnode-solutions/logger'
+
+import { writeOutput, writeSummary } from '../adapters/github-output.js'
+import { readSemanticReleaseOutput } from '../adapters/semantic-release-output.js'
+import {
+	buildSummary,
+	parseSemanticReleaseOutput,
+} from '../domain/publish-result.js'
+import type { PublishResult } from '../domain/publish-result.js'
+
+import { getEnv, requireEnv } from './env.js'
+
+const DEFAULT_SR_OUTPUT = '/tmp/sr-output.txt'
+
+export function publishResultCommand(): void {
+	const outputPath = getEnv('SR_OUTPUT_FILE') ?? DEFAULT_SR_OUTPUT
+	const projectFilter = requireEnv('PROJECT_FILTER')
+
+	let content: string
+	try {
+		content = readSemanticReleaseOutput(outputPath)
+	} catch {
+		logger.error(`Semantic-release output not found: ${outputPath}`)
+		const failure: PublishResult = { status: 'failure' }
+		writeOutput('status', 'failure')
+		writeSummary(buildSummary(failure, projectFilter))
+		process.exitCode = 1
+		return
+	}
+
+	const result = parseSemanticReleaseOutput(content)
+
+	writeOutput('status', result.status)
+	if (result.version) {
+		writeOutput('version', result.version)
+	}
+	writeSummary(buildSummary(result, projectFilter))
+
+	logger.info(
+		`Publish result: ${result.status}${result.version ? ` v${result.version}` : ''}`,
+	)
+
+	if (result.status === 'failure') {
+		process.exitCode = 1
+	}
+}

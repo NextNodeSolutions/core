@@ -5,9 +5,9 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { NextNodeConfig } from '../config/schema.js'
+import type { QualityTask } from '../domain/quality-matrix.js'
 
-import { writePlanOutputs } from './plan.js'
-import type { QualityTask } from './quality.js'
+import { writePlanOutputs } from './plan-outputs.js'
 
 const APP_CONFIG: NextNodeConfig = {
 	project: { name: 'my-app', type: 'app', filter: false },
@@ -116,11 +116,7 @@ describe('writePlanOutputs', () => {
 	it('writes has_prod_gate=true when prod-gate is in the matrix', () => {
 		const tasks: ReadonlyArray<QualityTask> = [
 			{ id: 'lint', name: 'Lint', cmd: 'pnpm lint' },
-			{
-				id: 'prod-gate',
-				name: 'Prod Gate',
-				cmd: 'cd .infra/packages/infrastructure && pnpm exec tsx src/index.ts prod-gate',
-			},
+			{ id: 'prod-gate', name: 'Prod Gate', cmd: 'run-prod-gate' },
 		]
 
 		writePlanOutputs({ config: APP_CONFIG, tasks })
