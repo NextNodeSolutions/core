@@ -12,6 +12,8 @@ export interface ProjectSection {
 	readonly name: string
 	readonly type: ProjectType
 	readonly filter: string | false
+	readonly domain: string | undefined
+	readonly redirectDomains: ReadonlyArray<string>
 }
 
 export interface ScriptsSection {
@@ -90,6 +92,27 @@ export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 		errors.push('project.filter must be a string or false')
 	}
 
+	const domain = project['domain']
+	if (domain !== undefined && (typeof domain !== 'string' || domain === '')) {
+		errors.push('project.domain must be a non-empty string')
+	}
+
+	const redirectDomains = project['redirect_domains']
+	if (redirectDomains !== undefined) {
+		if (!Array.isArray(redirectDomains)) {
+			errors.push('project.redirect_domains must be an array of strings')
+		} else {
+			for (const entry of redirectDomains) {
+				if (typeof entry !== 'string' || entry === '') {
+					errors.push(
+						'project.redirect_domains entries must be non-empty strings',
+					)
+					break
+				}
+			}
+		}
+	}
+
 	const scripts = raw['scripts']
 	if (scripts !== undefined && !isRecord(scripts)) {
 		errors.push('[scripts] must be a table')
@@ -139,6 +162,15 @@ export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 		return { ok: false, errors }
 	}
 
+	const resolvedDomain = typeof domain === 'string' ? domain : undefined
+	const resolvedRedirectDomains: ReadonlyArray<string> = Array.isArray(
+		redirectDomains,
+	)
+		? redirectDomains.filter(
+				(entry): entry is string => typeof entry === 'string',
+			)
+		: []
+
 	return {
 		ok: true,
 		config: {
@@ -146,6 +178,8 @@ export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 				name,
 				type,
 				filter: isScriptValue(filter) ? filter : false,
+				domain: resolvedDomain,
+				redirectDomains: resolvedRedirectDomains,
 			},
 			scripts: {
 				lint: resolveScript(scriptValues['lint'], DEFAULT_SCRIPTS.lint),

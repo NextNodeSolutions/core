@@ -11,11 +11,15 @@ const APP_PROJECT: ProjectSection = {
 	name: 'my-app',
 	type: 'app',
 	filter: false,
+	domain: undefined,
+	redirectDomains: [],
 }
 const FILTERED_PROJECT: ProjectSection = {
 	name: 'my-monorepo',
 	type: 'app',
 	filter: '@scope/app',
+	domain: undefined,
+	redirectDomains: [],
 }
 
 const DEV_PIPELINE: PipelineContext = {

@@ -26,6 +26,8 @@ export function writePlanOutputs({ config, tasks }: PlanInput): void {
 	writeOutput('publish', config.package ? 'true' : 'false')
 	writeOutput('development_enabled', String(config.environment.development))
 	writeOutput('has_prod_gate', String(hasProdGate(qualityMatrix)))
+	writeOutput('has_domain', String(Boolean(config.project.domain)))
+	writeOutput('domain', config.project.domain ?? '')
 
 	logger.info(`Quality matrix: ${matrixJson}`)
 	logger.info('Plan outputs written to GITHUB_OUTPUT')

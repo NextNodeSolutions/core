@@ -10,14 +10,26 @@ import type { QualityTask } from '../domain/quality-matrix.js'
 import { writePlanOutputs } from './plan-outputs.js'
 
 const APP_CONFIG: NextNodeConfig = {
-	project: { name: 'my-app', type: 'app', filter: false },
+	project: {
+		name: 'my-app',
+		type: 'app',
+		filter: false,
+		domain: undefined,
+		redirectDomains: [],
+	},
 	scripts: { lint: 'lint', test: 'test', build: 'build' },
 	package: false,
 	environment: { development: true },
 }
 
 const PACKAGE_CONFIG: NextNodeConfig = {
-	project: { name: 'my-lib', type: 'package', filter: false },
+	project: {
+		name: 'my-lib',
+		type: 'package',
+		filter: false,
+		domain: undefined,
+		redirectDomains: [],
+	},
 	scripts: { lint: 'lint', test: 'test', build: 'build' },
 	package: false,
 	environment: { development: true },
@@ -28,6 +40,8 @@ const PUBLISHABLE_CONFIG: NextNodeConfig = {
 		name: 'logger',
 		type: 'package',
 		filter: '@nextnode-solutions/logger',
+		domain: undefined,
+		redirectDomains: [],
 	},
 	scripts: { lint: 'lint', test: 'test', build: 'build' },
 	package: { access: 'public' },
@@ -70,7 +84,7 @@ describe('writePlanOutputs', () => {
 			{ id: 'test', name: 'Test', cmd: 'pnpm test' },
 		])
 		expect(output).toBe(
-			`quality_matrix=${matrixJson}\nproject_name=my-app\nproject_type=app\nproject_filter=\npublish=false\ndevelopment_enabled=true\nhas_prod_gate=false\n`,
+			`quality_matrix=${matrixJson}\nproject_name=my-app\nproject_type=app\nproject_filter=\npublish=false\ndevelopment_enabled=true\nhas_prod_gate=false\nhas_domain=false\ndomain=\n`,
 		)
 	})
 
@@ -128,13 +142,43 @@ describe('writePlanOutputs', () => {
 	it('writes project_type=static for static projects', () => {
 		const config: NextNodeConfig = {
 			...APP_CONFIG,
-			project: { name: 'my-site', type: 'static', filter: false },
+			project: {
+				name: 'my-site',
+				type: 'static',
+				filter: false,
+				domain: undefined,
+				redirectDomains: [],
+			},
 		}
 
 		writePlanOutputs({ config, tasks: [] })
 
 		const output = readFileSync(outputFile, 'utf-8')
 		expect(output).toContain('project_type=static\n')
+	})
+
+	it('writes has_domain=true and domain when a domain is configured', () => {
+		const config: NextNodeConfig = {
+			...APP_CONFIG,
+			project: {
+				...APP_CONFIG.project,
+				domain: 'example.com',
+			},
+		}
+
+		writePlanOutputs({ config, tasks: [] })
+
+		const output = readFileSync(outputFile, 'utf-8')
+		expect(output).toContain('has_domain=true\n')
+		expect(output).toContain('domain=example.com\n')
+	})
+
+	it('writes has_domain=false and empty domain when no domain is configured', () => {
+		writePlanOutputs({ config: APP_CONFIG, tasks: [] })
+
+		const output = readFileSync(outputFile, 'utf-8')
+		expect(output).toContain('has_domain=false\n')
+		expect(output).toContain('domain=\n')
 	})
 
 	it('throws when GITHUB_OUTPUT is not set', () => {

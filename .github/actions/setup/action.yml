@@ -70,11 +70,11 @@ runs:
 
     - name: Install infrastructure deps
       if: inputs.infra == 'true'
-      run: pnpm install --frozen-lockfile
+      run: pnpm install --frozen-lockfile --prefer-offline
       shell: bash
       working-directory: .infra/packages/infrastructure
 
     - name: Install project deps
       if: inputs.deps == 'true'
-      run: pnpm install --frozen-lockfile
+      run: pnpm install --frozen-lockfile --prefer-offline
       shell: bash
