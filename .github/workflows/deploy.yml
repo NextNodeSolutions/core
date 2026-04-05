@@ -1,8 +1,12 @@
-name: Deploy Prod
+name: Deploy
 
 on:
   workflow_call:
     inputs:
+      environment:
+        type: string
+        required: true
+        description: "development or production"
       config_file:
         type: string
         default: "nextnode.toml"
@@ -19,7 +23,7 @@ jobs:
     outputs:
       quality_matrix: ${{ steps.plan.outputs.quality_matrix }}
       project_name: ${{ steps.plan.outputs.project_name }}
-      development_enabled: ${{ steps.plan.outputs.development_enabled }}
+      has_prod_gate: ${{ steps.plan.outputs.has_prod_gate }}
     steps:
       - uses: NextNodeSolutions/core/.github/actions/setup@main
         with:
@@ -32,28 +36,11 @@ jobs:
         working-directory: .infra/packages/infrastructure
         env:
           PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
-
-  prod-gate:
-    name: Prod Gate
-    needs: plan
-    if: needs.plan.outputs.development_enabled == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: NextNodeSolutions/core/.github/actions/setup@main
-        with:
-          infra: "true"
-          deps: "false"
-
-      - name: Verify dev pipeline passed
-        run: pnpm exec tsx src/index.ts prod-gate
-        working-directory: .infra/packages/infrastructure
-        env:
-          GH_TOKEN: ${{ github.token }}
+          PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
 
   quality:
-    name: Quality
+    name: ${{ matrix.task.name }}
     needs: plan
-    if: needs.plan.outputs.development_enabled != 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -61,20 +48,22 @@ jobs:
         task: ${{ fromJSON(needs.plan.outputs.quality_matrix) }}
     steps:
       - uses: NextNodeSolutions/core/.github/actions/setup@main
+        with:
+          infra: ${{ needs.plan.outputs.has_prod_gate }}
 
       - name: ${{ matrix.task.name }}
         run: ${{ matrix.task.cmd }}
+        env:
+          GH_TOKEN: ${{ github.token }}
 
   deploy:
     name: Deploy
-    needs: [plan, prod-gate, quality]
-    if: always() && !failure() && !cancelled()
+    needs: [plan, quality]
     runs-on: ubuntu-latest
     steps:
       - run: |
           echo "══════════════════════════════════════════"
-          echo "  DEPLOY — production"
+          echo "  DEPLOY — ${{ inputs.environment }}"
           echo "══════════════════════════════════════════"
           echo "Project:  ${{ needs.plan.outputs.project_name }}"
-          echo "Gate:     ${{ needs.plan.outputs.development_enabled == 'true' && 'prod-gate (dev verified)' || 'inline quality (direct-to-prod)' }}"
           echo "══════════════════════════════════════════"

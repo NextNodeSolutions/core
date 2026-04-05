@@ -89,7 +89,7 @@ describe('parseConfig', () => {
 			if (result.ok) return
 
 			expect(result.errors).toContain(
-				'project.type is required and must be one of: app, package',
+				'project.type is required and must be one of: app, package, static',
 			)
 		})
 
@@ -102,7 +102,7 @@ describe('parseConfig', () => {
 			if (result.ok) return
 
 			expect(result.errors).toContain(
-				'project.type is required and must be one of: app, package',
+				'project.type is required and must be one of: app, package, static',
 			)
 		})
 	})
@@ -122,7 +122,7 @@ describe('parseConfig', () => {
 				'project.name is required and must be a string',
 			)
 			expect(result.errors).toContain(
-				'project.type is required and must be one of: app, package',
+				'project.type is required and must be one of: app, package, static',
 			)
 			expect(result.errors).toContain(
 				'scripts.lint must be a string or false, got number',
@@ -319,6 +319,19 @@ describe('parseConfig', () => {
 			})
 
 			expect(result.ok).toBe(true)
+		})
+	})
+
+	describe('static project type', () => {
+		it('parses a valid static config', () => {
+			const result = parseConfig({
+				project: { name: 'my-site', type: 'static' },
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok) return
+
+			expect(result.config.project.type).toBe('static')
 		})
 	})
 

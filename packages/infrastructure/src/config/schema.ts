@@ -5,7 +5,7 @@ export interface NextNodeConfig {
 	readonly environment: EnvironmentSection
 }
 
-const PROJECT_TYPES = ['app', 'package'] as const
+const PROJECT_TYPES = ['app', 'package', 'static'] as const
 type ProjectType = (typeof PROJECT_TYPES)[number]
 
 export interface ProjectSection {

@@ -70,7 +70,7 @@ describe('writePlanOutputs', () => {
 			{ id: 'test', name: 'Test', cmd: 'pnpm test' },
 		])
 		expect(output).toBe(
-			`quality_matrix=${matrixJson}\nproject_name=my-app\nproject_type=app\nproject_filter=\npublish=false\ndevelopment_enabled=true\n`,
+			`quality_matrix=${matrixJson}\nproject_name=my-app\nproject_type=app\nproject_filter=\npublish=false\ndevelopment_enabled=true\nhas_prod_gate=false\n`,
 		)
 	})
 
@@ -111,6 +111,34 @@ describe('writePlanOutputs', () => {
 
 		const output = readFileSync(outputFile, 'utf-8')
 		expect(output).toContain('development_enabled=false\n')
+	})
+
+	it('writes has_prod_gate=true when prod-gate is in the matrix', () => {
+		const tasks: ReadonlyArray<QualityTask> = [
+			{ id: 'lint', name: 'Lint', cmd: 'pnpm lint' },
+			{
+				id: 'prod-gate',
+				name: 'Prod Gate',
+				cmd: 'cd .infra/packages/infrastructure && pnpm exec tsx src/index.ts prod-gate',
+			},
+		]
+
+		writePlanOutputs({ config: APP_CONFIG, tasks })
+
+		const output = readFileSync(outputFile, 'utf-8')
+		expect(output).toContain('has_prod_gate=true\n')
+	})
+
+	it('writes project_type=static for static projects', () => {
+		const config: NextNodeConfig = {
+			...APP_CONFIG,
+			project: { name: 'my-site', type: 'static', filter: false },
+		}
+
+		writePlanOutputs({ config, tasks: [] })
+
+		const output = readFileSync(outputFile, 'utf-8')
+		expect(output).toContain('project_type=static\n')
 	})
 
 	it('throws when GITHUB_OUTPUT is not set', () => {

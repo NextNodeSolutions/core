@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import type { ProjectSection, ScriptsSection } from '../config/schema.js'
 
-import { buildQualityMatrix } from './quality.js'
+import { buildQualityMatrix, hasProdGate } from './quality.js'
+import type { PipelineContext, QualityTask } from './quality.js'
 
 const APP_PROJECT: ProjectSection = {
 	name: 'my-app',
@@ -15,6 +16,21 @@ const FILTERED_PROJECT: ProjectSection = {
 	filter: '@scope/app',
 }
 
+const DEV_PIPELINE: PipelineContext = {
+	environment: 'development',
+	developmentEnabled: true,
+}
+
+const PROD_PIPELINE: PipelineContext = {
+	environment: 'production',
+	developmentEnabled: true,
+}
+
+const PROD_DIRECT_PIPELINE: PipelineContext = {
+	environment: 'production',
+	developmentEnabled: false,
+}
+
 describe('buildQualityMatrix', () => {
 	it('builds lint and test tasks for enabled scripts', () => {
 		const scripts: ScriptsSection = {
@@ -23,7 +39,7 @@ describe('buildQualityMatrix', () => {
 			build: 'build',
 		}
 
-		const tasks = buildQualityMatrix(scripts, APP_PROJECT)
+		const tasks = buildQualityMatrix(scripts, APP_PROJECT, DEV_PIPELINE)
 
 		expect(tasks).toEqual([
 			{ id: 'lint', name: 'Lint', cmd: 'pnpm lint' },
@@ -38,7 +54,7 @@ describe('buildQualityMatrix', () => {
 			build: 'build',
 		}
 
-		const tasks = buildQualityMatrix(scripts, APP_PROJECT)
+		const tasks = buildQualityMatrix(scripts, APP_PROJECT, DEV_PIPELINE)
 
 		expect(tasks).toEqual([{ id: 'test', name: 'Test', cmd: 'pnpm test' }])
 	})
@@ -50,7 +66,7 @@ describe('buildQualityMatrix', () => {
 			build: false,
 		}
 
-		const tasks = buildQualityMatrix(scripts, APP_PROJECT)
+		const tasks = buildQualityMatrix(scripts, APP_PROJECT, DEV_PIPELINE)
 
 		expect(tasks).toEqual([])
 	})
@@ -62,7 +78,7 @@ describe('buildQualityMatrix', () => {
 			build: 'build',
 		}
 
-		const tasks = buildQualityMatrix(scripts, APP_PROJECT)
+		const tasks = buildQualityMatrix(scripts, APP_PROJECT, DEV_PIPELINE)
 
 		expect(tasks).toEqual([
 			{ id: 'lint', name: 'Lint', cmd: 'pnpm check:lint' },
@@ -77,7 +93,7 @@ describe('buildQualityMatrix', () => {
 			build: 'build',
 		}
 
-		const tasks = buildQualityMatrix(scripts, APP_PROJECT)
+		const tasks = buildQualityMatrix(scripts, APP_PROJECT, DEV_PIPELINE)
 
 		expect(tasks).toEqual([])
 	})
@@ -89,7 +105,7 @@ describe('buildQualityMatrix', () => {
 			build: false,
 		}
 
-		const tasks = buildQualityMatrix(scripts, APP_PROJECT)
+		const tasks = buildQualityMatrix(scripts, APP_PROJECT, DEV_PIPELINE)
 
 		expect(tasks).toEqual([{ id: 'lint', name: 'Lint', cmd: 'pnpm lint' }])
 	})
@@ -101,7 +117,11 @@ describe('buildQualityMatrix', () => {
 			build: 'build',
 		}
 
-		const tasks = buildQualityMatrix(scripts, FILTERED_PROJECT)
+		const tasks = buildQualityMatrix(
+			scripts,
+			FILTERED_PROJECT,
+			DEV_PIPELINE,
+		)
 
 		expect(tasks).toEqual([
 			{
@@ -115,5 +135,71 @@ describe('buildQualityMatrix', () => {
 				cmd: 'pnpm turbo run test --filter=@scope/app',
 			},
 		])
+	})
+
+	describe('prod-gate', () => {
+		const scripts: ScriptsSection = {
+			lint: 'lint',
+			test: 'test',
+			build: 'build',
+		}
+
+		it('adds prod-gate task when environment is production and dev is enabled', () => {
+			const tasks = buildQualityMatrix(
+				scripts,
+				APP_PROJECT,
+				PROD_PIPELINE,
+			)
+
+			expect(tasks).toContainEqual({
+				id: 'prod-gate',
+				name: 'Prod Gate',
+				cmd: 'cd .infra/packages/infrastructure && pnpm exec tsx src/index.ts prod-gate',
+			})
+		})
+
+		it('does not add prod-gate in development environment', () => {
+			const tasks = buildQualityMatrix(scripts, APP_PROJECT, DEV_PIPELINE)
+
+			expect(tasks.find(t => t.id === 'prod-gate')).toBeUndefined()
+		})
+
+		it('does not add prod-gate when development is disabled (direct-to-prod)', () => {
+			const tasks = buildQualityMatrix(
+				scripts,
+				APP_PROJECT,
+				PROD_DIRECT_PIPELINE,
+			)
+
+			expect(tasks.find(t => t.id === 'prod-gate')).toBeUndefined()
+		})
+	})
+})
+
+describe('hasProdGate', () => {
+	it('returns true when prod-gate task is in the matrix', () => {
+		const tasks: QualityTask[] = [
+			{ id: 'lint', name: 'Lint', cmd: 'pnpm lint' },
+			{
+				id: 'prod-gate',
+				name: 'Prod Gate',
+				cmd: 'cd .infra/packages/infrastructure && pnpm exec tsx src/index.ts prod-gate',
+			},
+		]
+
+		expect(hasProdGate(tasks)).toBe(true)
+	})
+
+	it('returns false when no prod-gate task is present', () => {
+		const tasks: QualityTask[] = [
+			{ id: 'lint', name: 'Lint', cmd: 'pnpm lint' },
+			{ id: 'test', name: 'Test', cmd: 'pnpm test' },
+		]
+
+		expect(hasProdGate(tasks)).toBe(false)
+	})
+
+	it('returns false for empty task list', () => {
+		expect(hasProdGate([])).toBe(false)
 	})
 })

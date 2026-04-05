@@ -41,6 +41,19 @@ Called by `.github/workflows/pipeline.yml` via `workflow_call`:
 4. Each route is a self-contained workflow — no shared jobs, no `if` inside routes
 5. Inactive routes appear as a single skipped line in the UI (not expanded)
 
+## YAML vs TypeScript — STRICT RULE (ABSOLUTE BAN)
+
+All pipeline/CI logic MUST live in TypeScript infrastructure code (`src/`). YAML workflow files (`.github/workflows/*.yml`) are STRICTLY limited to job structure: job definitions, step declarations, action references, input/output wiring, and reusable workflow calls.
+
+FORBIDDEN in YAML:
+
+- Conditional logic beyond simple routing (e.g. complex `if` expressions, shell script blocks with branching)
+- Data transformation, string manipulation, or computation in `run` steps
+- Business rules, validation, or decision-making of any kind
+- Multi-line shell scripts that implement behavior
+
+If a workflow needs to make a decision or transform data, that logic belongs in a TypeScript module invoked by the workflow — not inline in the YAML.
+
 ## Error Handling
 
 Follow the global CLAUDE.md rules without exception:
