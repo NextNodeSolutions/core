@@ -19,6 +19,7 @@ import type {
 import { computeDnsRecords, reconcileDnsRecord } from '../domain/dns-records.ts'
 import type { AppEnvironment } from '../domain/environment.ts'
 import { resolveEnvironment } from '../domain/environment.ts'
+import { computePagesProjectName } from '../domain/pages-project-name.ts'
 
 import { getEnv, requireEnv } from './env.ts'
 
@@ -43,7 +44,7 @@ export async function dnsCommand(): Promise<void> {
 		domain: config.project.domain,
 		redirectDomains: config.project.redirectDomains,
 		environment,
-		projectName: config.project.name,
+		projectName: computePagesProjectName(config.project.name, environment),
 	})
 
 	logger.info(

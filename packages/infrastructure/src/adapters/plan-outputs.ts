@@ -12,15 +12,20 @@ const SKIP_MATRIX: ReadonlyArray<QualityTask> = [
 
 interface PlanInput {
 	readonly config: NextNodeConfig
+	readonly pagesProjectName: string
 	readonly tasks: ReadonlyArray<QualityTask>
 }
 
-export function writePlanOutputs({ config, tasks }: PlanInput): void {
+export function writePlanOutputs({
+	config,
+	pagesProjectName,
+	tasks,
+}: PlanInput): void {
 	const qualityMatrix = tasks.length > 0 ? tasks : SKIP_MATRIX
 	const matrixJson = JSON.stringify(qualityMatrix)
 
 	writeOutput('quality_matrix', matrixJson)
-	writeOutput('project_name', config.project.name)
+	writeOutput('project_name', pagesProjectName)
 	writeOutput('project_type', config.project.type)
 	writeOutput('project_filter', config.project.filter || '')
 	writeOutput('publish', config.package ? 'true' : 'false')

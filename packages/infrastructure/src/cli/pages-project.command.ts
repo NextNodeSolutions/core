@@ -5,18 +5,27 @@ import {
 	getPagesProject,
 } from '../adapters/cloudflare-pages.ts'
 import { loadConfig } from '../config/load.ts'
+import { resolveEnvironment } from '../domain/environment.ts'
+import { computePagesProjectName } from '../domain/pages-project-name.ts'
 
-import { requireEnv } from './env.ts'
+import { getEnv, requireEnv } from './env.ts'
 
 const PRODUCTION_BRANCH = 'main'
 
 export async function ensurePagesProjectCommand(): Promise<void> {
 	const configPath = requireEnv('PIPELINE_CONFIG_FILE')
 	const config = loadConfig(configPath)
+	const environment = resolveEnvironment(
+		config.project.type,
+		getEnv('PIPELINE_ENVIRONMENT'),
+	)
 	const accountId = requireEnv('CLOUDFLARE_ACCOUNT_ID')
 	const token = requireEnv('CLOUDFLARE_API_TOKEN')
 
-	const projectName = config.project.name
+	const projectName = computePagesProjectName(
+		config.project.name,
+		environment,
+	)
 	const existing = await getPagesProject(accountId, projectName, token)
 
 	if (existing) {

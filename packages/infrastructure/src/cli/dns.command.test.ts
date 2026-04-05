@@ -38,29 +38,19 @@ function methodOf(init: RequestInit | undefined): string {
 
 describe('dnsCommand', () => {
 	let configFile: string
-	const savedEnv: Record<string, string | undefined> = {}
 
 	beforeEach(() => {
 		configFile = join(
 			tmpdir(),
 			`nextnode-${Date.now()}-${Math.random().toString(36).slice(2)}.toml`,
 		)
-		savedEnv['PIPELINE_CONFIG_FILE'] = process.env['PIPELINE_CONFIG_FILE']
-		savedEnv['PIPELINE_ENVIRONMENT'] = process.env['PIPELINE_ENVIRONMENT']
-		savedEnv['CLOUDFLARE_API_TOKEN'] = process.env['CLOUDFLARE_API_TOKEN']
-		process.env['PIPELINE_CONFIG_FILE'] = configFile
-		process.env['CLOUDFLARE_API_TOKEN'] = 'cf-token'
+		vi.stubEnv('PIPELINE_CONFIG_FILE', configFile)
+		vi.stubEnv('CLOUDFLARE_API_TOKEN', 'cf-token')
 	})
 
 	afterEach(() => {
-		for (const [key, value] of Object.entries(savedEnv)) {
-			if (value === undefined) {
-				delete process.env[key]
-			} else {
-				process.env[key] = value
-			}
-		}
 		rmSync(configFile, { force: true })
+		vi.unstubAllEnvs()
 		vi.unstubAllGlobals()
 		vi.restoreAllMocks()
 	})
@@ -70,7 +60,7 @@ describe('dnsCommand', () => {
 			configFile,
 			'[project]\nname = "my-site"\ntype = "static"\n',
 		)
-		process.env['PIPELINE_ENVIRONMENT'] = 'production'
+		vi.stubEnv('PIPELINE_ENVIRONMENT', 'production')
 		const fetchMock = vi.fn<FetchImpl>()
 		vi.stubGlobal('fetch', fetchMock)
 
@@ -84,7 +74,7 @@ describe('dnsCommand', () => {
 			configFile,
 			'[project]\nname = "my-site"\ntype = "static"\ndomain = "example.com"\n',
 		)
-		process.env['PIPELINE_ENVIRONMENT'] = 'production'
+		vi.stubEnv('PIPELINE_ENVIRONMENT', 'production')
 
 		const impl: FetchImpl = (input, init) => {
 			const url = urlOf(input)
@@ -131,7 +121,7 @@ describe('dnsCommand', () => {
 			configFile,
 			'[project]\nname = "my-site"\ntype = "static"\ndomain = "example.com"\n',
 		)
-		process.env['PIPELINE_ENVIRONMENT'] = 'production'
+		vi.stubEnv('PIPELINE_ENVIRONMENT', 'production')
 
 		const impl: FetchImpl = (input, init) => {
 			const url = urlOf(input)
@@ -180,7 +170,7 @@ describe('dnsCommand', () => {
 			configFile,
 			'[project]\nname = "my-site"\ntype = "static"\ndomain = "example.com"\n',
 		)
-		process.env['PIPELINE_ENVIRONMENT'] = 'production'
+		vi.stubEnv('PIPELINE_ENVIRONMENT', 'production')
 
 		const impl: FetchImpl = (input, init) => {
 			const url = urlOf(input)
@@ -241,12 +231,12 @@ describe('dnsCommand', () => {
 		expect(putCall).toBeDefined()
 	})
 
-	it('creates dev.{domain} unproxied in development', async () => {
+	it('creates dev.{domain} unproxied targeting the -dev project in development', async () => {
 		writeFileSync(
 			configFile,
 			'[project]\nname = "my-site"\ntype = "static"\ndomain = "example.com"\n',
 		)
-		process.env['PIPELINE_ENVIRONMENT'] = 'development'
+		vi.stubEnv('PIPELINE_ENVIRONMENT', 'development')
 
 		let postBody: string | undefined
 		const impl: FetchImpl = (input, init) => {
@@ -276,7 +266,7 @@ describe('dnsCommand', () => {
 							id: 'rec-new',
 							type: 'CNAME',
 							name: 'dev.example.com',
-							content: 'my-site.pages.dev',
+							content: 'my-site-dev.pages.dev',
 							proxied: false,
 							ttl: 300,
 						},
@@ -296,7 +286,7 @@ describe('dnsCommand', () => {
 		expect(payload).toEqual({
 			type: 'CNAME',
 			name: 'dev.example.com',
-			content: 'my-site.pages.dev',
+			content: 'my-site-dev.pages.dev',
 			proxied: false,
 			ttl: 300,
 		})
@@ -307,7 +297,7 @@ describe('dnsCommand', () => {
 			configFile,
 			'[project]\nname = "my-site"\ntype = "static"\ndomain = "example.com"\nredirect_domains = ["alt.example.com", "other.net"]\n',
 		)
-		process.env['PIPELINE_ENVIRONMENT'] = 'production'
+		vi.stubEnv('PIPELINE_ENVIRONMENT', 'production')
 
 		const impl: FetchImpl = (input, init) => {
 			const url = urlOf(input)
@@ -367,7 +357,7 @@ describe('dnsCommand', () => {
 	})
 
 	it('throws when PIPELINE_CONFIG_FILE is not set', async () => {
-		delete process.env['PIPELINE_CONFIG_FILE']
+		vi.stubEnv('PIPELINE_CONFIG_FILE', undefined)
 
 		await expect(dnsCommand()).rejects.toThrow(
 			'PIPELINE_CONFIG_FILE env var',
@@ -379,8 +369,8 @@ describe('dnsCommand', () => {
 			configFile,
 			'[project]\nname = "my-site"\ntype = "static"\ndomain = "example.com"\n',
 		)
-		process.env['PIPELINE_ENVIRONMENT'] = 'production'
-		delete process.env['CLOUDFLARE_API_TOKEN']
+		vi.stubEnv('PIPELINE_ENVIRONMENT', 'production')
+		vi.stubEnv('CLOUDFLARE_API_TOKEN', undefined)
 
 		await expect(dnsCommand()).rejects.toThrow(
 			'CLOUDFLARE_API_TOKEN env var',

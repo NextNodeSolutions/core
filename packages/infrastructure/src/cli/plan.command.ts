@@ -5,6 +5,7 @@ import { logger } from '@nextnode-solutions/logger'
 import { writePlanOutputs } from '../adapters/plan-outputs.ts'
 import { loadConfig } from '../config/load.ts'
 import { resolveEnvironment } from '../domain/environment.ts'
+import { computePagesProjectName } from '../domain/pages-project-name.ts'
 import { buildQualityMatrix } from '../domain/quality-matrix.ts'
 
 import { getEnv, requireEnv } from './env.ts'
@@ -20,9 +21,15 @@ export function planCommand(): void {
 		getEnv('PIPELINE_ENVIRONMENT'),
 	)
 
+	const pagesProjectName = computePagesProjectName(
+		config.project.name,
+		environment,
+	)
+
 	logger.info(`Config: ${configPath}`)
 	logger.info(`Project: ${config.project.name}`)
 	logger.info(`Environment: ${environment}`)
+	logger.info(`Pages project: ${pagesProjectName}`)
 	logger.info(`Project dir: ${dirname(configPath)}`)
 
 	const tasks = buildQualityMatrix(config.scripts, config.project, {
@@ -30,5 +37,5 @@ export function planCommand(): void {
 		developmentEnabled: config.environment.development,
 		prodGateCommand: PROD_GATE_COMMAND,
 	})
-	writePlanOutputs({ config, tasks })
+	writePlanOutputs({ config, pagesProjectName, tasks })
 }
