@@ -1,11 +1,12 @@
 # Deploy a static site to Cloudflare Pages via Direct Upload.
 #
-# Handles both production and preview deployments:
-#   - production: set `production: "true"` (deploys to the main Pages URL)
-#   - preview:    omit or set `production: "false"` (deploys to a preview URL)
+# Each environment targets its own CF Pages project (e.g. `my-site` for
+# production, `my-site-dev` for development). Both projects use `main` as
+# their production branch, so every deploy goes to `--branch=main` — the
+# environment distinction is encoded in the project name, not the branch.
 #
-# The caller is responsible for building the site before invoking this action.
-# DNS configuration is handled separately.
+# The caller is responsible for building the site before invoking this
+# action. DNS configuration is handled separately.
 
 name: Deploy to Cloudflare Pages
 description: Deploy a static site to Cloudflare Pages using wrangler pages deploy
@@ -15,11 +16,8 @@ inputs:
     description: Path to the directory of static assets to deploy
     required: true
   project-name:
-    description: Cloudflare Pages project name
+    description: Cloudflare Pages project name (already env-specific)
     required: true
-  production:
-    description: Whether this is a production deployment
-    default: "false"
   account-id:
     description: Cloudflare account ID
     required: true
@@ -44,7 +42,7 @@ runs:
         command: >-
           pages deploy ${{ inputs.directory }}
           --project-name=${{ inputs.project-name }}
-          ${{ inputs.production == 'true' && '--branch=main' || format('--branch=preview-{0}', github.run_id) }}
+          --branch=main
 
     - name: Deployment summary
       shell: bash
@@ -52,5 +50,4 @@ runs:
         echo "### Cloudflare Pages Deploy" >> "$GITHUB_STEP_SUMMARY"
         echo "" >> "$GITHUB_STEP_SUMMARY"
         echo "- **Project:** ${{ inputs.project-name }}" >> "$GITHUB_STEP_SUMMARY"
-        echo "- **Environment:** ${{ inputs.production == 'true' && 'production' || 'preview' }}" >> "$GITHUB_STEP_SUMMARY"
         echo "- **URL:** ${{ steps.deploy.outputs.deployment-url }}" >> "$GITHUB_STEP_SUMMARY"

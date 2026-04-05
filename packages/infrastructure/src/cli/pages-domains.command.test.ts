@@ -38,31 +38,20 @@ function methodOf(init: RequestInit | undefined): string {
 
 describe('ensurePagesDomainsCommand', () => {
 	let configFile: string
-	const savedEnv: Record<string, string | undefined> = {}
 
 	beforeEach(() => {
 		configFile = join(
 			tmpdir(),
 			`nextnode-${Date.now()}-${Math.random().toString(36).slice(2)}.toml`,
 		)
-		savedEnv['PIPELINE_CONFIG_FILE'] = process.env['PIPELINE_CONFIG_FILE']
-		savedEnv['PIPELINE_ENVIRONMENT'] = process.env['PIPELINE_ENVIRONMENT']
-		savedEnv['CLOUDFLARE_ACCOUNT_ID'] = process.env['CLOUDFLARE_ACCOUNT_ID']
-		savedEnv['CLOUDFLARE_API_TOKEN'] = process.env['CLOUDFLARE_API_TOKEN']
-		process.env['PIPELINE_CONFIG_FILE'] = configFile
-		process.env['CLOUDFLARE_ACCOUNT_ID'] = 'acct-abc'
-		process.env['CLOUDFLARE_API_TOKEN'] = 'cf-token'
+		vi.stubEnv('PIPELINE_CONFIG_FILE', configFile)
+		vi.stubEnv('CLOUDFLARE_ACCOUNT_ID', 'acct-abc')
+		vi.stubEnv('CLOUDFLARE_API_TOKEN', 'cf-token')
 	})
 
 	afterEach(() => {
-		for (const [key, value] of Object.entries(savedEnv)) {
-			if (value === undefined) {
-				delete process.env[key]
-			} else {
-				process.env[key] = value
-			}
-		}
 		rmSync(configFile, { force: true })
+		vi.unstubAllEnvs()
 		vi.unstubAllGlobals()
 		vi.restoreAllMocks()
 	})
@@ -72,7 +61,7 @@ describe('ensurePagesDomainsCommand', () => {
 			configFile,
 			'[project]\nname = "my-site"\ntype = "static"\n',
 		)
-		process.env['PIPELINE_ENVIRONMENT'] = 'production'
+		vi.stubEnv('PIPELINE_ENVIRONMENT', 'production')
 		const fetchMock = vi.fn<FetchImpl>()
 		vi.stubGlobal('fetch', fetchMock)
 
@@ -86,7 +75,7 @@ describe('ensurePagesDomainsCommand', () => {
 			configFile,
 			'[project]\nname = "my-site"\ntype = "static"\ndomain = "example.com"\nredirect_domains = ["example.fr"]\n',
 		)
-		process.env['PIPELINE_ENVIRONMENT'] = 'production'
+		vi.stubEnv('PIPELINE_ENVIRONMENT', 'production')
 
 		const attachedBodies: string[] = []
 		const impl: FetchImpl = (input, init) => {
@@ -131,7 +120,7 @@ describe('ensurePagesDomainsCommand', () => {
 			configFile,
 			'[project]\nname = "my-site"\ntype = "static"\ndomain = "example.com"\n',
 		)
-		process.env['PIPELINE_ENVIRONMENT'] = 'production'
+		vi.stubEnv('PIPELINE_ENVIRONMENT', 'production')
 
 		const impl: FetchImpl = (input, init) => {
 			const url = urlOf(input)
@@ -159,19 +148,19 @@ describe('ensurePagesDomainsCommand', () => {
 		expect(methods).not.toContain('POST')
 	})
 
-	it('attaches only dev.{domain} in development, ignoring redirects', async () => {
+	it('attaches only dev.{domain} to the -dev project in development, ignoring redirects', async () => {
 		writeFileSync(
 			configFile,
 			'[project]\nname = "my-site"\ntype = "static"\ndomain = "example.com"\nredirect_domains = ["example.fr"]\n',
 		)
-		process.env['PIPELINE_ENVIRONMENT'] = 'development'
+		vi.stubEnv('PIPELINE_ENVIRONMENT', 'development')
 
 		const attachedBodies: string[] = []
 		const impl: FetchImpl = (input, init) => {
 			const url = urlOf(input)
 			const method = methodOf(init)
 			if (
-				url.endsWith('/pages/projects/my-site/domains') &&
+				url.endsWith('/pages/projects/my-site-dev/domains') &&
 				method === 'GET'
 			) {
 				return Promise.resolve(
@@ -179,7 +168,7 @@ describe('ensurePagesDomainsCommand', () => {
 				)
 			}
 			if (
-				url.endsWith('/pages/projects/my-site/domains') &&
+				url.endsWith('/pages/projects/my-site-dev/domains') &&
 				method === 'POST'
 			) {
 				const body = init?.body
@@ -211,7 +200,7 @@ describe('ensurePagesDomainsCommand', () => {
 			configFile,
 			'[project]\nname = "my-site"\ntype = "static"\ndomain = "example.com"\n',
 		)
-		process.env['PIPELINE_ENVIRONMENT'] = 'production'
+		vi.stubEnv('PIPELINE_ENVIRONMENT', 'production')
 
 		const impl: FetchImpl = (input, init) => {
 			const url = urlOf(input)
@@ -247,8 +236,8 @@ describe('ensurePagesDomainsCommand', () => {
 			configFile,
 			'[project]\nname = "my-site"\ntype = "static"\ndomain = "example.com"\n',
 		)
-		process.env['PIPELINE_ENVIRONMENT'] = 'production'
-		delete process.env['CLOUDFLARE_ACCOUNT_ID']
+		vi.stubEnv('PIPELINE_ENVIRONMENT', 'production')
+		vi.stubEnv('CLOUDFLARE_ACCOUNT_ID', undefined)
 
 		await expect(ensurePagesDomainsCommand()).rejects.toThrow(
 			'CLOUDFLARE_ACCOUNT_ID env var',
@@ -260,8 +249,8 @@ describe('ensurePagesDomainsCommand', () => {
 			configFile,
 			'[project]\nname = "my-site"\ntype = "static"\ndomain = "example.com"\n',
 		)
-		process.env['PIPELINE_ENVIRONMENT'] = 'production'
-		delete process.env['CLOUDFLARE_API_TOKEN']
+		vi.stubEnv('PIPELINE_ENVIRONMENT', 'production')
+		vi.stubEnv('CLOUDFLARE_API_TOKEN', undefined)
 
 		await expect(ensurePagesDomainsCommand()).rejects.toThrow(
 			'CLOUDFLARE_API_TOKEN env var',

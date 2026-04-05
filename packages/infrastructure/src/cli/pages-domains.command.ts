@@ -15,6 +15,7 @@ import {
 	findStalePagesDomains,
 	reconcilePagesDomain,
 } from '../domain/pages-domains.ts'
+import { computePagesProjectName } from '../domain/pages-project-name.ts'
 
 import { getEnv, requireEnv } from './env.ts'
 
@@ -36,6 +37,11 @@ export async function ensurePagesDomainsCommand(): Promise<void> {
 	const accountId = requireEnv('CLOUDFLARE_ACCOUNT_ID')
 	const token = requireEnv('CLOUDFLARE_API_TOKEN')
 
+	const projectName = computePagesProjectName(
+		config.project.name,
+		environment,
+	)
+
 	const desired = computePagesDomains({
 		domain: config.project.domain,
 		redirectDomains: config.project.redirectDomains,
@@ -43,23 +49,13 @@ export async function ensurePagesDomainsCommand(): Promise<void> {
 	})
 
 	logger.info(
-		`Ensuring ${desired.length} Pages custom domain(s) on "${config.project.name}" (${environment})`,
+		`Ensuring ${desired.length} Pages custom domain(s) on "${projectName}" (${environment})`,
 	)
 
-	const attached = await listPagesDomains(
-		accountId,
-		config.project.name,
-		token,
-	)
+	const attached = await listPagesDomains(accountId, projectName, token)
 
 	for (const domain of desired) {
-		await applyDomain(
-			accountId,
-			config.project.name,
-			domain,
-			attached,
-			token,
-		)
+		await applyDomain(accountId, projectName, domain, attached, token)
 	}
 
 	reportStaleDomains(desired, attached)

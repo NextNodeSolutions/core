@@ -47,30 +47,21 @@ function methodOf(init: RequestInit | undefined): string {
 
 describe('ensurePagesProjectCommand', () => {
 	let configFile: string
-	const savedEnv: Record<string, string | undefined> = {}
 
 	beforeEach(() => {
 		configFile = join(
 			tmpdir(),
 			`nextnode-${Date.now()}-${Math.random().toString(36).slice(2)}.toml`,
 		)
-		savedEnv['PIPELINE_CONFIG_FILE'] = process.env['PIPELINE_CONFIG_FILE']
-		savedEnv['CLOUDFLARE_API_TOKEN'] = process.env['CLOUDFLARE_API_TOKEN']
-		savedEnv['CLOUDFLARE_ACCOUNT_ID'] = process.env['CLOUDFLARE_ACCOUNT_ID']
-		process.env['PIPELINE_CONFIG_FILE'] = configFile
-		process.env['CLOUDFLARE_API_TOKEN'] = 'cf-token'
-		process.env['CLOUDFLARE_ACCOUNT_ID'] = 'acct-xyz'
+		vi.stubEnv('PIPELINE_CONFIG_FILE', configFile)
+		vi.stubEnv('PIPELINE_ENVIRONMENT', 'production')
+		vi.stubEnv('CLOUDFLARE_API_TOKEN', 'cf-token')
+		vi.stubEnv('CLOUDFLARE_ACCOUNT_ID', 'acct-xyz')
 	})
 
 	afterEach(() => {
-		for (const [key, value] of Object.entries(savedEnv)) {
-			if (value === undefined) {
-				delete process.env[key]
-			} else {
-				process.env[key] = value
-			}
-		}
 		rmSync(configFile, { force: true })
+		vi.unstubAllEnvs()
 		vi.unstubAllGlobals()
 		vi.restoreAllMocks()
 	})
@@ -124,6 +115,56 @@ describe('ensurePagesProjectCommand', () => {
 		})
 	})
 
+	it('creates the project with -dev suffix in development env', async () => {
+		writeFileSync(
+			configFile,
+			'[project]\nname = "gardefroidclim"\ntype = "static"\n',
+		)
+		vi.stubEnv('PIPELINE_ENVIRONMENT', 'development')
+
+		const impl: FetchImpl = (input, init) => {
+			const url = urlOf(input)
+			const method = methodOf(init)
+			if (
+				url.endsWith('/pages/projects/gardefroidclim-dev') &&
+				method === 'GET'
+			) {
+				return Promise.resolve(notFound())
+			}
+			if (url.endsWith('/pages/projects') && method === 'POST') {
+				return Promise.resolve(
+					okJson({
+						success: true,
+						result: {
+							name: 'gardefroidclim-dev',
+							production_branch: 'main',
+						},
+						errors: [],
+					}),
+				)
+			}
+			throw new Error(`Unexpected call: ${method} ${url}`)
+		}
+		const fetchMock = vi.fn<FetchImpl>(impl)
+		vi.stubGlobal('fetch', fetchMock)
+
+		await ensurePagesProjectCommand()
+
+		const postCall = fetchMock.mock.calls.find(
+			call => methodOf(call[1]) === 'POST',
+		)
+		expect(postCall).toBeDefined()
+		if (!postCall) return
+		const body = postCall[1]?.body
+		expect(typeof body).toBe('string')
+		if (typeof body !== 'string') return
+		const payload: unknown = JSON.parse(body)
+		expect(payload).toEqual({
+			name: 'gardefroidclim-dev',
+			production_branch: 'main',
+		})
+	})
+
 	it('skips creation when the project already exists', async () => {
 		writeFileSync(
 			configFile,
@@ -160,7 +201,7 @@ describe('ensurePagesProjectCommand', () => {
 	})
 
 	it('throws when PIPELINE_CONFIG_FILE is not set', async () => {
-		delete process.env['PIPELINE_CONFIG_FILE']
+		vi.stubEnv('PIPELINE_CONFIG_FILE', undefined)
 
 		await expect(ensurePagesProjectCommand()).rejects.toThrow(
 			'PIPELINE_CONFIG_FILE env var',
@@ -172,7 +213,7 @@ describe('ensurePagesProjectCommand', () => {
 			configFile,
 			'[project]\nname = "gardefroidclim"\ntype = "static"\n',
 		)
-		delete process.env['CLOUDFLARE_ACCOUNT_ID']
+		vi.stubEnv('CLOUDFLARE_ACCOUNT_ID', undefined)
 
 		await expect(ensurePagesProjectCommand()).rejects.toThrow(
 			'CLOUDFLARE_ACCOUNT_ID env var',
@@ -184,7 +225,7 @@ describe('ensurePagesProjectCommand', () => {
 			configFile,
 			'[project]\nname = "gardefroidclim"\ntype = "static"\n',
 		)
-		delete process.env['CLOUDFLARE_API_TOKEN']
+		vi.stubEnv('CLOUDFLARE_API_TOKEN', undefined)
 
 		await expect(ensurePagesProjectCommand()).rejects.toThrow(
 			'CLOUDFLARE_API_TOKEN env var',

@@ -76,7 +76,11 @@ describe('writePlanOutputs', () => {
 			{ id: 'test', name: 'Test', cmd: 'pnpm test' },
 		]
 
-		writePlanOutputs({ config: APP_CONFIG, tasks })
+		writePlanOutputs({
+			config: APP_CONFIG,
+			pagesProjectName: 'my-app',
+			tasks,
+		})
 
 		const output = readFileSync(outputFile, 'utf-8')
 		const matrixJson = JSON.stringify([
@@ -88,8 +92,23 @@ describe('writePlanOutputs', () => {
 		)
 	})
 
+	it('uses pagesProjectName as the project_name output (dev env)', () => {
+		writePlanOutputs({
+			config: APP_CONFIG,
+			pagesProjectName: 'my-app-dev',
+			tasks: [],
+		})
+
+		const output = readFileSync(outputFile, 'utf-8')
+		expect(output).toContain('project_name=my-app-dev\n')
+	})
+
 	it('writes skip sentinel when no tasks', () => {
-		writePlanOutputs({ config: APP_CONFIG, tasks: [] })
+		writePlanOutputs({
+			config: APP_CONFIG,
+			pagesProjectName: 'my-app',
+			tasks: [],
+		})
 
 		const output = readFileSync(outputFile, 'utf-8')
 		expect(output).toContain(
@@ -98,7 +117,11 @@ describe('writePlanOutputs', () => {
 	})
 
 	it('writes package type for package projects', () => {
-		writePlanOutputs({ config: PACKAGE_CONFIG, tasks: [] })
+		writePlanOutputs({
+			config: PACKAGE_CONFIG,
+			pagesProjectName: 'my-lib',
+			tasks: [],
+		})
 
 		const output = readFileSync(outputFile, 'utf-8')
 		expect(output).toContain('project_name=my-lib\n')
@@ -108,7 +131,11 @@ describe('writePlanOutputs', () => {
 	})
 
 	it('writes project filter and publish true when package section exists', () => {
-		writePlanOutputs({ config: PUBLISHABLE_CONFIG, tasks: [] })
+		writePlanOutputs({
+			config: PUBLISHABLE_CONFIG,
+			pagesProjectName: 'logger',
+			tasks: [],
+		})
 
 		const output = readFileSync(outputFile, 'utf-8')
 		expect(output).toContain('project_filter=@nextnode-solutions/logger\n')
@@ -121,7 +148,11 @@ describe('writePlanOutputs', () => {
 			environment: { development: false },
 		}
 
-		writePlanOutputs({ config, tasks: [] })
+		writePlanOutputs({
+			config,
+			pagesProjectName: 'my-app',
+			tasks: [],
+		})
 
 		const output = readFileSync(outputFile, 'utf-8')
 		expect(output).toContain('development_enabled=false\n')
@@ -133,7 +164,11 @@ describe('writePlanOutputs', () => {
 			{ id: 'prod-gate', name: 'Prod Gate', cmd: 'run-prod-gate' },
 		]
 
-		writePlanOutputs({ config: APP_CONFIG, tasks })
+		writePlanOutputs({
+			config: APP_CONFIG,
+			pagesProjectName: 'my-app',
+			tasks,
+		})
 
 		const output = readFileSync(outputFile, 'utf-8')
 		expect(output).toContain('has_prod_gate=true\n')
@@ -151,7 +186,11 @@ describe('writePlanOutputs', () => {
 			},
 		}
 
-		writePlanOutputs({ config, tasks: [] })
+		writePlanOutputs({
+			config,
+			pagesProjectName: 'my-site',
+			tasks: [],
+		})
 
 		const output = readFileSync(outputFile, 'utf-8')
 		expect(output).toContain('project_type=static\n')
@@ -166,7 +205,11 @@ describe('writePlanOutputs', () => {
 			},
 		}
 
-		writePlanOutputs({ config, tasks: [] })
+		writePlanOutputs({
+			config,
+			pagesProjectName: 'my-app',
+			tasks: [],
+		})
 
 		const output = readFileSync(outputFile, 'utf-8')
 		expect(output).toContain('has_domain=true\n')
@@ -174,7 +217,11 @@ describe('writePlanOutputs', () => {
 	})
 
 	it('writes has_domain=false and empty domain when no domain is configured', () => {
-		writePlanOutputs({ config: APP_CONFIG, tasks: [] })
+		writePlanOutputs({
+			config: APP_CONFIG,
+			pagesProjectName: 'my-app',
+			tasks: [],
+		})
 
 		const output = readFileSync(outputFile, 'utf-8')
 		expect(output).toContain('has_domain=false\n')
@@ -185,7 +232,11 @@ describe('writePlanOutputs', () => {
 		delete process.env['GITHUB_OUTPUT']
 
 		expect(() =>
-			writePlanOutputs({ config: APP_CONFIG, tasks: [] }),
+			writePlanOutputs({
+				config: APP_CONFIG,
+				pagesProjectName: 'my-app',
+				tasks: [],
+			}),
 		).toThrow('GITHUB_OUTPUT env var')
 	})
 })
