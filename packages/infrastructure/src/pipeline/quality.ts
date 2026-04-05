@@ -1,5 +1,12 @@
 import type { ProjectSection, ScriptsSection } from '../config/schema.js'
 
+export type PipelineEnvironment = 'development' | 'production' | 'none'
+
+export interface PipelineContext {
+	readonly environment: PipelineEnvironment
+	readonly developmentEnabled: boolean
+}
+
 export interface QualityTask {
 	id: string
 	name: string
@@ -9,6 +16,7 @@ export interface QualityTask {
 export function buildQualityMatrix(
 	scripts: ScriptsSection,
 	project: ProjectSection,
+	pipeline: PipelineContext,
 ): QualityTask[] {
 	const tasks: QualityTask[] = []
 
@@ -28,7 +36,19 @@ export function buildQualityMatrix(
 		})
 	}
 
+	if (pipeline.environment === 'production' && pipeline.developmentEnabled) {
+		tasks.push({
+			id: 'prod-gate',
+			name: 'Prod Gate',
+			cmd: 'cd .infra/packages/infrastructure && pnpm exec tsx src/index.ts prod-gate',
+		})
+	}
+
 	return tasks
+}
+
+export function hasProdGate(tasks: ReadonlyArray<QualityTask>): boolean {
+	return tasks.some(task => task.id === 'prod-gate')
 }
 
 function buildCommand(script: string, filter: string | false): string {
