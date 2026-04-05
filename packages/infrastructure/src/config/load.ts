@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs'
 
 import { parse as parseTOML } from 'smol-toml'
 
-import type { NextNodeConfig } from './schema.js'
-import { parseConfig } from './schema.js'
+import type { NextNodeConfig } from './schema.ts'
+import { parseConfig } from './schema.ts'
 
 export function loadConfig(configPath: string): NextNodeConfig {
 	const content = readFileSync(configPath, 'utf-8')

@@ -3,13 +3,18 @@ import {
 	authHeaders,
 	formatErrors,
 	parseEnvelope,
+	requireArrayResult,
 	requireObjectResult,
 	requireOk,
-} from './cloudflare-api.js'
+} from './cloudflare-api.ts'
 
 export interface CloudflarePagesProject {
 	readonly name: string
 	readonly productionBranch: string
+}
+
+export interface CloudflarePagesDomain {
+	readonly name: string
 }
 
 function parsePagesProject(item: unknown): CloudflarePagesProject {
@@ -57,6 +62,79 @@ export async function getPagesProject(
 	}
 
 	return parsePagesProject(requireObjectResult(data, context))
+}
+
+function parsePagesDomain(item: unknown): CloudflarePagesDomain {
+	if (typeof item !== 'object' || item === null) {
+		throw new Error('Cloudflare Pages domain: item is not an object')
+	}
+	if (!('name' in item) || typeof item.name !== 'string') {
+		throw new Error('Cloudflare Pages domain: name missing')
+	}
+	return { name: item.name }
+}
+
+/**
+ * List the custom domains attached to a Cloudflare Pages project.
+ *
+ * The returned list reflects the domains tied to the project in the
+ * "Custom domains" tab — NOT the DNS records in the zone. These are
+ * separate concerns: attaching a domain here teaches Pages which
+ * `Host` header maps to this project and provisions the SSL certificate.
+ */
+export async function listPagesDomains(
+	accountId: string,
+	projectName: string,
+	token: string,
+): Promise<ReadonlyArray<CloudflarePagesDomain>> {
+	const response = await fetch(
+		`${CLOUDFLARE_API_BASE}/accounts/${accountId}/pages/projects/${encodeURIComponent(projectName)}/domains`,
+		{ headers: authHeaders(token) },
+	)
+	await requireOk(response)
+
+	const data: unknown = await response.json()
+	const context = `Cloudflare Pages domains list for "${projectName}"`
+	const envelope = parseEnvelope(data, context)
+	if (!envelope.success) {
+		throw new Error(`${context} failed: ${formatErrors(envelope.errors)}`)
+	}
+
+	const result = requireArrayResult(data, context)
+	return result.map(parsePagesDomain)
+}
+
+/**
+ * Attach a custom domain to a Cloudflare Pages project.
+ *
+ * Must be called BEFORE serving traffic from the domain — skipping this
+ * step while only creating the CNAME record yields a 522 error because
+ * the Pages edge has no routing entry for the incoming `Host` header.
+ */
+export async function attachPagesDomain(
+	accountId: string,
+	projectName: string,
+	domainName: string,
+	token: string,
+): Promise<CloudflarePagesDomain> {
+	const response = await fetch(
+		`${CLOUDFLARE_API_BASE}/accounts/${accountId}/pages/projects/${encodeURIComponent(projectName)}/domains`,
+		{
+			method: 'POST',
+			headers: authHeaders(token),
+			body: JSON.stringify({ name: domainName }),
+		},
+	)
+	await requireOk(response)
+
+	const data: unknown = await response.json()
+	const context = `Cloudflare Pages domain attach "${domainName}" to "${projectName}"`
+	const envelope = parseEnvelope(data, context)
+	if (!envelope.success) {
+		throw new Error(`${context} failed: ${formatErrors(envelope.errors)}`)
+	}
+
+	return parsePagesDomain(requireObjectResult(data, context))
 }
 
 /**

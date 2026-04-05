@@ -5,7 +5,7 @@ import {
 	listDnsRecords,
 	lookupZoneId,
 	updateDnsRecord,
-} from './cloudflare-dns.js'
+} from './cloudflare-dns.ts'
 
 const TOKEN = 'cf-token-123'
 

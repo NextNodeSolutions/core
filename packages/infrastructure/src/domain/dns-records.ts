@@ -1,4 +1,4 @@
-import type { AppEnvironment } from './environment.js'
+import type { AppEnvironment } from './environment.ts'
 
 export interface DesiredDnsRecord {
 	readonly zoneName: string

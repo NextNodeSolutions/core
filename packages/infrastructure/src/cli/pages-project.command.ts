@@ -3,10 +3,10 @@ import { logger } from '@nextnode-solutions/logger'
 import {
 	createPagesProject,
 	getPagesProject,
-} from '../adapters/cloudflare-pages.js'
-import { loadConfig } from '../config/load.js'
+} from '../adapters/cloudflare-pages.ts'
+import { loadConfig } from '../config/load.ts'
 
-import { requireEnv } from './env.js'
+import { requireEnv } from './env.ts'
 
 const PRODUCTION_BRANCH = 'main'
 

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import type { ProjectSection, ScriptsSection } from '../config/schema.js'
+import type { ProjectSection, ScriptsSection } from '../config/schema.ts'
 
-import { buildQualityMatrix, hasProdGate } from './quality-matrix.js'
-import type { PipelineContext, QualityTask } from './quality-matrix.js'
+import { buildQualityMatrix, hasProdGate } from './quality-matrix.ts'
+import type { PipelineContext, QualityTask } from './quality-matrix.ts'
 
 const PROD_GATE_CMD = 'run-prod-gate'
 

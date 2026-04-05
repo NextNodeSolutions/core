@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { createPagesProject, getPagesProject } from './cloudflare-pages.js'
+import {
+	attachPagesDomain,
+	createPagesProject,
+	getPagesProject,
+	listPagesDomains,
+} from './cloudflare-pages.ts'
 
 const TOKEN = 'cf-token-123'
 const ACCOUNT = 'acct-abc'
@@ -182,5 +187,154 @@ describe('createPagesProject', () => {
 		await expect(
 			createPagesProject(ACCOUNT, PROJECT, 'main', TOKEN),
 		).rejects.toThrow('[8000007] Project already exists')
+	})
+})
+
+describe('listPagesDomains', () => {
+	it('returns the attached domains', async () => {
+		const fetchMock = vi.fn().mockResolvedValue(
+			okJson({
+				success: true,
+				result: [
+					{ name: 'example.com', status: 'active' },
+					{ name: 'www.example.com', status: 'pending' },
+				],
+				errors: [],
+			}),
+		)
+		vi.stubGlobal('fetch', fetchMock)
+
+		const domains = await listPagesDomains(ACCOUNT, PROJECT, TOKEN)
+
+		expect(domains).toEqual([
+			{ name: 'example.com' },
+			{ name: 'www.example.com' },
+		])
+		expect(fetchMock).toHaveBeenCalledWith(
+			`https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/pages/projects/${PROJECT}/domains`,
+			expect.objectContaining({
+				headers: expect.objectContaining({
+					Authorization: `Bearer ${TOKEN}`,
+				}),
+			}),
+		)
+	})
+
+	it('returns an empty list when no domains are attached', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi
+				.fn()
+				.mockResolvedValue(
+					okJson({ success: true, result: [], errors: [] }),
+				),
+		)
+
+		const domains = await listPagesDomains(ACCOUNT, PROJECT, TOKEN)
+
+		expect(domains).toEqual([])
+	})
+
+	it('URL-encodes the project name', async () => {
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValue(
+				okJson({ success: true, result: [], errors: [] }),
+			)
+		vi.stubGlobal('fetch', fetchMock)
+
+		await listPagesDomains(ACCOUNT, 'weird name', TOKEN)
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			`https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/pages/projects/weird%20name/domains`,
+			expect.any(Object),
+		)
+	})
+
+	it('throws on HTTP error', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue(httpError(500, 'server down')),
+		)
+
+		await expect(listPagesDomains(ACCOUNT, PROJECT, TOKEN)).rejects.toThrow(
+			'Cloudflare API returned 500',
+		)
+	})
+
+	it('throws when the API reports success=false', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue(
+				okJson({
+					success: false,
+					result: [],
+					errors: [{ code: 10001, message: 'Invalid account' }],
+				}),
+			),
+		)
+
+		await expect(listPagesDomains(ACCOUNT, PROJECT, TOKEN)).rejects.toThrow(
+			'[10001] Invalid account',
+		)
+	})
+})
+
+describe('attachPagesDomain', () => {
+	it('POSTs the domain name and returns the attached domain', async () => {
+		const fetchMock = vi.fn().mockResolvedValue(
+			okJson({
+				success: true,
+				result: { name: 'example.com', status: 'initializing' },
+				errors: [],
+			}),
+		)
+		vi.stubGlobal('fetch', fetchMock)
+
+		const domain = await attachPagesDomain(
+			ACCOUNT,
+			PROJECT,
+			'example.com',
+			TOKEN,
+		)
+
+		expect(domain).toEqual({ name: 'example.com' })
+		expect(fetchMock).toHaveBeenCalledWith(
+			`https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/pages/projects/${PROJECT}/domains`,
+			expect.objectContaining({
+				method: 'POST',
+				body: JSON.stringify({ name: 'example.com' }),
+			}),
+		)
+	})
+
+	it('throws on HTTP error', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue(httpError(403, 'forbidden')),
+		)
+
+		await expect(
+			attachPagesDomain(ACCOUNT, PROJECT, 'example.com', TOKEN),
+		).rejects.toThrow('Cloudflare API returned 403')
+	})
+
+	it('throws when the API reports success=false', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue(
+				okJson({
+					success: false,
+					result: {},
+					errors: [
+						{ code: 8000001, message: 'Domain already exists' },
+					],
+				}),
+			),
+		)
+
+		await expect(
+			attachPagesDomain(ACCOUNT, PROJECT, 'example.com', TOKEN),
+		).rejects.toThrow('[8000001] Domain already exists')
 	})
 })

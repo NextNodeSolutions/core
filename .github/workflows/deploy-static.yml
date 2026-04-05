@@ -34,7 +34,7 @@ jobs:
 
       - name: Plan pipeline
         id: plan
-        run: pnpm exec tsx src/index.ts
+        run: node src/index.ts
         working-directory: .infra/packages/infrastructure
         env:
           PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
@@ -69,7 +69,7 @@ jobs:
           deps: "false"
 
       - name: Ensure Cloudflare Pages project exists
-        run: pnpm exec tsx src/index.ts ensure-pages-project
+        run: node src/index.ts ensure-pages-project
         working-directory: .infra/packages/infrastructure
         env:
           PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
@@ -95,9 +95,29 @@ jobs:
           account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
+  ensure-pages-domains:
+    name: Ensure Pages Custom Domains
+    needs: [plan, quality, ensure-project]
+    if: needs.plan.outputs.has_domain == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: NextNodeSolutions/core/.github/actions/setup@main
+        with:
+          infra: "true"
+          deps: "false"
+
+      - name: Attach Pages custom domains
+        run: node src/index.ts ensure-pages-domains
+        working-directory: .infra/packages/infrastructure
+        env:
+          PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
+          PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
   dns:
     name: DNS
-    needs: [plan, quality]
+    needs: [plan, quality, ensure-pages-domains]
     if: needs.plan.outputs.has_domain == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -107,7 +127,7 @@ jobs:
           deps: "false"
 
       - name: Reconcile Cloudflare DNS
-        run: pnpm exec tsx src/index.ts dns
+        run: node src/index.ts dns
         working-directory: .infra/packages/infrastructure
         env:
           PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}

@@ -1,14 +1,14 @@
 import { logger } from '@nextnode-solutions/logger'
 
-import { writeOutput, writeSummary } from '../adapters/github-output.js'
-import { readSemanticReleaseOutput } from '../adapters/semantic-release-output.js'
+import { writeOutput, writeSummary } from '../adapters/github-output.ts'
+import { readSemanticReleaseOutput } from '../adapters/semantic-release-output.ts'
 import {
 	buildSummary,
 	parseSemanticReleaseOutput,
-} from '../domain/publish-result.js'
-import type { PublishResult } from '../domain/publish-result.js'
+} from '../domain/publish-result.ts'
+import type { PublishResult } from '../domain/publish-result.ts'
 
-import { getEnv, requireEnv } from './env.js'
+import { getEnv, requireEnv } from './env.ts'
 
 const DEFAULT_SR_OUTPUT = '/tmp/sr-output.txt'
 

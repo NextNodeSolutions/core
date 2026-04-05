@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import type { DesiredDnsRecord } from './dns-records.js'
+import type { DesiredDnsRecord } from './dns-records.ts'
 import {
 	computeDnsRecords,
 	extractRootDomain,
 	reconcileDnsRecord,
-} from './dns-records.js'
+} from './dns-records.ts'
 
 describe('computeDnsRecords', () => {
 	describe('production', () => {

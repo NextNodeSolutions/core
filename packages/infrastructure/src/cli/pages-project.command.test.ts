@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { ensurePagesProjectCommand } from './pages-project.command.js'
+import { ensurePagesProjectCommand } from './pages-project.command.ts'
 
 interface MockResponse {
 	ok: boolean

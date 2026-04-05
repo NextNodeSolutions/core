@@ -1,4 +1,4 @@
-import type { ProjectSection } from '../config/schema.js'
+import type { ProjectSection } from '../config/schema.ts'
 
 export const APP_ENVIRONMENTS = ['development', 'production'] as const
 export type AppEnvironment = (typeof APP_ENVIRONMENTS)[number]

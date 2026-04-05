@@ -1,9 +1,9 @@
 import { logger } from '@nextnode-solutions/logger'
 
-import { fetchWorkflowRuns } from '../adapters/github-api.js'
-import { evaluateDevRun, findDevRun } from '../domain/prod-gate.js'
+import { fetchWorkflowRuns } from '../adapters/github-api.ts'
+import { evaluateDevRun, findDevRun } from '../domain/prod-gate.ts'
 
-import { requireEnv } from './env.js'
+import { requireEnv } from './env.ts'
 
 export async function prodGateCommand(): Promise<void> {
 	const repo = requireEnv('GITHUB_REPOSITORY')

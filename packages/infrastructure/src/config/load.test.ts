@@ -2,7 +2,7 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { loadConfig } from './load.js'
+import { loadConfig } from './load.ts'
 
 const FIXTURES = join(import.meta.dirname, 'fixtures')
 const fixture = (name: string): string => join(FIXTURES, name)

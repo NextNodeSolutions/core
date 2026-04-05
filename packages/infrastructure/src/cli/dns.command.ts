@@ -5,22 +5,22 @@ import {
 	listDnsRecords,
 	lookupZoneId,
 	updateDnsRecord,
-} from '../adapters/cloudflare-dns.js'
+} from '../adapters/cloudflare-dns.ts'
 import type {
 	CloudflareDnsRecord,
 	DnsRecordPayload,
-} from '../adapters/cloudflare-dns.js'
-import { loadConfig } from '../config/load.js'
-import type { ProjectSection } from '../config/schema.js'
+} from '../adapters/cloudflare-dns.ts'
+import { loadConfig } from '../config/load.ts'
+import type { ProjectSection } from '../config/schema.ts'
 import type {
 	DesiredDnsRecord,
 	ExistingDnsRecord,
-} from '../domain/dns-records.js'
-import { computeDnsRecords, reconcileDnsRecord } from '../domain/dns-records.js'
-import type { AppEnvironment } from '../domain/environment.js'
-import { resolveEnvironment } from '../domain/environment.js'
+} from '../domain/dns-records.ts'
+import { computeDnsRecords, reconcileDnsRecord } from '../domain/dns-records.ts'
+import type { AppEnvironment } from '../domain/environment.ts'
+import { resolveEnvironment } from '../domain/environment.ts'
 
-import { getEnv, requireEnv } from './env.js'
+import { getEnv, requireEnv } from './env.ts'
 
 export async function dnsCommand(): Promise<void> {
 	const configPath = requireEnv('PIPELINE_CONFIG_FILE')
