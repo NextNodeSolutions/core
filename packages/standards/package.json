@@ -52,7 +52,7 @@
 		"registry": "https://registry.npmjs.org/"
 	},
 	"scripts": {
-		"build": "echo 'No build step needed for config package'",
+		"build": "cp src/oxfmt/base.ts src/oxfmt/base.js",
 		"format": "oxfmt --write .",
 		"format:check": "oxfmt --check .",
 		"lint": "oxlint",
