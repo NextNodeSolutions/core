@@ -1,1 +1,1 @@
-export { default } from './src/oxfmt/base.js'
+export { default } from './src/oxfmt/base.ts'
