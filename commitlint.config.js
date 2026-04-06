@@ -1,1 +1,1 @@
-export { default } from "@nextnode-solutions/standards/commitlint";
+export { default } from '@nextnode-solutions/standards/commitlint'

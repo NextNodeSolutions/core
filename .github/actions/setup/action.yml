@@ -21,67 +21,67 @@ name: Setup NextNode
 description: Checkout, install pnpm/Node, and optionally install infra or project deps
 
 inputs:
-  infra:
-    description: >
-      Checkout the core infrastructure package into .infra/ and install its
-      deps. Needed by jobs that run the pipeline CLI (plan, deploy).
-    default: "false"
-  deps:
-    description: >
-      Install the caller project's dependencies. Needed by jobs that run
-      the project's own scripts (lint, test, build, publish).
-    default: "true"
-  fetch-depth:
-    description: >
-      Git fetch depth for checkout. Use 0 for full history
-      (required by semantic-release for commit analysis).
-    default: "1"
+    infra:
+        description: >
+            Checkout the core infrastructure package into .infra/ and install its
+            deps. Needed by jobs that run the pipeline CLI (plan, deploy).
+        default: 'false'
+    deps:
+        description: >
+            Install the caller project's dependencies. Needed by jobs that run
+            the project's own scripts (lint, test, build, publish).
+        default: 'true'
+    fetch-depth:
+        description: >
+            Git fetch depth for checkout. Use 0 for full history
+            (required by semantic-release for commit analysis).
+        default: '1'
 
 runs:
-  using: composite
-  steps:
-    - name: Checkout caller repo
-      uses: actions/checkout@v6
-      with:
-        fetch-depth: ${{ inputs.fetch-depth }}
+    using: composite
+    steps:
+        - name: Checkout caller repo
+          uses: actions/checkout@v6
+          with:
+              fetch-depth: ${{ inputs.fetch-depth }}
 
-    - name: Setup pnpm
-      uses: pnpm/action-setup@v5
+        - name: Setup pnpm
+          uses: pnpm/action-setup@v5
 
-    # Sparse-checkout infra BEFORE setup-node so the lockfile exists for
-    # cache-dependency-path resolution.
-    - name: Checkout infrastructure
-      if: inputs.infra == 'true'
-      uses: actions/checkout@v6
-      with:
-        repository: NextNodeSolutions/core
-        path: .infra
-        sparse-checkout: |
-          packages/infrastructure
-          pnpm-lock.yaml
+        # Sparse-checkout infra BEFORE setup-node so the lockfile exists for
+        # cache-dependency-path resolution.
+        - name: Checkout infrastructure
+          if: inputs.infra == 'true'
+          uses: actions/checkout@v6
+          with:
+              repository: NextNodeSolutions/core
+              path: .infra
+              sparse-checkout: |
+                  packages/infrastructure
+                  pnpm-lock.yaml
 
-    - name: Setup Node (infra cache)
-      if: inputs.infra == 'true'
-      uses: actions/setup-node@v6
-      with:
-        node-version: 24
-        cache: pnpm
-        cache-dependency-path: .infra/pnpm-lock.yaml
+        - name: Setup Node (infra cache)
+          if: inputs.infra == 'true'
+          uses: actions/setup-node@v6
+          with:
+              node-version: 24
+              cache: pnpm
+              cache-dependency-path: .infra/pnpm-lock.yaml
 
-    - name: Setup Node (project cache)
-      if: inputs.infra != 'true'
-      uses: actions/setup-node@v6
-      with:
-        node-version: 24
-        cache: pnpm
+        - name: Setup Node (project cache)
+          if: inputs.infra != 'true'
+          uses: actions/setup-node@v6
+          with:
+              node-version: 24
+              cache: pnpm
 
-    - name: Install infrastructure deps
-      if: inputs.infra == 'true'
-      run: pnpm install --frozen-lockfile --prefer-offline --prod
-      shell: bash
-      working-directory: .infra/packages/infrastructure
+        - name: Install infrastructure deps
+          if: inputs.infra == 'true'
+          run: pnpm install --frozen-lockfile --prefer-offline --prod
+          shell: bash
+          working-directory: .infra/packages/infrastructure
 
-    - name: Install project deps
-      if: inputs.deps == 'true'
-      run: pnpm install --frozen-lockfile --prefer-offline
-      shell: bash
+        - name: Install project deps
+          if: inputs.deps == 'true'
+          run: pnpm install --frozen-lockfile --prefer-offline
+          shell: bash

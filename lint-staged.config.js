@@ -1,1 +1,1 @@
-export { default } from "@nextnode-solutions/standards/lint-staged";
+export { default } from '@nextnode-solutions/standards/lint-staged'

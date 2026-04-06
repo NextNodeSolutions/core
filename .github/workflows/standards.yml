@@ -1,16 +1,16 @@
 name: Standards
 
 on:
-  workflow_dispatch:
-  push:
-    branches: [main]
-    paths: ["packages/standards/**"]
-  pull_request:
-    paths: ["packages/standards/**"]
+    workflow_dispatch:
+    push:
+        branches: [main]
+        paths: ['packages/standards/**']
+    pull_request:
+        paths: ['packages/standards/**']
 
 jobs:
-  pipeline:
-    uses: ./.github/workflows/publish-package.yml
-    with:
-      config_file: packages/standards/nextnode.toml
-    secrets: inherit
+    pipeline:
+        uses: ./.github/workflows/publish-package.yml
+        with:
+            config_file: packages/standards/nextnode.toml
+        secrets: inherit

@@ -55,7 +55,7 @@
 		"@types/node": "^22",
 		"@types/react": "^19",
 		"@vitest/coverage-v8": "^3",
-		"oxfmt": "^0.28.0",
+		"oxfmt": "^0.43.0",
 		"oxlint": "^1.43.0",
 		"react": "^19",
 		"resend": "^6.6.0",
