@@ -1,0 +1,79 @@
+import { resolve, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+import { defineConfig } from 'oxlint'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const pluginPath = resolve(__dirname, 'plugins', 'no-type-assertion.js')
+
+export default defineConfig({
+	jsPlugins: [pluginPath],
+	categories: {
+		correctness: 'error',
+		suspicious: 'warn',
+		perf: 'warn',
+	},
+	plugins: ['typescript', 'react', 'unicorn', 'import'],
+	rules: {
+		'eslint/no-unused-vars': ['error', { ignoreRestSiblings: true }],
+		'eslint/prefer-const': 'error',
+		'eslint/no-var': 'error',
+		'eslint/no-debugger': 'error',
+		'eslint/no-console': 'warn',
+		'eslint/eqeqeq': 'error',
+		'eslint/prefer-template': 'error',
+		'eslint/arrow-body-style': 'error',
+		'eslint/complexity': ['error', { max: 15 }],
+		'eslint/no-magic-numbers': [
+			'error',
+			{
+				ignore: [0, 1, -1],
+				ignoreEnums: true,
+				ignoreReadonlyClassProperties: true,
+			},
+		],
+		'typescript/no-explicit-any': 'error',
+		'typescript/consistent-type-imports': [
+			'error',
+			{ prefer: 'type-imports', fixStyle: 'separate-type-imports' },
+		],
+		'typescript/no-dynamic-delete': 'error',
+		'typescript/explicit-function-return-type': [
+			'error',
+			{
+				allowExpressions: true,
+				allowTypedFunctionExpressions: true,
+				allowHigherOrderFunctions: true,
+				allowDirectConstAssertionInArrowFunctions: true,
+			},
+		],
+		'react/exhaustive-deps': 'warn',
+		'react/rules-of-hooks': 'error',
+		'import/consistent-type-specifier-style': ['error', 'prefer-top-level'],
+		'nextnode/no-type-assertion': 'error',
+	},
+	overrides: [
+		{
+			files: ['**/*.config.*', '**/*.test.*', '**/*.spec.*'],
+			rules: {
+				'eslint/no-console': 'off',
+				'typescript/no-explicit-any': 'warn',
+				'eslint/no-magic-numbers': 'off',
+			},
+		},
+		{
+			files: ['**/tsconfig*.json'],
+			rules: {},
+		},
+	],
+	env: {
+		browser: true,
+		es2024: true,
+		node: true,
+	},
+	globals: {
+		React: 'readonly',
+		JSX: 'readonly',
+		NodeJS: 'readonly',
+	},
+})
