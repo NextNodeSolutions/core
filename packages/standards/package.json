@@ -27,7 +27,7 @@
 	],
 	"type": "module",
 	"exports": {
-		"./oxlint": "./src/oxlint/base.json",
+		"./oxlint": "./src/oxlint/base.js",
 		"./oxfmt": "./src/oxfmt/base.js",
 		"./typescript/library": "./src/typescript/tsconfig.library.json",
 		"./typescript/nextjs": "./src/typescript/tsconfig.nextjs.json",
@@ -71,13 +71,13 @@
 		"husky": "^9.0.11",
 		"lint-staged": "^15.2.2",
 		"oxfmt": "^0.43.0",
-		"oxlint": "^1.43.0"
+		"oxlint": "^1.58.0"
 	},
 	"peerDependencies": {
 		"@commitlint/cli": "^19.0.0",
 		"@commitlint/config-conventional": "^19.0.0",
 		"oxfmt": ">=0.43.0",
-		"oxlint": ">=0.16.0",
+		"oxlint": ">=1.58.0",
 		"tailwindcss": "^4.0.0",
 		"vitest": "^3.0.0 || ^4.0.0"
 	},
