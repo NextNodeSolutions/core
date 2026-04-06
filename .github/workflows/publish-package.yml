@@ -1,101 +1,101 @@
 name: Publish Package
 
 on:
-  workflow_call:
-    inputs:
-      config_file:
-        type: string
-        default: "nextnode.toml"
-        description: "Path to nextnode.toml in the calling repo"
+    workflow_call:
+        inputs:
+            config_file:
+                type: string
+                default: 'nextnode.toml'
+                description: 'Path to nextnode.toml in the calling repo'
 
 permissions:
-  contents: read
+    contents: read
 
 jobs:
-  plan:
-    name: Plan
-    runs-on: ubuntu-latest
-    outputs:
-      quality_matrix: ${{ steps.plan.outputs.quality_matrix }}
-      project_name: ${{ steps.plan.outputs.project_name }}
-      project_filter: ${{ steps.plan.outputs.project_filter }}
-      publish: ${{ steps.plan.outputs.publish }}
-    steps:
-      - uses: NextNodeSolutions/core/.github/actions/setup@main
-        with:
-          infra: "true"
-          deps: "false"
+    plan:
+        name: Plan
+        runs-on: ubuntu-latest
+        outputs:
+            quality_matrix: ${{ steps.plan.outputs.quality_matrix }}
+            project_name: ${{ steps.plan.outputs.project_name }}
+            project_filter: ${{ steps.plan.outputs.project_filter }}
+            publish: ${{ steps.plan.outputs.publish }}
+        steps:
+            - uses: NextNodeSolutions/core/.github/actions/setup@main
+              with:
+                  infra: 'true'
+                  deps: 'false'
 
-      - name: Plan pipeline
-        id: plan
-        run: node src/index.ts
-        working-directory: .infra/packages/infrastructure
-        env:
-          PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
+            - name: Plan pipeline
+              id: plan
+              run: node src/index.ts
+              working-directory: .infra/packages/infrastructure
+              env:
+                  PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
 
-  quality:
-    name: ${{ matrix.task.name }}
-    needs: plan
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        task: ${{ fromJSON(needs.plan.outputs.quality_matrix) }}
-    steps:
-      - uses: NextNodeSolutions/core/.github/actions/setup@main
+    quality:
+        name: ${{ matrix.task.name }}
+        needs: plan
+        runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                task: ${{ fromJSON(needs.plan.outputs.quality_matrix) }}
+        steps:
+            - uses: NextNodeSolutions/core/.github/actions/setup@main
 
-      - name: ${{ matrix.task.name }}
-        run: ${{ matrix.task.cmd }}
+            - name: ${{ matrix.task.name }}
+              run: ${{ matrix.task.cmd }}
 
-  publish:
-    name: Publish
-    needs: [plan, quality]
-    if: github.ref == 'refs/heads/main' && needs.plan.outputs.publish == 'true'
-    runs-on: ubuntu-latest
-    concurrency:
-      group: publish-main
-      cancel-in-progress: false
-    permissions:
-      contents: write
-      id-token: write
-    steps:
-      - uses: NextNodeSolutions/core/.github/actions/setup@main
-        with:
-          infra: "true"
-          fetch-depth: "0"
+    publish:
+        name: Publish
+        needs: [plan, quality]
+        if: github.ref == 'refs/heads/main' && needs.plan.outputs.publish == 'true'
+        runs-on: ubuntu-latest
+        concurrency:
+            group: publish-main
+            cancel-in-progress: false
+        permissions:
+            contents: write
+            id-token: write
+        steps:
+            - uses: NextNodeSolutions/core/.github/actions/setup@main
+              with:
+                  infra: 'true'
+                  fetch-depth: '0'
 
-      - name: Build
-        run: pnpm turbo run build --filter=${{ needs.plan.outputs.project_filter }}
+            - name: Build
+              run: pnpm turbo run build --filter=${{ needs.plan.outputs.project_filter }}
 
-      - name: Generate GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ secrets.NEXTNODE_APP_ID }}
-          private-key: ${{ secrets.NEXTNODE_APP_PRIVATE_KEY }}
-          owner: NextNodeSolutions
+            - name: Generate GitHub App token
+              id: app-token
+              uses: actions/create-github-app-token@v2
+              with:
+                  app-id: ${{ secrets.NEXTNODE_APP_ID }}
+                  private-key: ${{ secrets.NEXTNODE_APP_PRIVATE_KEY }}
+                  owner: NextNodeSolutions
 
-      - name: Clear local tags for semantic-release
-        run: git tag -l | xargs -r git tag -d
+            - name: Clear local tags for semantic-release
+              run: git tag -l | xargs -r git tag -d
 
-      - name: Sync with remote main
-        run: git pull origin main --ff-only
+            - name: Sync with remote main
+              run: git pull origin main --ff-only
 
-      - name: Publish
-        id: publish
-        working-directory: packages/${{ needs.plan.outputs.project_name }}
-        shell: bash -eo pipefail {0}
-        run: pnpm exec semantic-release 2>&1 | tee /tmp/sr-output.txt
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-          HUSKY: "0"
-          NPM_CONFIG_PROVENANCE: "true"
+            - name: Publish
+              id: publish
+              working-directory: packages/${{ needs.plan.outputs.project_name }}
+              shell: bash -eo pipefail {0}
+              run: pnpm exec semantic-release 2>&1 | tee /tmp/sr-output.txt
+              env:
+                  NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+                  GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+                  HUSKY: '0'
+                  NPM_CONFIG_PROVENANCE: 'true'
 
-      - name: Parse result and summary
-        if: always()
-        run: node src/index.ts publish-result
-        working-directory: .infra/packages/infrastructure
-        env:
-          SR_OUTPUT_FILE: /tmp/sr-output.txt
-          PROJECT_FILTER: ${{ needs.plan.outputs.project_filter }}
+            - name: Parse result and summary
+              if: always()
+              run: node src/index.ts publish-result
+              working-directory: .infra/packages/infrastructure
+              env:
+                  SR_OUTPUT_FILE: /tmp/sr-output.txt
+                  PROJECT_FILTER: ${{ needs.plan.outputs.project_filter }}

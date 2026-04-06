@@ -12,42 +12,42 @@ name: Deploy to Cloudflare Pages
 description: Deploy a static site to Cloudflare Pages using wrangler pages deploy
 
 inputs:
-  directory:
-    description: Path to the directory of static assets to deploy
-    required: true
-  project-name:
-    description: Cloudflare Pages project name (already env-specific)
-    required: true
-  account-id:
-    description: Cloudflare account ID
-    required: true
-  api-token:
-    description: Cloudflare API token with Pages edit permission
-    required: true
+    directory:
+        description: Path to the directory of static assets to deploy
+        required: true
+    project-name:
+        description: Cloudflare Pages project name (already env-specific)
+        required: true
+    account-id:
+        description: Cloudflare account ID
+        required: true
+    api-token:
+        description: Cloudflare API token with Pages edit permission
+        required: true
 
 outputs:
-  url:
-    description: The deployment URL
-    value: ${{ steps.deploy.outputs.deployment-url }}
+    url:
+        description: The deployment URL
+        value: ${{ steps.deploy.outputs.deployment-url }}
 
 runs:
-  using: composite
-  steps:
-    - name: Deploy to Cloudflare Pages
-      id: deploy
-      uses: cloudflare/wrangler-action@v3
-      with:
-        apiToken: ${{ inputs.api-token }}
-        accountId: ${{ inputs.account-id }}
-        command: >-
-          pages deploy ${{ inputs.directory }}
-          --project-name=${{ inputs.project-name }}
-          --branch=main
+    using: composite
+    steps:
+        - name: Deploy to Cloudflare Pages
+          id: deploy
+          uses: cloudflare/wrangler-action@v3
+          with:
+              apiToken: ${{ inputs.api-token }}
+              accountId: ${{ inputs.account-id }}
+              command: >-
+                  pages deploy ${{ inputs.directory }}
+                  --project-name=${{ inputs.project-name }}
+                  --branch=main
 
-    - name: Deployment summary
-      shell: bash
-      run: |
-        echo "### Cloudflare Pages Deploy" >> "$GITHUB_STEP_SUMMARY"
-        echo "" >> "$GITHUB_STEP_SUMMARY"
-        echo "- **Project:** ${{ inputs.project-name }}" >> "$GITHUB_STEP_SUMMARY"
-        echo "- **URL:** ${{ steps.deploy.outputs.deployment-url }}" >> "$GITHUB_STEP_SUMMARY"
+        - name: Deployment summary
+          shell: bash
+          run: |
+              echo "### Cloudflare Pages Deploy" >> "$GITHUB_STEP_SUMMARY"
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+              echo "- **Project:** ${{ inputs.project-name }}" >> "$GITHUB_STEP_SUMMARY"
+              echo "- **URL:** ${{ steps.deploy.outputs.deployment-url }}" >> "$GITHUB_STEP_SUMMARY"

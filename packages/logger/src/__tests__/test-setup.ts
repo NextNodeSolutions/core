@@ -53,7 +53,7 @@ export const restoreConsoleMocks = (mocks: ConsoleMocks): void => {
  */
 export const createMockError = (
 	stack: string,
-): (new (message?: string) => Error) =>
+): new (message?: string) => Error =>
 	class MockError extends Error {
 		override stack = stack
 	}

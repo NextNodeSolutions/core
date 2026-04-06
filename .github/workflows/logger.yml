@@ -1,16 +1,16 @@
 name: Logger
 
 on:
-  workflow_dispatch:
-  push:
-    branches: [main]
-    paths: ["packages/logger/**"]
-  pull_request:
-    paths: ["packages/logger/**"]
+    workflow_dispatch:
+    push:
+        branches: [main]
+        paths: ['packages/logger/**']
+    pull_request:
+        paths: ['packages/logger/**']
 
 jobs:
-  pipeline:
-    uses: ./.github/workflows/publish-package.yml
-    with:
-      config_file: packages/logger/nextnode.toml
-    secrets: inherit
+    pipeline:
+        uses: ./.github/workflows/publish-package.yml
+        with:
+            config_file: packages/logger/nextnode.toml
+        secrets: inherit

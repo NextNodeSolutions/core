@@ -1,69 +1,69 @@
 name: Deploy
 
 on:
-  workflow_call:
-    inputs:
-      environment:
-        type: string
-        required: true
-        description: "development or production"
-      config_file:
-        type: string
-        default: "nextnode.toml"
-        description: "Path to nextnode.toml in the calling repo"
+    workflow_call:
+        inputs:
+            environment:
+                type: string
+                required: true
+                description: 'development or production'
+            config_file:
+                type: string
+                default: 'nextnode.toml'
+                description: 'Path to nextnode.toml in the calling repo'
 
 permissions:
-  contents: read
-  actions: read
+    contents: read
+    actions: read
 
 jobs:
-  plan:
-    name: Plan
-    runs-on: ubuntu-latest
-    outputs:
-      quality_matrix: ${{ steps.plan.outputs.quality_matrix }}
-      project_name: ${{ steps.plan.outputs.project_name }}
-      has_prod_gate: ${{ steps.plan.outputs.has_prod_gate }}
-    steps:
-      - uses: NextNodeSolutions/core/.github/actions/setup@main
-        with:
-          infra: "true"
-          deps: "false"
+    plan:
+        name: Plan
+        runs-on: ubuntu-latest
+        outputs:
+            quality_matrix: ${{ steps.plan.outputs.quality_matrix }}
+            project_name: ${{ steps.plan.outputs.project_name }}
+            has_prod_gate: ${{ steps.plan.outputs.has_prod_gate }}
+        steps:
+            - uses: NextNodeSolutions/core/.github/actions/setup@main
+              with:
+                  infra: 'true'
+                  deps: 'false'
 
-      - name: Plan pipeline
-        id: plan
-        run: node src/index.ts
-        working-directory: .infra/packages/infrastructure
-        env:
-          PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
-          PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
+            - name: Plan pipeline
+              id: plan
+              run: node src/index.ts
+              working-directory: .infra/packages/infrastructure
+              env:
+                  PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
+                  PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
 
-  quality:
-    name: ${{ matrix.task.name }}
-    needs: plan
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        task: ${{ fromJSON(needs.plan.outputs.quality_matrix) }}
-    steps:
-      - uses: NextNodeSolutions/core/.github/actions/setup@main
-        with:
-          infra: ${{ needs.plan.outputs.has_prod_gate }}
+    quality:
+        name: ${{ matrix.task.name }}
+        needs: plan
+        runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                task: ${{ fromJSON(needs.plan.outputs.quality_matrix) }}
+        steps:
+            - uses: NextNodeSolutions/core/.github/actions/setup@main
+              with:
+                  infra: ${{ needs.plan.outputs.has_prod_gate }}
 
-      - name: ${{ matrix.task.name }}
-        run: ${{ matrix.task.cmd }}
-        env:
-          GH_TOKEN: ${{ github.token }}
+            - name: ${{ matrix.task.name }}
+              run: ${{ matrix.task.cmd }}
+              env:
+                  GH_TOKEN: ${{ github.token }}
 
-  deploy:
-    name: Deploy
-    needs: [plan, quality]
-    runs-on: ubuntu-latest
-    steps:
-      - run: |
-          echo "══════════════════════════════════════════"
-          echo "  DEPLOY — ${{ inputs.environment }}"
-          echo "══════════════════════════════════════════"
-          echo "Project:  ${{ needs.plan.outputs.project_name }}"
-          echo "══════════════════════════════════════════"
+    deploy:
+        name: Deploy
+        needs: [plan, quality]
+        runs-on: ubuntu-latest
+        steps:
+            - run: |
+                  echo "══════════════════════════════════════════"
+                  echo "  DEPLOY — ${{ inputs.environment }}"
+                  echo "══════════════════════════════════════════"
+                  echo "Project:  ${{ needs.plan.outputs.project_name }}"
+                  echo "══════════════════════════════════════════"

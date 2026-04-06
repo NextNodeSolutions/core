@@ -1,16 +1,16 @@
 name: Infrastructure
 
 on:
-  workflow_dispatch:
-  push:
-    branches: [main]
-    paths: ["packages/infrastructure/**"]
-  pull_request:
-    paths: ["packages/infrastructure/**"]
+    workflow_dispatch:
+    push:
+        branches: [main]
+        paths: ['packages/infrastructure/**']
+    pull_request:
+        paths: ['packages/infrastructure/**']
 
 jobs:
-  pipeline:
-    uses: ./.github/workflows/publish-package.yml
-    with:
-      config_file: packages/infrastructure/nextnode.toml
-    secrets: inherit
+    pipeline:
+        uses: ./.github/workflows/publish-package.yml
+        with:
+            config_file: packages/infrastructure/nextnode.toml
+        secrets: inherit
