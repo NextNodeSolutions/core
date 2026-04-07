@@ -1,6 +1,6 @@
 {
 	"name": "@nextnode-solutions/brand-assets",
-	"version": "0.0.0-development",
+	"version": "1.0.0",
 	"description": "NextNode Solutions brand assets — logos, icons, favicons, and social avatars",
 	"files": [
 		"README.md",
