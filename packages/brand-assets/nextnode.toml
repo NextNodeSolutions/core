@@ -1,0 +1,10 @@
+[project]
+name = "brand-assets"
+type = "package"
+filter = "@nextnode-solutions/brand-assets"
+
+[scripts]
+test = false
+
+[package]
+access = "public"

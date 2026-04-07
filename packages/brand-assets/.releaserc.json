@@ -1,0 +1,7 @@
+{
+	"extends": [
+		"semantic-release-monorepo",
+		"@nextnode-solutions/standards/semantic-release"
+	],
+	"tagFormat": "@nextnode-solutions/brand-assets-v${version}"
+}
