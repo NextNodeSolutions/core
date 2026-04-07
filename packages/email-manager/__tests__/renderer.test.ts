@@ -2,6 +2,8 @@
  * Template renderer tests
  * Mock @react-email/render (external boundary) to verify rendering orchestration
  */
+import { createElement } from 'react'
+import type { ReactElement } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { renderTemplate } from '../src/templates/renderer.js'
@@ -17,11 +19,12 @@ interface TestProps {
 	name: string
 }
 
-const testTemplate = (props: TestProps) =>
-	({
-		type: 'div',
-		props: { children: `Hello ${props.name}` },
-	}) as unknown as React.ReactElement
+const testTemplate = (props: TestProps): ReactElement =>
+	createElement('div', null, `Hello ${props.name}`)
+
+function badTemplate(): ReactElement {
+	throw new Error('Component crash')
+}
 
 describe('renderTemplate() (FR-11, FR-14) — success paths', () => {
 	it('returns the rendered html in a success Result', async () => {
@@ -122,11 +125,7 @@ describe('renderTemplate() — error handling (EC-1, never throws)', () => {
 	})
 
 	it('catches synchronous throws from the template function itself', async () => {
-		const badTemplate = () => {
-			throw new Error('Component crash')
-		}
-
-		const result = await renderTemplate(badTemplate as never, {})
+		const result = await renderTemplate(badTemplate, {})
 
 		expect(result.success).toBe(false)
 		if (!result.success) {

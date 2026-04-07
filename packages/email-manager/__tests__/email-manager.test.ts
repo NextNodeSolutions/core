@@ -6,6 +6,8 @@
  * render failure propagation, provider delegation).
  */
 import { createSpyLogger } from '@nextnode-solutions/logger/testing'
+import { createElement } from 'react'
+import type { ReactElement } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createEmailManager } from '../src/email-manager.js'
@@ -27,12 +29,7 @@ const { createProvider: mockCreateProvider } =
 const { renderTemplate: mockRenderTemplate } =
 	await import('../src/templates/renderer.js')
 
-interface TestProps {
-	name: string
-}
-
-const testTemplate = (_props: TestProps) =>
-	null as unknown as React.ReactElement
+const testTemplate = (): ReactElement => createElement('span')
 
 const successSendResult: SendResult = {
 	success: true,
