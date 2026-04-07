@@ -62,6 +62,13 @@ export default defineConfig({
 			},
 		},
 		{
+			files: ['**/*.astro'],
+			rules: {
+				'import/no-unassigned-import': 'off',
+				'typescript/explicit-function-return-type': 'off',
+			},
+		},
+		{
 			files: ['**/tsconfig*.json'],
 			rules: {},
 		},
