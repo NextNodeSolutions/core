@@ -20,7 +20,12 @@ vi.mock('resend', () => ({
 	})),
 }))
 
-const createMockClient = () => ({
+interface MockResendClient {
+	emails: { send: ReturnType<typeof vi.fn> }
+	domains: { list: ReturnType<typeof vi.fn> }
+}
+
+const createMockClient = (): MockResendClient => ({
 	emails: { send: vi.fn() },
 	domains: { list: vi.fn() },
 })
@@ -33,12 +38,13 @@ const baseMessage: EmailMessage = {
 }
 
 describe('Resend Provider', () => {
-	let mockClient: ReturnType<typeof createMockClient>
+	let mockClient: MockResendClient
 	let provider: ReturnType<typeof createResendProvider>
 
 	beforeEach(() => {
 		mockClient = createMockClient()
-		provider = createResendProvider(mockClient as never, createNoopLogger())
+		// @ts-expect-error — mock client only implements the methods used by the provider
+		provider = createResendProvider(mockClient, createNoopLogger())
 	})
 
 	describe('send() — happy path', () => {
@@ -104,7 +110,7 @@ describe('Resend Provider', () => {
 				},
 			},
 			{
-				name: 'attachments with contentType renamed to content_type',
+				name: 'attachments with contentType',
 				input: {
 					attachments: [
 						{
@@ -119,7 +125,7 @@ describe('Resend Provider', () => {
 						{
 							filename: 'test.pdf',
 							content: Buffer.from('data'),
-							content_type: 'application/pdf',
+							contentType: 'application/pdf',
 						},
 					],
 				},
@@ -135,14 +141,14 @@ describe('Resend Provider', () => {
 				expected: { tags: [{ name: 'campaign', value: 'launch' }] },
 			},
 			{
-				name: 'scheduledAt Date → ISO string (renamed to scheduled_at)',
+				name: 'scheduledAt Date → ISO string',
 				input: { scheduledAt: new Date('2026-03-01T10:00:00Z') },
-				expected: { scheduled_at: '2026-03-01T10:00:00.000Z' },
+				expected: { scheduledAt: '2026-03-01T10:00:00.000Z' },
 			},
 			{
 				name: 'scheduledAt string passed as-is',
 				input: { scheduledAt: '2026-03-01T10:00:00Z' },
-				expected: { scheduled_at: '2026-03-01T10:00:00Z' },
+				expected: { scheduledAt: '2026-03-01T10:00:00Z' },
 			},
 		])('maps $name', async ({ input, expected }) => {
 			await provider.send({ ...baseMessage, ...input })
@@ -245,7 +251,7 @@ describe('Resend Provider', () => {
 				to: 'recipient@example.com',
 				subject: 'Test',
 				html: '',
-			} as EmailMessage)
+			})
 
 			expect(result.success).toBe(false)
 			if (!result.success) {

@@ -4,7 +4,7 @@
  */
 
 import type { Logger } from '@nextnode-solutions/logger'
-import type { CreateEmailOptions, Resend } from 'resend'
+import type { Attachment, CreateEmailOptions, Resend } from 'resend'
 
 import type { EmailMessage } from '../types/email.js'
 import type { EmailProvider } from '../types/provider.js'
@@ -17,28 +17,6 @@ const HTTP_VALIDATION_ERROR = 422
 const HTTP_UNAUTHORIZED = 401
 const HTTP_FORBIDDEN = 403
 const HTTP_RATE_LIMIT = 429
-
-/**
- * Resend email payload type
- */
-interface ResendEmailPayload {
-	from: string
-	to: string[]
-	subject: string
-	html?: string
-	text?: string
-	cc?: string[]
-	bcc?: string[]
-	replyTo?: string[]
-	attachments?: Array<{
-		filename: string
-		content: string | Buffer
-		content_type?: string
-	}>
-	headers?: Record<string, string>
-	tags?: Array<{ name: string; value: string }>
-	scheduled_at?: string
-}
 
 /**
  * Map Resend API errors to EmailError (FR-20)
@@ -118,6 +96,53 @@ const mapResendError = (error: unknown): EmailError => {
 }
 
 /**
+ * Map optional content fields (text, attachments)
+ */
+const mapOptionalContent = (
+	message: EmailMessage,
+): { text?: string; attachments?: Attachment[] } => ({
+	...(message.text && { text: message.text }),
+	...(message.attachments && {
+		attachments: message.attachments.map(
+			(a): Attachment => ({
+				filename: a.filename,
+				content: a.content,
+				...(a.contentType && { contentType: a.contentType }),
+			}),
+		),
+	}),
+})
+
+/**
+ * Map optional metadata (headers, tags, scheduledAt)
+ */
+const mapOptionalMetadata = (
+	message: EmailMessage,
+): {
+	headers?: Record<string, string>
+	tags?: Array<{ name: string; value: string }>
+	scheduledAt?: string
+} => ({
+	...(message.headers && {
+		headers: Object.fromEntries(
+			message.headers.map(h => [h.name, h.value]),
+		),
+	}),
+	...(message.tags && {
+		tags: message.tags.map(t => ({
+			name: t.name,
+			value: t.value,
+		})),
+	}),
+	...(message.scheduledAt && {
+		scheduledAt:
+			message.scheduledAt instanceof Date
+				? message.scheduledAt.toISOString()
+				: message.scheduledAt,
+	}),
+})
+
+/**
  * Create Resend email provider
  *
  * @param resendClient - Pre-configured Resend SDK client
@@ -134,7 +159,7 @@ export const createResendProvider = (
 	 */
 	const mapOptionalRecipients = (
 		message: EmailMessage,
-	): Pick<ResendEmailPayload, 'cc' | 'bcc' | 'replyTo'> => ({
+	): { cc?: string[]; bcc?: string[]; replyTo?: string[] } => ({
 		...(message.cc && {
 			cc: utils.normalizeRecipients(message.cc),
 		}),
@@ -147,54 +172,13 @@ export const createResendProvider = (
 	})
 
 	/**
-	 * Map optional content fields
-	 */
-	const mapOptionalContent = (
-		message: EmailMessage,
-	): Pick<ResendEmailPayload, 'html' | 'text' | 'attachments'> => ({
-		...(message.html && { html: message.html }),
-		...(message.text && { text: message.text }),
-		...(message.attachments && {
-			attachments: message.attachments.map(a => ({
-				filename: a.filename,
-				content: a.content,
-				...(a.contentType && { content_type: a.contentType }),
-			})),
-		}),
-	})
-
-	/**
-	 * Map optional metadata (headers, tags, scheduledAt)
-	 */
-	const mapOptionalMetadata = (
-		message: EmailMessage,
-	): Pick<ResendEmailPayload, 'headers' | 'tags' | 'scheduled_at'> => ({
-		...(message.headers && {
-			headers: Object.fromEntries(
-				message.headers.map(h => [h.name, h.value]),
-			),
-		}),
-		...(message.tags && {
-			tags: message.tags.map(t => ({
-				name: t.name,
-				value: t.value,
-			})),
-		}),
-		...(message.scheduledAt && {
-			scheduled_at:
-				message.scheduledAt instanceof Date
-					? message.scheduledAt.toISOString()
-					: message.scheduledAt,
-		}),
-	})
-
-	/**
 	 * Map EmailMessage to Resend payload
 	 */
-	const mapToResendPayload = (message: EmailMessage): ResendEmailPayload => ({
+	const mapToResendPayload = (message: EmailMessage): CreateEmailOptions => ({
 		from: utils.normalizeRecipient(message.from),
 		to: utils.normalizeRecipients(message.to),
 		subject: message.subject,
+		html: message.html,
 		...mapOptionalRecipients(message),
 		...mapOptionalContent(message),
 		...mapOptionalMetadata(message),
@@ -219,9 +203,7 @@ export const createResendProvider = (
 
 			try {
 				const payload = mapToResendPayload(message)
-				const { data, error } = await resendClient.emails.send(
-					payload as CreateEmailOptions,
-				)
+				const { data, error } = await resendClient.emails.send(payload)
 
 				if (error) {
 					logger.error('Resend API returned error', {

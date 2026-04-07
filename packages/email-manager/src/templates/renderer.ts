@@ -44,7 +44,7 @@ export async function renderTemplate<TProps>(
 		const element = template(props)
 
 		// Render to HTML using @react-email/render (FR-14)
-		const html = await render(element as React.ReactElement, {
+		const html = await render(element, {
 			...(config.pretty !== undefined && {
 				pretty: config.pretty,
 			}),
@@ -53,7 +53,7 @@ export async function renderTemplate<TProps>(
 		// Optionally generate plain text version
 		let text: string | undefined
 		if (config.plainText) {
-			text = await render(element as React.ReactElement, {
+			text = await render(element, {
 				plainText: true,
 			})
 		}
