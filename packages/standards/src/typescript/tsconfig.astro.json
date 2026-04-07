@@ -2,10 +2,10 @@
 	"extends": "astro/tsconfigs/strict",
 	"compilerOptions": {
 		// Target & Module Configuration
-		"target": "es2022",
+		"target": "es2023",
 		"module": "preserve",
 		"moduleDetection": "force",
-		"lib": ["es2022", "dom", "dom.iterable"],
+		"lib": ["es2023", "dom", "dom.iterable"],
 
 		// JavaScript & JSON Support
 		"allowJs": true,
