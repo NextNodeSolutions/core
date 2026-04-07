@@ -37,7 +37,7 @@
 		"lint": "oxlint",
 		"test": "vitest run",
 		"test:watch": "vitest",
-		"typecheck": "tsc --noEmit"
+		"typecheck": "tsgo --noEmit"
 	},
 	"dependencies": {
 		"@nextnode-solutions/logger": "^1.0.0",
@@ -45,10 +45,10 @@
 	},
 	"devDependencies": {
 		"@nextnode-solutions/standards": "workspace:*",
+		"@typescript/native-preview": "7.0.0-dev.20260407.1",
 		"oxfmt": "^0.43.0",
 		"oxlint": "^1.58.0",
 		"tsup": "^8.0.0",
-		"typescript": "^6",
 		"vitest": "^3.0.0"
 	},
 	"engines": {
