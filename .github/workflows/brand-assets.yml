@@ -1,0 +1,16 @@
+name: Brand Assets
+
+on:
+    workflow_dispatch:
+    push:
+        branches: [main]
+        paths: ['packages/brand-assets/**']
+    pull_request:
+        paths: ['packages/brand-assets/**']
+
+jobs:
+    pipeline:
+        uses: ./.github/workflows/publish-package.yml
+        with:
+            config_file: packages/brand-assets/nextnode.toml
+        secrets: inherit
