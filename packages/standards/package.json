@@ -27,12 +27,18 @@
 	],
 	"type": "module",
 	"exports": {
-		"./oxlint": "./src/oxlint/base.js",
+		"./oxlint": {
+			"types": "./src/oxlint/base.d.ts",
+			"default": "./src/oxlint/base.js"
+		},
 		"./oxfmt": "./src/oxfmt/base.js",
 		"./typescript/library": "./src/typescript/tsconfig.library.json",
 		"./typescript/nextjs": "./src/typescript/tsconfig.nextjs.json",
 		"./typescript/astro": "./src/typescript/tsconfig.astro.json",
 		"./tailwind": "./src/tailwind/theme.css",
+		"./vitest/vite-plugin": {
+			"types": "./src/vitest/vite-plugin.d.ts"
+		},
 		"./vitest/frontend": {
 			"types": "./src/vitest/vitest.frontend.d.ts",
 			"default": "./src/vitest/vitest.frontend.js"
