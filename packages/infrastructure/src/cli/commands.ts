@@ -1,3 +1,4 @@
+import { deployEnvCommand } from './deploy-env.command.ts'
 import { dnsCommand } from './dns.command.ts'
 import { ensurePagesDomainsCommand } from './pages-domains.command.ts'
 import { ensurePagesProjectCommand } from './pages-project.command.ts'
@@ -9,6 +10,7 @@ type Command = () => void | Promise<void>
 
 const COMMANDS: Record<string, Command> = {
 	plan: planCommand,
+	'deploy-env': deployEnvCommand,
 	'prod-gate': prodGateCommand,
 	'publish-result': publishResultCommand,
 	dns: dnsCommand,

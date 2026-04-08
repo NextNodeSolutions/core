@@ -93,6 +93,15 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: NextNodeSolutions/core/.github/actions/setup@main
+              with:
+                  infra: 'true'
+
+            - name: Inject deploy env
+              run: node src/index.ts deploy-env
+              working-directory: .infra/packages/infrastructure
+              env:
+                  PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
+                  PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
 
             - name: Build
               run: pnpm build

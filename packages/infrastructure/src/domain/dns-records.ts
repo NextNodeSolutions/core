@@ -1,3 +1,4 @@
+import { resolveDeployDomain } from './deploy-domain.ts'
 import type { AppEnvironment } from './environment.ts'
 
 const DNS_TTL_UNPROXIED = 300
@@ -44,7 +45,13 @@ export function computeDnsRecords(
 		]
 	}
 
-	return [buildCname(`dev.${input.domain}`, target, false)]
+	return [
+		buildCname(
+			resolveDeployDomain(input.domain, input.environment),
+			target,
+			false,
+		),
+	]
 }
 
 function buildCname(

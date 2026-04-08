@@ -1,3 +1,4 @@
+import { resolveDeployDomain } from './deploy-domain.ts'
 import type { AppEnvironment } from './environment.ts'
 
 export interface DesiredPagesDomain {
@@ -32,7 +33,7 @@ export function computePagesDomains(
 			...input.redirectDomains.map(name => ({ name })),
 		]
 	}
-	return [{ name: `dev.${input.domain}` }]
+	return [{ name: resolveDeployDomain(input.domain, input.environment) }]
 }
 
 export interface AttachedPagesDomain {
