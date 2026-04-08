@@ -1,5 +1,6 @@
 import {
 	CLOUDFLARE_API_BASE,
+	HTTP_NOT_FOUND,
 	authHeaders,
 	formatErrors,
 	parseEnvelope,
@@ -51,7 +52,7 @@ export async function getPagesProject(
 		`${CLOUDFLARE_API_BASE}/accounts/${accountId}/pages/projects/${encodeURIComponent(projectName)}`,
 		{ headers: authHeaders(token) },
 	)
-	if (response.status === 404) return null
+	if (response.status === HTTP_NOT_FOUND) return null
 	await requireOk(response)
 
 	const data: unknown = await response.json()

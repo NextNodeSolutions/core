@@ -3,26 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { prodGateCommand } from './prod-gate.command.ts'
 
 describe('prodGateCommand', () => {
-	const savedEnv: Record<string, string | undefined> = {}
-
 	beforeEach(() => {
-		savedEnv['GITHUB_REPOSITORY'] = process.env['GITHUB_REPOSITORY']
-		savedEnv['GITHUB_SHA'] = process.env['GITHUB_SHA']
-		savedEnv['GH_TOKEN'] = process.env['GH_TOKEN']
-
-		process.env['GITHUB_REPOSITORY'] = 'NextNodeSolutions/core'
-		process.env['GITHUB_SHA'] = 'abc123'
-		process.env['GH_TOKEN'] = 'fake-token'
+		vi.stubEnv('GITHUB_REPOSITORY', 'NextNodeSolutions/core')
+		vi.stubEnv('GITHUB_SHA', 'abc123')
+		vi.stubEnv('GH_TOKEN', 'fake-token')
 	})
 
 	afterEach(() => {
-		for (const [key, value] of Object.entries(savedEnv)) {
-			if (value === undefined) {
-				delete process.env[key]
-			} else {
-				process.env[key] = value
-			}
-		}
+		vi.unstubAllEnvs()
 		vi.restoreAllMocks()
 	})
 
@@ -140,7 +128,7 @@ describe('prodGateCommand', () => {
 	})
 
 	it('throws when GITHUB_REPOSITORY is not set', async () => {
-		delete process.env['GITHUB_REPOSITORY']
+		vi.stubEnv('GITHUB_REPOSITORY', undefined)
 
 		await expect(prodGateCommand()).rejects.toThrow(
 			'GITHUB_REPOSITORY env var',

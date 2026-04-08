@@ -5,6 +5,8 @@
 NextNode infrastructure CLI — runs in GitHub Actions to orchestrate CI quality gates.
 Currently implements the **plan** phase: parse `nextnode.toml`, generate a quality matrix (lint/test), and write outputs for downstream jobs.
 
+**This package is NEVER published to npm.** It is consumed directly from the monorepo by GitHub Actions workflows. Do not add `publishConfig`, `.releaserc.json`, or `[package]` section to `nextnode.toml`.
+
 ## Architecture — STRICT LAYERED RULE (ABSOLUTE BAN)
 
 The package is organized as **four strict layers**. Each layer has enforced import rules. Violations are bugs, not style preferences.

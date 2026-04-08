@@ -44,11 +44,10 @@ function isBoolean(value: unknown): value is boolean {
 	return typeof value === 'boolean'
 }
 
+const PROJECT_TYPE_SET: ReadonlySet<string> = new Set(PROJECT_TYPES)
+
 function isProjectType(value: unknown): value is ProjectType {
-	return (
-		typeof value === 'string' &&
-		PROJECT_TYPES.includes(value as ProjectType)
-	)
+	return typeof value === 'string' && PROJECT_TYPE_SET.has(value)
 }
 
 function isScriptValue(value: unknown): value is string | false {
@@ -67,36 +66,31 @@ function resolveScript(
 	return fallback
 }
 
-export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
+function validateProjectSection(project: Record<string, unknown>): {
+	errors: string[]
+	name: unknown
+	type: unknown
+} {
 	const errors: string[] = []
-
-	const project = raw['project']
-	if (!isRecord(project)) {
-		return { ok: false, errors: ['[project] section is required'] }
-	}
-
 	const name = project['name']
 	if (!name || typeof name !== 'string') {
 		errors.push('project.name is required and must be a string')
 	}
-
 	const type = project['type']
 	if (!type || !isProjectType(type)) {
 		errors.push(
 			`project.type is required and must be one of: ${PROJECT_TYPES.join(', ')}`,
 		)
 	}
-
-	const filter = project['filter']
-	if (filter !== undefined && !isScriptValue(filter)) {
+	if (project['filter'] !== undefined && !isScriptValue(project['filter'])) {
 		errors.push('project.filter must be a string or false')
 	}
-
-	const domain = project['domain']
-	if (domain !== undefined && (typeof domain !== 'string' || domain === '')) {
+	if (
+		project['domain'] !== undefined &&
+		(typeof project['domain'] !== 'string' || project['domain'] === '')
+	) {
 		errors.push('project.domain must be a non-empty string')
 	}
-
 	const redirectDomains = project['redirect_domains']
 	if (redirectDomains !== undefined) {
 		if (!Array.isArray(redirectDomains)) {
@@ -112,12 +106,19 @@ export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 			}
 		}
 	}
+	return { errors, name, type }
+}
 
+function validateScriptsSection(raw: Record<string, unknown>): {
+	errors: string[]
+	scriptValues: Record<string, unknown>
+} {
 	const scripts = raw['scripts']
+	const errors: string[] = []
 	if (scripts !== undefined && !isRecord(scripts)) {
 		errors.push('[scripts] must be a table')
+		return { errors, scriptValues: {} }
 	}
-
 	if (isRecord(scripts)) {
 		for (const key of ['lint', 'test', 'build'] as const) {
 			const value = scripts[key]
@@ -128,71 +129,109 @@ export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 			}
 		}
 	}
+	return { errors, scriptValues: isRecord(scripts) ? scripts : {} }
+}
 
+function validateEnvironmentSection(raw: Record<string, unknown>): {
+	errors: string[]
+	development: unknown
+} {
 	const environment = raw['environment']
+	const errors: string[] = []
 	if (environment !== undefined && !isRecord(environment)) {
 		errors.push('[environment] must be a table')
+		return { errors, development: undefined }
 	}
-
 	const development = isRecord(environment)
 		? environment['development']
 		: undefined
 	if (development !== undefined && !isBoolean(development)) {
 		errors.push('environment.development must be a boolean')
 	}
+	return { errors, development }
+}
 
-	if (errors.length > 0 || typeof name !== 'string' || !isProjectType(type)) {
-		return { ok: false, errors }
-	}
-
-	const scriptValues = isRecord(scripts) ? scripts : {}
+function validatePackageSection(raw: Record<string, unknown>): {
+	errors: string[]
+	packageSection: PackageSection | false
+} {
 	const pkg = raw['package']
-
-	let packageSection: PackageSection | false = false
-	if (isRecord(pkg)) {
-		const access = pkg['access']
-		if (!access || typeof access !== 'string') {
-			errors.push('package.access is required and must be a string')
-		} else {
-			packageSection = { access }
+	if (!isRecord(pkg)) return { errors: [], packageSection: false }
+	const access = pkg['access']
+	if (!access || typeof access !== 'string') {
+		return {
+			errors: ['package.access is required and must be a string'],
+			packageSection: false,
 		}
 	}
+	return { errors: [], packageSection: { access } }
+}
 
-	if (errors.length > 0) {
-		return { ok: false, errors }
+export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
+	const project = raw['project']
+	if (!isRecord(project)) {
+		return { ok: false, errors: ['[project] section is required'] }
 	}
 
-	const resolvedDomain = typeof domain === 'string' ? domain : undefined
-	const resolvedRedirectDomains: ReadonlyArray<string> = Array.isArray(
-		redirectDomains,
-	)
-		? redirectDomains.filter(
-				(entry): entry is string => typeof entry === 'string',
-			)
-		: []
+	const projectResult = validateProjectSection(project)
+	const scriptsResult = validateScriptsSection(raw)
+	const envResult = validateEnvironmentSection(raw)
+
+	const earlyErrors = [
+		...projectResult.errors,
+		...scriptsResult.errors,
+		...envResult.errors,
+	]
+	if (
+		earlyErrors.length > 0 ||
+		typeof projectResult.name !== 'string' ||
+		!isProjectType(projectResult.type)
+	) {
+		return { ok: false, errors: earlyErrors }
+	}
+
+	const pkgResult = validatePackageSection(raw)
+	if (pkgResult.errors.length > 0) {
+		return { ok: false, errors: pkgResult.errors }
+	}
+
+	const domain = project['domain']
+	const redirectDomains = project['redirect_domains']
+	const filter = project['filter']
 
 	return {
 		ok: true,
 		config: {
 			project: {
-				name,
-				type,
+				name: projectResult.name,
+				type: projectResult.type,
 				filter: isScriptValue(filter) ? filter : false,
-				domain: resolvedDomain,
-				redirectDomains: resolvedRedirectDomains,
+				domain: typeof domain === 'string' ? domain : undefined,
+				redirectDomains: Array.isArray(redirectDomains)
+					? redirectDomains.filter(
+							(entry): entry is string =>
+								typeof entry === 'string',
+						)
+					: [],
 			},
 			scripts: {
-				lint: resolveScript(scriptValues['lint'], DEFAULT_SCRIPTS.lint),
-				test: resolveScript(scriptValues['test'], DEFAULT_SCRIPTS.test),
+				lint: resolveScript(
+					scriptsResult.scriptValues['lint'],
+					DEFAULT_SCRIPTS.lint,
+				),
+				test: resolveScript(
+					scriptsResult.scriptValues['test'],
+					DEFAULT_SCRIPTS.test,
+				),
 				build: resolveScript(
-					scriptValues['build'],
+					scriptsResult.scriptValues['build'],
 					DEFAULT_SCRIPTS.build,
 				),
 			},
-			package: packageSection,
+			package: pkgResult.packageSection,
 			environment: {
-				development: isBoolean(development)
-					? development
+				development: isBoolean(envResult.development)
+					? envResult.development
 					: DEFAULT_ENVIRONMENT.development,
 			},
 		},

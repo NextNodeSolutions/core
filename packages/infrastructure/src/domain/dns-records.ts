@@ -1,5 +1,8 @@
 import type { AppEnvironment } from './environment.ts'
 
+const DNS_TTL_UNPROXIED = 300
+const MIN_DOMAIN_PARTS = 2
+
 export interface DesiredDnsRecord {
 	readonly zoneName: string
 	readonly name: string
@@ -55,7 +58,7 @@ function buildCname(
 		type: 'CNAME',
 		content: target,
 		proxied,
-		ttl: proxied ? 1 : 300,
+		ttl: proxied ? 1 : DNS_TTL_UNPROXIED,
 	}
 }
 
@@ -108,6 +111,6 @@ export function reconcileDnsRecord(
  */
 export function extractRootDomain(fqdn: string): string {
 	const parts = fqdn.split('.')
-	if (parts.length < 2) return fqdn
-	return parts.slice(-2).join('.')
+	if (parts.length < MIN_DOMAIN_PARTS) return fqdn
+	return parts.slice(-MIN_DOMAIN_PARTS).join('.')
 }
