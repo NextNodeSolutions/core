@@ -459,6 +459,62 @@ describe('parseConfig', () => {
 		})
 	})
 
+	describe('deploy section', () => {
+		it('defaults secrets to empty array when not provided', () => {
+			const result = parseConfig({
+				project: { name: 'my-app', type: 'app' },
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok) return
+
+			expect(result.config.deploy.secrets).toEqual([])
+		})
+
+		it('accepts an array of secret names', () => {
+			const result = parseConfig({
+				project: { name: 'my-app', type: 'static' },
+				deploy: { secrets: ['RESEND_API_KEY', 'SUPABASE_URL'] },
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok) return
+
+			expect(result.config.deploy.secrets).toEqual([
+				'RESEND_API_KEY',
+				'SUPABASE_URL',
+			])
+		})
+
+		it('rejects non-array secrets', () => {
+			const result = parseConfig({
+				project: { name: 'my-app', type: 'app' },
+				deploy: { secrets: 'RESEND_API_KEY' },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'deploy.secrets must be an array of strings',
+			)
+		})
+
+		it('rejects empty-string entries', () => {
+			const result = parseConfig({
+				project: { name: 'my-app', type: 'app' },
+				deploy: { secrets: ['RESEND_API_KEY', ''] },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'deploy.secrets entries must be non-empty strings',
+			)
+		})
+	})
+
 	describe('static project type', () => {
 		it('parses a valid static config', () => {
 			const result = parseConfig({

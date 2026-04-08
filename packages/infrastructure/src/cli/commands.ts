@@ -5,12 +5,14 @@ import { ensurePagesProjectCommand } from './pages-project.command.ts'
 import { planCommand } from './plan.command.ts'
 import { prodGateCommand } from './prod-gate.command.ts'
 import { publishResultCommand } from './publish-result.command.ts'
+import { syncPagesEnvCommand } from './sync-pages-env.command.ts'
 
 type Command = () => void | Promise<void>
 
 const COMMANDS: Record<string, Command> = {
 	plan: planCommand,
 	'deploy-env': deployEnvCommand,
+	'sync-pages-env': syncPagesEnvCommand,
 	'prod-gate': prodGateCommand,
 	'publish-result': publishResultCommand,
 	dns: dnsCommand,
