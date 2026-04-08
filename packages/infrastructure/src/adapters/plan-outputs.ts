@@ -1,4 +1,6 @@
-import { logger } from '@nextnode-solutions/logger'
+import { createLogger } from '@nextnode-solutions/logger'
+
+const logger = createLogger()
 
 import type { NextNodeConfig } from '../config/schema.ts'
 import { hasProdGate } from '../domain/quality-matrix.ts'

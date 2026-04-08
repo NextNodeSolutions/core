@@ -4,7 +4,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { createLogger, logger, NextNodeLogger } from '@/logger.js'
+import { createLogger, NextNodeLogger } from '@/logger.js'
 import type { LogEntry, LoggerConfig, Transport } from '@/types.js'
 
 import type { ConsoleMocks } from '../test-setup.js'
@@ -788,27 +788,5 @@ describe('createLogger', () => {
 		const logger2 = createLogger({ prefix: '[LOGGER2]' })
 
 		expect(logger1).not.toBe(logger2)
-	})
-})
-
-describe('default logger', () => {
-	it('should export a default logger instance', () => {
-		expect(logger).toBeDefined()
-		expect(typeof logger.debug).toBe('function')
-		expect(typeof logger.info).toBe('function')
-		expect(typeof logger.warn).toBe('function')
-		expect(typeof logger.error).toBe('function')
-	})
-
-	it('should be usable immediately', () => {
-		const localMocks = createConsoleMocks()
-
-		logger.info('Default logger test')
-
-		expect(localMocks.log).toHaveBeenCalledWith(
-			expect.stringContaining('Default logger test'),
-		)
-
-		restoreConsoleMocks(localMocks)
 	})
 })

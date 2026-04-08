@@ -179,18 +179,6 @@ export class NextNodeLogger implements Logger {
 export const createLogger = (config?: LoggerConfig): NextNodeLogger =>
 	new NextNodeLogger(config)
 
-/**
- * Default logger instance for immediate use.
- *
- * @example
- * import { logger } from '@nextnode/logger'
- *
- * logger.info('Application started')
- * logger.warn('Something might be wrong', { details: { code: 123 } })
- * logger.error('Something went wrong', { scope: 'api', details: error })
- */
-export const logger = createLogger()
-
 export type { BrowserLogOutput } from './formatters/console-browser.js'
 export {
 	createBrowserLogArgs,
