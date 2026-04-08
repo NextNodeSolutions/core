@@ -1,4 +1,6 @@
-import { logger } from '@nextnode-solutions/logger'
+import { createLogger } from '@nextnode-solutions/logger'
+
+const logger = createLogger()
 
 import { writeEnvVar } from '../adapters/github-env.ts'
 import { loadConfig } from '../config/load.ts'

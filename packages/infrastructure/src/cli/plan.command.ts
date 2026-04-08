@@ -1,6 +1,8 @@
 import { dirname } from 'node:path'
 
-import { logger } from '@nextnode-solutions/logger'
+import { createLogger } from '@nextnode-solutions/logger'
+
+const logger = createLogger()
 
 import { writePlanOutputs } from '../adapters/plan-outputs.ts'
 import { loadConfig } from '../config/load.ts'
