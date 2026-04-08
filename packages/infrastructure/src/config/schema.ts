@@ -3,6 +3,7 @@ export interface NextNodeConfig {
 	readonly scripts: ScriptsSection
 	readonly package: PackageSection | false
 	readonly environment: EnvironmentSection
+	readonly deploy: DeploySection
 }
 
 const PROJECT_TYPES = ['app', 'package', 'static'] as const
@@ -28,6 +29,14 @@ export interface PackageSection {
 
 export interface EnvironmentSection {
 	readonly development: boolean
+}
+
+export interface DeploySection {
+	readonly secrets: ReadonlyArray<string>
+}
+
+export const DEFAULT_DEPLOY: DeploySection = {
+	secrets: [],
 }
 
 export const DEFAULT_SCRIPTS: ScriptsSection = {
@@ -167,6 +176,39 @@ function validatePackageSection(raw: Record<string, unknown>): {
 	return { errors: [], packageSection: { access } }
 }
 
+function validateDeploySection(raw: Record<string, unknown>): {
+	errors: string[]
+	secrets: ReadonlyArray<string>
+} {
+	const deploy = raw['deploy']
+	if (deploy === undefined)
+		return { errors: [], secrets: DEFAULT_DEPLOY.secrets }
+	if (!isRecord(deploy)) {
+		return {
+			errors: ['[deploy] must be a table'],
+			secrets: DEFAULT_DEPLOY.secrets,
+		}
+	}
+	const secrets = deploy['secrets']
+	if (secrets === undefined)
+		return { errors: [], secrets: DEFAULT_DEPLOY.secrets }
+	if (!Array.isArray(secrets)) {
+		return {
+			errors: ['deploy.secrets must be an array of strings'],
+			secrets: DEFAULT_DEPLOY.secrets,
+		}
+	}
+	for (const entry of secrets) {
+		if (typeof entry !== 'string' || entry === '') {
+			return {
+				errors: ['deploy.secrets entries must be non-empty strings'],
+				secrets: DEFAULT_DEPLOY.secrets,
+			}
+		}
+	}
+	return { errors: [], secrets }
+}
+
 export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 	const project = raw['project']
 	if (!isRecord(project)) {
@@ -176,11 +218,13 @@ export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 	const projectResult = validateProjectSection(project)
 	const scriptsResult = validateScriptsSection(raw)
 	const envResult = validateEnvironmentSection(raw)
+	const deployResult = validateDeploySection(raw)
 
 	const earlyErrors = [
 		...projectResult.errors,
 		...scriptsResult.errors,
 		...envResult.errors,
+		...deployResult.errors,
 	]
 	if (
 		earlyErrors.length > 0 ||
@@ -234,6 +278,7 @@ export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 					? envResult.development
 					: DEFAULT_ENVIRONMENT.development,
 			},
+			deploy: { secrets: deployResult.secrets },
 		},
 	}
 }
