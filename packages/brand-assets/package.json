@@ -2,6 +2,14 @@
 	"name": "@nextnode-solutions/brand-assets",
 	"version": "1.0.0",
 	"description": "NextNode Solutions brand assets — logos, icons, favicons, and social avatars",
+	"homepage": "https://github.com/NextNodeSolutions/core#readme",
+	"license": "MIT",
+	"author": "NextNode Solutions",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/NextNodeSolutions/core.git",
+		"directory": "packages/brand-assets"
+	},
 	"files": [
 		"README.md",
 		"src"
