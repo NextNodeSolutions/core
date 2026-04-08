@@ -10,7 +10,6 @@ describe('publishResultCommand', () => {
 	let outputFile: string
 	let summaryFile: string
 	let srOutputFile: string
-	const savedEnv: Record<string, string | undefined> = {}
 
 	beforeEach(() => {
 		const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -18,25 +17,14 @@ describe('publishResultCommand', () => {
 		summaryFile = join(tmpdir(), `gh-summary-${id}.txt`)
 		srOutputFile = join(tmpdir(), `sr-output-${id}.txt`)
 
-		savedEnv['GITHUB_OUTPUT'] = process.env['GITHUB_OUTPUT']
-		savedEnv['GITHUB_STEP_SUMMARY'] = process.env['GITHUB_STEP_SUMMARY']
-		savedEnv['SR_OUTPUT_FILE'] = process.env['SR_OUTPUT_FILE']
-		savedEnv['PROJECT_FILTER'] = process.env['PROJECT_FILTER']
-
-		process.env['GITHUB_OUTPUT'] = outputFile
-		process.env['GITHUB_STEP_SUMMARY'] = summaryFile
-		process.env['SR_OUTPUT_FILE'] = srOutputFile
-		process.env['PROJECT_FILTER'] = '@nextnode-solutions/logger'
+		vi.stubEnv('GITHUB_OUTPUT', outputFile)
+		vi.stubEnv('GITHUB_STEP_SUMMARY', summaryFile)
+		vi.stubEnv('SR_OUTPUT_FILE', srOutputFile)
+		vi.stubEnv('PROJECT_FILTER', '@nextnode-solutions/logger')
 	})
 
 	afterEach(() => {
-		for (const [key, value] of Object.entries(savedEnv)) {
-			if (value === undefined) {
-				delete process.env[key]
-			} else {
-				process.env[key] = value
-			}
-		}
+		vi.unstubAllEnvs()
 		process.exitCode = undefined
 		rmSync(outputFile, { force: true })
 		rmSync(summaryFile, { force: true })
@@ -105,7 +93,7 @@ describe('publishResultCommand', () => {
 	})
 
 	it('throws when PROJECT_FILTER is not set', () => {
-		delete process.env['PROJECT_FILTER']
+		vi.stubEnv('PROJECT_FILTER', undefined)
 
 		expect(() => publishResultCommand()).toThrow('PROJECT_FILTER env var')
 	})

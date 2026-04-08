@@ -37,6 +37,15 @@ function notFound(): MockResponse {
 	}
 }
 
+function forbiddenResponse(): Promise<MockResponse> {
+	return Promise.resolve({
+		ok: false,
+		status: 403,
+		json: () => Promise.resolve({}),
+		text: () => Promise.resolve('forbidden'),
+	})
+}
+
 function urlOf(input: FetchInput): string {
 	return typeof input === 'string' ? input : input.toString()
 }
@@ -238,14 +247,7 @@ describe('ensurePagesProjectCommand', () => {
 			'[project]\nname = "gardefroidclim"\ntype = "static"\n',
 		)
 
-		const impl: FetchImpl = () =>
-			Promise.resolve({
-				ok: false,
-				status: 403,
-				json: () => Promise.resolve({}),
-				text: () => Promise.resolve('forbidden'),
-			})
-		vi.stubGlobal('fetch', vi.fn<FetchImpl>(impl))
+		vi.stubGlobal('fetch', vi.fn<FetchImpl>(forbiddenResponse))
 
 		await expect(ensurePagesProjectCommand()).rejects.toThrow(
 			'Cloudflare API returned 403',

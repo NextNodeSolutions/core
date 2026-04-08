@@ -37,7 +37,7 @@
 		"lint": "oxlint",
 		"test": "vitest run",
 		"test:watch": "vitest",
-		"typecheck": "tsgo --noEmit"
+		"type-check": "tsgo --noEmit"
 	},
 	"dependencies": {
 		"@nextnode-solutions/logger": "^1.0.0",

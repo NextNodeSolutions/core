@@ -51,25 +51,34 @@ export async function dnsCommand(): Promise<void> {
 		`Reconciling ${records.length} DNS record(s) for ${config.project.domain} (${environment})`,
 	)
 
-	const zoneIdCache = new Map<string, string>()
-	for (const desired of records) {
-		const zoneId = await resolveZoneId(desired.zoneName, token, zoneIdCache)
-		await applyRecord(zoneId, desired, token)
-	}
+	const zoneIds = await resolveAllZoneIds(records, token)
+	await Promise.all(
+		records.map(desired => {
+			const zoneId = zoneIds.get(desired.zoneName)
+			if (!zoneId) {
+				throw new Error(`Zone ID not resolved for ${desired.zoneName}`)
+			}
+			return applyRecord(zoneId, desired, token)
+		}),
+	)
 
 	logger.info('DNS reconciliation complete')
 }
 
-async function resolveZoneId(
-	zoneName: string,
+async function resolveAllZoneIds(
+	records: ReadonlyArray<DesiredDnsRecord>,
 	token: string,
-	cache: Map<string, string>,
-): Promise<string> {
-	const cached = cache.get(zoneName)
-	if (cached) return cached
-	const zoneId = await lookupZoneId(zoneName, token)
-	cache.set(zoneName, zoneId)
-	return zoneId
+): Promise<Map<string, string>> {
+	const uniqueZones = [...new Set(records.map(record => record.zoneName))]
+	const entries = await Promise.all(
+		uniqueZones.map(
+			async (zone): Promise<[string, string]> => [
+				zone,
+				await lookupZoneId(zone, token),
+			],
+		),
+	)
+	return new Map(entries)
 }
 
 async function applyRecord(

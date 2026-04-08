@@ -1,4 +1,5 @@
 export const CLOUDFLARE_API_BASE = 'https://api.cloudflare.com/client/v4'
+export const HTTP_NOT_FOUND = 404
 
 export interface CloudflareApiError {
 	readonly code: number

@@ -54,9 +54,11 @@ export async function ensurePagesDomainsCommand(): Promise<void> {
 
 	const attached = await listPagesDomains(accountId, projectName, token)
 
-	for (const domain of desired) {
-		await applyDomain(accountId, projectName, domain, attached, token)
-	}
+	await Promise.all(
+		desired.map(domain =>
+			applyDomain(accountId, projectName, domain, attached, token),
+		),
+	)
 
 	reportStaleDomains(desired, attached)
 

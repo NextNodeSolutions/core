@@ -1,10 +1,5 @@
 import type { WorkflowRun } from '../domain/prod-gate.ts'
 
-interface WorkflowRunsResponse {
-	readonly total_count: number
-	readonly workflow_runs: ReadonlyArray<WorkflowRun>
-}
-
 export async function fetchWorkflowRuns(
 	repo: string,
 	sha: string,
@@ -27,6 +22,14 @@ export async function fetchWorkflowRuns(
 		)
 	}
 
-	const data = (await response.json()) as WorkflowRunsResponse
+	const data: unknown = await response.json()
+	if (
+		typeof data !== 'object' ||
+		data === null ||
+		!('workflow_runs' in data) ||
+		!Array.isArray(data.workflow_runs)
+	) {
+		throw new Error('GitHub API response missing workflow_runs array')
+	}
 	return data.workflow_runs
 }
