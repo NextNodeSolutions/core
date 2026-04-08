@@ -20,6 +20,11 @@
 	],
 	"license": "MIT",
 	"author": "NextNode Solutions",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/NextNodeSolutions/core.git",
+		"directory": "packages/logger"
+	},
 	"files": [
 		"CHANGELOG.md",
 		"README.md",
