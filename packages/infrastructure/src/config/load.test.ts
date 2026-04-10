@@ -67,6 +67,35 @@ describe('loadConfig', () => {
 
 		expect(config.environment.development).toBe(false)
 	})
+
+	it('loads a config with a full [monitoring] section', () => {
+		const config = loadConfig(fixture('with-monitoring.toml'))
+
+		if (config.monitoring === false) {
+			throw new Error('expected monitoring to be defined')
+		}
+		expect(config.monitoring.endpoint).toBe(
+			'https://monitoring.nextnode.solutions',
+		)
+		expect(config.monitoring.slo).toEqual({
+			availability: 99.9,
+			latencyMsP95: 500,
+			latencyMsP99: 1500,
+			windowDays: 30,
+		})
+		expect(config.monitoring.healthcheck).toEqual({
+			path: '/healthz',
+			intervalSeconds: 10,
+			timeoutMs: 3000,
+			expectedStatus: 204,
+		})
+	})
+
+	it('defaults monitoring to false when section is absent', () => {
+		const config = loadConfig(fixture('valid.toml'))
+
+		expect(config.monitoring).toBe(false)
+	})
 })
 
 describe('parseConfig', () => {

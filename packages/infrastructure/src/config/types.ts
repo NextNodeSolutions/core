@@ -4,6 +4,7 @@ export interface NextNodeConfig {
 	readonly package: PackageSection | false
 	readonly environment: EnvironmentSection
 	readonly deploy: DeploySection | false
+	readonly monitoring: MonitoringConfig | false
 }
 
 export interface HetznerDeployableConfig extends NextNodeConfig {
@@ -105,6 +106,33 @@ export interface CloudflarePagesDeploySection extends BaseDeploySection {
 export type DeploySection =
 	| HetznerVpsDeploySection
 	| CloudflarePagesDeploySection
+
+export interface MonitoringSloConfig {
+	readonly availability: number
+	readonly latencyMsP95: number
+	readonly latencyMsP99: number | undefined
+	readonly windowDays: number
+}
+
+export interface MonitoringHealthcheckConfig {
+	readonly path: string
+	readonly intervalSeconds: number
+	readonly timeoutMs: number
+	readonly expectedStatus: number
+}
+
+export interface MonitoringConfig {
+	readonly endpoint: string
+	readonly slo: MonitoringSloConfig | undefined
+	readonly healthcheck: MonitoringHealthcheckConfig
+}
+
+export const DEFAULT_MONITORING_HEALTHCHECK: MonitoringHealthcheckConfig = {
+	path: '/health',
+	intervalSeconds: 5,
+	timeoutMs: 2000,
+	expectedStatus: 200,
+}
 
 export const DEFAULT_SCRIPTS: ScriptsSection = {
 	lint: 'lint',

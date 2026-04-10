@@ -22,6 +22,7 @@ const PACKAGE_CONFIG: NextNodeConfig = {
 	package: false,
 	environment: { development: true },
 	deploy: false,
+	monitoring: false,
 }
 
 const APP_CONFIG: NextNodeConfig = {
@@ -41,6 +42,7 @@ const APP_CONFIG: NextNodeConfig = {
 		secrets: [],
 		hetzner: { serverType: 'cx23', location: 'nbg1' },
 	},
+	monitoring: false,
 }
 
 describe('planCommand', () => {

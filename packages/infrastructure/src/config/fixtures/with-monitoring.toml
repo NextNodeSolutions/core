@@ -1,0 +1,23 @@
+[project]
+name = "my-app"
+type = "app"
+domain = "my-app.example.com"
+
+[deploy.hetzner]
+server_type = "cpx22"
+location = "nbg1"
+
+[monitoring]
+endpoint = "https://monitoring.nextnode.solutions"
+
+[monitoring.slo]
+availability = 99.9
+latency_ms_p95 = 500
+latency_ms_p99 = 1500
+window_days = 30
+
+[monitoring.healthcheck]
+path = "/healthz"
+interval_seconds = 10
+timeout_ms = 3000
+expected_status = 204

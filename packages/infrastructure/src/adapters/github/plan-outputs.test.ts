@@ -26,6 +26,7 @@ const APP_CONFIG: NextNodeConfig = {
 		secrets: [],
 		hetzner: { serverType: 'cpx22', location: 'nbg1' },
 	},
+	monitoring: false,
 }
 
 const PACKAGE_CONFIG: NextNodeConfig = {
@@ -41,6 +42,7 @@ const PACKAGE_CONFIG: NextNodeConfig = {
 	package: false,
 	environment: { development: true },
 	deploy: false,
+	monitoring: false,
 }
 
 const PUBLISHABLE_CONFIG: NextNodeConfig = {
@@ -56,6 +58,7 @@ const PUBLISHABLE_CONFIG: NextNodeConfig = {
 	package: { access: 'public' },
 	environment: { development: true },
 	deploy: false,
+	monitoring: false,
 }
 
 describe('writePlanOutputs', () => {

@@ -9,6 +9,7 @@ import {
 	validateEnvironmentSection,
 	validateScriptsSection,
 } from './validation/pipeline.ts'
+import { validateMonitoringSection } from './validation/monitoring.ts'
 import {
 	validatePackageSection,
 	validateProjectSection,
@@ -19,12 +20,14 @@ export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 	const scriptsResult = validateScriptsSection(raw['scripts'])
 	const envResult = validateEnvironmentSection(raw['environment'])
 	const pkgResult = validatePackageSection(raw['package'])
+	const monitoringResult = validateMonitoringSection(raw['monitoring'])
 
 	if (
 		!projectResult.ok ||
 		!scriptsResult.ok ||
 		!envResult.ok ||
-		!pkgResult.ok
+		!pkgResult.ok ||
+		!monitoringResult.ok
 	) {
 		return {
 			ok: false,
@@ -33,6 +36,7 @@ export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 				scriptsResult,
 				envResult,
 				pkgResult,
+				monitoringResult,
 			].flatMap(r => (r.ok ? [] : r.errors)),
 		}
 	}
@@ -57,6 +61,7 @@ export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 				environment: envResult.section,
 				package: pkgResult.section,
 				deploy: false,
+				monitoring: monitoringResult.section,
 			},
 		}
 	}
@@ -85,6 +90,7 @@ export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 			environment: envResult.section,
 			package: pkgResult.section,
 			deploy: deployResult.section,
+			monitoring: monitoringResult.section,
 		},
 	}
 }
