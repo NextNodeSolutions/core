@@ -1,24 +1,28 @@
 /**
  * Console transport for NextNode Logger
- * Auto-detects runtime environment and uses appropriate formatter
+ * Resolves the output format from environment + runtime + config,
+ * then delegates rendering to an injectable ConsoleWriter strategy.
  */
 
-import { formatForBrowser } from '../formatters/console-browser.js'
-import { formatForNode } from '../formatters/console-node.js'
-import { formatAsJson } from '../formatters/json.js'
 import type { Environment, LogEntry, LogLevel, Transport } from '../types.js'
 import { detectRuntime } from '../utils/environment.js'
 
+import type {
+	ConsoleFormat,
+	ConsoleMethod,
+	ConsoleWriter,
+} from './console-writers.js'
+import { DEFAULT_CONSOLE_WRITERS } from './console-writers.js'
+
 // Console methods mapping for type safety
-const CONSOLE_METHODS: Record<
-	LogLevel,
-	keyof Pick<Console, 'log' | 'warn' | 'error' | 'debug'>
-> = {
+const CONSOLE_METHODS: Record<LogLevel, ConsoleMethod> = {
 	debug: 'debug',
 	info: 'log',
 	warn: 'warn',
 	error: 'error',
 } as const
+
+type FormatOption = ConsoleFormat | 'auto'
 
 export interface ConsoleTransportConfig {
 	/**
@@ -34,70 +38,50 @@ export interface ConsoleTransportConfig {
 	 * - 'browser': Always use CSS styling (for DevTools)
 	 * - 'json': Always output JSON (for log aggregation)
 	 */
-	format?: 'auto' | 'node' | 'browser' | 'json'
+	format?: FormatOption
+
+	/**
+	 * Override the default writer for one or more formats.
+	 * Useful for testing or routing output through a different channel.
+	 */
+	writers?: Partial<Record<ConsoleFormat, ConsoleWriter>>
 }
 
 export class ConsoleTransport implements Transport {
 	private readonly config: ConsoleTransportConfig
 	private readonly runtime: ReturnType<typeof detectRuntime>
+	private readonly writers: Record<ConsoleFormat, ConsoleWriter>
 
 	constructor(config: ConsoleTransportConfig = {}) {
 		this.config = config
 		this.runtime = detectRuntime()
+		this.writers = {
+			...DEFAULT_CONSOLE_WRITERS,
+			...config.writers,
+		}
 	}
 
 	log(entry: LogEntry): void {
 		const method = CONSOLE_METHODS[entry.level]
-		const format = this.config.format ?? 'auto'
-		const environment = this.config.environment
-
-		// Production always uses JSON regardless of format setting
-		if (environment === 'production' && format !== 'json') {
-			console[method](formatAsJson(entry))
-			return
-		}
-
-		// Explicit format override
-		if (format === 'json') {
-			console[method](formatAsJson(entry))
-			return
-		}
-
-		if (format === 'node') {
-			console[method](formatForNode(entry))
-			return
-		}
-
-		if (format === 'browser') {
-			this.logBrowser(entry, method)
-			return
-		}
-
-		// Auto-detect based on runtime
-		if (this.runtime === 'browser' || this.runtime === 'webworker') {
-			this.logBrowser(entry, method)
-			return
-		}
-
-		// Node.js or unknown - use ANSI
-		console[method](formatForNode(entry))
+		const format = this.resolveFormat()
+		this.writers[format](entry, method)
 	}
 
-	private logBrowser(
-		entry: LogEntry,
-		method: keyof Pick<Console, 'log' | 'warn' | 'error' | 'debug'>,
-	): void {
-		const { format, styles, objects } = formatForBrowser(entry)
+	private resolveFormat(): ConsoleFormat {
+		const requested: FormatOption = this.config.format ?? 'auto'
 
-		if (objects.length > 0) {
-			console.groupCollapsed(format, ...styles)
-			for (const obj of objects) {
-				console.dir(obj, { depth: null })
-			}
-			console.groupEnd()
-		} else {
-			console[method](format, ...styles)
+		// Production always emits JSON unless a specific format is forced
+		if (this.config.environment === 'production' && requested !== 'json') {
+			return 'json'
 		}
+
+		if (requested !== 'auto') return requested
+
+		if (this.runtime === 'browser' || this.runtime === 'webworker') {
+			return 'browser'
+		}
+
+		return 'node'
 	}
 }
 

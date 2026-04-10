@@ -6,6 +6,7 @@
 import type { LogEntry, LogLevel } from '../types.js'
 import { formatTimeForDisplay } from '../utils/time.js'
 
+import { createScopeColorCache } from './scope-colors.js'
 import { LOG_LEVEL_ICONS, formatLocationForDisplay } from './shared.js'
 
 // CSS styles for browser DevTools
@@ -36,32 +37,18 @@ const LOG_LEVEL_STYLES: Record<LogLevel, string> = {
 	error: STYLES.error,
 } as const
 
-const SCOPE_STYLE_KEYS = ['green', 'magenta', 'cyan', 'yellow', 'blue'] as const
+const SCOPE_STYLE_PALETTE: readonly string[] = [
+	STYLES.scope.green,
+	STYLES.scope.magenta,
+	STYLES.scope.cyan,
+	STYLES.scope.yellow,
+	STYLES.scope.blue,
+]
 
-// LRU-like cache with max size
-const MAX_SCOPE_CACHE_SIZE = 100
-let scopeStyleIndex = 0
-const scopeStyleMap = new Map<string, string>()
-
-const getScopeStyle = (scope: string): string => {
-	let style = scopeStyleMap.get(scope)
-
-	if (!style) {
-		if (scopeStyleMap.size >= MAX_SCOPE_CACHE_SIZE) {
-			const firstKey = scopeStyleMap.keys().next().value
-			if (firstKey) scopeStyleMap.delete(firstKey)
-		}
-
-		const styleKey =
-			SCOPE_STYLE_KEYS[scopeStyleIndex % SCOPE_STYLE_KEYS.length] ??
-			'green'
-		style = STYLES.scope[styleKey]
-		scopeStyleMap.set(scope, style)
-		scopeStyleIndex = (scopeStyleIndex + 1) % SCOPE_STYLE_KEYS.length
-	}
-
-	return style
-}
+const scopeStyleCache = createScopeColorCache<string>({
+	palette: SCOPE_STYLE_PALETTE,
+	fallback: STYLES.scope.green,
+})
 
 export interface BrowserLogOutput {
 	format: string
@@ -93,7 +80,7 @@ export const formatForBrowser = (entry: LogEntry): BrowserLogOutput => {
 	// Scope if present
 	if (scope) {
 		formatParts.push(`%c[${scope}]`)
-		styles.push(getScopeStyle(scope))
+		styles.push(scopeStyleCache.resolve(scope))
 	}
 
 	// Timestamp
@@ -132,6 +119,5 @@ export const createBrowserLogArgs = (entry: LogEntry): unknown[] => {
 }
 
 export const resetScopeCache = (): void => {
-	scopeStyleMap.clear()
-	scopeStyleIndex = 0
+	scopeStyleCache.reset()
 }
