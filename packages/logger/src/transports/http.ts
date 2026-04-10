@@ -68,18 +68,36 @@ const RESTRICTED_HEADERS = new Set([
 	'transfer-encoding',
 ])
 
+/**
+ * Fully-resolved HTTP transport configuration with all defaults applied.
+ * Used internally after merging user config with defaults.
+ */
+interface ResolvedHttpTransportConfig {
+	readonly endpoint: string
+	readonly headers?: Record<string, string>
+	readonly batchSize: number
+	readonly flushInterval: number
+	readonly timeout: number
+	readonly maxRetries: number
+	readonly onError?: (error: Error, entries: LogEntry[]) => void
+	readonly onSuccess?: (count: number) => void
+}
+
+const resolveConfig = (
+	config: HttpTransportConfig,
+): ResolvedHttpTransportConfig => ({
+	endpoint: config.endpoint,
+	batchSize: config.batchSize ?? DEFAULT_BATCH_SIZE,
+	flushInterval: config.flushInterval ?? DEFAULT_FLUSH_INTERVAL,
+	timeout: config.timeout ?? DEFAULT_TIMEOUT,
+	maxRetries: config.maxRetries ?? DEFAULT_MAX_RETRIES,
+	...(config.headers !== undefined && { headers: config.headers }),
+	...(config.onError !== undefined && { onError: config.onError }),
+	...(config.onSuccess !== undefined && { onSuccess: config.onSuccess }),
+})
+
 export class HttpTransport implements Transport {
-	private readonly config: Required<
-		Pick<
-			HttpTransportConfig,
-			| 'endpoint'
-			| 'batchSize'
-			| 'flushInterval'
-			| 'timeout'
-			| 'maxRetries'
-		>
-	> &
-		HttpTransportConfig
+	private readonly config: ResolvedHttpTransportConfig
 
 	private buffer: LogEntry[] = []
 	private flushTimer: ReturnType<typeof setTimeout> | null = null
@@ -90,13 +108,7 @@ export class HttpTransport implements Transport {
 		this.validateEndpoint(config.endpoint)
 		this.validateHeaders(config.headers)
 
-		this.config = {
-			...config,
-			batchSize: config.batchSize ?? DEFAULT_BATCH_SIZE,
-			flushInterval: config.flushInterval ?? DEFAULT_FLUSH_INTERVAL,
-			timeout: config.timeout ?? DEFAULT_TIMEOUT,
-			maxRetries: config.maxRetries ?? DEFAULT_MAX_RETRIES,
-		}
+		this.config = resolveConfig(config)
 
 		// Start flush interval timer
 		this.startFlushTimer()
