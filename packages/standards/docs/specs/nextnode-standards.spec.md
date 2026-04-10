@@ -137,8 +137,9 @@ The existing `@nextnode/standards` package (v2.2.1) uses Biome for linting and P
 
 - **FR-26**: Export a lint-staged config at `@nextnode/standards/lint-staged` (`src/lint-staged/base.js`).
 - **FR-27**: The config runs:
-    - `package.json`: `better-sort-package-json`
-    - `*`: oxlint check + oxfmt format
+    - `package.json`: `better-sort-package-json` only (exclusive — oxfmt must NOT run on `package.json`, the two tools disagree on ordering/indentation and create a flip-flop)
+    - `*.{js,mjs,cjs,jsx,ts,mts,cts,tsx,vue,svelte,astro}`: oxlint check + oxfmt format
+    - `!(package).json`: oxfmt format (all JSON files except `package.json`)
 
 ### Git Hooks (Husky)
 
