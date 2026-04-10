@@ -3,6 +3,7 @@
  * Provides spy logger and mock utilities for use in vitest/jest tests
  */
 
+import { createLogEntry } from '../core/create-log-entry.js'
 import type {
 	ChildLoggerConfig,
 	LogEntry,
@@ -12,9 +13,6 @@ import type {
 	SpyLogger,
 } from '../types.js'
 import { generateRequestId } from '../utils/crypto.js'
-import { parseLocation } from '../utils/location.js'
-import { extractScope } from '../utils/scope.js'
-import { getCurrentTimestamp } from '../utils/time.js'
 
 /**
  * Creates a spy logger that tracks all log calls without producing any output.
@@ -50,34 +48,18 @@ export const createSpyLogger = (
 	const calls = sharedCalls ?? []
 	const instanceRequestId = parentRequestId ?? generateRequestId()
 
-	const createEntry = (
-		level: LogLevel,
-		message: string,
-		object?: LogObject,
-	): LogEntry => {
-		const {
-			scope: perCallScope,
-			requestId: perCallRequestId,
-			cleanObject,
-		} = extractScope(object)
-
-		return {
-			level,
-			message,
-			timestamp: getCurrentTimestamp(),
-			location: parseLocation(false),
-			requestId: perCallRequestId ?? instanceRequestId,
-			scope: perCallScope ?? parentScope,
-			object: cleanObject,
-		}
-	}
-
 	const log = (
 		level: LogLevel,
 		message: string,
 		object?: LogObject,
 	): void => {
-		const entry = createEntry(level, message, object)
+		const entry = createLogEntry({
+			level,
+			message,
+			object,
+			defaultRequestId: instanceRequestId,
+			...(parentScope !== undefined && { defaultScope: parentScope }),
+		})
 		calls.push(entry)
 	}
 

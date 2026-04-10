@@ -39,7 +39,17 @@ export type {
 	SpyLogger,
 	Transport,
 } from './types.js'
-export { LOG_LEVEL_PRIORITY } from './types.js'
+
+// Constants
+export { LOG_LEVEL_PRIORITY } from './constants.js'
+
+// Type guards
+export {
+	isDevelopmentLocation,
+	isEnvironment,
+	isLogLevel,
+	isRuntimeEnvironment,
+} from './type-guards.js'
 
 // Utilities
 export { generateRequestId } from './utils/crypto.js'

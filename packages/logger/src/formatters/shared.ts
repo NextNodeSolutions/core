@@ -3,8 +3,8 @@
  * Common formatting functions used by console formatters
  */
 
+import { isDevelopmentLocation } from '../type-guards.js'
 import type { LogEntry, LogLevel } from '../types.js'
-import { isDevelopmentLocation } from '../types.js'
 
 export const LOG_LEVEL_ICONS: Record<LogLevel, string> = {
 	debug: '🔍',
