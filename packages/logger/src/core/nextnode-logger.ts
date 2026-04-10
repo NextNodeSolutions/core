@@ -3,23 +3,21 @@
  * Orchestrates log level filtering, entry creation, and transport dispatch.
  */
 
+import { LOG_LEVEL_PRIORITY } from '../constants.js'
 import { ConsoleTransport } from '../transports/console.js'
 import type {
 	ChildLoggerConfig,
 	Environment,
-	LogEntry,
 	Logger,
 	LoggerConfig,
 	LogLevel,
 	LogObject,
 	Transport,
 } from '../types.js'
-import { LOG_LEVEL_PRIORITY } from '../types.js'
 import { generateRequestId } from '../utils/crypto.js'
 import { detectEnvironment } from '../utils/environment.js'
-import { parseLocation } from '../utils/location.js'
-import { extractScope } from '../utils/scope.js'
-import { getCurrentTimestamp } from '../utils/time.js'
+
+import { createLogEntry } from './create-log-entry.js'
 
 export class NextNodeLogger implements Logger {
 	private readonly environment: Environment
@@ -55,36 +53,18 @@ export class NextNodeLogger implements Logger {
 		return LOG_LEVEL_PRIORITY[level] >= LOG_LEVEL_PRIORITY[this.minLevel]
 	}
 
-	private createLogEntry(
-		level: LogLevel,
-		message: string,
-		object?: LogObject,
-	): LogEntry {
-		const {
-			scope: perCallScope,
-			requestId: perCallRequestId,
-			cleanObject,
-		} = extractScope(object)
-
-		const finalMessage = this.prefix ? `${this.prefix} ${message}` : message
-
-		return {
-			level,
-			message: finalMessage,
-			timestamp: getCurrentTimestamp(),
-			location: this.includeLocation
-				? parseLocation(false)
-				: parseLocation(true),
-			requestId: perCallRequestId ?? this.requestId,
-			scope: perCallScope ?? this.scope,
-			object: cleanObject,
-		}
-	}
-
 	private log(level: LogLevel, message: string, object?: LogObject): void {
 		if (!this.shouldLog(level)) return
 
-		const entry = this.createLogEntry(level, message, object)
+		const entry = createLogEntry({
+			level,
+			message,
+			object,
+			defaultRequestId: this.requestId,
+			defaultScope: this.scope,
+			prefix: this.prefix,
+			includeLocation: this.includeLocation,
+		})
 
 		for (const transport of this.transports) {
 			try {

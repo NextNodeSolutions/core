@@ -34,6 +34,7 @@ const INTERNAL_FILES = [
 	'logger.ts',
 	'nextnode-logger.ts',
 	'factory.ts',
+	'create-log-entry.ts',
 	'location.ts',
 	'console-node.ts',
 	'console-browser.ts',
