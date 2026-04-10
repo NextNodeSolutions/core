@@ -14,13 +14,13 @@
 
 | Phase | Scope | Status |
 |---|---|---|
-| **Phase 1 — Foundation** | Package scaffold + `nextnode.toml` schema | `[WIP]` |
+| **Phase 1 — Foundation** | Package scaffold + `nextnode.toml` schema | `[DONE]` |
 | **Phase 2 — Core services** | Auth, Hono ingest, uptime probes | `[TODO]` |
 | **Phase 3 — Alerting** | SLO rule generator, alert routing | `[TODO]` |
 | **Phase 4 — Deployment** | Docker Compose + Cloudflare Worker second probe | `[TODO]` |
 | **Phase 5 — Extended features** | Synthetic tests, status page, client contract | `[TODO]` |
 
-**Current step**: Phase 1 / Step 2 — `nextnode.toml` schema extension
+**Current step**: Phase 2 / Step 3 — Auth & token management
 **Last updated**: 2026-04-10
 
 ---
@@ -427,44 +427,79 @@ oxfmt.config.ts, oxlint.config.ts, vitest.config.ts, CLAUDE.md, nextnode.toml,
 
 ---
 
-#### Step 2: `nextnode.toml` schema extension `[TODO]`
+#### Step 2: `nextnode.toml` schema extension `[DONE]`
 
 **Goal**: extend the shared `nextnode.toml` schema in `packages/infrastructure`
 with `[monitoring]`, `[monitoring.slo]`, and `[monitoring.healthcheck]` blocks.
 All optional so existing projects don't break.
 
 **Tasks**:
-- [ ] Read `packages/infrastructure/src/config/` to understand the current schema, loader, and tests
-- [ ] Add `MonitoringConfig` type to `packages/infrastructure/src/config/schema.ts` matching the schema in Section 4
-- [ ] Add `MonitoringSloConfig` sub-type (availability, latency_ms_p95/p99, window_days)
-- [ ] Add `MonitoringHealthcheckConfig` sub-type (path, interval_seconds, timeout_ms, expected_status)
-- [ ] Add parser/validator for `[monitoring.*]` blocks in the config loader
-- [ ] Validation rules:
-  - `availability` must be 0 < x ≤ 100
+- [x] Read `packages/infrastructure/src/config/` to understand the current schema, loader, and tests
+- [x] Add `MonitoringConfig` type to `packages/infrastructure/src/config/schema.ts` matching Section 4
+- [x] Add `MonitoringSloConfig` sub-type (availability, latency_ms_p95/p99, window_days)
+- [x] Add `MonitoringHealthcheckConfig` sub-type (path, interval_seconds, timeout_ms, expected_status)
+- [x] Add parser/validators for `[monitoring.*]` blocks (extracted per-field helpers to keep
+      complexity below the oxlint cap of 15 and name every magic number)
+- [x] Validation rules enforced:
+  - `availability` must be in (0, 100]
   - `latency_ms_p95` must be > 0
-  - `latency_ms_p99` must be ≥ `latency_ms_p95` if both set
+  - `latency_ms_p99` must be > 0 AND ≥ `latency_ms_p95` if both set
   - `window_days` must be ≥ 1
-  - `interval_seconds` must be ≥ 1 (5 is the sweet spot)
-  - `endpoint` must be a valid HTTPS URL
-- [ ] Unit tests in `packages/infrastructure/src/config/` with fixtures:
-  - Valid `[monitoring]` block with all fields
-  - Valid with only required fields
-  - Missing `[monitoring]` block entirely (valid — opt-in)
-  - Invalid availability (> 100, < 0, non-numeric)
-  - Invalid endpoint (http:// not allowed)
-  - p99 < p95 rejected
-- [ ] Create `packages/monitoring/src/config/slo-schema.ts` with domain types (re-export
-      from infrastructure where appropriate; add monitoring-specific computed types like
-      `errorBudgetMinutes`, `burnRateThresholds`)
-- [ ] Unit tests for computed types
-- [ ] Run `pnpm test` at root — both infrastructure and monitoring tests pass
-- [ ] Run `pnpm lint` and `pnpm format:check` — no violations
+  - `interval_seconds` must be ≥ 1 (default: 5)
+  - `timeout_ms` must be > 0 (default: 2000)
+  - `expected_status` must be an integer in [100, 599] (default: 200)
+  - `endpoint` must parse as a valid `https://` URL
+  - healthcheck `path` must be a non-empty string starting with `/`
+- [x] 20 new unit tests in `schema.test.ts` (now 60 total):
+      valid full / minimal / absent; each invalid case; boundary availability=100;
+      non-table `[monitoring]` and `[monitoring.slo]`; malformed URL
+- [x] New fixture `fixtures/with-monitoring.toml` + 2 load.test.ts cases
+- [x] Expose infrastructure schema as a typed subpath export via
+      `"./config/schema"` in `packages/infrastructure/package.json`'s `exports`
+- [x] Add `@nextnode-solutions/infrastructure` as a workspace devDep of monitoring
+      (types-only consumer)
+- [x] Create `packages/monitoring/src/domain/slo.ts` (NOT `config/slo-schema.ts`
+      — see deviation below) with pure computations:
+      `computeBaselineErrorRatio`, `computeErrorBudgetMinutes`,
+      `computeBurnRateThresholds`, `SRE_BURN_RATE_WINDOWS` constant
+- [x] 16 unit tests in `domain/slo.test.ts` covering the SRE workbook math
+- [x] All gates green on both packages: build, lint, format:check, type-check, test
+- [x] Byproduct fix: `packages/infrastructure/src/adapters/plan-outputs.test.ts`
+      fixtures were missing `deploy` (pre-existing main breakage) and `monitoring`;
+      both added via a single replace-all.
+
+**Decisions taken during Step 2** (appended to decision log):
+- **slo.ts lives in `domain/`, not `config/`.** The plan suggested
+  `packages/monitoring/src/config/slo-schema.ts`, but the package CLAUDE.md
+  reserves `config/` for loaders and mandates pure business math in `domain/`.
+  Domain wins: the module is pure, has no IO, and depends only on a type from
+  infrastructure. This is a minor plan correction, not an architectural pivot.
+- **Subpath type-only export from infrastructure.** `packages/infrastructure`
+  now exposes `./config/schema` as a types-only entry so monitoring can
+  `import type { MonitoringSloConfig } from '@nextnode-solutions/infrastructure/config/schema'`
+  without pulling in the CLI runtime. Keeps the layer boundary intact.
+- **Validator refactor for complexity.** Each field check is now a small pure
+  helper returning `{ error, value }`. This keeps every function well under
+  the oxlint complexity cap of 15 and makes per-field logic trivially testable
+  if we ever need it.
+- **`pnpm test` via turbo trips a sandbox write error** (`/tmp/<random>/ssr`
+  from vitest's SSR transform cache). Per-package `pnpm --filter … test` runs
+  fine under `$TMPDIR`. Not a code bug; flagged for CI vs local divergence.
+  Worked around by running tests per-package during Step 2.
 
 **Definition of done**: a `nextnode.toml` with a `[monitoring.slo]` block parses
-cleanly; a malformed one produces a specific validation error. The monitoring
-package can import the schema types. Update status to `[DONE]`.
+cleanly; malformed ones produce specific validation errors; the monitoring
+package imports the schema types as type-only and ships pure SRE-burn-rate
+math tested with 16 unit cases. ✅
 
-**Files created**: ~4 new, ~2 edited in `packages/infrastructure/src/config/`.
+**Files created**: 4 new (
+`packages/infrastructure/src/config/fixtures/with-monitoring.toml`,
+`packages/monitoring/src/domain/slo.ts`,
+`packages/monitoring/src/domain/slo.test.ts`,
+the new test suite blocks inside `schema.test.ts` and `load.test.ts`
+) + 5 edited (`schema.ts`, `schema.test.ts`, `load.test.ts`,
+`plan-outputs.test.ts`, `infrastructure/package.json`,
+`monitoring/package.json`, `monitoring/vitest.config.ts`).
 
 ---
 

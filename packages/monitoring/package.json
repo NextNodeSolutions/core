@@ -40,6 +40,7 @@
     "smol-toml": "^1.6.1"
   },
   "devDependencies": {
+    "@nextnode-solutions/infrastructure": "workspace:*",
     "@nextnode-solutions/standards": "workspace:*",
     "@types/node": "^22",
     "@typescript/native-preview": "7.0.0-dev.20260407.1",

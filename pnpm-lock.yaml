@@ -162,6 +162,9 @@ importers:
         specifier: ^1.6.1
         version: 1.6.1
     devDependencies:
+      '@nextnode-solutions/infrastructure':
+        specifier: workspace:*
+        version: link:../infrastructure
       '@nextnode-solutions/standards':
         specifier: workspace:*
         version: link:../standards
