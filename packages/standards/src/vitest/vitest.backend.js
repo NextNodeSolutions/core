@@ -9,6 +9,9 @@ export default defineConfig({
 			NODE_ENV: 'test',
 		},
 
+		// Test Discovery
+		exclude: ['node_modules/**', 'dist/**', '.infra/**'],
+
 		// Mock Cleanup Configuration
 		restoreMocks: true,
 		clearMocks: true,

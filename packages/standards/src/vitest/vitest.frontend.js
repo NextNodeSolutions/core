@@ -6,6 +6,9 @@ export default defineConfig({
 		environment: 'jsdom',
 		globals: true,
 
+		// Test Discovery
+		exclude: ['node_modules/**', 'dist/**', '.infra/**'],
+
 		// Mock Cleanup Configuration
 		restoreMocks: true,
 		clearMocks: true,
