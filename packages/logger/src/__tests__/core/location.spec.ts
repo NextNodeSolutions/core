@@ -4,7 +4,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { detectEnvironment, parseLocation } from '@/utils/location.js'
+import { detectEnvironment } from '@/utils/environment.js'
+import { parseLocation } from '@/utils/location.js'
 
 import { createMockError, MOCK_STACKS } from '../test-setup.js'
 

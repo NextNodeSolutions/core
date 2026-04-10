@@ -5,7 +5,6 @@
 
 import type {
 	DevelopmentLocationInfo,
-	Environment,
 	ProductionLocationInfo,
 } from '../types.js'
 
@@ -33,6 +32,8 @@ const STACK_TRACE_PATTERNS = {
 // Internal files to skip when parsing stack traces
 const INTERNAL_FILES = [
 	'logger.ts',
+	'nextnode-logger.ts',
+	'factory.ts',
 	'location.ts',
 	'console-node.ts',
 	'console-browser.ts',
@@ -148,21 +149,4 @@ export const parseLocation = (
 			? { function: 'unknown' }
 			: { function: 'unknown', file: 'unknown', line: 0 }
 	}
-}
-
-export const detectEnvironment = (): Environment => {
-	// Check NODE_ENV first - handle both browser and Node.js environments
-	const nodeEnv =
-		typeof process !== 'undefined' ? process.env.NODE_ENV : undefined
-
-	if (nodeEnv === 'production' || nodeEnv === 'prod') {
-		return 'production'
-	}
-
-	if (nodeEnv === 'development' || nodeEnv === 'dev') {
-		return 'development'
-	}
-
-	// Default to development for safety (more verbose logging)
-	return 'development'
 }
