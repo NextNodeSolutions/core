@@ -7,6 +7,7 @@ import type { LogEntry, LogLevel } from '../types.js'
 import { safeStringify } from '../utils/serialization.js'
 import { formatTimeForDisplay } from '../utils/time.js'
 
+import { createScopeColorCache } from './scope-colors.js'
 import { LOG_LEVEL_ICONS, formatLocationForDisplay } from './shared.js'
 
 const COLORS = {
@@ -38,29 +39,10 @@ const SCOPE_COLORS = [
 	COLORS.blue,
 ] as const
 
-// LRU-like cache with max size to prevent memory leaks
-const MAX_SCOPE_CACHE_SIZE = 100
-let scopeColorIndex = 0
-const scopeColorMap = new Map<string, string>()
-
-const getScopeColor = (scope: string): string => {
-	let color = scopeColorMap.get(scope)
-
-	if (!color) {
-		// Implement cache eviction when size limit reached
-		if (scopeColorMap.size >= MAX_SCOPE_CACHE_SIZE) {
-			const firstKey = scopeColorMap.keys().next().value
-			if (firstKey) scopeColorMap.delete(firstKey)
-		}
-
-		color =
-			SCOPE_COLORS[scopeColorIndex % SCOPE_COLORS.length] ?? COLORS.white
-		scopeColorMap.set(scope, color)
-		scopeColorIndex = (scopeColorIndex + 1) % SCOPE_COLORS.length
-	}
-
-	return color
-}
+const scopeColorCache = createScopeColorCache<string>({
+	palette: SCOPE_COLORS,
+	fallback: COLORS.white,
+})
 
 const colorize = (text: string, color: string): string =>
 	`${color}${text}${COLORS.reset}`
@@ -120,7 +102,7 @@ export const formatForNode = (entry: LogEntry): string => {
 
 	// Scope if present
 	if (scope) {
-		components.push(colorize(`[${scope}]`, getScopeColor(scope)))
+		components.push(colorize(`[${scope}]`, scopeColorCache.resolve(scope)))
 	}
 
 	// Timestamp
@@ -148,6 +130,5 @@ export const formatForNode = (entry: LogEntry): string => {
 }
 
 export const resetScopeCache = (): void => {
-	scopeColorMap.clear()
-	scopeColorIndex = 0
+	scopeColorCache.reset()
 }
