@@ -7,6 +7,9 @@ export default getViteConfig({
 		environment: 'node',
 		globals: true,
 
+		// Test Discovery
+		exclude: ['node_modules/**', 'dist/**', '.infra/**'],
+
 		// Mock Cleanup Configuration
 		restoreMocks: true,
 		clearMocks: true,
