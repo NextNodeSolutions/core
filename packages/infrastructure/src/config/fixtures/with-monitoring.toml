@@ -8,7 +8,7 @@ server_type = "cpx22"
 location = "nbg1"
 
 [monitoring]
-endpoint = "https://monitoring.nextnode.solutions"
+endpoint = "https://monitoring.nextnode.fr"
 
 [monitoring.slo]
 availability = 99.9

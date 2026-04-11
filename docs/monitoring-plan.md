@@ -297,7 +297,7 @@ defaults.
 [monitoring]
 # Required: where to send logs and query status.
 # Default: shared nextnode instance. Override for enterprise-dedicated tier.
-endpoint = "https://monitoring.nextnode.solutions"
+endpoint = "https://monitoring.nextnode.fr"
 
 # Token is NOT here. Injected via env var NEXTNODE_MONITORING_TOKEN.
 # Stored as a GitHub repo secret, pushed to the app VPS at deploy time.
@@ -760,8 +760,8 @@ persistence for logs/metrics/SQLite.
   - Healthchecks on each service
   - Restart policy: `unless-stopped`
 - [ ] Create `packages/monitoring/deploy/Caddyfile`:
-  - `monitoring.nextnode.solutions` → `monitoring-api:3000`
-  - `grafana.monitoring.nextnode.solutions` → `grafana:3000` (basic auth)
+  - `monitoring.nextnode.fr` → `monitoring-api:3000`
+  - `grafana.monitoring.nextnode.fr` → `grafana:3000` (basic auth)
   - Automatic TLS via Let's Encrypt
   - HTTP → HTTPS redirect
 - [ ] Create `packages/monitoring/deploy/victoriametrics.yml`:
@@ -794,7 +794,7 @@ persistence for logs/metrics/SQLite.
 - [ ] Smoke test the full stack locally via `docker compose up` before shipping to VPS
 
 **Definition of done**: `docker compose up -d` on a fresh CX33 brings up the
-full stack; TLS is issued; `https://monitoring.nextnode.solutions/healthz`
+full stack; TLS is issued; `https://monitoring.nextnode.fr/healthz`
 returns 200; Grafana is accessible behind basic auth.
 
 **Files created**: ~10 files under `packages/monitoring/deploy/`. Depends on all

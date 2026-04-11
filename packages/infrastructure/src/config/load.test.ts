@@ -75,7 +75,7 @@ describe('loadConfig', () => {
 			throw new Error('expected monitoring to be defined')
 		}
 		expect(config.monitoring.endpoint).toBe(
-			'https://monitoring.nextnode.solutions',
+			'https://monitoring.nextnode.fr',
 		)
 		expect(config.monitoring.slo).toEqual({
 			availability: 99.9,
