@@ -15,13 +15,22 @@
 | Phase | Scope | Status |
 |---|---|---|
 | **Phase 1 — Foundation** | Package scaffold + `nextnode.toml` schema | `[DONE]` |
-| **Phase 2 — Core services** | Auth, Hono ingest, uptime probes | `[TODO]` |
+| **Phase 2 — Core services** | Logs pipeline (Vector + VL), uptime probes | `[IN PROGRESS]` |
 | **Phase 3 — Alerting** | SLO rule generator, alert routing | `[TODO]` |
 | **Phase 4 — Deployment** | Docker Compose + Cloudflare Worker second probe | `[TODO]` |
 | **Phase 5 — Extended features** | Synthetic tests, status page, client contract | `[TODO]` |
 
-**Current step**: Phase 2 / Step 5 — Uptime probe worker
+**Current step**: Phase 2 / Step 3 — Logs pipeline (Vector + VictoriaLogs)
 **Last updated**: 2026-04-11
+
+> **Note (2026-04-11)** — This plan pivoted from a push-based Hono ingest
+> service to a pull-based agent deployment (Vector on every VPS → VictoriaLogs
+> direct over Tailscale). Steps 3 and 4 of the original plan (auth/token store
+> and Hono ingest) were implemented, tested, and then deleted in favor of the
+> simpler agent model. See the Decision log entry dated 2026-04-11 titled
+> "Option A pivot: Vector + private network over Hono ingest API" for the
+> full rationale. Git history on branch `feat/monitoring-package` preserves
+> the removed code (commits `e990e4c`, `28eb766`, `b298a14`, `667d720`).
 
 ---
 
@@ -29,8 +38,10 @@
 
 A self-hosted multi-tenant monitoring service that:
 
-1. Ingests logs from every NextNode production project via `@nextnode-solutions/logger`'s
-   HTTP transport, with per-project auth tokens and 30-day retention
+1. Collects logs from every NextNode production project via a **Vector agent**
+   running on each client VPS (tailing `docker logs` + journald), shipping
+   NDJSON over a private network (Tailscale/WireGuard) directly into
+   VictoriaLogs with 30-day retention
 2. Probes every client app's `/health` endpoint every 5 seconds from an external VPS
    (plus a free Cloudflare Worker from a second geographic location)
 3. Scrapes Prometheus-format `/metrics` from each client app for RED-method
@@ -105,10 +116,12 @@ when tenant count or disk pressure justifies.
 | Component | Role | Why this, not alternatives |
 |---|---|---|
 | **VictoriaMetrics** (`vmsingle`) | Scrape `/metrics`, store time series, evaluate MetricsQL | Drop-in Prometheus replacement, PromQL-compatible, single Go binary, ~50–150 MB RAM idle. Way lighter than Prometheus. |
-| **VictoriaLogs** | Store logs, 30-day retention (`-retentionPeriod=30d`) | Single Go binary, `/insert/jsonline` ndjson endpoint maps cleanly to `@nextnode-solutions/logger`'s HTTP transport. Much simpler than Loki (no schema_config, no object storage). |
+| **VictoriaLogs** | Store logs, 30-day retention (`-retentionPeriod=30d`) | Single Go binary, native NDJSON ingest at `/insert/jsonline`, no schema_config, no object storage. Much simpler than Loki for a single-node deploy. |
+| **Vector** (per client VPS) | Tail `docker logs` + journald + files, batch, compress, ship NDJSON to VictoriaLogs | ~30 MB Rust binary, single TOML config, native VL sink, disk-backed buffer, automatic retries. Decouples every client app from observability — apps just log to stdout. |
+| **Tailscale / WireGuard** | Private mesh between each client VPS and the monitoring VPS | Zero-trust network identity per host; VictoriaLogs stays OFF the public internet. The network is the trust boundary — no application-level auth tokens needed. |
 | **vmalert** | Evaluate recording + alerting rules against VM and VL, fire webhooks | Replaces Prometheus rule evaluator AND Alertmanager's rule half. Ships webhook notifier — no Alertmanager config DSL needed. |
 | **Grafana** | Dashboards, ad-hoc query explorer for VM and VL | Industry standard, first-class datasources for both VM and VL. Worth the ~200 MB RAM to avoid building dashboards ourselves. |
-| **`@nextnode-solutions/monitoring`** (Hono) | Log ingest endpoint, 5s probe worker, token CLI, webhook receiver from vmalert, status page | The TypeScript service that makes this ours. Handles multi-tenancy, auth, rate limiting, notification routing, incident tracking. |
+| **`@nextnode-solutions/monitoring`** (slim TS service) | 5s probe worker, vmalert rule generator, vmalert webhook receiver, status page | The TypeScript service that makes this ours. Handles probe scheduling, SLO→rules compilation, alert routing, incident tracking. Deliberately does NOT handle log ingest — Vector + VL do that directly. |
 
 **Killed from the design**:
 - ❌ Prometheus — replaced by VictoriaMetrics
@@ -116,6 +129,7 @@ when tenant count or disk pressure justifies.
 - ❌ Loki — rejected in favor of VictoriaLogs (simpler storage, better single-node story)
 - ❌ `blackbox_exporter` — our own 5s worker covers it with better tenant awareness
 - ❌ Uptime Kuma — 20s minimum interval, Socket.IO-first API, doesn't fit
+- ❌ **Hono-based ingest API with bearer tokens** — built and tested, then deleted (2026-04-11). With NextNode owning all client VPSs, the Tailscale private network is the trust boundary and an application-auth layer is pure ceremony. If a future SaaS tier arrives, the ingest API can be reintroduced as a separate package informed by real customer requirements. |
 
 ### 2.4 Second probe location: Cloudflare Worker (free tier)
 
@@ -173,38 +187,62 @@ src/
 Violations are bugs, not style. See `packages/infrastructure/CLAUDE.md` for the
 full ruleset.
 
-### 2.7 Multi-tenancy: labels + auth tokens
+### 2.7 Multi-tenancy: labels + private-network identity
 
 **Decision**: every log, metric, and alert carries `client_id`, `project`,
-`environment` labels. Per-project auth tokens are the tenant identity.
+`environment` labels. Tenant identity is established by the private-network
+address of the source host (Tailscale node identity), not by an application
+auth token.
 
-- Labels are **injected server-side** by the Hono ingest service after token
-  lookup — clients cannot spoof their project
+- Labels on logs are **injected by Vector** on each client VPS via the
+  `transforms.add_fields` section of its `vector.toml`. Each VPS is a known
+  Tailscale node, so the `client_id`/`project` it writes under is a fact of
+  deployment, not a claim a runtime process makes.
 - Every metric scraped by VictoriaMetrics is relabelled with the same set from
   scrape config
+- Alerts are labelled from vmalert rules generated per tenant
 - Grafana orgs/folders can be used later to give clients read-only self-service
   access to their own data (NOT in v1)
 
-### 2.8 Secrets: tokens NEVER in `nextnode.toml`
+If a client VPS is compromised, the attacker can write logs under that
+tenant's labels — same blast radius as the old bearer-token model, without
+the extra moving part. Mitigation at the Tailscale layer (ACLs) is the
+defense-in-depth path if it's ever needed.
 
-**Decision**: auth tokens are secrets and live in GitHub repo secrets + runtime
-env vars, never in the toml config.
+### 2.8 Secrets: minimized — no application auth for logs
 
-**Flow**:
-1. Admin runs `nn-monitor token create --client foo --project foo-app` on the monitoring VPS
-2. CLI prints the token ONCE (`nn_live_xxx`), hashes it, stores hash in the monitoring DB
-3. Admin stores the plaintext token in the client repo as a GitHub secret: `NEXTNODE_MONITORING_TOKEN`
-4. Deploy pipeline injects it as an env var on the client app VPS
-5. `@nextnode-solutions/logger`'s HTTP transport reads it from `process.env` at startup
-6. Every request to the ingest endpoint carries `Authorization: Bearer nn_live_xxx`
-7. Hono service hashes incoming token, constant-time compares against stored hash,
-   resolves to `{client_id, project, tier}`, injects labels
+**Decision**: the logs pipeline has no application-level secret. Tenant
+identity is asserted by the private-network membership of each host. Secrets
+in the system are reduced to infrastructure credentials (Tailscale auth keys,
+Grafana admin password, webhook URLs).
+
+**Flow (logs)**:
+1. Admin provisions a new client VPS and joins it to the Tailscale tailnet
+2. `nextnode-deploy` drops a `vector.toml` on the VPS with the `client_id`,
+   `project`, `environment` fields hard-coded in `transforms.add_fields`
+3. Vector starts on boot as a systemd unit (or a sidecar container), tails
+   `docker logs` + journald, ships NDJSON to `http://monitoring.ts.net:9428/insert/jsonline`
+4. VictoriaLogs listens only on the Tailscale interface — not the public internet
+
+**Flow (operator secrets)**:
+
+| Secret | Location | Rotation |
+|---|---|---|
+| Tailscale auth key (per host) | `tailscale up --authkey=...` at provision time | Reauth via `nextnode-deploy` |
+| Grafana admin password | `.env` on monitoring VPS | Manual |
+| SMTP credentials | `.env` on monitoring VPS | Manual |
+| Discord/Slack webhook URLs | `.env` on monitoring VPS | Regenerate in respective apps |
+| Cloudflare Worker backup Discord URL | `wrangler secret put` | `wrangler secret` update |
 
 **Security properties**:
-- Token is shown ONCE (Stripe/GitHub style)
-- Only hash lives in the DB → leaked DB dumps cannot authenticate
-- Blast radius of a leaked token = one project
-- Rotation is trivial: new token → update GitHub secret → re-deploy → revoke old
+- Zero application-level tokens to rotate for logs
+- VictoriaLogs is completely unreachable without tailnet membership — a leaked
+  secret anywhere else cannot be used to write spam logs
+- Tenant spoofing requires either compromising a client VPS (same blast
+  radius as the old bearer-token model) or getting onto the tailnet with
+  forged identity (defeated by Tailscale ACLs)
+- Onboarding a new tenant is "provision + join tailnet" — no token-create
+  dance, no GitHub secret, no redeploy
 
 ### 2.9 SLO methodology — Google SRE multi-window multi-burn-rate
 
@@ -244,45 +282,60 @@ trusts the system to tell the truth about itself. Combine heavily.
 ## 3. Target architecture
 
 ```
-┌──────────── Hetzner CX33 (monitoring VPS, Nuremberg) ───────────────┐
-│  docker-compose.yml — managed via packages/monitoring/deploy/       │
-│                                                                      │
-│  ┌───────────────┐  scrape /metrics   ┌──────────────────────┐      │
-│  │VictoriaMetrics│◄────── every 15s ──┤ Client app VPSes     │      │
-│  │  :8428        │                    │ (multiple projects)  │      │
-│  └──────┬────────┘                    │ on Hetzner/Cloudflare│      │
-│         │                             └──────────┬───────────┘      │
-│         │ query                                  │                  │
-│         ▼                                        │ 5s HTTP probe    │
-│  ┌───────────────┐                   ┌───────────┴──────────┐       │
-│  │ vmalert       │ webhook on fire ─►│ Hono monitoring svc  │       │
-│  │  :8880        │                   │  :3000 — Caddy TLS   │       │
-│  └───────────────┘                   │                      │       │
-│                                      │ - POST /ingest/logs  │       │
-│  ┌───────────────┐ ndjson POST       │ - GET  /status/:p    │       │
-│  │ VictoriaLogs  │◄──────────────────┤ - POST /webhook/vmalert│     │
-│  │  :9428        │                   │ - 5s uptime worker   │       │
-│  └──────┬────────┘                   │ - synthetic tests    │       │
-│         │                            │ - SQLite: tokens,    │       │
-│         │ query                      │   incidents, tenants │       │
-│         ▼                            └──────────┬───────────┘       │
-│  ┌───────────────┐                              ▲                   │
-│  │ Grafana       │                              │ heartbeat         │
-│  │  :3001        │                              │                   │
-│  └───────────────┘                   ┌──────────┴──────────┐        │
-│                                      │ Cloudflare Worker   │ FREE   │
-│                                      │ (2nd probe + DMS)   │        │
-│                                      │ - cron trigger 1min │        │
-│                                      │ - probes all targets│        │
-│                                      │ - probes monitoring │        │
-│                                      │   VPS itself (DMS)  │        │
-│                                      └─────────────────────┘        │
-└──────────────────────────────────────────────────────────────────────┘
-           ▲
-           │ HTTPS (Caddy auto-TLS, single public port)
-           │
-      Client apps ─ logger HTTP transport + /metrics endpoint
-      Operator    ─ Grafana dashboards, status pages
+                        ── Tailscale private mesh (no public ingress for logs) ──
+
+┌──────── Client VPS A ────────┐         ┌──────── Client VPS B ────────┐
+│ ┌──────────┐  docker logs    │         │ ┌──────────┐  docker logs    │
+│ │ app1     │────────────────┐│         │ │ app3     │────────────────┐│
+│ │ app2     │                ▼│         │ │ app4     │                ▼│
+│ └──────────┘      ┌──────────┐│         │ └──────────┘      ┌──────────┐│
+│                   │  Vector  ││         │                   │  Vector  ││
+│                   │  + TOML  ││         │                   │  + TOML  ││
+│                   └─────┬────┘│         │                   └─────┬────┘│
+└─────────────────────────┼─────┘         └─────────────────────────┼─────┘
+                          │ NDJSON over Tailscale                   │
+                          │ (client_id/project injected here)       │
+                          ▼                                         ▼
+┌──────────────── Hetzner CX33 (monitoring VPS, Nuremberg) ────────────────┐
+│  docker-compose.yml — managed via packages/monitoring/deploy/            │
+│                                                                           │
+│  ┌───────────────┐                        ┌──────────────────────┐       │
+│  │ VictoriaLogs  │◄── direct write ───────┤ Vector (from every   │       │
+│  │  :9428        │    (tailnet only)      │  client VPS)         │       │
+│  └──────┬────────┘                        └──────────────────────┘       │
+│         │                                                                 │
+│         │ query                       ┌──────────────────────┐           │
+│         ▼                             │ Client app VPSes     │           │
+│  ┌───────────────┐ scrape /metrics    │ (multiple projects)  │           │
+│  │VictoriaMetrics│◄───── every 15s ───┤  on Tailscale        │           │
+│  │  :8428        │                    └──────────┬───────────┘           │
+│  └──────┬────────┘                               │ 5s HTTP probe         │
+│         │                                        │                       │
+│         │ query                      ┌───────────▼──────────┐            │
+│         ▼                            │ monitoring TS svc    │            │
+│  ┌───────────────┐                   │  :3000 — Caddy TLS   │            │
+│  │ vmalert       │ webhook on fire ─►│                      │            │
+│  │  :8880        │                   │ - 5s probe worker    │            │
+│  └───────────────┘                   │ - vmalert rule gen   │            │
+│                                      │ - POST /webhook/vmalert│          │
+│  ┌───────────────┐                   │ - GET  /status/:p    │            │
+│  │ Grafana       │                   │ - SQLite: incidents  │            │
+│  │  :3001        │                   └──────────┬───────────┘            │
+│  └───────────────┘                              ▲                        │
+│                                                 │ heartbeat              │
+│                                      ┌──────────┴──────────┐             │
+│                                      │ Cloudflare Worker   │ FREE        │
+│                                      │ (2nd probe + DMS)   │             │
+│                                      │ - cron trigger 1min │             │
+│                                      │ - probes all targets│             │
+│                                      │ - probes monitoring │             │
+│                                      │   VPS itself (DMS)  │             │
+│                                      └─────────────────────┘             │
+└───────────────────────────────────────────────────────────────────────────┘
+           ▲                                        ▲
+           │ HTTPS (Caddy auto-TLS)                  │ cron wake
+           │                                        │
+      Operator → Grafana, public status pages        Cloudflare edge
 ```
 
 ---
@@ -290,17 +343,21 @@ trusts the system to tell the truth about itself. Combine heavily.
 ## 4. `nextnode.toml` schema — the contract
 
 Every NextNode project adds these blocks to its `nextnode.toml` to opt into
-monitoring. All fields except `[monitoring.endpoint]` are optional with sensible
-defaults.
+monitoring. All fields have sensible defaults; declaring the blocks is what
+enables monitoring for that project.
 
 ```toml
 [monitoring]
-# Required: where to send logs and query status.
-# Default: shared nextnode instance. Override for enterprise-dedicated tier.
-endpoint = "https://monitoring.nextnode.fr"
+# Optional: client and project identifiers used as labels on everything
+# (logs, metrics, alerts). Defaults derive from the project name, but
+# declaring them explicitly is recommended.
+client_id = "acme"
+project   = "acme-web"
 
-# Token is NOT here. Injected via env var NEXTNODE_MONITORING_TOKEN.
-# Stored as a GitHub repo secret, pushed to the app VPS at deploy time.
+# The `endpoint` field is LEGACY (pre-Option-A pivot). With Vector + Tailscale,
+# clients do not need to know the monitoring VPS address — Vector ships to VL
+# directly via tailnet DNS. The field remains in the schema for now for
+# backwards compat, but is unused by the pipeline.
 
 [monitoring.slo]
 # The promise to the client. Drives auto-generated vmalert rules.
@@ -310,7 +367,8 @@ latency_ms_p99 = 1500   # p99 latency ceiling (optional)
 window_days    = 30     # rolling measurement window
 
 [monitoring.healthcheck]
-# The 5s black-box probe target on this app.
+# The 5s black-box probe target on this app. The probe worker fetches this
+# block from the project's nextnode.toml (GitHub raw) on a refresh loop.
 path             = "/health"  # endpoint to poll
 interval_seconds = 5          # poll frequency
 timeout_ms       = 2000       # max wait before "down"
@@ -349,13 +407,26 @@ Every NextNode production app MUST expose the following for monitoring to work:
 | `GET /ready` | Readiness — checks DB and external deps | `/ready` down but `/health` up = downstream issue |
 | `GET /metrics` | Prometheus-format RED metrics (request counter, error counter, latency histogram) | No scrape data = monitoring blind to internals |
 
-Plus:
-- `@nextnode-solutions/logger` with `HttpTransport` pointing at the monitoring
-  endpoint, bearer token from `process.env.NEXTNODE_MONITORING_TOKEN`
-- `[monitoring]` blocks in the project's `nextnode.toml` declaring the SLO
+Plus, at the **host** level (NOT the application level):
 
-**Enforcement** (Step 12): lint rule or CI gate in `@nextnode-solutions/standards`
-that rejects NextNode projects missing these contracts.
+- **Vector** running as a systemd service or sidecar container on the VPS,
+  configured via a `vector.toml` that tails the app's `docker logs` (or
+  stdout/journald when running outside Docker) and ships NDJSON to
+  `http://<monitoring-host>.ts.net:9428/insert/jsonline` over Tailscale
+- **Tailscale** client joined to the NextNode tailnet, advertising the host
+  identity used for label injection
+- `[monitoring]` blocks in the project's `nextnode.toml` declaring the SLO
+  and healthcheck target so the probe worker and rule generator can pick
+  them up from GitHub raw
+
+The app code itself **does not** import a monitoring SDK, does not read a
+`NEXTNODE_MONITORING_TOKEN` env var, and does not make any HTTP call to the
+monitoring service for logs. It simply writes structured logs to stdout and
+Vector handles the rest.
+
+**Enforcement** (Step 11): lint rule or CI gate in `@nextnode-solutions/standards`
+that rejects NextNode projects missing the `/health`, `/ready`, `/metrics`
+endpoints and the `[monitoring.slo]` / `[monitoring.healthcheck]` blocks.
 
 ---
 
@@ -505,153 +576,104 @@ the new test suite blocks inside `schema.test.ts` and `load.test.ts`
 
 ### PHASE 2 — CORE SERVICES
 
-#### Step 3: Auth & token management `[DONE]`
+#### Step 3: Logs pipeline — Vector + VictoriaLogs over Tailscale `[TODO]`
 
-**Goal**: the foundation of multi-tenancy. Generate, store (hashed), verify, list,
-revoke, and rotate per-project bearer tokens via a `nn-monitor token` CLI subcommand.
+**Goal**: ship logs from every client VPS into a single VictoriaLogs instance
+on the monitoring VPS with zero application-level auth and zero custom
+ingest code. This step is the replacement for the original Step 3 (token
+store) + Step 4 (Hono ingest) after the 2026-04-11 Option A pivot — see
+Decision log for the full rationale.
 
 **Tasks**:
-- [x] Create `packages/monitoring/src/domain/token.ts`:
-  - `formatToken(randomBytes)` — pure, caller injects 32 random bytes (adapter/cli owns `crypto.randomBytes`). Deviates from the original `generateToken()` wording to satisfy the package's "domain is 100% pure" rule.
-  - `hashToken(plaintext: string): string` — sha256 hex
-  - `verifyToken(plaintext: string, hash: string): boolean` — `timingSafeEqual`, rejects wrong-length hashes
-- [x] Create `packages/monitoring/src/domain/tenant.ts`:
-  - `Tenant` type, `TenantTier` union, `rateLimitForTier`, `isTenantTier` guard
-- [x] Create `packages/monitoring/src/adapters/token-store.ts`:
-  - `node:sqlite` `DatabaseSync` (Node 24 stdlib) with WAL journal mode
-  - CRUD: `create`, `findByHash`, `findById`, `list`, `revoke`, `rotate`
-  - Schema migration on first run; `rotate` runs in a `BEGIN IMMEDIATE` transaction
-  - Row parsing via an `isTenantRow` type guard — no `as` assertions
-- [x] Create `packages/monitoring/src/cli/token.command.ts` with subcommands:
-  - `create --client <id> --project <name> [--tier standard|enterprise]` — prints the plaintext ONCE in a JSON line
-  - `list [--all]` — JSON lines, one per tenant; `--all` includes revoked
-  - `revoke --id <id>` — marks `revoked_at`
-  - `rotate --id <id>` — atomic: new row + revoke old, prints new plaintext
-- [x] Register command in `cli/commands.ts`, propagate argv through `index.ts`
-- [x] Pure unit tests on domain functions (28 tests on `tenant.ts` + `token.ts`)
-- [x] Integration tests on `token-store` with temp SQLite dirs (17 tests)
-- [x] In-process CLI tests with injected `dbPath` + `write` capture (18 tests)
 
-**Definition of done**: `nn-monitor token create --client foo --project bar`
-prints a token (as a JSON line on stdout), stores its hash in SQLite, `token
-list` shows it, `token revoke` invalidates it. 79 monitoring tests pass
-(domain + adapter + cli).
+**3a. Tailscale mesh**
+- [ ] Verify the monitoring VPS is joined to the NextNode tailnet and has a
+      stable MagicDNS hostname (e.g. `monitoring.<tailnet>.ts.net`)
+- [ ] Document the Tailscale auth-key provisioning flow for new client VPSes
+      (reusable ephemeral key vs per-host key — trade-off noted in deploy docs)
+- [ ] Add a Tailscale ACL that restricts `:9428` (VL ingest) to known client
+      tags only, so a compromised non-monitoring node can't spam VL
 
-**Files created**: 8 files in `packages/monitoring/src/{domain,adapters,cli}`.
+**3b. VictoriaLogs container**
+- [ ] Add `victorialogs` service to `packages/monitoring/deploy/docker-compose.yml`
+      (created in Step 7). Key flags:
+  - `-retentionPeriod=30d`
+  - `-retention.maxDiskSpaceUsageBytes=50GiB`
+  - Listen only on the Tailscale interface (`-httpListenAddr=<tailnet-ip>:9428`)
+- [ ] Persistent volume mount `./data/vl` for log storage
+- [ ] Healthcheck in compose pointing at `/health` of VL
 
-**Decisions taken during Step 3** (appended to decision log):
+**3c. Vector template for client VPSes**
+- [ ] Create `packages/monitoring/deploy/vector/vector.toml.template`:
+  - `sources.docker_logs` — tails all docker containers on the host
+  - `sources.journald` — tails host journald for non-container services
+  - `transforms.add_tenant_fields` — injects `client_id`, `project`,
+    `environment` from env vars set by `nextnode-deploy`
+  - `sinks.victorialogs` — HTTP sink to `http://<tailnet>/insert/jsonline`
+    with `encoding.codec = "json"`, `framing.method = "newline_delimited"`
+  - Disk-backed buffer with a bounded size (~200 MB) so a VL outage does not
+    OOM the host
+- [ ] Create `packages/monitoring/deploy/vector/systemd.service` unit file for
+      non-Docker hosts, installed by `nextnode-deploy`
+- [ ] Document Docker alternative: Vector as a sidecar container in the
+      client's compose file, mounting `/var/lib/docker/containers` read-only
+- [ ] Decide single path (systemd vs sidecar) or support both — probably
+      sidecar by default because NextNode already uses Docker Compose everywhere
 
-- **Domain token API: `formatToken(randomBytes)` instead of `generateToken()`.**
-  The monitoring package's CLAUDE.md forbids `crypto.randomBytes` inside domain
-  functions (domain must be deterministic on its inputs). The adapter/cli layer
-  owns `randomBytes(32)` and passes the bytes in. Tests pass fixed bytes for
-  fully deterministic assertions.
-- **`node:sqlite` over `better-sqlite3`.** The plan preferred stdlib when
-  available; Node 24.14 exposes `DatabaseSync` out of the box. Downside: emits
-  an `ExperimentalWarning` at import time — accepted since the CLI is internal
-  and the warning is harmless. No native-addon compile step.
-- **`no-type-assertion` oxlint rule (repo-wide) forbids `as`.** Row parsing in
-  the adapter and JSON parsing in the CLI tests both use explicit runtime type
-  guards (`isTenantRow`, `isRecord`, `parseJsonLine`, `readString`). This
-  surfaced late — each layer required a small refactor. Keep type guards as the
-  default pattern from now on in this package.
-- **CLI output format is JSON lines, not tables.** Machine-readable for the
-  deploy pipeline and deterministic for tests. Tokens print on a single line
-  in the `create`/`rotate` payload — operators copy-paste from stdout.
-- **`process.stdout.write` instead of `console.log` in CLI output.** oxlint's
-  `no-console` rule warns on `console.log`; `process.stdout.write` is the
-  unambiguously correct low-level write for CLI user output.
+**3d. `nextnode-deploy` integration**
+- [ ] Extend `packages/infrastructure` deploy pipeline so that provisioning a
+      new client VPS:
+  1. Joins Tailscale using a pre-authorized ephemeral key
+  2. Drops the rendered `vector.toml` with tenant fields filled in from
+     the project's `nextnode.toml`
+  3. Starts Vector (systemd or sidecar) and waits for the first successful
+     NDJSON push
+- [ ] Handle upgrades: `nextnode-deploy` re-renders `vector.toml` whenever
+      `[monitoring]` fields change in a project's `nextnode.toml`
+
+**3e. End-to-end validation**
+- [ ] Stand up a staging monitoring VPS with VL + Tailscale
+- [ ] Provision a throwaway client VPS with Vector, generate synthetic log
+      traffic
+- [ ] Confirm logs land in VL queryable by `client_id`, `project`,
+      `environment` labels
+- [ ] Kill VL, verify Vector's disk buffer accumulates, bring VL back,
+      verify buffer drains without loss (this is the key property that
+      motivates the agent pattern over direct app push)
+- [ ] Document the runbook for "Vector on VPS X is lagging" in
+      `packages/monitoring/deploy/runbooks/`
+
+**What this step explicitly does NOT build**:
+- A `nn-monitor serve` / `nn-monitor token` CLI — these existed in the old
+  Steps 3 & 4, have been deleted, and are not coming back. Log ingest is
+  Vector's job.
+- Any adapter code in `packages/monitoring/src/`. This entire step is
+  infrastructure config (compose file, vector.toml, systemd unit, docs)
+  plus a `nextnode-deploy` extension. The TypeScript package stays
+  dormant until Step 4 (Probe worker).
+
+**Definition of done**: a fresh client VPS provisioned through
+`nextnode-deploy` automatically ships its container logs to the shared
+VictoriaLogs over Tailscale, with correct `client_id`/`project` labels,
+and survives a monitoring VPS restart without log loss.
+
+**Files created / touched**:
+- `packages/monitoring/deploy/vector/vector.toml.template` (new)
+- `packages/monitoring/deploy/vector/vector-sidecar.compose.yml` (new,
+  optional sidecar pattern)
+- `packages/monitoring/deploy/docker-compose.yml` (merged with Step 7)
+- `packages/monitoring/deploy/runbooks/vector-lag.md` (new)
+- `packages/infrastructure/src/...` — pipeline extension (scope TBD)
+
+**Depends on**: Step 2 (schema — `[monitoring]` block is the source of
+tenant labels).
+
+**Informs**: Step 4 (probe worker reads the same `nextnode.toml` blocks),
+Step 7 (full compose stack includes the VL service defined here).
 
 ---
 
-#### Step 4: Hono ingest service (MVP) `[DONE]`
-
-**Goal**: HTTP server accepting log batches from `@nextnode-solutions/logger` HTTP
-transport, authenticating via tokens from Step 3, rate-limiting per tenant,
-forwarding to VictoriaLogs.
-
-**Tasks**:
-- [x] Add `hono@^4.12` + `@hono/node-server@^1` dependencies
-- [x] Create `packages/monitoring/src/domain/log-envelope.ts`:
-  - `IngestedLogEntry` type — minimum contract the ingest endpoint enforces,
-    with an index signature so extra fields pass through untouched
-  - `validateLogEnvelope(body)` returns `{ ok, envelope | error }`
-- [x] Create `packages/monitoring/src/domain/rate-limiter.ts`:
-  - Pure sliding-window `checkLimit(state, now, limitRpm)` → `{ allowed, newState, remaining, retryAfterMs }`
-  - Caller owns the clock; denies on `limitRpm <= 0`; reports retry hint from oldest in-window timestamp
-- [x] Create `packages/monitoring/src/adapters/rate-limiter-store.ts`:
-  - In-memory `Map<tenantId, RateLimiterState>` keyed by tenant id, not client id (supports multiple projects per client)
-  - Injected clock for deterministic tests
-- [x] Create `packages/monitoring/src/adapters/victorialogs-client.ts`:
-  - `push(entries)` — POSTs NDJSON with `Content-Type: application/stream+json`
-  - Retries via recursion (no `await` in loop) with exponential backoff on 5xx and network errors
-  - 4xx is terminal (no retry) via an internal `TerminalHttpError` class
-  - Every error logs at the correct level before rethrowing — no silent swallow
-  - `fetchImpl` and `sleepImpl` injected for deterministic tests
-- [x] Create `packages/monitoring/src/adapters/http-server.ts`:
-  - `POST /ingest/logs` with Bearer auth, rate limiting, body validation, enrichment, VL forwarding
-  - 401/400/429/503/204 all log structured events before responding
-  - `GET /health` — always 204
-  - `GET /ready` — delegates to injected `readinessCheck()` (v1 always-ready)
-  - HTTP status codes pulled out as named constants to satisfy `no-magic-numbers`
-- [x] Create `packages/monitoring/src/cli/serve.command.ts`:
-  - Reads `MONITORING_DB_PATH`, `MONITORING_VL_URL`, `MONITORING_HTTP_PORT` (default 4000) via `cli/env`
-  - `buildServeContext()` helper builds the fully-wired stack without listening — tests drive it via `app.request()`
-  - Main command calls `@hono/node-server`'s `serve` then installs SIGTERM/SIGINT handlers for graceful shutdown
-- [x] Register `serve` in `cli/commands.ts`
-- [x] Integration tests (via Hono's `app.request()` helper):
-  - Valid token → 204, VL receives the enriched logs (client_id + project + tenant_tier labels)
-  - Missing Authorization → 401
-  - Malformed Bearer prefix → 401
-  - Unknown token → 401
-  - Revoked tenant → 401
-  - Rate limit exceeded → 429 with `Retry-After` header
-  - Malformed JSON → 400
-  - Invalid envelope shape → 400
-  - Missing required entry field → 400
-  - VL unreachable → 503, logs `ingest.forward.failed` (does NOT silently swallow)
-- [ ] Manually smoke-test against a local `victoria-logs` binary in Docker — deferred to Step 8 when the full compose stack lands
-
-**Definition of done**: 138 monitoring tests pass (28 new domain + 14 adapters
-+ 14 Hono + 3 serve wiring). `nn-monitor serve` boots the ingest server,
-shuts down cleanly on SIGTERM, and every error path logs + propagates per
-the strict error handling rules.
-
-**Files created**: 13 files in `packages/monitoring/src/{domain,adapters,cli}`.
-
-**Decisions taken during Step 4** (appended to decision log):
-
-- **`IngestedLogEntry` has an index signature** so unknown fields forward to
-  VictoriaLogs untouched. The monitoring service is a forwarder, not a strict
-  schema gate — the logger can evolve its LogEntry shape without breaking
-  ingest.
-- **Retry loops expressed as recursion** in `victorialogs-client.ts` to avoid
-  the `no-await-in-loop` warning cleanly. Max 3 attempts; the call depth is
-  bounded and stack safety is a non-issue at that size.
-- **`TerminalHttpError` class internal to the VL client.** 4xx responses
-  bypass the retry loop via an internal class used for control flow; the
-  thrown error surfacing to callers is a plain `Error`.
-- **Rate limiter keys on tenant id, not client id.** A single client with
-  multiple projects gets independent limits per project because each project
-  maps to its own tenant row. Same shape scales cleanly when we add
-  per-project overrides.
-- **`buildServeContext` separated from `serveCommand`.** The context builder
-  is a pure function of its options — fully testable via `app.request()`.
-  `serveCommand` is a thin wrapper that adds real listener + signal handlers.
-  Tests skip the signal handling because it would pollute the global process
-  state across tests.
-- **v1 readiness check is always-ready.** A real VL ping (`readinessCheck`)
-  is deferred to Step 8 when the full compose stack arrives — flagged here so
-  a future session doesn't forget. The `readinessCheck` dependency is
-  already in place, only the implementation is a stub.
-- **`no-map-spread` warning on enrichment is accepted.** The spread is needed
-  to preserve unknown fields on each entry. Rewriting with `Object.assign` or
-  an explicit loop wouldn't change behavior and would make the code less
-  direct.
-
----
-
-#### Step 5: Uptime probe worker `[TODO]`
+#### Step 4: Uptime probe worker `[TODO]`
 
 **Goal**: a 5-second loop that probes every tenant's `[monitoring.healthcheck]`
 target, detects state changes, writes metrics to VictoriaMetrics, and writes
@@ -668,24 +690,43 @@ state-change events to VictoriaLogs.
   - Only emit events on actual transitions (not on every 5s tick)
   - Pure
 - [ ] Create `packages/monitoring/src/adapters/target-registry.ts`:
-  - Loads targets from the tenant DB, joined with the tenant's registered `[monitoring.healthcheck]` config
-  - Needs a way for clients to publish their healthcheck config — for v1, store it in the SQLite `tenants` table at token-create time (update Step 3 to accept healthcheck overrides, OR read from `nextnode.toml` sent as part of the deploy pipeline)
-  - **DECISION NEEDED** before implementation: push model (client pushes its healthcheck config to monitoring API) or pull model (monitoring pulls from client's GitHub raw `nextnode.toml`)? Flag to user during step.
+  - **Pull model** (decision resolved 2026-04-11): source of truth is each
+    project's `nextnode.toml` in its GitHub repo. The adapter fetches the raw
+    file for every registered project on a refresh loop (default: every 5 min)
+    and exposes the parsed `[monitoring.healthcheck]` blocks as a target list.
+  - The list of repos to watch lives in a static
+    `packages/monitoring/deploy/tenants.toml` file on the monitoring VPS
+    (checked into the monitoring repo, reviewed via PR). Adding a tenant =
+    appending one entry and redeploying. No API, no SQLite, no token.
+  - Uses `smol-toml` to parse the pulled `nextnode.toml` and reuses the
+    infrastructure schema types via type-only import.
+- [ ] Create `packages/monitoring/src/adapters/nextnode-toml-fetcher.ts`:
+  - `fetchNextnodeToml(repoRef: RepoRef): Promise<string>` — GET over
+    `https://raw.githubusercontent.com/<owner>/<repo>/<ref>/nextnode.toml`
+  - Handles 404 (repo removed / renamed) with an explicit logged error
+  - Handles 200 with a TOML body that fails schema validation — logs and
+    drops the target for this refresh cycle, keeps the last good copy
 - [ ] Create `packages/monitoring/src/adapters/probe-scheduler.ts`:
   - Per-target `setInterval(check, target.interval_seconds * 1000)`
   - Uses `unref()` so the process can exit cleanly
   - In-memory last-known state per target
   - On state change → calls metric writer AND log writer
+  - Reconciles with the target-registry on each refresh: adds new targets,
+    removes disappeared ones, updates intervals if changed
 - [ ] Create `packages/monitoring/src/adapters/victoriametrics-client.ts`:
   - `writeMetric(metric: Metric): Promise<void>`
   - Uses VM's `/api/v1/import/prometheus` text endpoint for simplicity
   - Reads VM endpoint from `MONITORING_VM_URL`
+- [ ] Create `packages/monitoring/src/adapters/victorialogs-client.ts` (slim
+      rewrite — the earlier version from the deleted Step 4 is gone):
+  - `writeStateChange(event: StateChangeEvent): Promise<void>` — single-line
+    NDJSON POST to `/insert/jsonline`, retries on 5xx, logs every failure
 - [ ] Create `packages/monitoring/src/adapters/metric-writer.ts`:
   - Converts `HealthStatus` → `uptime_probe{client_id, project, status}` metric + `uptime_probe_latency_ms` histogram
   - Pushes via `victoriametrics-client`
 - [ ] Create `packages/monitoring/src/cli/probe.command.ts`:
   - Starts the probe scheduler worker
-  - Reads target list, subscribes to registry changes
+  - Reads `tenants.toml`, subscribes to registry changes
 - [ ] Unit tests on all domain functions (pure, no mocks)
 - [ ] Integration tests with mocked fetch + real VM in Docker
 
@@ -693,14 +734,14 @@ state-change events to VictoriaLogs.
 tenant's healthcheck every 5s; `uptime_probe{project="foo"}` shows up in
 VictoriaMetrics; state-change events show up in VictoriaLogs.
 
-**Files created**: ~9 files. Depends on Step 3 (tenants), Step 4 (VL adapter for
-state-change logs — share the client).
+**Files created**: ~9 files. Depends on Step 2 (schema) and Step 3 (VL is
+standing up and reachable on the tailnet).
 
 ---
 
 ### PHASE 3 — ALERTING
 
-#### Step 6: SLO → vmalert rule generator `[TODO]`
+#### Step 5: SLO → vmalert rule generator `[TODO]`
 
 **Goal**: auto-generate vmalert recording and alerting rules from each tenant's
 `[monitoring.slo]` block, following the multi-window multi-burn-rate technique
@@ -718,7 +759,10 @@ from the Google SRE workbook.
 - [ ] Create `packages/monitoring/src/domain/vmalert-rule.ts`:
   - Types for `RecordingRule` and `AlertingRule` matching vmalert's YAML shape
 - [ ] Create `packages/monitoring/src/domain/slo-to-rules.ts`:
-  - `generateRules(tenant: Tenant, slo: SloConfig): { recordingRules, alertingRules }`
+  - `generateRules(tenant: TenantIdentity, slo: SloConfig): { recordingRules, alertingRules }`
+  - `TenantIdentity` is a simple value type `{ client_id, project }` derived
+    from `tenants.toml` + the pulled `nextnode.toml`; there is no tenant row
+    in a DB anymore (the token store was deleted in the Option A pivot)
   - Recording rules:
     - `job:slo_errors_per_request:ratio_rate1h{client_id, project}`
     - `...rate6h`, `...rate3d`
@@ -731,7 +775,7 @@ from the Google SRE workbook.
   - Writes all tenants' rules to a YAML file on disk (grouped by tenant)
   - Sends SIGHUP to the vmalert process (or HTTP reload endpoint if available)
 - [ ] Create `packages/monitoring/src/cli/generate-rules.command.ts`:
-  - Reads all non-revoked tenants
+  - Reads `tenants.toml` + the pulled `nextnode.toml` per tenant
   - Generates rules per tenant
   - Writes unified file
   - Reloads vmalert
@@ -745,11 +789,12 @@ from the Google SRE workbook.
 load without error; the rules correspond to what the SRE workbook prescribes for
 the declared SLO.
 
-**Files created**: ~6 files. Depends on Step 2 (schema) and Step 3 (tenants).
+**Files created**: ~6 files. Depends on Step 2 (schema) and Step 4 (reuses the
+target-registry / nextnode-toml-fetcher adapters).
 
 ---
 
-#### Step 7: Alert routing & notifications `[TODO]`
+#### Step 6: Alert routing & notifications `[TODO]`
 
 **Goal**: receive vmalert webhook fires, deduplicate, route to notification
 channels (email/Slack/Discord), and record incidents with stable IDs for the
@@ -773,14 +818,17 @@ status page and SLA reports.
   - `discord-webhook.ts` — POSTs to Discord webhook URL
   - `slack-webhook.ts` — POSTs to Slack webhook URL
   - Each reads its config from env (never from the toml)
-- [ ] Add `POST /webhook/vmalert` route to the Hono app from Step 4:
-  - Parses vmalert payload
-  - For each firing alert → open incident (or append to existing)
-  - For each resolved alert → close incident
-  - For each state change → route via `alert-router` and send notifications
-  - Returns 204
+- [ ] **New**: create a slim Hono webhook service in this step (the old Hono
+      app was deleted in the Option A pivot). `packages/monitoring/src/cli/webhook.command.ts`
+      + `packages/monitoring/src/adapters/http-server.ts`:
+  - `POST /webhook/vmalert` — parse payload; for each firing alert → open
+    incident (or append to existing); for each resolved → close; for each
+    state change → route via `alert-router` and send notifications; 204
+  - `POST /webhook/external-probe` — receiver for the Cloudflare Worker probe
+  - `GET /status/:project` — stub here, filled in by Step 10
+  - Listens on the Tailscale interface only — no public ingress, no auth
 - [ ] Maintenance window support:
-  - SQLite table: `maintenance_windows { tenant_id, start, end, reason }`
+  - SQLite table: `maintenance_windows { client_id, project, start, end, reason }`
   - Alert router checks window before routing
   - `nn-monitor maintenance start/end` CLI subcommands
 - [ ] Unit tests on alert-router and incident domain (pure)
@@ -791,13 +839,14 @@ status page and SLA reports.
 channel, creates an incident row, and a subsequent resolve closes it. Maintenance
 windows correctly suppress notifications.
 
-**Files created**: ~10 files. Depends on Steps 3 (tenants), 4 (Hono app), 6 (vmalert).
+**Files created**: ~11 files (includes the slim Hono rebuild). Depends on
+Steps 2 (schema), 4 (target registry), 5 (vmalert rules).
 
 ---
 
 ### PHASE 4 — DEPLOYMENT
 
-#### Step 8: Docker Compose + Caddy + full infrastructure `[TODO]`
+#### Step 7: Docker Compose + Caddy + full infrastructure `[TODO]`
 
 **Goal**: a single `docker-compose.yml` that brings up the entire monitoring stack
 on the Hetzner CX33, with Caddy handling TLS and reverse proxy, and volume
@@ -805,27 +854,31 @@ persistence for logs/metrics/SQLite.
 
 **Tasks**:
 - [ ] Create `packages/monitoring/deploy/docker-compose.yml`:
-  - Services: `victoriametrics`, `victorialogs`, `vmalert`, `grafana`, `monitoring-api`, `caddy`
-  - Internal network (monitoring-api is the only public entrypoint)
-  - Volume mounts: `./data/vm`, `./data/vl`, `./data/grafana`, `./data/api-sqlite`, `./data/caddy`
+  - Services: `victoriametrics`, `victorialogs`, `vmalert`, `grafana`, `monitoring-webhook`, `caddy`
+  - Two networks: an internal bridge for service-to-service calls, and the
+    host tailnet interface exposed via `network_mode: host` or equivalent for
+    VL and VM so Vector on client VPSes can reach them through Tailscale
+  - VL listens ONLY on the Tailscale interface — never on public ports
+  - Volume mounts: `./data/vm`, `./data/vl`, `./data/grafana`, `./data/webhook-sqlite`, `./data/caddy`
   - Healthchecks on each service
   - Restart policy: `unless-stopped`
 - [ ] Create `packages/monitoring/deploy/Caddyfile`:
-  - `monitoring.nextnode.fr` → `monitoring-api:3000`
+  - `monitoring.nextnode.fr` → `monitoring-webhook:3000` (status pages + vmalert webhook — webhook itself is internal-only, only status routes are public)
   - `grafana.monitoring.nextnode.fr` → `grafana:3000` (basic auth)
   - Automatic TLS via Let's Encrypt
   - HTTP → HTTPS redirect
 - [ ] Create `packages/monitoring/deploy/victoriametrics.yml`:
-  - Scrape config: read tenant list from API endpoint on `monitoring-api`, target each tenant's `/metrics` endpoint
+  - Scrape config: generated from `tenants.toml` via a small helper, targets each tenant's `/metrics` endpoint over Tailscale
   - 15s scrape interval
   - Relabelling to add `client_id`, `project`, `environment` labels
 - [ ] Create `packages/monitoring/deploy/victorialogs.yml`:
   - `-retentionPeriod=30d`
   - `-retention.maxDiskSpaceUsageBytes=50GiB`
+  - `-httpListenAddr=<tailnet-ip>:9428` — never 0.0.0.0
 - [ ] Create `packages/monitoring/deploy/vmalert.yml`:
-  - `-rule=/etc/vmalert/rules.yml` (the file written by Step 6)
+  - `-rule=/etc/vmalert/rules.yml` (the file written by Step 5)
   - `-datasource.url=http://victoriametrics:8428`
-  - `-notifier.url=http://monitoring-api:3000/webhook/vmalert`
+  - `-notifier.url=http://monitoring-webhook:3000/webhook/vmalert`
 - [ ] Create `packages/monitoring/deploy/grafana/provisioning/datasources/`:
   - `victoriametrics.yml` — Prometheus datasource pointing at `vmsingle`
   - `victorialogs.yml` — Grafana VL plugin datasource
@@ -853,7 +906,7 @@ previous steps.
 
 ---
 
-#### Step 9: Cloudflare Worker — second probe + dead-man's switch `[TODO]`
+#### Step 8: Cloudflare Worker — second probe + dead-man's switch `[TODO]`
 
 **Goal**: a free-tier Cloudflare Worker that probes every tenant from CF's global
 edge every minute, plus probes the monitoring VPS itself (dead-man's switch).
@@ -872,12 +925,12 @@ directly to a backup notification channel.
   - KV namespace binding for target list + last-state cache
 - [ ] Create `packages/monitoring/worker/src/index.ts`:
   - `scheduled()` handler
-  - Fetches target list from KV (updated by the monitoring API on tenant changes)
-  - Fan-out probe to all targets + the monitoring VPS itself
+  - Fetches target list from KV (updated by the monitoring webhook service on every refresh of `tenants.toml`)
+  - Fan-out probe to all targets + the monitoring VPS itself (its **public** HTTPS endpoint via Caddy — the worker lives outside the tailnet)
   - On monitoring VPS failure → **backup notification channel directly from worker**
     (Discord webhook URL as env var in wrangler — the ONLY reliable path when the
     main monitoring service is the thing that's down)
-  - On target failure → POST result to monitoring API `POST /webhook/external-probe`
+  - On target failure → POST result to monitoring webhook service `POST /webhook/external-probe` (public route)
 - [ ] Create `packages/monitoring/worker/src/dead-mans-switch.ts`:
   - Tracks consecutive failures to the monitoring VPS in KV
   - After 3 consecutive failures (3 minutes) → direct Discord notification
@@ -885,13 +938,11 @@ directly to a backup notification channel.
 - [ ] Create `packages/monitoring/worker/src/probe.ts`:
   - Single-target probe with timeout
   - Pure function
-- [ ] Add `POST /webhook/external-probe` to Hono app:
-  - Correlates worker probe results with internal probe results
-  - Raises confidence on double-confirmed failures
-  - Writes to `uptime_probe_external` metric in VM
-- [ ] Add `GET /internal/targets` to Hono app:
+- [ ] Add `GET /internal/targets` to the webhook service:
   - Returns the target list for the worker to pull
-  - Auth via a separate admin token
+  - Auth via a single admin token stored in the wrangler env (this is the
+    ONE remaining bearer token in the whole stack — justified because the
+    worker is not on the tailnet and the route is public)
   - Worker updates its KV from this endpoint on every run (or cache + refresh hourly)
 - [ ] Deploy via `wrangler deploy`
 - [ ] Smoke test: kill the monitoring VPS → verify Discord notification arrives within 3 minutes
@@ -901,13 +952,13 @@ under `uptime_probe_external`, killing the monitoring VPS for 3+ minutes produce
 a Discord notification from the worker.
 
 **Files created**: ~6 files under `packages/monitoring/worker/`, ~2 routes added
-to Hono. Depends on Step 4 (Hono app), Step 8 (deployed monitoring VPS).
+to the webhook service. Depends on Step 6 (webhook service), Step 7 (deployed monitoring VPS).
 
 ---
 
 ### PHASE 5 — EXTENDED FEATURES
 
-#### Step 10: Synthetic monitoring `[TODO]`
+#### Step 9: Synthetic monitoring `[TODO]`
 
 **Goal**: scripted user-journey tests (not just `/health`) running on a schedule,
 asserting real business-critical flows (login, checkout, API round-trip).
@@ -938,18 +989,18 @@ asserting real business-critical flows (login, checkout, API round-trip).
 **Definition of done**: a synthetic test for a real NextNode project runs every
 minute; failures trigger the same alert pipeline as uptime probes.
 
-**Files created**: ~5 files. Depends on Step 2 (schema), Step 5 (probe infra to share).
+**Files created**: ~5 files. Depends on Step 2 (schema), Step 4 (probe infra to share).
 
 ---
 
-#### Step 11: Public status page `[TODO]`
+#### Step 10: Public status page `[TODO]`
 
 **Goal**: per-project public status page at `https://status.nextnode.solutions/:project`
 showing current state, remaining error budget for the month, recent incidents,
 and 90-day uptime history.
 
 **Tasks**:
-- [ ] Add `GET /status/:project` to Hono:
+- [ ] Add `GET /status/:project` to the webhook service Hono app (created in Step 6):
   - Returns JSON by default (for client-side rendering)
   - Returns HTML with `Accept: text/html`
   - Data source: incidents SQLite table + live query to VM for SLO state
@@ -968,29 +1019,32 @@ and 90-day uptime history.
 **Definition of done**: `https://status.nextnode.solutions/foo-app` renders a
 public status page; it updates in real-time as incidents open/close.
 
-**Files created**: ~4 files. Depends on Step 7 (incident store), Step 6 (SLO rules).
+**Files created**: ~4 files. Depends on Step 6 (incident store + Hono app), Step 5 (SLO rules).
 
 ---
 
-#### Step 12: Client contract enforcement `[TODO]`
+#### Step 11: Client contract enforcement `[TODO]`
 
 **Goal**: make the monitoring contract discoverable and enforceable across all
-NextNode projects — `/health`, `/ready`, `/metrics` endpoints + logger HTTP
-transport + `[monitoring]` block in `nextnode.toml`.
+NextNode projects — `/health`, `/ready`, `/metrics` endpoints + Vector
+agent running on the host + `[monitoring]` block in `nextnode.toml`.
 
 **Tasks**:
-- [ ] Update `@nextnode-solutions/logger` documentation to describe the
-      `NEXTNODE_MONITORING_TOKEN` env var pattern + example HTTP transport setup
 - [ ] Update `@nextnode-solutions/standards` docs to list required endpoints
-      for NextNode apps
+      for NextNode apps (`/health`, `/ready`, `/metrics`) and the Vector
+      sidecar contract
 - [ ] Optional: linting rule or CI gate in the infrastructure `prod-gate` command
-      that checks a project has `[monitoring]` configured before allowing deploy
-- [ ] Document the token generation workflow end-to-end in `docs/`:
-  1. SSH to monitoring VPS
-  2. Run `nn-monitor token create --client X --project Y`
-  3. Copy token to GitHub repo secrets as `NEXTNODE_MONITORING_TOKEN`
-  4. Ensure deploy workflow injects it as env var
-  5. Restart app
+      that checks a project has `[monitoring.slo]` and `[monitoring.healthcheck]`
+      configured before allowing deploy
+- [ ] Document the onboarding workflow end-to-end in `docs/`:
+  1. Add the project to `packages/monitoring/deploy/tenants.toml` on the
+     monitoring VPS (PR against the monitoring repo) — one entry with
+     `client_id`, `project`, `repo`, `ref`
+  2. Declare `[monitoring.slo]` and `[monitoring.healthcheck]` in the
+     project's `nextnode.toml`
+  3. Ensure the deploy pipeline joins the VPS to Tailscale and installs
+     Vector with the rendered `vector.toml`
+  4. Verify logs show up in Grafana under the new `client_id`/`project`
 - [ ] (Optional, stretch) Add a skill file for `@nextnode-solutions/monitoring`
       following the pattern of `nextnode-logger`, `nextnode-standards`, etc.
 
@@ -1036,8 +1090,10 @@ Listed here so we don't re-open these questions. Each can become a future phase.
 - No silent swallows anywhere
 - Every `catch` logs + re-throws OR logs + returns an explicit error response
 - No technical fallbacks without a business rule
-- At the ingest endpoint: a failed VL push is a 503 to the client, not a 204
-  with logs dropped
+- Probe worker: a failed VM write is a logged + retried event, not a silently
+  dropped metric. A repeatedly failing VM write raises a meta-alert.
+- Webhook service: a vmalert webhook that fails to parse returns a 400 with
+  a logged event so vmalert's own retry kicks in.
 
 ### 9.2 Testing strategy
 
@@ -1053,23 +1109,30 @@ Listed here so we don't re-open these questions. Each can become a future phase.
 ### 9.3 Observability of the monitoring service itself (meta-monitoring)
 
 The monitoring service must monitor itself:
-- Instrumented with `@nextnode-solutions/logger` (structured JSON logs)
+- Instrumented with `@nextnode-solutions/logger` (structured JSON logs) writing
+  to stdout; **its own Vector sidecar** tails those logs and ships them to VL
+  exactly like any other NextNode service. Recursion works.
 - Exposes its own `/metrics` endpoint — scraped by the same VictoriaMetrics that
   scrapes client apps. Meta!
 - Its own SLO declared in a `[monitoring.slo]` block. Recursion works.
 - Its own synthetic tests (hit its own `/health` from the CF Worker).
-- The dead-man's switch in Step 9 is the last line of defense.
+- The dead-man's switch in Step 8 is the last line of defense.
 
 ### 9.4 Secrets management
 
 | Secret | Location | Rotation |
 |---|---|---|
-| Tenant bearer tokens | GitHub repo secrets (per client repo) + hashed in monitoring SQLite | `nn-monitor token rotate --id X` |
+| Tailscale auth keys (per client VPS) | `tailscale up --authkey=...` at provision time | Via `nextnode-deploy` reauth |
+| Cloudflare Worker → webhook service admin token | `wrangler secret put` + `.env` on monitoring VPS | Regenerate both sides, redeploy |
 | Grafana admin password | `.env` on monitoring VPS only (never in git) | Manual |
 | SMTP credentials | `.env` on monitoring VPS | Manual |
 | Discord/Slack webhook URLs | `.env` on monitoring VPS | Regenerate in respective apps |
 | Cloudflare Worker backup Discord URL | `wrangler secret put` | `wrangler secret` update |
 | Synthetic test credentials | `.env` on monitoring VPS, per-tenant namespace | Manual |
+
+**Deliberately absent**: there are no per-tenant bearer tokens for the logs
+pipeline. Log shipping relies on Tailscale network identity. See Section 2.8
+for the full rationale and the Option A pivot decision log entry.
 
 ### 9.5 Backup strategy
 
@@ -1115,22 +1178,22 @@ as the project evolves.
 | 2026-04-10 | VictoriaLogs over Grafana Loki | Simpler `/insert/jsonline` endpoint, no schema_config, no object storage required |
 | 2026-04-10 | Custom 5s uptime worker over Uptime Kuma | Uptime Kuma minimum interval is 20s; Socket.IO-first API doesn't fit our pattern |
 | 2026-04-10 | vmalert webhook → Hono routing over Alertmanager | Avoid yet another YAML DSL; keep routing logic in TypeScript we control |
-| 2026-04-10 | Tokens NEVER in `nextnode.toml`, GitHub secrets + env vars only | Security: config is committed, secrets must not be |
+| 2026-04-10 | Tokens NEVER in `nextnode.toml`, GitHub secrets + env vars only — **SUPERSEDED by 2026-04-11 Option A pivot** | Security: config is committed, secrets must not be. Obsolete: there are no application tokens in the pivoted design, so the rule applies trivially. |
 | 2026-04-10 | Multi-window multi-burn-rate SLO alerts per Google SRE workbook | Canonical method; symptom-based; mathematically derived; client-sellable |
 | 2026-04-10 | Cloudflare Worker as second probe + dead-man's switch (free tier) | Zero-cost solution to single-probe blind spot; the ONLY reliable path to catch a dead monitoring VPS |
 | 2026-04-10 | Strict layered architecture mirroring `packages/infrastructure` | Consistency with existing NextNode patterns; proven to produce testable code |
 | 2026-04-10 | `packages/monitoring/` location (not `apps/`, not separate repo) | Consistency with `packages/infrastructure` precedent; workspace consumption of logger and config |
 | 2026-04-10 | NEVER published to npm | Private monorepo-consumed CLI + deployable, same pattern as `infrastructure` |
-| 2026-04-11 | Domain `formatToken(randomBytes)` instead of `generateToken()` | CLAUDE.md forbids `crypto.randomBytes` inside domain functions; adapter/cli layer owns randomness so domain stays deterministic |
-| 2026-04-11 | `node:sqlite` DatabaseSync over better-sqlite3 | Stdlib preference (Node 24.14 exposes it); zero dependency; no native compile step. Trade-off: emits harmless ExperimentalWarning at import |
-| 2026-04-11 | CLI output is JSON lines on stdout, not tables | Machine-readable for deploy pipeline + deterministic for tests; operators copy-paste token from the `create`/`rotate` payload |
-| 2026-04-11 | `process.stdout.write` over `console.log` in CLI output | oxlint `no-console` rule warns on console.log; stdout.write is the unambiguously correct low-level write for CLI user output |
-| 2026-04-11 | Row parsing via `isTenantRow` type guard, not `as` assertions | Repo-wide `nextnode/no-type-assertion` oxlint rule forbids `as` (except `as const`); runtime type guards are the mandated pattern |
-| 2026-04-11 | `IngestedLogEntry` has a permissive index signature | Monitoring is a forwarder, not a schema gate; unknown logger fields must pass through so the logger can evolve without breaking ingest |
-| 2026-04-11 | Retry loops in VL client via recursion, not for-loops | Avoids `no-await-in-loop` noise; retries are inherently sequential and recursion is bounded (maxRetries = 3) |
-| 2026-04-11 | `buildServeContext` factored out of `serveCommand` | Tests drive the full ingest pipeline via `app.request()` without touching real ports or signal handlers; the thin `serveCommand` wrapper adds only the listener + graceful shutdown |
-| 2026-04-11 | v1 `readinessCheck` is always-ready (stub) | Defer the real VL ping to Step 8 when the compose stack lands; the dependency is already wired so only the body needs swapping |
+| 2026-04-11 | Domain `formatToken(randomBytes)` instead of `generateToken()` — **SUPERSEDED** (code deleted) | CLAUDE.md forbids `crypto.randomBytes` inside domain functions; kept as a general rule for future randomness-in-domain cases |
+| 2026-04-11 | `node:sqlite` DatabaseSync over better-sqlite3 — **PARTIALLY SUPERSEDED** | Token store SQLite is gone; the same preference still applies if a future adapter needs SQLite (incident store in Step 6, maintenance windows). |
+| 2026-04-11 | CLI output is JSON lines on stdout, not tables | General CLI-ergonomics rule, still in force for future commands |
+| 2026-04-11 | `process.stdout.write` over `console.log` in CLI output | General rule, still in force |
+| 2026-04-11 | Runtime type guards over `as` assertions | Repo-wide rule — oxlint `nextnode/no-type-assertion` enforces it, still mandatory |
+| 2026-04-11 | Retry loops via recursion, not `await` in for-loop — **GENERAL RULE** | Avoids `no-await-in-loop` noise; future VL/VM clients should follow the same pattern |
 | 2026-04-11 | Unify `/health` and `/ready` everywhere (drop `/healthz`/`/readyz`) | Monitoring runs on Hetzner VPS via Docker Compose, not Kubernetes; the Google convention adds no value and costs readability for PME/ETI clients |
+| 2026-04-11 | **Option A pivot: Vector + private network over Hono ingest API**. Deleted Steps 3 (token store) and 4 (Hono ingest) after they were implemented, tested, and proven. New Step 3 = Vector agent per client VPS, shipping NDJSON to VictoriaLogs directly over Tailscale. Files removed: `http-server`, `rate-limiter-store`, `rate-limiter`, `token-store`, `victorialogs-client`, `serve.command`, `token.command`, `log-envelope`, `tenant`, `token`, and all matching tests (~600 LOC + 138 tests). | NextNode owns every client VPS, so the application-level bearer-token boundary was pure ceremony — Tailscale network identity is the trust boundary, VictoriaLogs stays private. Operational gains: one fewer service to run, no token rotation, logs survive monitoring-VPS outages via Vector's disk buffer, logs of crashing apps are captured via `docker logs` (not lost when the app buffer dies). If a SaaS tier arrives, the ingest API is a one-to-two-day migration: stand up a new proxy service in front of VL, point Vector's HTTP sink at it, close VL on the tailnet side. Git history on `feat/monitoring-package` preserves the deleted code at commits `e990e4c`, `28eb766`, `b298a14`, `667d720`. |
+| 2026-04-11 | Probe worker's target source is **pull from GitHub raw `nextnode.toml`**, not push to an API | Option A pivot removed the API. Pulling from the canonical `nextnode.toml` keeps config-as-code, survives redeploys without manual re-registration, and needs a single static `tenants.toml` file on the monitoring VPS listing which repos to watch. |
+| 2026-04-11 | `monitoring.endpoint` field in `nextnode.toml` schema becomes LEGACY | With Vector shipping logs directly to VL over Tailscale, the client app no longer needs to know where monitoring lives. The field stays in the schema unchanged for backwards compat and will be removed in a follow-up when the infrastructure schema is touched next. Schema tests left unchanged this round. |
 
 ---
 

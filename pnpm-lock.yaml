@@ -155,15 +155,9 @@ importers:
 
   packages/monitoring:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.13
-        version: 1.19.13(hono@4.12.12)
       '@nextnode-solutions/logger':
         specifier: workspace:*
         version: link:../logger
-      hono:
-        specifier: ^4.12.12
-        version: 4.12.12
       smol-toml:
         specifier: ^1.6.1
         version: 1.6.1
@@ -1005,12 +999,6 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
-
-  '@hono/node-server@1.19.13':
-    resolution: {integrity: sha512-TsQLe4i2gvoTtrHje625ngThGBySOgSK3Xo2XRYOdqGN1teR8+I7vchQC46uLJi8OF62YTYA3AhSpumtkhsaKQ==}
-    engines: {node: '>=18.14.1'}
-    peerDependencies:
-      hono: ^4
 
   '@img/colour@1.1.0':
     resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
@@ -2966,10 +2954,6 @@ packages:
 
   highlight.js@10.7.3:
     resolution: {integrity: sha512-tzcUFauisWKNHaRkN4Wjl/ZA07gENAjFl3J/c480dprkGTg5EQstgaNFqBfUqCq54kZRIEcreTsAgF/m2quD7A==}
-
-  hono@4.12.12:
-    resolution: {integrity: sha512-p1JfQMKaceuCbpJKAPKVqyqviZdS0eUxH9v82oWo1kb9xjQ5wA6iP3FNVAPDFlz5/p7d45lO+BpSk1tuSZMF4Q==}
-    engines: {node: '>=16.9.0'}
 
   hook-std@4.0.0:
     resolution: {integrity: sha512-IHI4bEVOt3vRUDJ+bFA9VUJlo7SzvFARPNLw75pqSmAOP2HmTWfFJtPvLBrDrlgjEYXY9zs7SFdHPQaJShkSCQ==}
@@ -5989,10 +5973,6 @@ snapshots:
   '@esbuild/win32-x64@0.27.7':
     optional: true
 
-  '@hono/node-server@1.19.13(hono@4.12.12)':
-    dependencies:
-      hono: 4.12.12
-
   '@img/colour@1.1.0':
     optional: true
 
@@ -8178,8 +8158,6 @@ snapshots:
       space-separated-tokens: 2.0.2
 
   highlight.js@10.7.3: {}
-
-  hono@4.12.12: {}
 
   hook-std@4.0.0: {}
 

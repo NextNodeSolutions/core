@@ -1,12 +1,6 @@
-import { serveCommand } from './serve.command.ts'
-import { tokenCommand } from './token.command.ts'
-
 type Command = (args: readonly string[]) => void | Promise<void>
 
-const COMMANDS: Record<string, Command> = {
-	serve: serveCommand,
-	token: tokenCommand,
-}
+const COMMANDS: Record<string, Command> = {}
 
 export async function runCommand(
 	name: string,
