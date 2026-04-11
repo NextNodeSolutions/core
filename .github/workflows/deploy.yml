@@ -60,6 +60,8 @@ jobs:
         name: Deploy
         needs: [plan, quality]
         runs-on: ubuntu-latest
+        environment:
+            name: ${{ inputs.environment }}
         steps:
             - uses: NextNodeSolutions/core/.github/actions/setup@main
               with:
