@@ -36,6 +36,7 @@
     "type-check": "tsgo --noEmit"
   },
   "dependencies": {
+    "@hono/node-server": "^1.19.13",
     "@nextnode-solutions/logger": "workspace:*",
     "hono": "^4.12.12",
     "smol-toml": "^1.6.1"
