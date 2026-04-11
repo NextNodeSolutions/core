@@ -37,6 +37,7 @@
   },
   "dependencies": {
     "@nextnode-solutions/logger": "workspace:*",
+    "hono": "^4.12.12",
     "smol-toml": "^1.6.1"
   },
   "devDependencies": {
