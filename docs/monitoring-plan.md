@@ -20,7 +20,7 @@
 | **Phase 4 — Deployment** | Docker Compose + Cloudflare Worker second probe | `[TODO]` |
 | **Phase 5 — Extended features** | Synthetic tests, status page, client contract | `[TODO]` |
 
-**Current step**: Phase 2 / Step 4 — Hono ingest service (MVP)
+**Current step**: Phase 2 / Step 5 — Uptime probe worker
 **Last updated**: 2026-04-11
 
 ---
@@ -564,63 +564,90 @@ list` shows it, `token revoke` invalidates it. 79 monitoring tests pass
 
 ---
 
-#### Step 4: Hono ingest service (MVP) `[TODO]`
+#### Step 4: Hono ingest service (MVP) `[DONE]`
 
 **Goal**: HTTP server accepting log batches from `@nextnode-solutions/logger` HTTP
 transport, authenticating via tokens from Step 3, rate-limiting per tenant,
 forwarding to VictoriaLogs.
 
 **Tasks**:
-- [ ] Add `hono` dependency to `packages/monitoring/package.json`
-- [ ] Create `packages/monitoring/src/domain/log-envelope.ts`:
-  - `LogEnvelope` type matching the payload from `packages/logger/src/transports/http.ts`
-    (see its `send` method: `{ logs: LogEntry[] }`)
-  - Pure validation function
-- [ ] Create `packages/monitoring/src/domain/rate-limiter.ts`:
-  - Pure sliding-window implementation: `checkLimit(state, now, limitRpm) → { allowed, newState }`
-  - No IO, no setInterval — caller owns the clock
-- [ ] Create `packages/monitoring/src/adapters/rate-limiter-store.ts`:
-  - In-memory Map<client_id, RateLimitState>
-  - Wraps the pure domain function, owns `Date.now()`
-- [ ] Create `packages/monitoring/src/adapters/victorialogs-client.ts`:
-  - `push(entries: EnrichedLogEntry[]): Promise<void>`
-  - POSTs to `http://victorialogs:9428/insert/jsonline` with `Content-Type: application/stream+json`
-  - Reads VL endpoint from env (`MONITORING_VL_URL`)
-  - Retries with exponential backoff on 5xx (no silent swallow — all errors logged + re-thrown)
-- [ ] Create `packages/monitoring/src/adapters/http-server.ts`:
-  - Hono app setup
-  - `POST /ingest/logs`:
-    - Extract `Authorization: Bearer <token>` header
-    - Look up tenant via `token-store` (hash + find)
-    - On miss: 401 + structured log
-    - Rate limit check per tenant
-    - On exceeded: 429 + structured log
-    - Parse + validate `LogEnvelope`
-    - Enrich each entry with `client_id`, `project`, `environment` labels from tenant
-    - Forward to VictoriaLogs client
-    - Return 204 on success
-  - `GET /health` — liveness (no deps)
-  - `GET /ready` — readiness (checks SQLite + VL reachable)
-  - Request logging via `@nextnode-solutions/logger`
-- [ ] Create `packages/monitoring/src/cli/serve.command.ts`:
-  - Reads `MONITORING_HTTP_PORT`, `MONITORING_VL_URL`, `MONITORING_DB_PATH` from env via `cli/env.ts`
-  - Starts Hono server with graceful shutdown
-- [ ] Register command in `cli/commands.ts`
-- [ ] Integration tests:
-  - Valid token → 204, VL receives the enriched logs
-  - Invalid token → 401
+- [x] Add `hono@^4.12` + `@hono/node-server@^1` dependencies
+- [x] Create `packages/monitoring/src/domain/log-envelope.ts`:
+  - `IngestedLogEntry` type — minimum contract the ingest endpoint enforces,
+    with an index signature so extra fields pass through untouched
+  - `validateLogEnvelope(body)` returns `{ ok, envelope | error }`
+- [x] Create `packages/monitoring/src/domain/rate-limiter.ts`:
+  - Pure sliding-window `checkLimit(state, now, limitRpm)` → `{ allowed, newState, remaining, retryAfterMs }`
+  - Caller owns the clock; denies on `limitRpm <= 0`; reports retry hint from oldest in-window timestamp
+- [x] Create `packages/monitoring/src/adapters/rate-limiter-store.ts`:
+  - In-memory `Map<tenantId, RateLimiterState>` keyed by tenant id, not client id (supports multiple projects per client)
+  - Injected clock for deterministic tests
+- [x] Create `packages/monitoring/src/adapters/victorialogs-client.ts`:
+  - `push(entries)` — POSTs NDJSON with `Content-Type: application/stream+json`
+  - Retries via recursion (no `await` in loop) with exponential backoff on 5xx and network errors
+  - 4xx is terminal (no retry) via an internal `TerminalHttpError` class
+  - Every error logs at the correct level before rethrowing — no silent swallow
+  - `fetchImpl` and `sleepImpl` injected for deterministic tests
+- [x] Create `packages/monitoring/src/adapters/http-server.ts`:
+  - `POST /ingest/logs` with Bearer auth, rate limiting, body validation, enrichment, VL forwarding
+  - 401/400/429/503/204 all log structured events before responding
+  - `GET /health` — always 204
+  - `GET /ready` — delegates to injected `readinessCheck()` (v1 always-ready)
+  - HTTP status codes pulled out as named constants to satisfy `no-magic-numbers`
+- [x] Create `packages/monitoring/src/cli/serve.command.ts`:
+  - Reads `MONITORING_DB_PATH`, `MONITORING_VL_URL`, `MONITORING_HTTP_PORT` (default 4000) via `cli/env`
+  - `buildServeContext()` helper builds the fully-wired stack without listening — tests drive it via `app.request()`
+  - Main command calls `@hono/node-server`'s `serve` then installs SIGTERM/SIGINT handlers for graceful shutdown
+- [x] Register `serve` in `cli/commands.ts`
+- [x] Integration tests (via Hono's `app.request()` helper):
+  - Valid token → 204, VL receives the enriched logs (client_id + project + tenant_tier labels)
   - Missing Authorization → 401
-  - Rate limit exceeded → 429
-  - Malformed body → 400
-  - VL unreachable → 503 (does NOT silently swallow)
-- [ ] Manually smoke-test against a local `victoria-logs` binary in Docker
+  - Malformed Bearer prefix → 401
+  - Unknown token → 401
+  - Revoked tenant → 401
+  - Rate limit exceeded → 429 with `Retry-After` header
+  - Malformed JSON → 400
+  - Invalid envelope shape → 400
+  - Missing required entry field → 400
+  - VL unreachable → 503, logs `ingest.forward.failed` (does NOT silently swallow)
+- [ ] Manually smoke-test against a local `victoria-logs` binary in Docker — deferred to Step 8 when the full compose stack lands
 
-**Definition of done**: `nn-monitor serve` starts the ingest server; a curl with a
-valid token against `/ingest/logs` lands rows in VictoriaLogs tagged with the
-tenant's labels. Rate limiting works. All error paths log + propagate per the
-strict error handling rules.
+**Definition of done**: 138 monitoring tests pass (28 new domain + 14 adapters
++ 14 Hono + 3 serve wiring). `nn-monitor serve` boots the ingest server,
+shuts down cleanly on SIGTERM, and every error path logs + propagates per
+the strict error handling rules.
 
-**Files created**: ~8 files. Depends on Step 3.
+**Files created**: 13 files in `packages/monitoring/src/{domain,adapters,cli}`.
+
+**Decisions taken during Step 4** (appended to decision log):
+
+- **`IngestedLogEntry` has an index signature** so unknown fields forward to
+  VictoriaLogs untouched. The monitoring service is a forwarder, not a strict
+  schema gate — the logger can evolve its LogEntry shape without breaking
+  ingest.
+- **Retry loops expressed as recursion** in `victorialogs-client.ts` to avoid
+  the `no-await-in-loop` warning cleanly. Max 3 attempts; the call depth is
+  bounded and stack safety is a non-issue at that size.
+- **`TerminalHttpError` class internal to the VL client.** 4xx responses
+  bypass the retry loop via an internal class used for control flow; the
+  thrown error surfacing to callers is a plain `Error`.
+- **Rate limiter keys on tenant id, not client id.** A single client with
+  multiple projects gets independent limits per project because each project
+  maps to its own tenant row. Same shape scales cleanly when we add
+  per-project overrides.
+- **`buildServeContext` separated from `serveCommand`.** The context builder
+  is a pure function of its options — fully testable via `app.request()`.
+  `serveCommand` is a thin wrapper that adds real listener + signal handlers.
+  Tests skip the signal handling because it would pollute the global process
+  state across tests.
+- **v1 readiness check is always-ready.** A real VL ping (`readinessCheck`)
+  is deferred to Step 8 when the full compose stack arrives — flagged here so
+  a future session doesn't forget. The `readinessCheck` dependency is
+  already in place, only the implementation is a stub.
+- **`no-map-spread` warning on enrichment is accepted.** The spread is needed
+  to preserve unknown fields on each entry. Rewriting with `Object.assign` or
+  an explicit loop wouldn't change behavior and would make the code less
+  direct.
 
 ---
 
@@ -1099,6 +1126,11 @@ as the project evolves.
 | 2026-04-11 | CLI output is JSON lines on stdout, not tables | Machine-readable for deploy pipeline + deterministic for tests; operators copy-paste token from the `create`/`rotate` payload |
 | 2026-04-11 | `process.stdout.write` over `console.log` in CLI output | oxlint `no-console` rule warns on console.log; stdout.write is the unambiguously correct low-level write for CLI user output |
 | 2026-04-11 | Row parsing via `isTenantRow` type guard, not `as` assertions | Repo-wide `nextnode/no-type-assertion` oxlint rule forbids `as` (except `as const`); runtime type guards are the mandated pattern |
+| 2026-04-11 | `IngestedLogEntry` has a permissive index signature | Monitoring is a forwarder, not a schema gate; unknown logger fields must pass through so the logger can evolve without breaking ingest |
+| 2026-04-11 | Retry loops in VL client via recursion, not for-loops | Avoids `no-await-in-loop` noise; retries are inherently sequential and recursion is bounded (maxRetries = 3) |
+| 2026-04-11 | `buildServeContext` factored out of `serveCommand` | Tests drive the full ingest pipeline via `app.request()` without touching real ports or signal handlers; the thin `serveCommand` wrapper adds only the listener + graceful shutdown |
+| 2026-04-11 | v1 `readinessCheck` is always-ready (stub) | Defer the real VL ping to Step 8 when the compose stack lands; the dependency is already wired so only the body needs swapping |
+| 2026-04-11 | Unify `/health` and `/ready` everywhere (drop `/healthz`/`/readyz`) | Monitoring runs on Hetzner VPS via Docker Compose, not Kubernetes; the Google convention adds no value and costs readability for PME/ETI clients |
 
 ---
 
