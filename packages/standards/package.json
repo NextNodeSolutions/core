@@ -95,6 +95,7 @@
     },
     "./oxfmt": "./src/oxfmt/base.js",
     "./typescript/library": "./src/typescript/tsconfig.library.json",
+    "./typescript/library-node": "./src/typescript/tsconfig.library.node.json",
     "./typescript/nextjs": "./src/typescript/tsconfig.nextjs.json",
     "./typescript/astro": "./src/typescript/tsconfig.astro.json",
     "./tailwind": "./src/tailwind/theme.css",

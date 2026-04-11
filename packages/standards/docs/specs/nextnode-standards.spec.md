@@ -78,8 +78,9 @@ The existing `@nextnode/standards` package (v2.2.1) uses Biome for linting and P
 
 ### TypeScript Configurations
 
-- **FR-14**: Export 3 TypeScript configs:
+- **FR-14**: Export 4 TypeScript configs:
     - `@nextnode/standards/typescript/library` — `src/typescript/tsconfig.library.json`
+    - `@nextnode/standards/typescript/library-node` — `src/typescript/tsconfig.library.node.json`
     - `@nextnode/standards/typescript/nextjs` — `src/typescript/tsconfig.nextjs.json`
     - `@nextnode/standards/typescript/astro` — `src/typescript/tsconfig.astro.json`
 - **FR-15**: Library config (strictest):
@@ -88,6 +89,10 @@ The existing `@nextnode/standards` package (v2.2.1) uses Biome for linting and P
     - ESM: `isolatedModules`, `verbatimModuleSyntax`
     - Compat: `forceConsistentCasingInFileNames`, `allowSyntheticDefaultImports`, `esModuleInterop`, `resolveJsonModule`, `skipLibCheck`, `allowJs`
     - `noEmit`: true
+- **FR-15a**: Library-node config (extends `library`):
+    - Adds `types: ["node"]` for Node.js runtime types
+    - Adds `allowImportingTsExtensions: true` for `.ts` import specifiers (safe no-op when unused)
+    - Use this for any Node-targeting library; use the bare `library` config for runtime-agnostic libraries that override `types` themselves (e.g. libraries adding `vitest/globals`, DOM types, etc.)
 - **FR-16**: Next.js config:
     - Target: ES2023, lib: DOM + ESNext, Module: ESNext
     - JSX: preserve, incremental: true
@@ -158,6 +163,7 @@ The existing `@nextnode/standards` package (v2.2.1) uses Biome for linting and P
     	"./oxlint": "./src/oxlint/base.json",
     	"./oxfmt": "./src/oxfmt/base.json",
     	"./typescript/library": "./src/typescript/tsconfig.library.json",
+    	"./typescript/library-node": "./src/typescript/tsconfig.library.node.json",
     	"./typescript/nextjs": "./src/typescript/tsconfig.nextjs.json",
     	"./typescript/astro": "./src/typescript/tsconfig.astro.json",
     	"./tailwind": "./src/tailwind/theme.css",

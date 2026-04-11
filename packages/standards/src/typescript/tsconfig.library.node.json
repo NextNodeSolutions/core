@@ -1,0 +1,11 @@
+{
+	"extends": "./tsconfig.library.json",
+	"compilerOptions": {
+		// Node.js runtime types — required for any library targeting Node
+		"types": ["node"],
+
+		// Allow `import './foo.ts'` style imports (safe no-op when unused).
+		// Compatible with library config's noEmit: true.
+		"allowImportingTsExtensions": true
+	}
+}
