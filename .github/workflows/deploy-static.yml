@@ -87,6 +87,18 @@ jobs:
                   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
                   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
+    deploy:
+        name: Deploy
+        needs: [plan, quality, ensure-pages]
+        runs-on: ubuntu-latest
+        environment:
+            name: ${{ inputs.environment }}
+            url: ${{ steps.cf.outputs.url }}
+        steps:
+            - uses: NextNodeSolutions/core/.github/actions/setup@main
+              with:
+                  infra: 'true'
+
             - name: Sync Pages env vars
               run: node src/index.ts sync-pages-env
               working-directory: .infra/packages/infrastructure
@@ -96,15 +108,6 @@ jobs:
                   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
                   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
                   ALL_SECRETS: ${{ toJSON(secrets) }}
-
-    deploy:
-        name: Deploy
-        needs: [plan, quality, ensure-pages]
-        runs-on: ubuntu-latest
-        steps:
-            - uses: NextNodeSolutions/core/.github/actions/setup@main
-              with:
-                  infra: 'true'
 
             - name: Inject deploy env
               run: node src/index.ts deploy-env
@@ -117,6 +120,7 @@ jobs:
               run: pnpm build
 
             - uses: NextNodeSolutions/core/.github/actions/deploy-cloudflare-pages@main
+              id: cf
               with:
                   directory: dist
                   project-name: ${{ needs.plan.outputs.project_name }}
