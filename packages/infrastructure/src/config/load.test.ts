@@ -72,7 +72,7 @@ describe('loadConfig', () => {
 		const config = loadConfig(fixture('with-monitoring.toml'))
 
 		if (config.monitoring === false) {
-			throw new Error('expected monitoring to be defined')
+			expect.unreachable('monitoring should be defined')
 		}
 		expect(config.monitoring.endpoint).toBe(
 			'https://monitoring.nextnode.fr',
