@@ -84,7 +84,7 @@ describe('loadConfig', () => {
 			windowDays: 30,
 		})
 		expect(config.monitoring.healthcheck).toEqual({
-			path: '/healthz',
+			path: '/api/health',
 			intervalSeconds: 10,
 			timeoutMs: 3000,
 			expectedStatus: 204,

@@ -599,8 +599,8 @@ forwarding to VictoriaLogs.
     - Enrich each entry with `client_id`, `project`, `environment` labels from tenant
     - Forward to VictoriaLogs client
     - Return 204 on success
-  - `GET /healthz` — liveness (no deps)
-  - `GET /readyz` — readiness (checks SQLite + VL reachable)
+  - `GET /health` — liveness (no deps)
+  - `GET /ready` — readiness (checks SQLite + VL reachable)
   - Request logging via `@nextnode-solutions/logger`
 - [ ] Create `packages/monitoring/src/cli/serve.command.ts`:
   - Reads `MONITORING_HTTP_PORT`, `MONITORING_VL_URL`, `MONITORING_DB_PATH` from env via `cli/env.ts`
@@ -818,7 +818,7 @@ persistence for logs/metrics/SQLite.
 - [ ] Smoke test the full stack locally via `docker compose up` before shipping to VPS
 
 **Definition of done**: `docker compose up -d` on a fresh CX33 brings up the
-full stack; TLS is issued; `https://monitoring.nextnode.fr/healthz`
+full stack; TLS is issued; `https://monitoring.nextnode.fr/health`
 returns 200; Grafana is accessible behind basic auth.
 
 **Files created**: ~10 files under `packages/monitoring/deploy/`. Depends on all
@@ -1030,7 +1030,7 @@ The monitoring service must monitor itself:
 - Exposes its own `/metrics` endpoint — scraped by the same VictoriaMetrics that
   scrapes client apps. Meta!
 - Its own SLO declared in a `[monitoring.slo]` block. Recursion works.
-- Its own synthetic tests (hit its own `/healthz` from the CF Worker).
+- Its own synthetic tests (hit its own `/health` from the CF Worker).
 - The dead-man's switch in Step 9 is the last line of defense.
 
 ### 9.4 Secrets management

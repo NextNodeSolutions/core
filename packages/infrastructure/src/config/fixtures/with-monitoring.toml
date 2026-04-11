@@ -17,7 +17,7 @@ latency_ms_p99 = 1500
 window_days = 30
 
 [monitoring.healthcheck]
-path = "/healthz"
+path = "/api/health"
 interval_seconds = 10
 timeout_ms = 3000
 expected_status = 204
