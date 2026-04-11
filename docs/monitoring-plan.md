@@ -20,8 +20,8 @@
 | **Phase 4 — Deployment** | Docker Compose + Cloudflare Worker second probe | `[TODO]` |
 | **Phase 5 — Extended features** | Synthetic tests, status page, client contract | `[TODO]` |
 
-**Current step**: Phase 2 / Step 3 — Auth & token management
-**Last updated**: 2026-04-10
+**Current step**: Phase 2 / Step 4 — Hono ingest service (MVP)
+**Last updated**: 2026-04-11
 
 ---
 
@@ -505,38 +505,62 @@ the new test suite blocks inside `schema.test.ts` and `load.test.ts`
 
 ### PHASE 2 — CORE SERVICES
 
-#### Step 3: Auth & token management `[TODO]`
+#### Step 3: Auth & token management `[DONE]`
 
 **Goal**: the foundation of multi-tenancy. Generate, store (hashed), verify, list,
 revoke, and rotate per-project bearer tokens via a `nn-monitor token` CLI subcommand.
 
 **Tasks**:
-- [ ] Create `packages/monitoring/src/domain/token.ts`:
-  - `generateToken(): { plaintext: string; hash: string }` (crypto.randomBytes 32, base64url, `nn_live_` prefix)
-  - `hashToken(plaintext: string): string` (sha256, hex)
-  - `verifyToken(plaintext: string, hash: string): boolean` (timingSafeEqual)
-  - Pure functions, no IO
-- [ ] Create `packages/monitoring/src/domain/tenant.ts`:
-  - `Tenant` type: `{ id, client_id, project, tier: 'standard' | 'enterprise', rate_limit_rpm, created_at, revoked_at | null }`
-- [ ] Create `packages/monitoring/src/adapters/token-store.ts`:
-  - SQLite-backed store using `better-sqlite3` or native `node:sqlite` (Node 24+ has it built in — prefer stdlib)
-  - CRUD: `create`, `findByHash`, `list`, `revoke`, `rotate`
-  - Schema migration on first run
-- [ ] Create `packages/monitoring/src/cli/token.command.ts` with subcommands:
-  - `create --client <id> --project <name> [--tier standard|enterprise]` — prints plaintext ONCE
-  - `list` — prints non-revoked tokens (id, client, project, tier, created_at)
-  - `revoke --id <id>` — marks revoked_at
-  - `rotate --id <id>` — atomic: create new for same tenant, revoke old, print new plaintext
-- [ ] Register command in `cli/commands.ts`
-- [ ] Unit tests on domain functions (pure, no mocks)
-- [ ] Integration tests on `token-store` with a temp SQLite file
-- [ ] CLI e2e test: spawn the binary with subcommands, assert output + DB state
+- [x] Create `packages/monitoring/src/domain/token.ts`:
+  - `formatToken(randomBytes)` — pure, caller injects 32 random bytes (adapter/cli owns `crypto.randomBytes`). Deviates from the original `generateToken()` wording to satisfy the package's "domain is 100% pure" rule.
+  - `hashToken(plaintext: string): string` — sha256 hex
+  - `verifyToken(plaintext: string, hash: string): boolean` — `timingSafeEqual`, rejects wrong-length hashes
+- [x] Create `packages/monitoring/src/domain/tenant.ts`:
+  - `Tenant` type, `TenantTier` union, `rateLimitForTier`, `isTenantTier` guard
+- [x] Create `packages/monitoring/src/adapters/token-store.ts`:
+  - `node:sqlite` `DatabaseSync` (Node 24 stdlib) with WAL journal mode
+  - CRUD: `create`, `findByHash`, `findById`, `list`, `revoke`, `rotate`
+  - Schema migration on first run; `rotate` runs in a `BEGIN IMMEDIATE` transaction
+  - Row parsing via an `isTenantRow` type guard — no `as` assertions
+- [x] Create `packages/monitoring/src/cli/token.command.ts` with subcommands:
+  - `create --client <id> --project <name> [--tier standard|enterprise]` — prints the plaintext ONCE in a JSON line
+  - `list [--all]` — JSON lines, one per tenant; `--all` includes revoked
+  - `revoke --id <id>` — marks `revoked_at`
+  - `rotate --id <id>` — atomic: new row + revoke old, prints new plaintext
+- [x] Register command in `cli/commands.ts`, propagate argv through `index.ts`
+- [x] Pure unit tests on domain functions (28 tests on `tenant.ts` + `token.ts`)
+- [x] Integration tests on `token-store` with temp SQLite dirs (17 tests)
+- [x] In-process CLI tests with injected `dbPath` + `write` capture (18 tests)
 
 **Definition of done**: `nn-monitor token create --client foo --project bar`
-prints a token, stores its hash in SQLite, `token list` shows it, `token revoke`
-invalidates it. All tests pass. Update status.
+prints a token (as a JSON line on stdout), stores its hash in SQLite, `token
+list` shows it, `token revoke` invalidates it. 79 monitoring tests pass
+(domain + adapter + cli).
 
-**Files created**: ~6 files in `packages/monitoring/src/{domain,adapters,cli}`.
+**Files created**: 8 files in `packages/monitoring/src/{domain,adapters,cli}`.
+
+**Decisions taken during Step 3** (appended to decision log):
+
+- **Domain token API: `formatToken(randomBytes)` instead of `generateToken()`.**
+  The monitoring package's CLAUDE.md forbids `crypto.randomBytes` inside domain
+  functions (domain must be deterministic on its inputs). The adapter/cli layer
+  owns `randomBytes(32)` and passes the bytes in. Tests pass fixed bytes for
+  fully deterministic assertions.
+- **`node:sqlite` over `better-sqlite3`.** The plan preferred stdlib when
+  available; Node 24.14 exposes `DatabaseSync` out of the box. Downside: emits
+  an `ExperimentalWarning` at import time — accepted since the CLI is internal
+  and the warning is harmless. No native-addon compile step.
+- **`no-type-assertion` oxlint rule (repo-wide) forbids `as`.** Row parsing in
+  the adapter and JSON parsing in the CLI tests both use explicit runtime type
+  guards (`isTenantRow`, `isRecord`, `parseJsonLine`, `readString`). This
+  surfaced late — each layer required a small refactor. Keep type guards as the
+  default pattern from now on in this package.
+- **CLI output format is JSON lines, not tables.** Machine-readable for the
+  deploy pipeline and deterministic for tests. Tokens print on a single line
+  in the `create`/`rotate` payload — operators copy-paste from stdout.
+- **`process.stdout.write` instead of `console.log` in CLI output.** oxlint's
+  `no-console` rule warns on `console.log`; `process.stdout.write` is the
+  unambiguously correct low-level write for CLI user output.
 
 ---
 
@@ -1070,6 +1094,11 @@ as the project evolves.
 | 2026-04-10 | Strict layered architecture mirroring `packages/infrastructure` | Consistency with existing NextNode patterns; proven to produce testable code |
 | 2026-04-10 | `packages/monitoring/` location (not `apps/`, not separate repo) | Consistency with `packages/infrastructure` precedent; workspace consumption of logger and config |
 | 2026-04-10 | NEVER published to npm | Private monorepo-consumed CLI + deployable, same pattern as `infrastructure` |
+| 2026-04-11 | Domain `formatToken(randomBytes)` instead of `generateToken()` | CLAUDE.md forbids `crypto.randomBytes` inside domain functions; adapter/cli layer owns randomness so domain stays deterministic |
+| 2026-04-11 | `node:sqlite` DatabaseSync over better-sqlite3 | Stdlib preference (Node 24.14 exposes it); zero dependency; no native compile step. Trade-off: emits harmless ExperimentalWarning at import |
+| 2026-04-11 | CLI output is JSON lines on stdout, not tables | Machine-readable for deploy pipeline + deterministic for tests; operators copy-paste token from the `create`/`rotate` payload |
+| 2026-04-11 | `process.stdout.write` over `console.log` in CLI output | oxlint `no-console` rule warns on console.log; stdout.write is the unambiguously correct low-level write for CLI user output |
+| 2026-04-11 | Row parsing via `isTenantRow` type guard, not `as` assertions | Repo-wide `nextnode/no-type-assertion` oxlint rule forbids `as` (except `as const`); runtime type guards are the mandated pattern |
 
 ---
 
