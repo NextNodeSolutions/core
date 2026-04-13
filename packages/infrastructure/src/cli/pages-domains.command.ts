@@ -8,7 +8,7 @@ import {
 } from '../adapters/cloudflare-pages.ts'
 import type { CloudflarePagesDomain } from '../adapters/cloudflare-pages.ts'
 import { loadConfig } from '../config/load.ts'
-import type { ProjectSection } from '../config/schema.ts'
+import type { ProjectSection } from '../config/types.ts'
 import type { AppEnvironment } from '../domain/environment.ts'
 import { resolveEnvironment } from '../domain/environment.ts'
 import type { DesiredPagesDomain } from '../domain/pages-domains.ts'

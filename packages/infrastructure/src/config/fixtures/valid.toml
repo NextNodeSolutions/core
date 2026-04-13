@@ -1,3 +1,8 @@
 [project]
 name = "my-app"
 type = "app"
+domain = "my-app.example.com"
+
+[deploy.hetzner]
+server_type = "cpx22"
+location = "nbg1"

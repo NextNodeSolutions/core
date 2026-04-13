@@ -1,6 +1,11 @@
 [project]
 name = "prod-only-app"
 type = "app"
+domain = "prod-only.example.com"
+
+[deploy.hetzner]
+server_type = "cpx22"
+location = "nbg1"
 
 [environment]
 development = false

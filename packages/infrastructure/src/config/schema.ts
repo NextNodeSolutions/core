@@ -1,71 +1,14 @@
-export interface NextNodeConfig {
-	readonly project: ProjectSection
-	readonly scripts: ScriptsSection
-	readonly package: PackageSection | false
-	readonly environment: EnvironmentSection
-	readonly deploy: DeploySection
-}
-
-const PROJECT_TYPES = ['app', 'package', 'static'] as const
-type ProjectType = (typeof PROJECT_TYPES)[number]
-
-export interface ProjectSection {
-	readonly name: string
-	readonly type: ProjectType
-	readonly filter: string | false
-	readonly domain: string | undefined
-	readonly redirectDomains: ReadonlyArray<string>
-}
-
-export interface ScriptsSection {
-	readonly lint: string | false
-	readonly test: string | false
-	readonly build: string | false
-}
-
-export interface PackageSection {
-	readonly access: string
-}
-
-export interface EnvironmentSection {
-	readonly development: boolean
-}
-
-export interface DeploySection {
-	readonly secrets: ReadonlyArray<string>
-}
-
-export const DEFAULT_DEPLOY: DeploySection = {
-	secrets: [],
-}
-
-export const DEFAULT_SCRIPTS: ScriptsSection = {
-	lint: 'lint',
-	test: 'test',
-	build: 'build',
-}
-
-export const DEFAULT_ENVIRONMENT: EnvironmentSection = {
-	development: true,
-}
-
-function isBoolean(value: unknown): value is boolean {
-	return typeof value === 'boolean'
-}
-
-const PROJECT_TYPE_SET: ReadonlySet<string> = new Set(PROJECT_TYPES)
-
-function isProjectType(value: unknown): value is ProjectType {
-	return typeof value === 'string' && PROJECT_TYPE_SET.has(value)
-}
-
-function isScriptValue(value: unknown): value is string | false {
-	return typeof value === 'string' || value === false
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
+import type { PackageSection, ParseConfigResult } from './types.ts'
+import {
+	DEFAULT_ENVIRONMENT,
+	DEFAULT_SCRIPTS,
+	isBoolean,
+	isProjectType,
+	isRecord,
+	isScriptValue,
+	PROJECT_TYPES,
+} from './types.ts'
+import { validateDeploySection } from './validate-deploy.ts'
 
 function resolveScript(
 	value: unknown,
@@ -176,39 +119,6 @@ function validatePackageSection(raw: Record<string, unknown>): {
 	return { errors: [], packageSection: { access } }
 }
 
-function validateDeploySection(raw: Record<string, unknown>): {
-	errors: string[]
-	secrets: ReadonlyArray<string>
-} {
-	const deploy = raw['deploy']
-	if (deploy === undefined)
-		return { errors: [], secrets: DEFAULT_DEPLOY.secrets }
-	if (!isRecord(deploy)) {
-		return {
-			errors: ['[deploy] must be a table'],
-			secrets: DEFAULT_DEPLOY.secrets,
-		}
-	}
-	const secrets = deploy['secrets']
-	if (secrets === undefined)
-		return { errors: [], secrets: DEFAULT_DEPLOY.secrets }
-	if (!Array.isArray(secrets)) {
-		return {
-			errors: ['deploy.secrets must be an array of strings'],
-			secrets: DEFAULT_DEPLOY.secrets,
-		}
-	}
-	for (const entry of secrets) {
-		if (typeof entry !== 'string' || entry === '') {
-			return {
-				errors: ['deploy.secrets entries must be non-empty strings'],
-				secrets: DEFAULT_DEPLOY.secrets,
-			}
-		}
-	}
-	return { errors: [], secrets }
-}
-
 export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 	const project = raw['project']
 	if (!isRecord(project)) {
@@ -218,13 +128,11 @@ export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 	const projectResult = validateProjectSection(project)
 	const scriptsResult = validateScriptsSection(raw)
 	const envResult = validateEnvironmentSection(raw)
-	const deployResult = validateDeploySection(raw)
 
 	const earlyErrors = [
 		...projectResult.errors,
 		...scriptsResult.errors,
 		...envResult.errors,
-		...deployResult.errors,
 	]
 	if (
 		earlyErrors.length > 0 ||
@@ -234,9 +142,18 @@ export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 		return { ok: false, errors: earlyErrors }
 	}
 
+	const hasDomain =
+		typeof project['domain'] === 'string' && project['domain'] !== ''
+	const deployResult = validateDeploySection(
+		raw,
+		projectResult.type,
+		hasDomain,
+	)
 	const pkgResult = validatePackageSection(raw)
-	if (pkgResult.errors.length > 0) {
-		return { ok: false, errors: pkgResult.errors }
+
+	const sectionErrors = [...deployResult.errors, ...pkgResult.errors]
+	if (sectionErrors.length > 0) {
+		return { ok: false, errors: sectionErrors }
 	}
 
 	const domain = project['domain']
@@ -278,11 +195,7 @@ export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 					? envResult.development
 					: DEFAULT_ENVIRONMENT.development,
 			},
-			deploy: { secrets: deployResult.secrets },
+			deploy: deployResult.deploy,
 		},
 	}
 }
-
-type ParseConfigResult =
-	| { readonly ok: true; readonly config: NextNodeConfig }
-	| { readonly ok: false; readonly errors: readonly string[] }

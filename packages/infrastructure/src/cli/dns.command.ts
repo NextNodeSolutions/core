@@ -13,7 +13,7 @@ import type {
 	DnsRecordPayload,
 } from '../adapters/cloudflare-dns.ts'
 import { loadConfig } from '../config/load.ts'
-import type { ProjectSection } from '../config/schema.ts'
+import type { ProjectSection } from '../config/types.ts'
 import type {
 	DesiredDnsRecord,
 	ExistingDnsRecord,

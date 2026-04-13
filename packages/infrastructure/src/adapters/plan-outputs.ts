@@ -2,7 +2,7 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
 
-import type { NextNodeConfig } from '../config/schema.ts'
+import type { NextNodeConfig } from '../config/types.ts'
 import { hasProdGate } from '../domain/quality-matrix.ts'
 import type { QualityTask } from '../domain/quality-matrix.ts'
 
