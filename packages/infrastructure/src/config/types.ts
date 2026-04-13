@@ -39,11 +39,22 @@ export interface EnvironmentSection {
 	readonly development: boolean
 }
 
-export interface DeploySection {
-	readonly target: DeployTargetType
+interface BaseDeploySection {
 	readonly secrets: ReadonlyArray<string>
-	readonly hetzner: HetznerDeployConfig | undefined
 }
+
+export interface HetznerVpsDeploySection extends BaseDeploySection {
+	readonly target: 'hetzner-vps'
+	readonly hetzner: HetznerDeployConfig
+}
+
+export interface CloudflarePagesDeploySection extends BaseDeploySection {
+	readonly target: 'cloudflare-pages'
+}
+
+export type DeploySection =
+	| HetznerVpsDeploySection
+	| CloudflarePagesDeploySection
 
 export const DEFAULT_SCRIPTS: ScriptsSection = {
 	lint: 'lint',
