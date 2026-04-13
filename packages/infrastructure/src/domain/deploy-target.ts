@@ -11,19 +11,39 @@ export interface EnvironmentDeployConfig {
 	readonly secrets: Readonly<Record<string, string>>
 }
 
-export interface ProjectDeployConfig {
+export interface ContainerDeployConfig {
+	readonly kind: 'container'
 	readonly projectName: string
 	readonly image: ImageRef
 	readonly environments: ReadonlyArray<EnvironmentDeployConfig>
-	readonly composeFileContent: string
 }
 
-export interface DeployedEnvironment {
+export interface StaticDeployConfig {
+	readonly kind: 'static'
+	readonly projectName: string
+	readonly environments: ReadonlyArray<EnvironmentDeployConfig>
+}
+
+export type ProjectDeployConfig = ContainerDeployConfig | StaticDeployConfig
+
+interface BaseDeployedEnvironment {
 	readonly name: string
 	readonly url: string
-	readonly imageRef: ImageRef
 	readonly deployedAt: Date
 }
+
+export interface ContainerDeployedEnvironment extends BaseDeployedEnvironment {
+	readonly kind: 'container'
+	readonly imageRef: ImageRef
+}
+
+export interface StaticDeployedEnvironment extends BaseDeployedEnvironment {
+	readonly kind: 'static'
+}
+
+export type DeployedEnvironment =
+	| ContainerDeployedEnvironment
+	| StaticDeployedEnvironment
 
 export interface TargetState {
 	readonly projectName: string
@@ -36,10 +56,11 @@ export interface DeployResult {
 	readonly durationMs: number
 }
 
-export interface DeployTarget {
+export interface DeployTarget<
+	TConfig extends ProjectDeployConfig = ProjectDeployConfig,
+> {
 	readonly name: string
 	ensureInfra(projectName: string): Promise<void>
-	deploy(config: ProjectDeployConfig): Promise<DeployResult>
-	describe(projectName: string): Promise<TargetState | null>
-	teardown(projectName: string): Promise<void>
+	deploy(config: TConfig): Promise<DeployResult>
+	describe?(projectName: string): Promise<TargetState | null>
 }
