@@ -7,7 +7,6 @@ import type {
 	DeployTarget,
 	StaticDeployConfig,
 	StaticDeployedEnvironment,
-	TargetState,
 } from '../../domain/deploy-target.ts'
 import type { DesiredDnsRecord } from '../../domain/dns-records.ts'
 import {
@@ -105,21 +104,6 @@ export class CloudflarePagesTarget implements DeployTarget<StaticDeployConfig> {
 			deployedEnvironments: [deployed],
 			durationMs: Date.now() - start,
 		}
-	}
-
-	async describe(projectName: string): Promise<TargetState | null> {
-		const pagesProjectName = computePagesProjectName(
-			projectName,
-			this.deps.environment,
-		)
-		const project = await getPagesProject(
-			this.deps.accountId,
-			pagesProjectName,
-			this.deps.token,
-		)
-		if (!project) return null
-
-		return { projectName: project.name, environments: [] }
 	}
 
 	private async ensureProject(pagesProjectName: string): Promise<void> {

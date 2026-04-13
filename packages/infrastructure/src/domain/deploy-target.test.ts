@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type {
+	ContainerDeployConfig,
 	DeployResult,
 	DeployTarget,
 	DeployedEnvironment,
@@ -15,7 +16,8 @@ const TEST_IMAGE: ImageRef = {
 	tag: 'sha-abc1234',
 }
 
-const TEST_CONFIG: ProjectDeployConfig = {
+const TEST_CONFIG: ContainerDeployConfig = {
+	kind: 'container',
 	projectName: 'acme-web',
 	image: TEST_IMAGE,
 	environments: [
@@ -32,7 +34,6 @@ const TEST_CONFIG: ProjectDeployConfig = {
 			secrets: { DATABASE_URL: 'postgres://prod' },
 		},
 	],
-	composeFileContent: 'services:\n  app:\n    image: ${IMAGE}\n',
 }
 
 class InMemoryDeployTarget implements DeployTarget {
@@ -60,12 +61,23 @@ class InMemoryDeployTarget implements DeployTarget {
 
 		const start = Date.now()
 		const deployedEnvironments: DeployedEnvironment[] =
-			config.environments.map(env => ({
-				name: env.name,
-				url: `https://${env.hostname}`,
-				imageRef: config.image,
-				deployedAt: new Date(),
-			}))
+			config.environments.map(env => {
+				if (config.kind === 'container') {
+					return {
+						kind: 'container',
+						name: env.name,
+						url: `https://${env.hostname}`,
+						imageRef: config.image,
+						deployedAt: new Date(),
+					}
+				}
+				return {
+					kind: 'static',
+					name: env.name,
+					url: `https://${env.hostname}`,
+					deployedAt: new Date(),
+				}
+			})
 
 		this.states.set(config.projectName, {
 			projectName: config.projectName,
@@ -81,11 +93,6 @@ class InMemoryDeployTarget implements DeployTarget {
 
 	async describe(projectName: string): Promise<TargetState | null> {
 		return this.states.get(projectName) ?? null
-	}
-
-	async teardown(projectName: string): Promise<void> {
-		this.provisioned.delete(projectName)
-		this.states.delete(projectName)
 	}
 }
 
@@ -114,7 +121,11 @@ describe('DeployTarget contract', () => {
 		expect(result.deployedEnvironments[0]?.url).toBe(
 			'https://dev.acme.example.com',
 		)
-		expect(result.deployedEnvironments[0]?.imageRef).toEqual(TEST_IMAGE)
+		const firstEnv = result.deployedEnvironments[0]
+		expect(firstEnv?.kind).toBe('container')
+		if (firstEnv?.kind === 'container') {
+			expect(firstEnv.imageRef).toEqual(TEST_IMAGE)
+		}
 		expect(result.deployedEnvironments[1]?.name).toBe('production')
 		expect(result.deployedEnvironments[1]?.url).toBe(
 			'https://acme.example.com',
@@ -128,17 +139,6 @@ describe('DeployTarget contract', () => {
 		await expect(target.deploy(TEST_CONFIG)).rejects.toThrow(
 			'Infrastructure not provisioned for "acme-web"',
 		)
-	})
-
-	it('returns null after teardown', async () => {
-		const target = new InMemoryDeployTarget()
-
-		await target.ensureInfra('acme-web')
-		await target.deploy(TEST_CONFIG)
-		await target.teardown('acme-web')
-		const state = await target.describe('acme-web')
-
-		expect(state).toBeNull()
 	})
 
 	it('is idempotent on double ensureInfra', async () => {
