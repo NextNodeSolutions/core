@@ -1,4 +1,4 @@
-import type { ProjectSection, ScriptsSection } from '../config/schema.ts'
+import type { ProjectSection, ScriptsSection } from '../config/types.ts'
 
 import type { PipelineEnvironment } from './environment.ts'
 

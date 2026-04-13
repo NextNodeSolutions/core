@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { NextNodeConfig } from '../config/schema.ts'
+import type { NextNodeConfig } from '../config/types.ts'
 import type { QualityTask } from '../domain/quality-matrix.ts'
 
 import { writePlanOutputs } from './plan-outputs.ts'
@@ -20,6 +20,11 @@ const APP_CONFIG: NextNodeConfig = {
 	scripts: { lint: 'lint', test: 'test', build: 'build' },
 	package: false,
 	environment: { development: true },
+	deploy: {
+		target: 'hetzner-vps',
+		secrets: [],
+		hetzner: { serverType: 'cpx22', location: 'nbg1' },
+	},
 }
 
 const PACKAGE_CONFIG: NextNodeConfig = {
@@ -33,6 +38,7 @@ const PACKAGE_CONFIG: NextNodeConfig = {
 	scripts: { lint: 'lint', test: 'test', build: 'build' },
 	package: false,
 	environment: { development: true },
+	deploy: false,
 }
 
 const PUBLISHABLE_CONFIG: NextNodeConfig = {
@@ -46,6 +52,7 @@ const PUBLISHABLE_CONFIG: NextNodeConfig = {
 	scripts: { lint: 'lint', test: 'test', build: 'build' },
 	package: { access: 'public' },
 	environment: { development: true },
+	deploy: false,
 }
 
 describe('writePlanOutputs', () => {

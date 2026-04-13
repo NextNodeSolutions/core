@@ -1,4 +1,4 @@
-import type { ProjectSection } from '../config/schema.ts'
+import type { ProjectSection } from '../config/types.ts'
 
 import { resolveDeployDomain } from './deploy-domain.ts'
 import type { AppEnvironment } from './environment.ts'

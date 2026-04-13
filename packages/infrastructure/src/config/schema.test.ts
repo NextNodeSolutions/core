@@ -6,7 +6,14 @@ describe('parseConfig', () => {
 	describe('valid configs', () => {
 		it('parses a valid app config with script defaults', () => {
 			const result = parseConfig({
-				project: { name: 'my-app', type: 'app' },
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: {
+					hetzner: { server_type: 'cpx22', location: 'nbg1' },
+				},
 			})
 
 			expect(result.ok).toBe(true)
@@ -19,6 +26,11 @@ describe('parseConfig', () => {
 			expect(result.config.scripts.test).toBe('test')
 			expect(result.config.scripts.build).toBe('build')
 			expect(result.config.package).toBe(false)
+			expect(result.config.deploy).toEqual({
+				target: 'hetzner-vps',
+				secrets: [],
+				hetzner: { serverType: 'cpx22', location: 'nbg1' },
+			})
 		})
 
 		it('parses a valid package config', () => {
@@ -34,7 +46,7 @@ describe('parseConfig', () => {
 
 		it('accepts scripts set to false', () => {
 			const result = parseConfig({
-				project: { name: 'test', type: 'app' },
+				project: { name: 'test', type: 'package' },
 				scripts: { lint: false, test: false, build: false },
 			})
 
@@ -48,7 +60,7 @@ describe('parseConfig', () => {
 
 		it('uses custom script names when provided', () => {
 			const result = parseConfig({
-				project: { name: 'my-app', type: 'app' },
+				project: { name: 'my-app', type: 'package' },
 				scripts: { lint: 'check:lint', test: 'check:test' },
 			})
 
@@ -131,7 +143,7 @@ describe('parseConfig', () => {
 
 		it('rejects non-string non-false script values', () => {
 			const result = parseConfig({
-				project: { name: 'test', type: 'app' },
+				project: { name: 'test', type: 'package' },
 				scripts: { lint: 42 },
 			})
 
@@ -158,7 +170,7 @@ describe('parseConfig', () => {
 	describe('project.filter', () => {
 		it('defaults filter to false when not provided', () => {
 			const result = parseConfig({
-				project: { name: 'my-app', type: 'app' },
+				project: { name: 'my-app', type: 'package' },
 			})
 
 			expect(result.ok).toBe(true)
@@ -186,7 +198,7 @@ describe('parseConfig', () => {
 
 		it('accepts false to explicitly disable filter', () => {
 			const result = parseConfig({
-				project: { name: 'my-app', type: 'app', filter: false },
+				project: { name: 'my-app', type: 'package', filter: false },
 			})
 
 			expect(result.ok).toBe(true)
@@ -265,7 +277,7 @@ describe('parseConfig', () => {
 	describe('environment', () => {
 		it('defaults development to true when environment section not provided', () => {
 			const result = parseConfig({
-				project: { name: 'my-app', type: 'app' },
+				project: { name: 'my-app', type: 'package' },
 			})
 
 			expect(result.ok).toBe(true)
@@ -276,7 +288,7 @@ describe('parseConfig', () => {
 
 		it('accepts development set to true', () => {
 			const result = parseConfig({
-				project: { name: 'my-app', type: 'app' },
+				project: { name: 'my-app', type: 'package' },
 				environment: { development: true },
 			})
 
@@ -288,7 +300,7 @@ describe('parseConfig', () => {
 
 		it('accepts development set to false', () => {
 			const result = parseConfig({
-				project: { name: 'my-app', type: 'app' },
+				project: { name: 'my-app', type: 'package' },
 				environment: { development: false },
 			})
 
@@ -314,7 +326,7 @@ describe('parseConfig', () => {
 
 		it('ignores unknown environment keys without error', () => {
 			const result = parseConfig({
-				project: { name: 'my-app', type: 'app' },
+				project: { name: 'my-app', type: 'package' },
 				environment: { development: true, unknown_key: 'whatever' },
 			})
 
@@ -460,15 +472,19 @@ describe('parseConfig', () => {
 	})
 
 	describe('deploy section', () => {
-		it('defaults secrets to empty array when not provided', () => {
+		it('defaults to cloudflare-pages with empty secrets for static projects', () => {
 			const result = parseConfig({
-				project: { name: 'my-app', type: 'app' },
+				project: { name: 'my-site', type: 'static' },
 			})
 
 			expect(result.ok).toBe(true)
 			if (!result.ok) return
 
-			expect(result.config.deploy.secrets).toEqual([])
+			expect(result.config.deploy).toEqual({
+				target: 'cloudflare-pages',
+				secrets: [],
+				hetzner: undefined,
+			})
 		})
 
 		it('accepts an array of secret names', () => {
@@ -480,15 +496,16 @@ describe('parseConfig', () => {
 			expect(result.ok).toBe(true)
 			if (!result.ok) return
 
-			expect(result.config.deploy.secrets).toEqual([
-				'RESEND_API_KEY',
-				'SUPABASE_URL',
-			])
+			expect(result.config.deploy).toEqual({
+				target: 'cloudflare-pages',
+				secrets: ['RESEND_API_KEY', 'SUPABASE_URL'],
+				hetzner: undefined,
+			})
 		})
 
 		it('rejects non-array secrets', () => {
 			const result = parseConfig({
-				project: { name: 'my-app', type: 'app' },
+				project: { name: 'my-site', type: 'static' },
 				deploy: { secrets: 'RESEND_API_KEY' },
 			})
 
@@ -502,7 +519,7 @@ describe('parseConfig', () => {
 
 		it('rejects empty-string entries', () => {
 			const result = parseConfig({
-				project: { name: 'my-app', type: 'app' },
+				project: { name: 'my-site', type: 'static' },
 				deploy: { secrets: ['RESEND_API_KEY', ''] },
 			})
 
@@ -512,6 +529,229 @@ describe('parseConfig', () => {
 			expect(result.errors).toContain(
 				'deploy.secrets entries must be non-empty strings',
 			)
+		})
+	})
+
+	describe('deploy target', () => {
+		it('infers hetzner-vps for app type with valid hetzner config', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: {
+					hetzner: { server_type: 'cpx22', location: 'nbg1' },
+				},
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok) return
+
+			expect(result.config.deploy).toEqual({
+				target: 'hetzner-vps',
+				secrets: [],
+				hetzner: { serverType: 'cpx22', location: 'nbg1' },
+			})
+		})
+
+		it('infers cloudflare-pages for static type', () => {
+			const result = parseConfig({
+				project: { name: 'my-site', type: 'static' },
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok) return
+
+			expect(result.config.deploy).toEqual({
+				target: 'cloudflare-pages',
+				secrets: [],
+				hetzner: undefined,
+			})
+		})
+
+		it('accepts explicit target override for app', () => {
+			const result = parseConfig({
+				project: { name: 'my-app', type: 'app' },
+				deploy: { target: 'cloudflare-pages' },
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok) return
+
+			expect(result.config.deploy).toEqual({
+				target: 'cloudflare-pages',
+				secrets: [],
+				hetzner: undefined,
+			})
+		})
+
+		it('accepts explicit hetzner-vps target for static with hetzner config', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-site',
+					type: 'static',
+					domain: 'my-site.example.com',
+				},
+				deploy: {
+					target: 'hetzner-vps',
+					hetzner: { server_type: 'cax11', location: 'fsn1' },
+				},
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok) return
+
+			expect(result.config.deploy).toEqual({
+				target: 'hetzner-vps',
+				secrets: [],
+				hetzner: { serverType: 'cax11', location: 'fsn1' },
+			})
+		})
+
+		it('rejects app without deploy section (hetzner config required by default)', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'[deploy.hetzner] section is required when target is "hetzner-vps"',
+			)
+		})
+
+		it('rejects hetzner-vps without [deploy.hetzner] section', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: { target: 'hetzner-vps' },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'[deploy.hetzner] section is required when target is "hetzner-vps"',
+			)
+		})
+
+		it('rejects hetzner-vps without project.domain', () => {
+			const result = parseConfig({
+				project: { name: 'my-app', type: 'app' },
+				deploy: {
+					hetzner: { server_type: 'cpx22', location: 'nbg1' },
+				},
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'project.domain is required when deploy target is "hetzner-vps"',
+			)
+		})
+
+		it('collects all hetzner validation errors at once', () => {
+			const result = parseConfig({
+				project: { name: 'my-app', type: 'app' },
+				deploy: { target: 'hetzner-vps', hetzner: {} },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'deploy.hetzner.server_type is required and must be a string',
+			)
+			expect(result.errors).toContain(
+				'deploy.hetzner.location is required and must be a string',
+			)
+			expect(result.errors).toContain(
+				'project.domain is required when deploy target is "hetzner-vps"',
+			)
+		})
+
+		it('rejects invalid deploy target string', () => {
+			const result = parseConfig({
+				project: { name: 'my-site', type: 'static' },
+				deploy: { target: 'aws-ecs' },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'deploy.target must be one of: hetzner-vps, cloudflare-pages',
+			)
+		})
+
+		it('rejects [deploy] section for package type', () => {
+			const result = parseConfig({
+				project: { name: 'my-lib', type: 'package' },
+				deploy: { secrets: ['DB_URL'] },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'[deploy] section is forbidden for project type "package"',
+			)
+		})
+
+		it('sets deploy to false for package type without deploy section', () => {
+			const result = parseConfig({
+				project: { name: 'my-lib', type: 'package' },
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok) return
+
+			expect(result.config.deploy).toBe(false)
+		})
+
+		it('rejects non-table deploy section', () => {
+			const result = parseConfig({
+				project: { name: 'my-site', type: 'static' },
+				deploy: 'invalid',
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain('[deploy] must be a table')
+		})
+
+		it('includes secrets with hetzner-vps deploy', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: {
+					secrets: ['DATABASE_URL', 'REDIS_URL'],
+					hetzner: { server_type: 'cpx22', location: 'nbg1' },
+				},
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok) return
+
+			expect(result.config.deploy).toEqual({
+				target: 'hetzner-vps',
+				secrets: ['DATABASE_URL', 'REDIS_URL'],
+				hetzner: { serverType: 'cpx22', location: 'nbg1' },
+			})
 		})
 	})
 
@@ -531,7 +771,7 @@ describe('parseConfig', () => {
 	describe('edge cases', () => {
 		it('ignores unknown script keys without error', () => {
 			const result = parseConfig({
-				project: { name: 'test', type: 'app' },
+				project: { name: 'test', type: 'package' },
 				scripts: { lint: 'lint', unknown_key: 'whatever' },
 			})
 

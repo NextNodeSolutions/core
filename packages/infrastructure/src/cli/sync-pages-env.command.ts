@@ -73,6 +73,9 @@ export async function syncPagesEnvCommand(): Promise<void> {
 
 	const computed = { SITE_URL: deployEnv.SITE_URL }
 
+	if (!config.deploy) {
+		throw new Error('sync-pages-env requires a deployable project')
+	}
 	const declaredSecrets = config.deploy.secrets
 	let secrets: Record<string, string> = {}
 
