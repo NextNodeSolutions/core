@@ -609,7 +609,7 @@ describe('parseConfig', () => {
 			})
 		})
 
-		it('rejects app without deploy section (hetzner config required by default)', () => {
+		it('defaults hetzner config when app has no deploy section', () => {
 			const result = parseConfig({
 				project: {
 					name: 'my-app',
@@ -618,15 +618,17 @@ describe('parseConfig', () => {
 				},
 			})
 
-			expect(result.ok).toBe(false)
-			if (result.ok) return
+			expect(result.ok).toBe(true)
+			if (!result.ok) return
 
-			expect(result.errors).toContain(
-				'[deploy.hetzner] section is required when target is "hetzner-vps"',
-			)
+			expect(result.config.deploy).toEqual({
+				target: 'hetzner-vps',
+				secrets: [],
+				hetzner: { serverType: 'cx23', location: 'nbg1' },
+			})
 		})
 
-		it('rejects hetzner-vps without [deploy.hetzner] section', () => {
+		it('defaults hetzner config when deploy section omits it', () => {
 			const result = parseConfig({
 				project: {
 					name: 'my-app',
@@ -636,12 +638,34 @@ describe('parseConfig', () => {
 				deploy: { target: 'hetzner-vps' },
 			})
 
-			expect(result.ok).toBe(false)
-			if (result.ok) return
+			expect(result.ok).toBe(true)
+			if (!result.ok) return
 
-			expect(result.errors).toContain(
-				'[deploy.hetzner] section is required when target is "hetzner-vps"',
-			)
+			expect(result.config.deploy).toEqual({
+				target: 'hetzner-vps',
+				secrets: [],
+				hetzner: { serverType: 'cx23', location: 'nbg1' },
+			})
+		})
+
+		it('defaults individual hetzner fields when partially specified', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: { hetzner: { server_type: 'cpx22' } },
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok) return
+
+			expect(result.config.deploy).toEqual({
+				target: 'hetzner-vps',
+				secrets: [],
+				hetzner: { serverType: 'cpx22', location: 'nbg1' },
+			})
 		})
 
 		it('rejects hetzner-vps without project.domain', () => {
@@ -660,24 +684,43 @@ describe('parseConfig', () => {
 			)
 		})
 
-		it('collects all hetzner validation errors at once', () => {
+		it('rejects invalid hetzner field values', () => {
 			const result = parseConfig({
-				project: { name: 'my-app', type: 'app' },
-				deploy: { target: 'hetzner-vps', hetzner: {} },
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: {
+					hetzner: { server_type: '', location: 42 },
+				},
 			})
 
 			expect(result.ok).toBe(false)
 			if (result.ok) return
 
 			expect(result.errors).toContain(
-				'deploy.hetzner.server_type is required and must be a string',
+				'deploy.hetzner.server_type must be a non-empty string',
 			)
 			expect(result.errors).toContain(
-				'deploy.hetzner.location is required and must be a string',
+				'deploy.hetzner.location must be a non-empty string',
 			)
-			expect(result.errors).toContain(
-				'project.domain is required when deploy target is "hetzner-vps"',
-			)
+		})
+
+		it('rejects non-table hetzner section', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: { hetzner: 'invalid' },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain('[deploy.hetzner] must be a table')
 		})
 
 		it('rejects invalid deploy target string', () => {

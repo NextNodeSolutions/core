@@ -1,8 +1,8 @@
+import { DEPLOY_PROVIDER_VALIDATORS } from './providers/registry.ts'
 import type {
 	DeployableProjectType,
 	DeploySection,
 	DeployTargetType,
-	HetznerDeployConfig,
 	ProjectType,
 } from './types.ts'
 import {
@@ -43,46 +43,6 @@ function validateSecrets(deployRecord: Record<string, unknown>): {
 		}
 	}
 	return { errors: [], secrets: rawSecrets }
-}
-
-function validateHetznerConfig(deployRecord: Record<string, unknown>): {
-	errors: string[]
-	hetzner: HetznerDeployConfig | undefined
-} {
-	const rawHetzner = deployRecord['hetzner']
-	if (!isRecord(rawHetzner)) {
-		return {
-			errors: [
-				'[deploy.hetzner] section is required when target is "hetzner-vps"',
-			],
-			hetzner: undefined,
-		}
-	}
-	const serverType = rawHetzner['server_type']
-	const location = rawHetzner['location']
-	if (typeof serverType !== 'string' || serverType === '') {
-		const errors = [
-			'deploy.hetzner.server_type is required and must be a string',
-		]
-		if (typeof location !== 'string' || location === '') {
-			errors.push(
-				'deploy.hetzner.location is required and must be a string',
-			)
-		}
-		return { errors, hetzner: undefined }
-	}
-	if (typeof location !== 'string' || location === '') {
-		return {
-			errors: [
-				'deploy.hetzner.location is required and must be a string',
-			],
-			hetzner: undefined,
-		}
-	}
-	return {
-		errors: [],
-		hetzner: { serverType, location },
-	}
 }
 
 export function validateDeploySection(
@@ -132,22 +92,24 @@ export function validateDeploySection(
 	const secretsResult = validateSecrets(deployRecord)
 	errors.push(...secretsResult.errors)
 
-	let hetzner: HetznerDeployConfig | undefined
-	if (target === 'hetzner-vps') {
-		const hetznerResult = validateHetznerConfig(deployRecord)
-		errors.push(...hetznerResult.errors)
-		hetzner = hetznerResult.hetzner
-		if (!hasDomain) {
-			errors.push(
-				'project.domain is required when deploy target is "hetzner-vps"',
-			)
-		}
+	const provider = DEPLOY_PROVIDER_VALIDATORS[target]
+	const providerResult = provider.validate(
+		deployRecord,
+		secretsResult.secrets,
+	)
+	errors.push(...providerResult.errors)
+
+	if (provider.requiresDomain && !hasDomain) {
+		errors.push(
+			'project.domain is required when deploy target is "hetzner-vps"',
+		)
 	}
 
 	if (errors.length > 0) return { errors, deploy: false }
 
-	return {
-		errors: [],
-		deploy: { target, secrets: secretsResult.secrets, hetzner },
+	if (!providerResult.deploy) {
+		return { errors: ['Provider validation failed'], deploy: false }
 	}
+
+	return { errors: [], deploy: providerResult.deploy }
 }
