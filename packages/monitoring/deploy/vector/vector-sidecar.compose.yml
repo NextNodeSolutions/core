@@ -1,0 +1,49 @@
+# Vector as a Docker sidecar on a NextNode client VPS.
+#
+# Merge this into the client's root docker-compose.yml (or include via
+# `docker compose -f app.yml -f vector-sidecar.compose.yml up -d`).
+#
+# Assumes the template has been rendered to /etc/vector/vector.toml by
+# `nextnode-deploy` and that the following env vars are present in a
+# shared env file at /etc/vector/vector.env:
+#
+#   NN_CLIENT_ID=acme-corp
+#   NN_PROJECT=web
+#   NN_ENVIRONMENT=production
+#   NN_VL_URL=http://monitoring.<tailnet>.ts.net:9428
+#
+# The Tailscale client on the host is a prerequisite — Vector talks to VL
+# over the tailnet interface.
+
+services:
+    vector:
+        image: timberio/vector:0.50.0-alpine
+        container_name: vector
+        restart: unless-stopped
+        env_file:
+            - /etc/vector/vector.env
+        volumes:
+            # Vector config — read-only, rendered by nextnode-deploy.
+            - /etc/vector/vector.toml:/etc/vector/vector.toml:ro
+            # Docker socket — required by the docker_logs source.
+            - /var/run/docker.sock:/var/run/docker.sock:ro
+            # Host journald — required by the journald source.
+            - /var/log/journal:/var/log/journal:ro
+            - /run/log/journal:/run/log/journal:ro
+            # Disk buffer persistence across restarts.
+            - vector_data:/var/lib/vector
+        command: ['--config', '/etc/vector/vector.toml']
+        # Vector needs to read the host's machine-id to dedupe journald.
+        # Safe because the container is ours and already has docker.sock.
+        read_only: false
+        security_opt:
+            - no-new-privileges:true
+        healthcheck:
+            test: ['CMD', 'vector', 'top', '--url', 'http://127.0.0.1:8686']
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 10s
+
+volumes:
+    vector_data:

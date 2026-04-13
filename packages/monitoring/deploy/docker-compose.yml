@@ -1,0 +1,45 @@
+# Monitoring VPS — Docker Compose stack.
+#
+# Current scope (Step 3 / Phase 2): VictoriaLogs only.
+# Future steps will add: victoriametrics, vmalert, grafana, monitoring-webhook,
+# caddy. Keeping this file minimal for now so it can stand up the logs pipeline
+# end-to-end without blocking on the rest of the stack.
+#
+# Required env vars (set via .env alongside this file):
+#
+#   TAILNET_BIND_ADDR   — tailnet IP of this monitoring VPS, e.g. 100.x.y.z
+#                         VL binds ONLY here; :9428 is never public.
+#
+# The tailnet bind is the trust boundary. Do NOT add `-httpListenAddr=:9428`
+# or `0.0.0.0` — that would expose VL to the public internet.
+
+services:
+    victorialogs:
+        image: victoriametrics/victoria-logs:v1.14.0-victorialogs
+        container_name: victorialogs
+        restart: unless-stopped
+        # Bind ONLY on the tailnet interface. Docker's default bridge would
+        # otherwise expose 9428 on all host interfaces.
+        ports:
+            - '${TAILNET_BIND_ADDR}:9428:9428'
+        command:
+            - '-storageDataPath=/vl-data'
+            - '-retentionPeriod=30d'
+            - '-retention.maxDiskSpaceUsageBytes=50GiB'
+            - '-httpListenAddr=:9428'
+            - '-loggerFormat=json'
+        volumes:
+            - ./data/vl:/vl-data
+        healthcheck:
+            test:
+                [
+                    'CMD',
+                    'wget',
+                    '--spider',
+                    '-q',
+                    'http://127.0.0.1:9428/health',
+                ]
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 10s
