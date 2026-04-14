@@ -87,6 +87,7 @@ describe('writePlanOutputs', () => {
 			config: APP_CONFIG,
 			pagesProjectName: 'my-app',
 			tasks,
+			buildDirectory: 'apps/landing/dist',
 		})
 
 		const output = readFileSync(outputFile, 'utf-8')
@@ -95,7 +96,7 @@ describe('writePlanOutputs', () => {
 			{ id: 'test', name: 'Test', cmd: 'pnpm test' },
 		])
 		expect(output).toBe(
-			`quality_matrix=${matrixJson}\nproject_name=my-app\nproject_type=app\nproject_filter=\npublish=false\ndevelopment_enabled=true\nhas_prod_gate=false\nhas_domain=false\ndomain=\n`,
+			`quality_matrix=${matrixJson}\nproject_name=my-app\nproject_type=app\nproject_filter=\npublish=false\ndevelopment_enabled=true\nhas_prod_gate=false\nhas_domain=false\ndomain=\nbuild_directory=apps/landing/dist\n`,
 		)
 	})
 
@@ -104,6 +105,7 @@ describe('writePlanOutputs', () => {
 			config: APP_CONFIG,
 			pagesProjectName: 'my-app-dev',
 			tasks: [],
+			buildDirectory: 'apps/landing/dist',
 		})
 
 		const output = readFileSync(outputFile, 'utf-8')
@@ -115,6 +117,7 @@ describe('writePlanOutputs', () => {
 			config: APP_CONFIG,
 			pagesProjectName: 'my-app',
 			tasks: [],
+			buildDirectory: 'dist',
 		})
 
 		const output = readFileSync(outputFile, 'utf-8')
@@ -128,6 +131,7 @@ describe('writePlanOutputs', () => {
 			config: PACKAGE_CONFIG,
 			pagesProjectName: 'my-lib',
 			tasks: [],
+			buildDirectory: 'dist',
 		})
 
 		const output = readFileSync(outputFile, 'utf-8')
@@ -142,6 +146,7 @@ describe('writePlanOutputs', () => {
 			config: PUBLISHABLE_CONFIG,
 			pagesProjectName: 'logger',
 			tasks: [],
+			buildDirectory: 'dist',
 		})
 
 		const output = readFileSync(outputFile, 'utf-8')
@@ -159,6 +164,7 @@ describe('writePlanOutputs', () => {
 			config,
 			pagesProjectName: 'my-app',
 			tasks: [],
+			buildDirectory: 'dist',
 		})
 
 		const output = readFileSync(outputFile, 'utf-8')
@@ -175,6 +181,7 @@ describe('writePlanOutputs', () => {
 			config: APP_CONFIG,
 			pagesProjectName: 'my-app',
 			tasks,
+			buildDirectory: 'apps/landing/dist',
 		})
 
 		const output = readFileSync(outputFile, 'utf-8')
@@ -197,6 +204,7 @@ describe('writePlanOutputs', () => {
 			config,
 			pagesProjectName: 'my-site',
 			tasks: [],
+			buildDirectory: 'dist',
 		})
 
 		const output = readFileSync(outputFile, 'utf-8')
@@ -216,6 +224,7 @@ describe('writePlanOutputs', () => {
 			config,
 			pagesProjectName: 'my-app',
 			tasks: [],
+			buildDirectory: 'dist',
 		})
 
 		const output = readFileSync(outputFile, 'utf-8')
@@ -228,6 +237,7 @@ describe('writePlanOutputs', () => {
 			config: APP_CONFIG,
 			pagesProjectName: 'my-app',
 			tasks: [],
+			buildDirectory: 'dist',
 		})
 
 		const output = readFileSync(outputFile, 'utf-8')
@@ -243,6 +253,7 @@ describe('writePlanOutputs', () => {
 				config: APP_CONFIG,
 				pagesProjectName: 'my-app',
 				tasks: [],
+				buildDirectory: 'dist',
 			}),
 		).toThrow('GITHUB_OUTPUT env var')
 	})

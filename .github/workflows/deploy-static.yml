@@ -25,6 +25,7 @@ jobs:
             project_name: ${{ steps.plan.outputs.project_name }}
             has_prod_gate: ${{ steps.plan.outputs.has_prod_gate }}
             has_domain: ${{ steps.plan.outputs.has_domain }}
+            build_directory: ${{ steps.plan.outputs.build_directory }}
         steps:
             - uses: NextNodeSolutions/core/.github/actions/setup@main
               with:
@@ -124,7 +125,7 @@ jobs:
             - uses: NextNodeSolutions/core/.github/actions/deploy-cloudflare-pages@main
               id: cf
               with:
-                  directory: dist
+                  directory: ${{ needs.plan.outputs.build_directory }}
                   project-name: ${{ needs.plan.outputs.project_name }}
                   account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
                   api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
