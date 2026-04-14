@@ -72,6 +72,7 @@ function buildCname(
 
 export interface ExistingDnsRecord {
 	readonly id: string
+	readonly type: string
 	readonly content: string
 	readonly proxied: boolean
 	readonly ttl: number
@@ -81,6 +82,10 @@ export type DnsRecordAction =
 	| { readonly kind: 'skip' }
 	| { readonly kind: 'create' }
 	| { readonly kind: 'update'; readonly recordId: string }
+	| {
+			readonly kind: 'replace'
+			readonly deleteRecordIds: ReadonlyArray<string>
+	  }
 
 /**
  * Decide what to do with a desired DNS record given the currently
@@ -94,6 +99,16 @@ export function reconcileDnsRecord(
 	desired: DesiredDnsRecord,
 	existing: ReadonlyArray<ExistingDnsRecord>,
 ): DnsRecordAction {
+	if (existing.length === 0) return { kind: 'create' }
+
+	const conflicting = existing.filter(r => r.type !== desired.type)
+	if (conflicting.length > 0) {
+		return {
+			kind: 'replace',
+			deleteRecordIds: conflicting.map(r => r.id),
+		}
+	}
+
 	const current = existing[0]
 	if (!current) return { kind: 'create' }
 	if (

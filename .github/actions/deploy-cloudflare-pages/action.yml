@@ -39,6 +39,7 @@ runs:
           with:
               apiToken: ${{ inputs.api-token }}
               accountId: ${{ inputs.account-id }}
+              packageManager: npm
               command: >-
                   pages deploy ${{ inputs.directory }}
                   --project-name=${{ inputs.project-name }}

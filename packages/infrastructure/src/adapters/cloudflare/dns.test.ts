@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
 	createDnsRecord,
+	deleteDnsRecord,
 	listDnsRecords,
 	lookupZoneId,
 	updateDnsRecord,
@@ -113,7 +114,7 @@ describe('lookupZoneId', () => {
 })
 
 describe('listDnsRecords', () => {
-	it('returns the records found for the name+type combination', async () => {
+	it('returns all records for the given name', async () => {
 		const records = [
 			{
 				id: 'rec-1',
@@ -131,16 +132,11 @@ describe('listDnsRecords', () => {
 			)
 		vi.stubGlobal('fetch', fetchMock)
 
-		const result = await listDnsRecords(
-			'zone-1',
-			'example.com',
-			'CNAME',
-			TOKEN,
-		)
+		const result = await listDnsRecords('zone-1', 'example.com', TOKEN)
 
 		expect(result).toEqual(records)
 		expect(fetchMock).toHaveBeenCalledWith(
-			'https://api.cloudflare.com/client/v4/zones/zone-1/dns_records?name=example.com&type=CNAME',
+			'https://api.cloudflare.com/client/v4/zones/zone-1/dns_records?name=example.com',
 			expect.any(Object),
 		)
 	})
@@ -152,7 +148,7 @@ describe('listDnsRecords', () => {
 		)
 
 		await expect(
-			listDnsRecords('zone-1', 'example.com', 'CNAME', TOKEN),
+			listDnsRecords('zone-1', 'example.com', TOKEN),
 		).rejects.toThrow('Cloudflare API returned 500')
 	})
 })
@@ -264,6 +260,35 @@ describe('updateDnsRecord', () => {
 		expect(fetchMock).toHaveBeenCalledWith(
 			'https://api.cloudflare.com/client/v4/zones/zone-1/dns_records/rec-1',
 			expect.objectContaining({ method: 'PUT' }),
+		)
+	})
+})
+
+describe('deleteDnsRecord', () => {
+	it('sends a DELETE request to the record URL', async () => {
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValue(
+				okJson({ success: true, result: null, errors: [] }),
+			)
+		vi.stubGlobal('fetch', fetchMock)
+
+		await deleteDnsRecord('zone-1', 'rec-1', TOKEN)
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			'https://api.cloudflare.com/client/v4/zones/zone-1/dns_records/rec-1',
+			expect.objectContaining({ method: 'DELETE' }),
+		)
+	})
+
+	it('throws on HTTP error', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue(httpError(404, 'not found')),
+		)
+
+		await expect(deleteDnsRecord('zone-1', 'rec-1', TOKEN)).rejects.toThrow(
+			'Cloudflare API returned 404',
 		)
 	})
 })
