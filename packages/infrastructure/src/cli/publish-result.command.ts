@@ -2,8 +2,8 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
 
-import { writeOutput, writeSummary } from '../adapters/github-output.ts'
-import { readSemanticReleaseOutput } from '../adapters/semantic-release-output.ts'
+import { writeOutput, writeSummary } from '../adapters/github/output.ts'
+import { readSemanticReleaseOutput } from '../adapters/github/semantic-release.ts'
 import {
 	buildSummary,
 	parseSemanticReleaseOutput,

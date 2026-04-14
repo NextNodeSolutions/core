@@ -28,7 +28,7 @@ jobs:
 
             - name: Plan pipeline
               id: plan
-              run: node src/index.ts
+              run: node src/index.ts plan
               working-directory: .infra/packages/infrastructure
               env:
                   PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}

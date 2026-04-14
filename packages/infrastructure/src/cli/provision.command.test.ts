@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { dnsCommand } from './dns.command.ts'
 import { STATIC_NO_DOMAIN, STATIC_WITH_DOMAIN } from './fixtures.ts'
+import { provisionCommand } from './provision.command.ts'
 
 interface MockResponse {
 	ok: boolean
@@ -25,6 +25,15 @@ function okJson(body: unknown): MockResponse {
 	}
 }
 
+function notFound(): MockResponse {
+	return {
+		ok: false,
+		status: 404,
+		json: () => Promise.resolve({}),
+		text: () => Promise.resolve('Not found'),
+	}
+}
+
 function urlOf(input: FetchInput): string {
 	return typeof input === 'string' ? input : input.toString()
 }
@@ -38,32 +47,28 @@ function stubCloudflareApi(): ReturnType<typeof vi.fn<FetchImpl>> {
 		const url = urlOf(input)
 		const method = methodOf(init)
 
-		if (url.includes('/zones?name=') && method === 'GET') {
-			return Promise.resolve(
-				okJson({
-					success: true,
-					result: [{ id: 'zone-1', name: 'example.com' }],
-					errors: [],
-				}),
-			)
-		}
-		if (url.includes('/dns_records') && method === 'GET') {
+		if (url.includes('/domains') && method === 'GET') {
 			return Promise.resolve(
 				okJson({ success: true, result: [], errors: [] }),
 			)
 		}
-		if (url.includes('/dns_records') && method === 'POST') {
+		if (url.includes('/domains') && method === 'POST') {
 			return Promise.resolve(
 				okJson({
 					success: true,
-					result: {
-						id: 'rec-1',
-						type: 'CNAME',
-						name: 'example.com',
-						content: 'my-site.pages.dev',
-						proxied: true,
-						ttl: 1,
-					},
+					result: { name: 'x', status: 'initializing' },
+					errors: [],
+				}),
+			)
+		}
+		if (url.includes('/pages/projects/') && method === 'GET') {
+			return Promise.resolve(notFound())
+		}
+		if (url.includes('/pages/projects') && method === 'POST') {
+			return Promise.resolve(
+				okJson({
+					success: true,
+					result: { name: 'my-site', production_branch: 'main' },
 					errors: [],
 				}),
 			)
@@ -77,7 +82,7 @@ function stubCloudflareApi(): ReturnType<typeof vi.fn<FetchImpl>> {
 	return fetchMock
 }
 
-describe('dnsCommand', () => {
+describe('provisionCommand', () => {
 	beforeEach(() => {
 		vi.stubEnv('PIPELINE_ENVIRONMENT', 'production')
 		vi.stubEnv('CLOUDFLARE_ACCOUNT_ID', 'acct-123')
@@ -90,30 +95,38 @@ describe('dnsCommand', () => {
 		vi.restoreAllMocks()
 	})
 
-	it('creates DNS records for a static project with domain', async () => {
+	it('provisions Pages project and domains for a static project with domain', async () => {
 		const fetchMock = stubCloudflareApi()
 
-		await dnsCommand(STATIC_WITH_DOMAIN)
+		await provisionCommand(STATIC_WITH_DOMAIN)
 
-		const postCalls = fetchMock.mock.calls.filter(
-			call => methodOf(call[1]) === 'POST',
-		)
-		expect(postCalls.length).toBeGreaterThan(0)
+		const urls = fetchMock.mock.calls.map(call => urlOf(call[0]))
+		expect(urls.some(u => u.includes('/pages/projects'))).toBe(true)
+		expect(urls.some(u => u.includes('/domains'))).toBe(true)
 	})
 
-	it('skips when no domain configured', async () => {
-		const fetchMock = vi.fn<FetchImpl>()
-		vi.stubGlobal('fetch', fetchMock)
+	it('provisions only the Pages project when no domain configured', async () => {
+		const fetchMock = stubCloudflareApi()
 
-		await dnsCommand(STATIC_NO_DOMAIN)
+		await provisionCommand(STATIC_NO_DOMAIN)
 
-		expect(fetchMock).not.toHaveBeenCalled()
+		const urls = fetchMock.mock.calls.map(call => urlOf(call[0]))
+		expect(urls.some(u => u.includes('/pages/projects'))).toBe(true)
+		expect(urls.some(u => u.includes('/dns_records'))).toBe(false)
+	})
+
+	it('throws when CLOUDFLARE_ACCOUNT_ID is missing', async () => {
+		vi.stubEnv('CLOUDFLARE_ACCOUNT_ID', undefined)
+
+		await expect(provisionCommand(STATIC_NO_DOMAIN)).rejects.toThrow(
+			'CLOUDFLARE_ACCOUNT_ID env var',
+		)
 	})
 
 	it('throws when CLOUDFLARE_API_TOKEN is missing', async () => {
 		vi.stubEnv('CLOUDFLARE_API_TOKEN', undefined)
 
-		await expect(dnsCommand(STATIC_WITH_DOMAIN)).rejects.toThrow(
+		await expect(provisionCommand(STATIC_NO_DOMAIN)).rejects.toThrow(
 			'CLOUDFLARE_API_TOKEN env var',
 		)
 	})

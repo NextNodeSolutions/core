@@ -6,8 +6,23 @@ export interface NextNodeConfig {
 	readonly deploy: DeploySection | false
 }
 
-export const PROJECT_TYPES = ['app', 'package', 'static'] as const
-export type ProjectType = (typeof PROJECT_TYPES)[number]
+export interface DeployableConfig extends NextNodeConfig {
+	readonly project: ProjectSection & { readonly type: DeployableProjectType }
+}
+
+export const DEPLOYABLE_PROJECT_TYPES = ['app', 'static'] as const
+export type DeployableProjectType = (typeof DEPLOYABLE_PROJECT_TYPES)[number]
+
+export const NON_DEPLOYABLE_PROJECT_TYPES = ['package'] as const
+export type NonDeployableProjectType =
+	(typeof NON_DEPLOYABLE_PROJECT_TYPES)[number]
+
+export type ProjectType = DeployableProjectType | NonDeployableProjectType
+
+export const PROJECT_TYPES = [
+	...DEPLOYABLE_PROJECT_TYPES,
+	...NON_DEPLOYABLE_PROJECT_TYPES,
+] as const
 
 export const DEPLOY_TARGETS = ['hetzner-vps', 'cloudflare-pages'] as const
 export type DeployTargetType = (typeof DEPLOY_TARGETS)[number]
@@ -66,12 +81,17 @@ export const DEFAULT_ENVIRONMENT: EnvironmentSection = {
 	development: true,
 }
 
-export type DeployableProjectType = 'app' | 'static'
+const DEPLOYABLE_SET: ReadonlySet<string> = new Set(DEPLOYABLE_PROJECT_TYPES)
 
-export const DEPLOYABLE_PROJECT_TYPES: ReadonlySet<string> = new Set([
-	'app',
-	'static',
-])
+export function isDeployable(type: ProjectType): type is DeployableProjectType {
+	return DEPLOYABLE_SET.has(type)
+}
+
+export function isDeployableConfig(
+	config: NextNodeConfig,
+): config is DeployableConfig {
+	return isDeployable(config.project.type)
+}
 
 export const DEFAULT_DEPLOY_TARGETS: Record<
 	DeployableProjectType,

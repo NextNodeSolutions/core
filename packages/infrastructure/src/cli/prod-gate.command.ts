@@ -2,7 +2,7 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
 
-import { fetchWorkflowRuns } from '../adapters/github-api.ts'
+import { fetchWorkflowRuns } from '../adapters/github/api.ts'
 import { evaluateDevRun, findDevRun } from '../domain/prod-gate.ts'
 
 import { requireEnv } from './env.ts'
