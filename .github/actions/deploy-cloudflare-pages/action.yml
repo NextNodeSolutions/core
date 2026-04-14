@@ -25,28 +25,16 @@ inputs:
         description: Cloudflare API token with Pages edit permission
         required: true
 
-outputs:
-    url:
-        description: The deployment URL
-        value: ${{ steps.deploy.outputs.deployment-url }}
-
 runs:
     using: composite
     steps:
-        - name: Install wrangler
-          shell: bash
-          run: pnpm add -Dw wrangler@3
-
         - name: Deploy to Cloudflare Pages
           id: deploy
-          uses: cloudflare/wrangler-action@v3
-          with:
-              apiToken: ${{ inputs.api-token }}
-              accountId: ${{ inputs.account-id }}
-              command: >-
-                  pages deploy ${{ inputs.directory }}
-                  --project-name=${{ inputs.project-name }}
-                  --branch=main
+          shell: bash
+          env:
+              CLOUDFLARE_API_TOKEN: ${{ inputs.api-token }}
+              CLOUDFLARE_ACCOUNT_ID: ${{ inputs.account-id }}
+          run: npx --yes wrangler@3 pages deploy ${{ inputs.directory }} --project-name=${{ inputs.project-name }} --branch=main
 
         - name: Deployment summary
           shell: bash
@@ -54,4 +42,3 @@ runs:
               echo "### Cloudflare Pages Deploy" >> "$GITHUB_STEP_SUMMARY"
               echo "" >> "$GITHUB_STEP_SUMMARY"
               echo "- **Project:** ${{ inputs.project-name }}" >> "$GITHUB_STEP_SUMMARY"
-              echo "- **URL:** ${{ steps.deploy.outputs.deployment-url }}" >> "$GITHUB_STEP_SUMMARY"
