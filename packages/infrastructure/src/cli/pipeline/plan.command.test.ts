@@ -49,6 +49,11 @@ describe('planCommand', () => {
 		outputFile = join(tmpdir(), `gh-output-${id}.txt`)
 		vi.stubEnv('GITHUB_OUTPUT', outputFile)
 		vi.stubEnv('PIPELINE_ENVIRONMENT', 'production')
+		vi.stubEnv(
+			'PIPELINE_CONFIG_FILE',
+			'/workspace/apps/landing/nextnode.toml',
+		)
+		vi.stubEnv('GITHUB_WORKSPACE', '/workspace')
 	})
 
 	afterEach(() => {
@@ -64,6 +69,7 @@ describe('planCommand', () => {
 		expect(output).toContain('project_name=my-site\n')
 		expect(output).toContain('has_domain=true\n')
 		expect(output).toContain('domain=example.com\n')
+		expect(output).toContain('build_directory=apps/landing/dist\n')
 	})
 
 	it('writes plan outputs for a package project', () => {

@@ -16,12 +16,14 @@ interface PlanInput {
 	readonly config: NextNodeConfig
 	readonly pagesProjectName: string
 	readonly tasks: ReadonlyArray<QualityTask>
+	readonly buildDirectory: string
 }
 
 export function writePlanOutputs({
 	config,
 	pagesProjectName,
 	tasks,
+	buildDirectory,
 }: PlanInput): void {
 	const qualityMatrix = tasks.length > 0 ? tasks : SKIP_MATRIX
 	const matrixJson = JSON.stringify(qualityMatrix)
@@ -35,6 +37,7 @@ export function writePlanOutputs({
 	writeOutput('has_prod_gate', String(hasProdGate(qualityMatrix)))
 	writeOutput('has_domain', String(Boolean(config.project.domain)))
 	writeOutput('domain', config.project.domain ?? '')
+	writeOutput('build_directory', buildDirectory)
 
 	logger.info(`Quality matrix: ${matrixJson}`)
 	logger.info('Plan outputs written to GITHUB_OUTPUT')
