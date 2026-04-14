@@ -3,6 +3,7 @@ import { createLogger } from '@nextnode-solutions/logger'
 import { deployCommand } from './cli/deploy/deploy.command.ts'
 import { dnsCommand } from './cli/deploy/dns.command.ts'
 import { provisionCommand } from './cli/deploy/provision.command.ts'
+import { seoGuardCommand } from './cli/deploy/seo-guard.command.ts'
 import { requireEnv } from './cli/env.ts'
 import { planCommand } from './cli/pipeline/plan.command.ts'
 import { prodGateCommand } from './cli/pipeline/prod-gate.command.ts'
@@ -25,6 +26,7 @@ const DEPLOY_COMMANDS: Record<string, DeployCommand> = {
 	provision: provisionCommand,
 	deploy: deployCommand,
 	dns: dnsCommand,
+	'seo-guard': seoGuardCommand,
 }
 
 const STANDALONE_COMMANDS: Record<string, StandaloneCommand> = {

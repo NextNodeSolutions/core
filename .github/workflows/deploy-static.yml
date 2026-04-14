@@ -122,6 +122,14 @@ jobs:
             - name: Build
               run: pnpm build
 
+            - name: SEO guard
+              run: node src/index.ts seo-guard
+              working-directory: .infra/packages/infrastructure
+              env:
+                  PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
+                  PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
+                  BUILD_DIRECTORY: ${{ github.workspace }}/${{ needs.plan.outputs.build_directory }}
+
             - uses: NextNodeSolutions/core/.github/actions/deploy-cloudflare-pages@main
               id: cf
               with:
