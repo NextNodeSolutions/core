@@ -35,10 +35,12 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1030.0",
     "@nextnode-solutions/logger": "^1.0.0",
-    "smol-toml": "^1.6.1"
+    "smol-toml": "^1.6.1",
+    "ssh2": "^1.17.0"
   },
   "devDependencies": {
     "@nextnode-solutions/standards": "workspace:*",
+    "@types/ssh2": "^1.15.5",
     "@typescript/native-preview": "7.0.0-dev.20260407.1",
     "oxfmt": "^0.43.0",
     "oxlint": "^1.58.0",
