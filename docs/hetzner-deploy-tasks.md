@@ -2,275 +2,146 @@
 
 Atomic implementation steps for [hetzner-deploy-plan.md](./hetzner-deploy-plan.md). Each task is independently testable.
 
-## 1 — Config schema
+## 1 — Config schema ✅
 
 ### 1.1 Add deploy target types to config/schema.ts
 
-Add `DeployTarget`, `HetznerDeployConfig`, and extended `DeploySection` types. Add `target` field (`"hetzner-vps" | "cloudflare-pages"`) and `hetzner` field (optional object with `server_type`, `location`).
-
-**Test:** `pnpm --filter @nextnode-solutions/infrastructure type-check` passes.
+Done. `DeployTarget`, `HetznerDeployConfig`, `HetznerVpsDeploySection` in `config/types.ts`.
 
 ### 1.2 Add validation for [deploy.target] and [deploy.hetzner]
 
-In `parseConfig`, validate:
-- `deploy.target` must be `"hetzner-vps"` or `"cloudflare-pages"` (default: infer from `project.type` — `"static"` → `"cloudflare-pages"`, `"app"` → `"hetzner-vps"`)
-- If target is `"hetzner-vps"`: `deploy.hetzner` required with `server_type` (string) and `location` (string)
-- If target is `"hetzner-vps"`: `project.domain` required (used for hostname convention)
-- Collect all errors (multi-error, not fail-first)
+Done. Multi-error validation in `config/validation/providers/hetzner.ts` + `config/validation/deploy.ts`.
 
-**Test:** `pnpm --filter @nextnode-solutions/infrastructure test` — new tests in `config/schema.test.ts` cover: valid hetzner config, missing hetzner block, missing domain, default target inference from type, invalid target string.
-
-## 2 — DeployTarget interface
+## 2 — DeployTarget interface ✅
 
 ### 2.1 Create DeployTarget interface and core types
 
-Create `domain/deploy-target.ts` with:
-- `ImageRef` (registry, repository, tag)
-- `EnvironmentDeployConfig` (name, hostname, envVars, secrets)
-- `ProjectDeployConfig` (projectName, image, environments, composeFileContent)
-- `DeployedEnvironment` (name, url, imageRef, deployedAt)
-- `TargetState` (projectName, environments)
-- `DeployResult` (projectName, deployedEnvironments, durationMs)
-- `DeployTarget` interface (name, ensureInfra, deploy, describe, teardown)
-
-Zero provider-specific types.
-
-**Test:** `pnpm --filter @nextnode-solutions/infrastructure type-check` passes. Exports usable from other domain files.
+Done. `domain/deploy/target.ts` — `DeployTarget`, `ImageRef`, `ContainerDeployConfig`, `StaticDeployConfig`, `DeployResult`, `TargetState`.
 
 ### 2.2 Create InMemoryDeployTarget + contract tests
 
-Create `domain/deploy-target.test.ts` with:
-- `InMemoryDeployTarget` implementing `DeployTarget` (stores state in Maps, no IO)
-- Contract tests:
-  - `ensureInfra` then `describe` returns state
-  - `deploy` returns DeployResult with correct environments
-  - `deploy` without `ensureInfra` throws
-  - `teardown` then `describe` returns null
-  - Double `ensureInfra` is idempotent
+Done. `domain/deploy/target.test.ts`.
 
-**Test:** `pnpm --filter @nextnode-solutions/infrastructure test -- deploy-target` — all green.
-
-## 3 — CF Pages target extraction
+## 3 — CF Pages target extraction ✅
 
 ### 3.1 Extract cloudflare-pages.target.ts from existing commands
 
-Refactor existing Cloudflare Pages logic into `adapters/targets/cloudflare-pages.target.ts` implementing `DeployTarget`.
+Done. `adapters/cloudflare/target.ts` — `CloudflarePagesTarget` implements `DeployTarget<StaticDeployConfig>`. Wired in `cli/deploy/create-target.ts`.
 
-- Map existing pages-project, pages-domains, sync-pages-env, deploy-env commands into ensureInfra/deploy/describe/teardown
-- Existing CLI commands become thin wrappers that instantiate CloudflarePagesTarget and call its methods
-- ALL existing tests must pass without modification (zero regression)
+## 4 — Domain helpers ✅
 
-**Test:** `pnpm --filter @nextnode-solutions/infrastructure test` — full suite green, zero regressions.
+### 4.1 hostname-resolver — skipped
 
-## 4 — Domain helpers
+`resolveDeployDomain` in `domain/deploy/domain.ts` already covers this. No separate file needed.
 
-### 4.1 Create hostname-resolver.ts + tests
+### 4.2 env-silo
 
-Create `domain/hostname-resolver.ts`:
-- Pure function `resolveHostname(domain: string, envName: string): string`
-- Rules: `prod` → domain as-is, any other env → `<env>.<domain>`
-- Examples: `("acme.example.com", "prod")` → `"acme.example.com"`, `("acme.example.com", "dev")` → `"dev.acme.example.com"`
+Done. Types in `domain/env-silo.ts`, logic in `domain/compute-silo.ts`. Returns `{ id }` only — additional fields (subnet, paths, volumes) will be added as adapters that consume them are built.
 
-**Test:** `pnpm --filter @nextnode-solutions/infrastructure test -- hostname-resolver` — covers: prod, dev, staging, custom env name, domain with existing subdomain.
+### 4.3 compose-env-resolver
 
-### 4.2 Create env-silo.ts + tests
+Done. Types in `domain/compose-env.ts`, logic in `domain/resolve-compose-env.ts`. Auto-generates SITE_URL, COMPOSE_PROJECT_NAME, NN_ENVIRONMENT, merges CI secrets on top.
 
-Create `domain/env-silo.ts`:
-- Pure function `computeSilo(projectName: string, envName: string): EnvSilo`
-- Returns: `composeProjectName`, `networkName`, `networkSubnet`, `basePath`, `volumePrefix`, `r2CertPath`, `vectorEnvTag`
-- Formulas per plan section 9
+### 4.4 caddy-routes-builder
 
-**Test:** `pnpm --filter @nextnode-solutions/infrastructure test -- env-silo` — covers: two envs have zero overlapping fields, correct formats, subnet no-collision.
+Done. Types in `domain/caddy-config.ts`, logic in `domain/build-caddy-config.ts`. Full Caddy JSON config with routes per hostname → reverse_proxy, TLS automation via caddy-storage-s3 → R2. HTTP→HTTPS redirect handled automatically by Caddy when host matcher is present.
 
-### 4.3 Create compose-env-resolver.ts + tests
+### 4.5 vector-env-renderer
 
-Create `domain/compose-env-resolver.ts`:
-- Pure function `resolveComposeEnv(config: ComposeEnvInput): string`
-- Input: CI secrets (`Record<string,string>`), env name, project name, hostname
-- Auto-generates: `SITE_URL` (from hostname), `COMPOSE_PROJECT_NAME`, `NN_ENVIRONMENT`
-- Merges CI secrets on top
-- Output: `.env` file content (`KEY=value\n`)
+Done. Types in `domain/vector-env.ts`, logic in `domain/render-vector-env.ts`.
 
-**Test:** `pnpm --filter @nextnode-solutions/infrastructure test -- compose-env-resolver` — covers: SITE_URL computed, COMPOSE_PROJECT_NAME set, CI secrets override auto-generated, valid KEY=VALUE format, special chars handled.
+## 5 — Hetzner adapters (hcloud + R2) ✅
 
-### 4.4 Create caddy-routes-builder.ts + tests
+### 5.1 hcloud-client
 
-Create `domain/caddy-routes-builder.ts`:
-- Pure function `buildCaddyConfig(input: CaddyConfigInput): CaddyJsonConfig`
-- Input: array of `{ envName, hostnames, upstream: { host, port } }`, R2 storage config
-- Output: full Caddy JSON config with TLS automation (caddy-storage-s3 → R2), routes per hostname → reverse_proxy, HTTP→HTTPS redirect
+Done. `adapters/hetzner/hcloud-client.ts` — `createServer`, `describeServer`, `deleteServer`, `createFirewall`, `applyFirewall`. Types split: `hcloud-server.ts`, `hcloud-firewall.ts`, `hcloud-api.ts`. Uses `isRecord` from `config/types.ts`.
 
-**Test:** `pnpm --filter @nextnode-solutions/infrastructure test -- caddy-routes-builder` — covers: single env, multi env, hostnames map to correct upstreams, R2 storage in TLS, valid Caddy JSON structure.
+### 5.2 hcloud-state
 
-### 4.5 Create vector-env-renderer.ts + tests
+Done. `adapters/hetzner/hcloud-state.ts` — `readState`, `writeState` (3x retry on ETag contention), `deleteState`. Depends on `R2Operations` interface. Types in `hcloud-state.types.ts`.
 
-Create `domain/vector-env-renderer.ts`:
-- Pure function `renderVectorEnv(fields: VectorTenantFields): string`
-- Input: `{ clientId, project, vlUrl }`
-- Output: `NN_CLIENT_ID=...\nNN_PROJECT=...\nNN_VL_URL=...\n`
+### 5.3 r2-client
 
-**Test:** `pnpm --filter @nextnode-solutions/infrastructure test -- vector-env-renderer` — covers: correct format, all fields present, no extras.
-
-## 5 — Hetzner adapters (hcloud + R2)
-
-### 5.1 Create hcloud-client.ts + tests
-
-Create `adapters/hetzner/hcloud-client.ts`:
-- Typed `fetch()` wrapper to Hetzner Cloud REST API
-- Methods: `createServer`, `describeServer`, `deleteServer`, `createFirewall`, `applyFirewall`
-- Auth via HCLOUD_TOKEN in constructor
-- HTTP errors wrapped with context
-
-**Test:** `pnpm --filter @nextnode-solutions/infrastructure test -- hcloud-client` — mock fetch, covers: correct payload, response parsing, 4xx/5xx error wrapping, auth header.
-
-### 5.2 Create hcloud-state.ts + tests
-
-Create `adapters/hetzner/hcloud-state.ts`:
-- Read/write project state JSON from R2
-- State: `{ serverId, ip, tailnetHostname, environments: { [env]: { lastDeploys: ImageRef[] } } }`
-- Write uses conditional put (If-Match ETag)
-- Retry 3x on ETag mismatch, then throw "state lock contention"
-
-**Test:** `pnpm --filter @nextnode-solutions/infrastructure test -- hcloud-state` — mock R2, covers: null for missing, ETag match success, stale ETag retry, 3x mismatch throws.
-
-### 5.3 Create r2/r2-client.ts + tests
-
-Create `adapters/r2/r2-client.ts`:
-- Wrapper around `@aws-sdk/client-s3` configured for R2
-- Methods: `get(key)`, `put(key, body, ifMatch?)`, `delete(key)`, `exists(key)`
-- Errors wrapped with key path context
-
-**Test:** `pnpm --filter @nextnode-solutions/infrastructure test -- r2-client` — mock S3Client, covers: get returns body+etag, missing key → null, put with ifMatch, ETag mismatch throws.
+Done. `adapters/r2/r2-client.ts` — `R2Client` class wrapping `@aws-sdk/client-s3`. Types + `R2Operations` interface in `r2-client.types.ts`. S3Client injectable for testing.
 
 ## 6 — SSH session
 
-### 6.1 Create ssh-session.ts + integration tests
+### 6.1 Create ssh-session.ts
 
 Create `adapters/hetzner/ssh-session.ts`:
 - Wrapper around `ssh2` Client
 - `createSshSession(host, keyPath, user?)` → `SshSession`
-- Methods: `exec(cmd)`, `writeFile(path, content)`, `readFile(path)`, `mkdir(path)`, `close()`
-- Single connection reused. Connection counter for test assertion.
+- Methods: `exec(cmd)`, `writeFile(path, content)`, `readFile(path)`, `close()`
+- Single connection reused
 
-**Test:** `pnpm --filter @nextnode-solutions/infrastructure test -- ssh-session` — integration with `linuxserver/openssh-server` container. Covers: exec, writeFile+readFile round-trip, mkdir, exactly 1 connection, failing command returns stderr, unreachable host throws.
+**Test:** unit tests with mocked ssh2 Client. Covers: exec returns stdout, writeFile+readFile, failing command returns stderr, close disposes connection.
 
-Requires Docker running locally.
+## 7 — cloud-init
 
-## 7 — Remote Docker Compose
-
-### 7.1 Create remote-docker-compose.ts + integration tests
-
-Create `adapters/hetzner/remote-docker-compose.ts`:
-- Takes `SshSession` as dependency
-- Methods: `pull`, `up`, `down`, `getPort`, `getLogs`, `waitHealthy`
-- Errors wrapped with project name + command
-
-**Test:** `pnpm --filter @nextnode-solutions/infrastructure test -- remote-docker-compose` — integration with openssh-server + DinD. Covers: pull+up starts containers, getPort returns valid port, getLogs returns content, waitHealthy resolves/rejects, up is idempotent.
-
-Requires Docker running locally.
-
-## 8 — Caddy admin client
-
-### 8.1 Create caddy-admin-client.ts + integration tests
-
-Create `adapters/hetzner/caddy-admin-client.ts`:
-- Takes `SshSession` as dependency
-- Method: `loadConfig(caddyJson)` — write to temp file, `curl POST http://127.0.0.1:2019/load`, cleanup temp file in finally
-- Rejection → throw with Caddy error body
-
-**Test:** `pnpm --filter @nextnode-solutions/infrastructure test -- caddy-admin-client` — integration with openssh-server + Caddy container. Covers: valid config accepted, invalid rejected with error body, temp file cleaned up.
-
-Requires Docker running locally.
-
-## 9 — VL log verifier
-
-### 9.1 Create vl-log-verifier.ts + tests
-
-Create `adapters/hetzner/vl-log-verifier.ts`:
-- Method: `verifyLogs(vlUrl, projectName, envName, timeoutMs)`
-- Polls VL `/select/logsql/query` every 5s until ≥1 log or timeout
-
-**Test:** `pnpm --filter @nextnode-solutions/infrastructure test -- vl-log-verifier` — mock fetch. Covers: immediate find, found after 3 polls, timeout throws, VL unreachable throws.
-
-## 10 — HetznerVpsTarget orchestration
-
-### 10.1 Implement HetznerVpsTarget.ensureInfra
-
-Wire adapters: read state → create VPS if missing → firewall (22/80/443) → wait tailnet → write state → convergence.
-
-**Test:** `pnpm --filter @nextnode-solutions/infrastructure test -- hetzner-vps.target` — covers: first call creates, second call skips, failure propagates.
-
-### 10.2 Implement HetznerVpsTarget.deploy
-
-Wire adapters: load state → 1 SSH session → per env (silo + hostname + env vars + compose pull/up + healthcheck + ports) → Caddy POST → HTTPS probe → VL verify → update state.
-
-**Test:** covers: 2 envs use 1 SSH connection, separate compose projects, Caddy has both envs, deploy without ensureInfra throws, compose failure includes logs.
-
-### 10.3 Implement HetznerVpsTarget.describe + teardown
-
-- `describe`: read state + SSH docker compose ps → TargetState
-- `teardown`: compose down + hcloud delete + remove state
-
-**Test:** covers: describe returns state, describe unknown → null, teardown cleans everything.
-
-## 11 — cloud-init
-
-### 11.1 Write cloud-init bootstrap template
+### 7.1 Write cloud-init bootstrap template
 
 ~80 lines: docker-ce, tailscale, caddy+s3-plugin, vector, deploy user, UFW (22/80/443), `/opt/apps/`.
 
 **Test:** YAML lint passes. Template renders with test variables.
 
-### 11.2 Write convergence script (idempotent SSH)
+### 7.2 Write convergence script (idempotent SSH)
 
 Push vector.toml + vector.env, push Caddy base config, ensure project dirs. Skip if unchanged.
 
 **Test:** Run twice — second run is no-op (no restarts).
 
-## 12 — CLI commands
+## 8 — HetznerVpsTarget.ensureInfra
 
-### 12.1 Create hetzner/provision.command.ts
+### 8.1 Implement ensureInfra
 
-Reads env vars + config → `target.ensureInfra()` → logs success. Register as `hetzner-provision`.
+Wire adapters: read state → create VPS if missing → firewall (22/80/443) → wait for server running → wait SSH reachable → write state.
+
+**Test:** covers: first call creates, second call skips (idempotent), failure propagates.
+
+### 8.2 Provision CLI command
+
+`cli/hetzner/provision.command.ts` — reads env vars + config → `target.ensureInfra()` → logs success. Register as `hetzner-provision`.
 
 **Test:** `pnpm --filter @nextnode-solutions/infrastructure test -- provision.command`
 
-### 12.2 Create hetzner/deploy.command.ts
+## 9 — HetznerVpsTarget.deploy (deferred)
 
-Reads env vars + config + image ref + secrets → builds ProjectDeployConfig → `target.deploy()` → logs success. Register as `hetzner-deploy`.
+### 9.1 Remote Docker Compose adapter
 
-**Test:** `pnpm --filter @nextnode-solutions/infrastructure test -- deploy.command`
+`adapters/hetzner/remote-docker-compose.ts` — compose ops via SshSession: `pull`, `up`, `down`, `getPort`, `getLogs`, `waitHealthy`.
 
-### 12.3 Create hetzner/describe.command.ts + teardown.command.ts
+### 9.2 Caddy admin client adapter
 
-- `describe`: `target.describe()` → print JSON
-- `teardown`: `target.teardown()` → logs success
+`adapters/hetzner/caddy-admin-client.ts` — POST /load via SshSession.
 
-Register as `hetzner-describe` and `hetzner-teardown`.
+### 9.3 VL log verifier adapter
 
-**Test:** `pnpm --filter @nextnode-solutions/infrastructure test -- describe.command teardown.command`
+`adapters/hetzner/vl-log-verifier.ts` — poll VictoriaLogs `/select/logsql/query`.
 
-## 13 — CI workflow
+### 9.4 Implement HetznerVpsTarget.deploy
 
-### 13.1 Update CI workflows to route by deploy target
+Wire adapters: load state → 1 SSH session → per env (silo + hostname + env vars + compose pull/up + healthcheck + ports) → Caddy POST → HTTPS probe → VL verify → update state.
+
+### 9.5 Deploy CLI command
+
+`cli/hetzner/deploy.command.ts` — reads env vars + config + image ref + secrets → `target.deploy()`.
+
+## 10 — HetznerVpsTarget.describe + teardown (deferred)
+
+- `describe`: read state + SSH docker compose ps → TargetState
+- `teardown`: compose down + hcloud delete + remove state
+- CLI commands: `hetzner-describe`, `hetzner-teardown`
+
+## 11 — CI workflow (deferred)
 
 - `plan` command outputs `deploy_target` from nextnode.toml
-- Route workflows dispatch: `cloudflare-pages` → existing, `hetzner-vps` → new job (build+push GHCR → join tailnet → provision → deploy)
-- Zero shell logic in YAML
+- Route workflows: `cloudflare-pages` → existing, `hetzner-vps` → new job (build+push GHCR → join tailnet → provision → deploy)
 
-**Test:** Plan command tests updated. YAML workflow lint passes.
+## 12 — Documentation
 
-## 14 — Documentation
+Update `packages/infrastructure/CLAUDE.md` with DeployTarget pattern, Hetzner adapter architecture, layer rules for target orchestrators.
 
-### 14.1 Update packages/infrastructure/CLAUDE.md
-
-Add: DeployTarget pattern, Hetzner adapter architecture, layer rule extension for target orchestrators, firewall rule, env silo rule, cloud-init split.
-
-**Test:** Review.
-
-## 15 — Final check
-
-### 15.1 Full suite green
+## 13 — Final check
 
 ```
 pnpm --filter @nextnode-solutions/infrastructure test
