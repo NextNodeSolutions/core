@@ -8,6 +8,7 @@ export interface NextNodeConfig {
 
 export interface DeployableConfig extends NextNodeConfig {
 	readonly project: ProjectSection & { readonly type: DeployableProjectType }
+	readonly deploy: DeploySection
 }
 
 export const DEPLOYABLE_PROJECT_TYPES = ['app', 'static'] as const

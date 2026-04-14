@@ -7,8 +7,8 @@ import { readSemanticReleaseOutput } from '../adapters/github/semantic-release.t
 import {
 	buildSummary,
 	parseSemanticReleaseOutput,
-} from '../domain/publish-result.ts'
-import type { PublishResult } from '../domain/publish-result.ts'
+} from '../domain/pipeline/publish-result.ts'
+import type { PublishResult } from '../domain/pipeline/publish-result.ts'
 
 import { getEnv, requireEnv } from './env.ts'
 

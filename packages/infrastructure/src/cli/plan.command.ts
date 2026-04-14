@@ -5,9 +5,9 @@ const logger = createLogger()
 import { writePlanOutputs } from '../adapters/github/plan-outputs.ts'
 import type { NextNodeConfig } from '../config/types.ts'
 import { isDeployable } from '../config/types.ts'
+import { computePagesProjectName } from '../domain/deploy/pages-project-name.ts'
 import { resolveEnvironment } from '../domain/environment.ts'
-import { computePagesProjectName } from '../domain/pages-project-name.ts'
-import { buildQualityMatrix } from '../domain/quality-matrix.ts'
+import { buildQualityMatrix } from '../domain/pipeline/quality-matrix.ts'
 
 import { getEnv } from './env.ts'
 

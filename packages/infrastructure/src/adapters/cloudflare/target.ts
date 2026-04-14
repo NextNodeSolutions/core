@@ -2,14 +2,14 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
 
+import { computePagesProjectName } from '../../domain/deploy/pages-project-name.ts'
 import type {
 	DeployResult,
 	DeployTarget,
 	StaticDeployConfig,
 	StaticDeployedEnvironment,
-} from '../../domain/deploy-target.ts'
+} from '../../domain/deploy/target.ts'
 import type { AppEnvironment } from '../../domain/environment.ts'
-import { computePagesProjectName } from '../../domain/pages-project-name.ts'
 
 import { reconcileDomains } from './pages-domains.ts'
 import { updatePagesEnvVars } from './pages-env.ts'

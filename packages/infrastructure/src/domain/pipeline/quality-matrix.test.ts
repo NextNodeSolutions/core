@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { ProjectSection, ScriptsSection } from '../config/types.ts'
+import type { ProjectSection, ScriptsSection } from '../../config/types.ts'
 
 import { buildQualityMatrix, hasProdGate } from './quality-matrix.ts'
 import type { PipelineContext, QualityTask } from './quality-matrix.ts'

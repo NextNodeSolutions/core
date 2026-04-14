@@ -1,12 +1,12 @@
 import { createLogger } from '@nextnode-solutions/logger'
 
-import type { AppEnvironment } from '../../domain/environment.ts'
-import type { DesiredPagesDomain } from '../../domain/pages-domains.ts'
+import type { DesiredPagesDomain } from '../../domain/deploy/pages-domains.ts'
 import {
 	computePagesDomains,
 	findStalePagesDomains,
 	reconcilePagesDomain,
-} from '../../domain/pages-domains.ts'
+} from '../../domain/deploy/pages-domains.ts'
+import type { AppEnvironment } from '../../domain/environment.ts'
 
 import type { CloudflarePagesDomain } from './pages.ts'
 import { attachPagesDomain, listPagesDomains } from './pages.ts'

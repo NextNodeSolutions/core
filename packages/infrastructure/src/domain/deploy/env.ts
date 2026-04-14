@@ -1,7 +1,7 @@
-import type { ProjectSection } from '../config/types.ts'
+import type { ProjectSection } from '../../config/types.ts'
+import type { AppEnvironment } from '../environment.ts'
 
-import { resolveDeployDomain } from './deploy-domain.ts'
-import type { AppEnvironment } from './environment.ts'
+import { resolveDeployDomain } from './domain.ts'
 
 export interface DeployEnv {
 	readonly SITE_URL: string
