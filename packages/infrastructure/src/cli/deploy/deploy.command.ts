@@ -2,15 +2,15 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
 
-import { writeEnvVar } from '../adapters/github/env.ts'
-import type { DeployableConfig } from '../config/types.ts'
-import { computeDeployEnv } from '../domain/deploy/env.ts'
-import { computePagesProjectName } from '../domain/deploy/pages-project-name.ts'
-import type { StaticDeployConfig } from '../domain/deploy/target.ts'
-import { resolveEnvironment } from '../domain/environment.ts'
+import { writeEnvVar } from '../../adapters/github/env.ts'
+import type { DeployableConfig } from '../../config/types.ts'
+import { computeDeployEnv } from '../../domain/deploy/env.ts'
+import { computePagesProjectName } from '../../domain/deploy/pages-project-name.ts'
+import type { StaticDeployConfig } from '../../domain/deploy/target.ts'
+import { resolveEnvironment } from '../../domain/environment.ts'
+import { getEnv, requireEnv } from '../env.ts'
 
 import { createTarget } from './create-target.ts'
-import { getEnv, requireEnv } from './env.ts'
 import { parseAllSecrets, pickSecrets } from './secrets.ts'
 
 export async function deployCommand(config: DeployableConfig): Promise<void> {

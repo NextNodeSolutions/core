@@ -4,9 +4,9 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { NextNodeConfig } from '../config/types.ts'
+import type { NextNodeConfig } from '../../config/types.ts'
+import { STATIC_WITH_DOMAIN } from '../fixtures.ts'
 
-import { STATIC_WITH_DOMAIN } from './fixtures.ts'
 import { planCommand } from './plan.command.ts'
 
 const PACKAGE_CONFIG: NextNodeConfig = {
