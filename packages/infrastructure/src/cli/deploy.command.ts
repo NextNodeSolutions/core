@@ -4,10 +4,10 @@ const logger = createLogger()
 
 import { writeEnvVar } from '../adapters/github/env.ts'
 import type { DeployableConfig } from '../config/types.ts'
-import { computeDeployEnv } from '../domain/deploy-env.ts'
-import type { StaticDeployConfig } from '../domain/deploy-target.ts'
+import { computeDeployEnv } from '../domain/deploy/env.ts'
+import { computePagesProjectName } from '../domain/deploy/pages-project-name.ts'
+import type { StaticDeployConfig } from '../domain/deploy/target.ts'
 import { resolveEnvironment } from '../domain/environment.ts'
-import { computePagesProjectName } from '../domain/pages-project-name.ts'
 
 import { createTarget } from './create-target.ts'
 import { getEnv, requireEnv } from './env.ts'

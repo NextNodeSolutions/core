@@ -8,7 +8,7 @@ import type {
 	ImageRef,
 	ProjectDeployConfig,
 	TargetState,
-} from './deploy-target.ts'
+} from './target.ts'
 
 const TEST_IMAGE: ImageRef = {
 	registry: 'ghcr.io',

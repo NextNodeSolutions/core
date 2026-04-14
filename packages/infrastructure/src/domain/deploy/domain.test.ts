@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { resolveDeployDomain } from './deploy-domain.ts'
+import { resolveDeployDomain } from './domain.ts'
 
 describe('resolveDeployDomain', () => {
 	it('returns domain as-is in production', () => {

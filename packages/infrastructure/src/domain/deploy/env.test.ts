@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { computeDeployEnv } from './deploy-env.ts'
+import { computeDeployEnv } from './env.ts'
 
 describe('computeDeployEnv', () => {
 	describe('with domain', () => {

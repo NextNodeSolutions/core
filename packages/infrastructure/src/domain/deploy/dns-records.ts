@@ -1,5 +1,6 @@
-import { resolveDeployDomain } from './deploy-domain.ts'
-import type { AppEnvironment } from './environment.ts'
+import type { AppEnvironment } from '../environment.ts'
+
+import { resolveDeployDomain } from './domain.ts'
 
 const DNS_TTL_UNPROXIED = 300
 const MIN_DOMAIN_PARTS = 2

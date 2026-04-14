@@ -1,6 +1,6 @@
 import { CloudflarePagesTarget } from '../adapters/cloudflare/target.ts'
 import type { DeployableConfig } from '../config/types.ts'
-import type { DeployTarget } from '../domain/deploy-target.ts'
+import type { DeployTarget } from '../domain/deploy/target.ts'
 import type { AppEnvironment } from '../domain/environment.ts'
 
 import { requireEnv } from './env.ts'
