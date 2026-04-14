@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest'
 import { evaluateDevRun, findDevRun } from './prod-gate.ts'
 import type { WorkflowRun } from './prod-gate.ts'
 
+const DEV_PATH = '.github/workflows/deploy-dev.yml'
+
 const DEV_RUN: WorkflowRun = {
-	path: '.github/workflows/deploy-dev.yml',
+	path: DEV_PATH,
 	status: 'completed',
 	conclusion: 'success',
 	html_url: 'https://github.com/org/repo/actions/runs/1',
@@ -19,15 +21,28 @@ const PROD_RUN: WorkflowRun = {
 
 describe('findDevRun', () => {
 	it('finds the dev workflow run by path', () => {
-		expect(findDevRun([DEV_RUN, PROD_RUN])).toEqual(DEV_RUN)
+		expect(findDevRun([DEV_RUN, PROD_RUN], DEV_PATH)).toEqual(DEV_RUN)
 	})
 
 	it('returns undefined when no dev run exists', () => {
-		expect(findDevRun([PROD_RUN])).toBeUndefined()
+		expect(findDevRun([PROD_RUN], DEV_PATH)).toBeUndefined()
 	})
 
 	it('returns undefined for empty runs', () => {
-		expect(findDevRun([])).toBeUndefined()
+		expect(findDevRun([], DEV_PATH)).toBeUndefined()
+	})
+
+	it('matches a custom workflow path', () => {
+		const customRun: WorkflowRun = {
+			...DEV_RUN,
+			path: '.github/workflows/landing-dev.yml',
+		}
+		expect(
+			findDevRun(
+				[customRun, PROD_RUN],
+				'.github/workflows/landing-dev.yml',
+			),
+		).toEqual(customRun)
 	})
 })
 

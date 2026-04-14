@@ -11,6 +11,10 @@ on:
                 type: string
                 default: 'nextnode.toml'
                 description: 'Path to nextnode.toml in the calling repo'
+            dev_workflow_file:
+                type: string
+                default: 'deploy-dev.yml'
+                description: 'Filename of the dev workflow (for prod gate)'
 
 permissions:
     contents: read
@@ -55,6 +59,7 @@ jobs:
               run: ${{ matrix.task.cmd }}
               env:
                   GH_TOKEN: ${{ github.token }}
+                  DEV_WORKFLOW_FILE: ${{ inputs.dev_workflow_file }}
 
     deploy:
         name: Deploy

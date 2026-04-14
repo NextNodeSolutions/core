@@ -112,6 +112,31 @@ describe('prodGateCommand', () => {
 		)
 	})
 
+	it('uses custom DEV_WORKFLOW_FILE when set', async () => {
+		vi.stubEnv('DEV_WORKFLOW_FILE', 'landing-dev.yml')
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						total_count: 1,
+						workflow_runs: [
+							{
+								path: '.github/workflows/landing-dev.yml',
+								status: 'completed',
+								conclusion: 'success',
+								html_url:
+									'https://github.com/org/repo/actions/runs/1',
+							},
+						],
+					}),
+			}),
+		)
+
+		await expect(prodGateCommand()).resolves.toBeUndefined()
+	})
+
 	it('throws when GitHub API returns an error', async () => {
 		vi.stubGlobal(
 			'fetch',
