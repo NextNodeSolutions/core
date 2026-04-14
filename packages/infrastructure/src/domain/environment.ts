@@ -1,4 +1,8 @@
-import type { ProjectSection } from '../config/types.ts'
+import type {
+	DeployableProjectType,
+	NonDeployableProjectType,
+	ProjectType,
+} from '../config/types.ts'
 
 export const APP_ENVIRONMENTS = ['development', 'production'] as const
 export type AppEnvironment = (typeof APP_ENVIRONMENTS)[number]
@@ -10,7 +14,15 @@ function isAppEnvironment(value: string): value is AppEnvironment {
 }
 
 export function resolveEnvironment(
-	projectType: ProjectSection['type'],
+	projectType: NonDeployableProjectType,
+	rawEnv: string | undefined,
+): 'none'
+export function resolveEnvironment(
+	projectType: DeployableProjectType,
+	rawEnv: string | undefined,
+): AppEnvironment
+export function resolveEnvironment(
+	projectType: ProjectType,
 	rawEnv: string | undefined,
 ): PipelineEnvironment {
 	if (projectType === 'package') return 'none'

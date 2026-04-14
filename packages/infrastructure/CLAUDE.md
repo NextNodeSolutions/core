@@ -2,8 +2,8 @@
 
 ## What This Is
 
-NextNode infrastructure CLI — runs in GitHub Actions to orchestrate CI quality gates.
-Currently implements the **plan** phase: parse `nextnode.toml`, generate a quality matrix (lint/test), and write outputs for downstream jobs.
+NextNode infrastructure CLI — runs in GitHub Actions to orchestrate CI/CD: planning, provisioning, and deployment.
+Commands: `plan` (quality matrix), `provision` (infra setup via DeployTarget), `deploy` (env vars + secrets sync), `prod-gate`, `publish-result`.
 
 **This package is NEVER published to npm.** It is consumed directly from the monorepo by GitHub Actions workflows. Do not add `publishConfig`, `.releaserc.json`, or `[package]` section to `nextnode.toml`.
 
@@ -13,31 +13,41 @@ The package is organized as **four strict layers**. Each layer has enforced impo
 
 ```
 src/
-  index.ts            — THIN entry: argv parsing + dispatch only, ZERO business logic
+  index.ts            — Command registry + argv dispatch. No business logic.
   cli/                — Command orchestrators: read env vars, call domain + adapters
-    commands.ts       — Command registry + runCommand dispatcher
     env.ts            — Typed env var readers (requireEnv, getEnv)
+    secrets.ts        — parseAllSecrets, pickSecrets (GitHub Secrets → Record)
+    create-target.ts  — Factory: config + env → DeployTarget instance
     plan.command.ts
+    provision.command.ts  — target.ensureInfra() (Pages project, domains, DNS)
+    deploy.command.ts     — SITE_URL → GITHUB_ENV + target.deploy()
     prod-gate.command.ts
     publish-result.command.ts
   domain/             — PURE business logic. NO IO, NO env vars, NO logger
+    deploy-target.ts  — DeployTarget interface + discriminated config/result types
     environment.ts    — resolveEnvironment + PipelineEnvironment type
     quality-matrix.ts — buildQualityMatrix, hasProdGate
     prod-gate.ts      — findDevRun, evaluateDevRun
     publish-result.ts — parseSemanticReleaseOutput, buildSummary
   adapters/           — IO boundary: fs, fetch, GitHub Actions outputs
+    targets/          — DeployTarget implementations
+      cloudflare-pages.target.ts — orchestrator: ensureInfra + deploy
+      pages-project.ts           — provisionProject()
+      pages-domains.ts           — reconcileDomains()
+      pages-dns.ts               — reconcileDns()
     github-output.ts  — writeOutput, writeSummary (GITHUB_OUTPUT / GITHUB_STEP_SUMMARY)
     github-api.ts     — fetchWorkflowRuns
     plan-outputs.ts   — writePlanOutputs (bridges domain tasks → GitHub Actions outputs)
     semantic-release-output.ts
   config/             — nextnode.toml schema + loader (self-contained layer)
+    providers/        — Per-target validation (strategy pattern)
 ```
 
 ### Layer import rules — ENFORCED
 
 | Layer        | May import from                                  | STRICTLY FORBIDDEN                                                |
 | ------------ | ------------------------------------------------ | ----------------------------------------------------------------- |
-| `index.ts`   | `cli/commands` only                              | `domain/`, `adapters/`, env vars, logger                          |
+| `index.ts`   | `cli/*.command` only                             | `domain/`, `adapters/`, env vars, logger                          |
 | `cli/*`      | `domain/`, `adapters/`, `config/`, logger        | direct `node:fs`, `fetch`, raw `process.env` outside `cli/env.ts` |
 | `domain/*`   | other `domain/*`, `config/schema` (types only)   | `process.env`, `node:fs`, `fetch`, logger, any adapter            |
 | `adapters/*` | `config/schema` (types), `domain/*` (types only) | domain business logic, cross-adapter calls                        |
@@ -45,7 +55,7 @@ src/
 
 ### Hard rules per layer
 
-- **`index.ts` is ~4 lines.** It reads `process.argv[2]`, defaults to `'plan'`, and calls `runCommand`. If you find yourself adding an `import` other than `./cli/commands.js`, you are in the wrong file.
+- **`index.ts` is the command registry + dispatcher.** It imports command functions, maps them by name, reads `process.argv[2]`, and calls the matched command. Throws on missing or unknown command — no silent defaults.
 - **Domain is 100% pure.** Functions take inputs, return outputs. No side effects, no env reads, no logger calls. Domain tests should never need stubs beyond plain value fixtures.
 - **Adapters never contain business decisions.** They translate between the outside world (fs, HTTP, GitHub Actions) and domain types. A conditional inside an adapter that goes beyond "did the IO succeed?" is a smell — push it into the domain.
 - **CLI commands are orchestrators.** They read env vars (via `cli/env.ts`), call domain functions, pass results to adapters, and log at milestones. They hold ZERO business logic — all decisions live in `domain/`.
@@ -63,8 +73,7 @@ src/
 1. Start in `domain/` — write a pure function + test
 2. Add an `adapter/` if new IO is needed (fs/http/env)
 3. Wire them together in a `cli/*.command.ts` orchestrator
-4. Register the command in `cli/commands.ts`
-5. `index.ts` NEVER changes when adding a new command
+4. Register the command in `index.ts`
 
 ## Config Format
 
@@ -84,7 +93,7 @@ All scripts default to their key name. Set to `false` to skip.
 
 Called by `.github/workflows/pipeline.yml` via `workflow_call`:
 
-1. `plan` job checks out this package, runs `node src/index.ts` with `PIPELINE_CONFIG_FILE`
+1. `plan` job checks out this package, runs `node src/index.ts plan` with `PIPELINE_CONFIG_FILE`
 2. Outputs `quality_matrix`, `project_name`, `project_type` to `GITHUB_OUTPUT`
 3. `pipeline.yml` routes to one of three nested reusable workflows based on plan outputs:
     - `route-package.yml` (`type == "package"`): quality → publish
