@@ -123,6 +123,7 @@ describe('reconcileDnsRecord', () => {
 			reconcileDnsRecord(desired, [
 				{
 					id: 'rec-1',
+					type: 'CNAME',
 					content: 'my-site.pages.dev',
 					proxied: true,
 					ttl: 1,
@@ -136,6 +137,7 @@ describe('reconcileDnsRecord', () => {
 			reconcileDnsRecord(desired, [
 				{
 					id: 'rec-1',
+					type: 'CNAME',
 					content: 'other.pages.dev',
 					proxied: true,
 					ttl: 1,
@@ -149,6 +151,7 @@ describe('reconcileDnsRecord', () => {
 			reconcileDnsRecord(desired, [
 				{
 					id: 'rec-1',
+					type: 'CNAME',
 					content: 'my-site.pages.dev',
 					proxied: false,
 					ttl: 1,
@@ -162,6 +165,7 @@ describe('reconcileDnsRecord', () => {
 			reconcileDnsRecord(desired, [
 				{
 					id: 'rec-1',
+					type: 'CNAME',
 					content: 'my-site.pages.dev',
 					proxied: true,
 					ttl: 300,
@@ -175,18 +179,58 @@ describe('reconcileDnsRecord', () => {
 			reconcileDnsRecord(desired, [
 				{
 					id: 'rec-first',
+					type: 'CNAME',
 					content: 'stale.pages.dev',
 					proxied: true,
 					ttl: 1,
 				},
 				{
 					id: 'rec-second',
+					type: 'CNAME',
 					content: 'my-site.pages.dev',
 					proxied: true,
 					ttl: 1,
 				},
 			]),
 		).toEqual({ kind: 'update', recordId: 'rec-first' })
+	})
+
+	it('returns replace when existing record has a conflicting type', () => {
+		expect(
+			reconcileDnsRecord(desired, [
+				{
+					id: 'rec-a',
+					type: 'A',
+					content: '192.168.1.1',
+					proxied: true,
+					ttl: 1,
+				},
+			]),
+		).toEqual({ kind: 'replace', deleteRecordIds: ['rec-a'] })
+	})
+
+	it('returns replace with all conflicting record ids', () => {
+		expect(
+			reconcileDnsRecord(desired, [
+				{
+					id: 'rec-a',
+					type: 'A',
+					content: '192.168.1.1',
+					proxied: true,
+					ttl: 1,
+				},
+				{
+					id: 'rec-aaaa',
+					type: 'AAAA',
+					content: '::1',
+					proxied: true,
+					ttl: 1,
+				},
+			]),
+		).toEqual({
+			kind: 'replace',
+			deleteRecordIds: ['rec-a', 'rec-aaaa'],
+		})
 	})
 })
 

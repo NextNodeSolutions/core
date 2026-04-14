@@ -96,10 +96,9 @@ export async function lookupZoneId(
 export async function listDnsRecords(
 	zoneId: string,
 	name: string,
-	type: string,
 	token: string,
 ): Promise<ReadonlyArray<CloudflareDnsRecord>> {
-	const params = new URLSearchParams({ name, type })
+	const params = new URLSearchParams({ name })
 	const response = await fetch(
 		`${CLOUDFLARE_API_BASE}/zones/${zoneId}/dns_records?${params.toString()}`,
 		{ headers: authHeaders(token) },
@@ -166,4 +165,19 @@ export async function updateDnsRecord(
 	}
 
 	return parseDnsRecord(requireObjectResult(data, context))
+}
+
+export async function deleteDnsRecord(
+	zoneId: string,
+	recordId: string,
+	token: string,
+): Promise<void> {
+	const response = await fetch(
+		`${CLOUDFLARE_API_BASE}/zones/${zoneId}/dns_records/${recordId}`,
+		{
+			method: 'DELETE',
+			headers: authHeaders(token),
+		},
+	)
+	await requireOk(response)
 }

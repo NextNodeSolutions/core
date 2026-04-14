@@ -9,6 +9,7 @@ import type { AppEnvironment } from '../../domain/environment.ts'
 
 import {
 	createDnsRecord,
+	deleteDnsRecord,
 	listDnsRecords,
 	lookupZoneId,
 	updateDnsRecord,
@@ -67,12 +68,7 @@ async function applyDnsRecord(
 	desired: DesiredDnsRecord,
 	token: string,
 ): Promise<void> {
-	const existing = await listDnsRecords(
-		zoneId,
-		desired.name,
-		desired.type,
-		token,
-	)
+	const existing = await listDnsRecords(zoneId, desired.name, token)
 
 	const action = reconcileDnsRecord(desired, existing)
 	const proxiedLabel = desired.proxied ? 'proxied' : 'unproxied'
@@ -84,6 +80,16 @@ async function applyDnsRecord(
 	if (action.kind === 'create') {
 		await createDnsRecord(zoneId, desired, token)
 		logger.info(`DNS created: ${desired.name} (${proxiedLabel})`)
+		return
+	}
+	if (action.kind === 'replace') {
+		await Promise.all(
+			action.deleteRecordIds.map(id =>
+				deleteDnsRecord(zoneId, id, token),
+			),
+		)
+		await createDnsRecord(zoneId, desired, token)
+		logger.info(`DNS replaced: ${desired.name} (${proxiedLabel})`)
 		return
 	}
 	await updateDnsRecord(zoneId, action.recordId, desired, token)
