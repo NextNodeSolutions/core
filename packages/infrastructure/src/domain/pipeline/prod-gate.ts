@@ -1,5 +1,3 @@
-export const DEV_WORKFLOW_PATH = '.github/workflows/deploy-dev.yml'
-
 export interface WorkflowRun {
 	readonly path: string
 	readonly status: string
@@ -13,8 +11,9 @@ export type DevRunEvaluation =
 
 export function findDevRun(
 	runs: ReadonlyArray<WorkflowRun>,
+	devWorkflowPath: string,
 ): WorkflowRun | undefined {
-	return runs.find(run => run.path === DEV_WORKFLOW_PATH)
+	return runs.find(run => run.path === devWorkflowPath)
 }
 
 export function evaluateDevRun(
