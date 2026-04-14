@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { STATIC_NO_DOMAIN, STATIC_WITH_DOMAIN } from '../fixtures.ts'
+
 import { dnsCommand } from './dns.command.ts'
-import { STATIC_NO_DOMAIN, STATIC_WITH_DOMAIN } from './fixtures.ts'
 
 interface MockResponse {
 	ok: boolean

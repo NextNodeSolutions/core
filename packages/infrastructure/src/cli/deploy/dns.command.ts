@@ -2,12 +2,11 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
 
-import { reconcileDns } from '../adapters/cloudflare/pages-dns.ts'
-import type { DeployableConfig } from '../config/types.ts'
-import { computePagesProjectName } from '../domain/deploy/pages-project-name.ts'
-import { resolveEnvironment } from '../domain/environment.ts'
-
-import { getEnv, requireEnv } from './env.ts'
+import { reconcileDns } from '../../adapters/cloudflare/pages-dns.ts'
+import type { DeployableConfig } from '../../config/types.ts'
+import { computePagesProjectName } from '../../domain/deploy/pages-project-name.ts'
+import { resolveEnvironment } from '../../domain/environment.ts'
+import { getEnv, requireEnv } from '../env.ts'
 
 export async function dnsCommand(config: DeployableConfig): Promise<void> {
 	if (!config.project.domain) {

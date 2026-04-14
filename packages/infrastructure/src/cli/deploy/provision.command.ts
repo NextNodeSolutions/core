@@ -1,8 +1,8 @@
-import type { DeployableConfig } from '../config/types.ts'
-import { resolveEnvironment } from '../domain/environment.ts'
+import type { DeployableConfig } from '../../config/types.ts'
+import { resolveEnvironment } from '../../domain/environment.ts'
+import { getEnv } from '../env.ts'
 
 import { createTarget } from './create-target.ts'
-import { getEnv } from './env.ts'
 
 export async function provisionCommand(
 	config: DeployableConfig,

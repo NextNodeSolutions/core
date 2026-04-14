@@ -4,13 +4,14 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { deployCommand } from './deploy.command.ts'
 import {
 	STATIC_NO_DOMAIN,
 	STATIC_WITH_DOMAIN,
 	STATIC_WITH_MISSING_SECRET,
 	STATIC_WITH_SECRETS,
-} from './fixtures.ts'
+} from '../fixtures.ts'
+
+import { deployCommand } from './deploy.command.ts'
 
 interface MockResponse {
 	ok: boolean
