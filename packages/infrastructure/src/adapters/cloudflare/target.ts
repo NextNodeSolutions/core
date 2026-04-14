@@ -25,8 +25,11 @@ export interface CloudflarePagesTargetDeps {
 
 export class CloudflarePagesTarget implements DeployTarget<StaticDeployConfig> {
 	readonly name = 'cloudflare-pages'
+	private readonly deps: CloudflarePagesTargetDeps
 
-	constructor(private readonly deps: CloudflarePagesTargetDeps) {}
+	constructor(deps: CloudflarePagesTargetDeps) {
+		this.deps = deps
+	}
 
 	async ensureInfra(projectName: string): Promise<void> {
 		const pagesProjectName = computePagesProjectName(
