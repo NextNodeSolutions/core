@@ -5,7 +5,11 @@ import { createLogger } from '@nextnode-solutions/logger'
 import { resolveAccountId } from '../../adapters/cloudflare/accounts.ts'
 import { resolveR2PermissionGroupIds } from '../../adapters/cloudflare/permission-groups.ts'
 import { ensureR2Bucket } from '../../adapters/cloudflare/r2/buckets.ts'
-import { createR2Token } from '../../adapters/cloudflare/r2/tokens.ts'
+import {
+	createR2Token,
+	deleteUserToken,
+	listUserTokens,
+} from '../../adapters/cloudflare/r2/tokens.ts'
 import { createOrgSecretsAdapter } from '../../adapters/github/org-secrets.ts'
 import type { OrgSecretsAdapter } from '../../adapters/github/org-secrets.ts'
 import { verifyR2Credentials } from '../../adapters/r2/verify-credentials.ts'
@@ -88,6 +92,30 @@ function readExistingCreds(): {
 	return { accessKeyId, secretAccessKey }
 }
 
+async function revokeStaleTokens(
+	cfToken: string,
+	keepTokenId: string,
+): Promise<void> {
+	const existing = await listUserTokens(cfToken)
+	const stale = existing.filter(
+		t => t.name === TOKEN_NAME && t.id !== keepTokenId,
+	)
+	if (stale.length === 0) return
+
+	await Promise.all(
+		stale.map(async token => {
+			try {
+				await deleteUserToken(cfToken, token.id)
+				logger.info(`Revoked stale R2 token ${token.id}`)
+			} catch (error) {
+				logger.warn(
+					`Failed to revoke stale R2 token ${token.id}: ${String(error)} — will retry on next run`,
+				)
+			}
+		}),
+	)
+}
+
 async function rotateR2Credentials(
 	cfToken: string,
 	accountId: string,
@@ -111,6 +139,8 @@ async function rotateR2Credentials(
 		creds.secretAccessKey,
 		stateBucket,
 	)
+
+	await revokeStaleTokens(cfToken, tokenResult.id)
 
 	logger.info('R2 API token created and verified')
 	return creds
