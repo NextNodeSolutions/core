@@ -1,7 +1,7 @@
 import { NoSuchKey, S3Client } from '@aws-sdk/client-s3'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { R2Client } from './r2-client.ts'
+import { R2Client } from './client.ts'
 
 const send = vi.fn()
 

@@ -1,5 +1,5 @@
 import { isRecord } from '../../config/types.ts'
-import type { R2Operations } from '../r2/r2-client.types.ts'
+import type { R2Operations } from '../r2/client.types.ts'
 
 import type { HcloudProjectState } from './hcloud-state.types.ts'
 

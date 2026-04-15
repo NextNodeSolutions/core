@@ -11,6 +11,7 @@ export async function provisionCommand(
 		config.project.type,
 		getEnv('PIPELINE_ENVIRONMENT'),
 	)
-	const target = createTarget(config, environment)
+
+	const target = await createTarget(config, environment)
 	await target.ensureInfra(config.project.name)
 }
