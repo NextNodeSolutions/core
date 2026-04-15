@@ -6,11 +6,20 @@ import { converge } from '../../cli/hetzner/converge.ts'
 import type { HetznerVpsDeploySection } from '../../config/types.ts'
 import type {
 	ContainerDeployConfig,
+	ContainerDeployedEnvironment,
 	DeployResult,
 	DeployTarget,
 } from '../../domain/deploy/target.ts'
+import type { CaddyUpstream } from '../../domain/hetzner/caddy-config.ts'
 import { buildCaddyConfig } from '../../domain/hetzner/caddy-config.ts'
 import { renderCloudInit } from '../../domain/hetzner/cloud-init.ts'
+import { formatComposeEnv } from '../../domain/hetzner/compose-env.ts'
+import {
+	CONTAINER_PORT,
+	computeHostPort,
+	renderComposeFile,
+} from '../../domain/hetzner/compose-file.ts'
+import { computeSilo } from '../../domain/hetzner/env-silo.ts'
 import { renderVectorEnv } from '../../domain/hetzner/vector-env.ts'
 import { renderVectorToml } from '../../domain/hetzner/vector-toml.ts'
 import { R2Client } from '../r2/r2-client.ts'
@@ -34,6 +43,8 @@ const POLL_INTERVAL_MS = 5_000
 const MAX_POLL_ATTEMPTS = 24
 const SSH_RETRY_INTERVAL_MS = 5_000
 const MAX_SSH_ATTEMPTS = 12
+
+const CADDY_CONFIG_PATH = '/etc/caddy/config.json'
 
 const FIREWALL_RULES: ReadonlyArray<FirewallRule> = [
 	{
@@ -78,7 +89,7 @@ export class HetznerVpsTarget implements DeployTarget<ContainerDeployConfig> {
 
 	constructor(hetzner: HetznerVpsDeploySection['hetzner']) {
 		this.hetzner = hetzner
-		this.hcloudToken = requireEnv('HCLOUD_TOKEN')
+		this.hcloudToken = requireEnv('HETZNER_API_TOKEN')
 		this.deployPrivateKey = requireEnv('DEPLOY_SSH_PRIVATE_KEY')
 		this.deployPublicKey = requireEnv('DEPLOY_SSH_PUBLIC_KEY')
 		this.tailscaleAuthKey = requireEnv('TAILSCALE_AUTH_KEY')
@@ -145,9 +156,97 @@ export class HetznerVpsTarget implements DeployTarget<ContainerDeployConfig> {
 		logger.info(`Infrastructure ready for "${projectName}"`)
 	}
 
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars -- deploy() will be implemented in task 9
 	async deploy(config: ContainerDeployConfig): Promise<DeployResult> {
-		throw new Error('hetzner-vps deploy is not yet implemented')
+		const start = Date.now()
+
+		const existing = await readState(this.r2, config.projectName)
+		if (!existing) {
+			throw new Error(
+				`No state for "${config.projectName}" - run ensureInfra first`,
+			)
+		}
+
+		const session = await createSshSession({
+			host: existing.state.ip,
+			username: 'root',
+			privateKey: this.deployPrivateKey,
+		})
+
+		try {
+			const upstreams: CaddyUpstream[] = []
+			const deployed: ContainerDeployedEnvironment[] = []
+
+			for (const env of config.environments) {
+				const silo = computeSilo(config.projectName, env.name)
+				const hostPort = computeHostPort(env.name)
+				const envDir = `/opt/apps/${config.projectName}/${env.name}`
+
+				const allEnv = {
+					PORT: String(CONTAINER_PORT),
+					...env.envVars,
+					...env.secrets,
+				}
+				await session.writeFile(
+					`${envDir}/.env`,
+					formatComposeEnv(allEnv),
+				) // eslint-disable-line no-await-in-loop -- sequential SSH commands by design
+
+				const composeContent = renderComposeFile({
+					image: config.image,
+					hostPort,
+				})
+				await session.writeFile(
+					`${envDir}/compose.yaml`,
+					composeContent,
+				) // eslint-disable-line no-await-in-loop -- sequential SSH commands by design
+
+				await session.exec(
+					`docker compose -p ${silo.id} -f ${envDir}/compose.yaml pull`,
+				) // eslint-disable-line no-await-in-loop -- sequential SSH commands by design
+				await session.exec(
+					`docker compose -p ${silo.id} -f ${envDir}/compose.yaml up -d --remove-orphans`,
+				) // eslint-disable-line no-await-in-loop -- sequential SSH commands by design
+
+				logger.info(`Deployed ${silo.id} on port ${hostPort}`)
+
+				upstreams.push({
+					hostname: env.hostname,
+					dial: `localhost:${hostPort}`,
+				})
+				deployed.push({
+					kind: 'container',
+					name: env.name,
+					imageRef: config.image,
+					url: `https://${env.hostname}`,
+					deployedAt: new Date(),
+				})
+			}
+
+			const caddyConfig = JSON.stringify(
+				buildCaddyConfig({
+					upstreams,
+					r2Storage: {
+						host: requireEnv('R2_ENDPOINT'),
+						bucket: requireEnv('R2_CERTS_BUCKET'),
+						accessId: requireEnv('R2_ACCESS_KEY_ID'),
+						secretKey: requireEnv('R2_SECRET_ACCESS_KEY'),
+						prefix: `${config.projectName}/`,
+					},
+				}),
+			)
+
+			await session.writeFile(CADDY_CONFIG_PATH, caddyConfig)
+			await session.exec(`caddy reload --config ${CADDY_CONFIG_PATH}`)
+			logger.info('Caddy config reloaded')
+
+			return {
+				projectName: config.projectName,
+				deployedEnvironments: deployed,
+				durationMs: Date.now() - start,
+			}
+		} finally {
+			session.close()
+		}
 	}
 
 	private async waitForServerRunning(serverId: number): Promise<void> {

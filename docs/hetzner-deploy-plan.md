@@ -52,7 +52,7 @@ Env vars come exclusively from CI (GitHub Secrets + GitHub Environments). Auto-g
 ```
 cli/
   commands.ts                                 — +hetzner-* entries
-  env.ts                                      — +HCLOUD_TOKEN, SSH_KEY_PATH, etc.
+  env.ts                                      — +HETZNER_API_TOKEN, SSH_KEY_PATH, etc.
   hetzner/
     provision.command.ts                      — create VPS + cloud-init + convergence
     deploy.command.ts                         — deploy an env (idempotent)
