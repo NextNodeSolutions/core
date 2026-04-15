@@ -15,47 +15,57 @@ import { reconcileDomains } from './pages-domains.ts'
 import { updatePagesEnvVars } from './pages-env.ts'
 import { provisionProject } from './pages-project.ts'
 
-export interface CloudflarePagesTargetDeps {
-	readonly accountId: string
-	readonly token: string
+export interface CloudflarePagesTargetConfig {
 	readonly environment: AppEnvironment
 	readonly domain: string | undefined
 	readonly redirectDomains: ReadonlyArray<string>
 }
 
+function requireEnv(name: string): string {
+	const value = process.env[name]
+	if (!value) {
+		throw new Error(`${name} env var is required`)
+	}
+	return value
+}
+
 export class CloudflarePagesTarget implements DeployTarget<StaticDeployConfig> {
 	readonly name = 'cloudflare-pages'
-	private readonly deps: CloudflarePagesTargetDeps
+	private readonly accountId: string
+	private readonly token: string
+	private readonly environment: AppEnvironment
+	private readonly domain: string | undefined
+	private readonly redirectDomains: ReadonlyArray<string>
 
-	constructor(deps: CloudflarePagesTargetDeps) {
-		this.deps = deps
+	constructor(config: CloudflarePagesTargetConfig) {
+		this.accountId = requireEnv('CLOUDFLARE_ACCOUNT_ID')
+		this.token = requireEnv('CLOUDFLARE_API_TOKEN')
+		this.environment = config.environment
+		this.domain = config.domain
+		this.redirectDomains = config.redirectDomains
 	}
 
 	async ensureInfra(projectName: string): Promise<void> {
 		const pagesProjectName = computePagesProjectName(
 			projectName,
-			this.deps.environment,
+			this.environment,
 		)
 
-		await provisionProject(
-			this.deps.accountId,
-			pagesProjectName,
-			this.deps.token,
-		)
+		await provisionProject(this.accountId, pagesProjectName, this.token)
 
-		if (this.deps.domain) {
+		if (this.domain) {
 			await reconcileDomains({
-				accountId: this.deps.accountId,
+				accountId: this.accountId,
 				pagesProjectName,
-				token: this.deps.token,
-				domain: this.deps.domain,
-				redirectDomains: this.deps.redirectDomains,
-				environment: this.deps.environment,
+				token: this.token,
+				domain: this.domain,
+				redirectDomains: this.redirectDomains,
+				environment: this.environment,
 			})
 		}
 
 		logger.info(
-			`Infrastructure ready for "${pagesProjectName}" (${this.deps.environment})`,
+			`Infrastructure ready for "${pagesProjectName}" (${this.environment})`,
 		)
 	}
 
@@ -63,7 +73,7 @@ export class CloudflarePagesTarget implements DeployTarget<StaticDeployConfig> {
 		const start = Date.now()
 		const pagesProjectName = computePagesProjectName(
 			config.projectName,
-			this.deps.environment,
+			this.environment,
 		)
 
 		const env = config.environments[0]
@@ -73,9 +83,9 @@ export class CloudflarePagesTarget implements DeployTarget<StaticDeployConfig> {
 
 		logger.info(`Syncing env vars to "${pagesProjectName}"`)
 		await updatePagesEnvVars(
-			this.deps.accountId,
+			this.accountId,
 			pagesProjectName,
-			this.deps.token,
+			this.token,
 			env.envVars,
 			env.secrets,
 		)
