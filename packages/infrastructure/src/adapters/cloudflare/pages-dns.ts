@@ -1,10 +1,10 @@
 import { createLogger } from '@nextnode-solutions/logger'
 
-import type { DesiredDnsRecord } from '../../domain/deploy/dns-records.ts'
+import type { DesiredDnsRecord } from '../../domain/cloudflare/dns-records.ts'
 import {
 	computeDnsRecords,
 	reconcileDnsRecord,
-} from '../../domain/deploy/dns-records.ts'
+} from '../../domain/cloudflare/dns-records.ts'
 import type { AppEnvironment } from '../../domain/environment.ts'
 
 import {
