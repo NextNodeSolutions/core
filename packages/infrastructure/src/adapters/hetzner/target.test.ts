@@ -25,6 +25,7 @@ vi.mock(import('./hcloud-client.ts'), async importOriginal => {
 			name: 'acme-web-fw',
 		})),
 		applyFirewall: vi.fn(async () => undefined),
+		ensureSshKey: vi.fn(async () => ({ id: 7, name: 'nextnode-ci' })),
 	}
 })
 
@@ -40,6 +41,14 @@ vi.mock(import('./ssh-session.ts'), async importOriginal => {
 // Mock converge (CLI orchestrator boundary)
 vi.mock('../../cli/hetzner/converge.ts', () => ({
 	converge: vi.fn(async () => undefined),
+}))
+
+// Mock Tailscale OAuth adapter (network boundary)
+vi.mock('../tailscale/oauth.ts', () => ({
+	mintAuthkey: vi.fn(async () => ({
+		key: 'tskey-auth-minted',
+		expires: '2099-01-01T00:00:00Z',
+	})),
 }))
 
 // Mock node:timers/promises (sleep resolves instantly in tests)

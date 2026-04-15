@@ -10,6 +10,8 @@ import type {
 	ContainerDeployedEnvironment,
 	DeployResult,
 	DeployTarget,
+	EnvironmentDeployConfig,
+	ImageRef,
 } from '../../domain/deploy/target.ts'
 import type { CaddyUpstream } from '../../domain/hetzner/caddy-config.ts'
 import { buildCaddyConfig } from '../../domain/hetzner/caddy-config.ts'
@@ -24,6 +26,7 @@ import { computeSilo } from '../../domain/hetzner/env-silo.ts'
 import { renderVectorEnv } from '../../domain/hetzner/vector-env.ts'
 import { renderVectorToml } from '../../domain/hetzner/vector-toml.ts'
 import { R2Client } from '../r2/client.ts'
+import { mintAuthkey } from '../tailscale/oauth.ts'
 
 import type { CreateServerInput } from './hcloud-client.ts'
 import {
@@ -31,10 +34,12 @@ import {
 	createFirewall,
 	createServer,
 	describeServer,
+	ensureSshKey,
 } from './hcloud-client.ts'
 import type { FirewallRule } from './hcloud-firewall.ts'
 import { readState, writeState } from './hcloud-state.ts'
 import { createSshSession } from './ssh-session.ts'
+import type { SshSession } from './ssh-session.types.ts'
 
 const logger = createLogger()
 
@@ -44,6 +49,8 @@ const POLL_INTERVAL_MS = 5_000
 const MAX_POLL_ATTEMPTS = 24
 const SSH_RETRY_INTERVAL_MS = 5_000
 const MAX_SSH_ATTEMPTS = 12
+const TAILSCALE_AUTHKEY_TTL_SECONDS = 600
+const TAILSCALE_TAG = 'tag:ci'
 
 const CADDY_CONFIG_PATH = '/etc/caddy/config.json'
 
@@ -118,8 +125,21 @@ export class HetznerVpsTarget implements DeployTarget<ContainerDeployConfig> {
 			return
 		}
 
+		await ensureSshKey(this.hcloudToken, SSH_KEY_NAME, this.deployPublicKey)
+		logger.info(`SSH key "${SSH_KEY_NAME}" ready in Hetzner project`)
+
+		const minted = await mintAuthkey(
+			this.tailscaleAuthKey,
+			[TAILSCALE_TAG],
+			TAILSCALE_AUTHKEY_TTL_SECONDS,
+			`nextnode-infra provisioning ${projectName}`,
+		)
+		logger.info(
+			`Minted ephemeral Tailscale authkey for "${projectName}" (expires ${minted.expires})`,
+		)
+
 		const cloudInit = renderCloudInit({
-			tailscaleAuthKey: this.tailscaleAuthKey,
+			tailscaleAuthKey: minted.key,
 			tailscaleHostname: projectName,
 			deployPublicKey: this.deployPublicKey,
 		})
@@ -183,49 +203,15 @@ export class HetznerVpsTarget implements DeployTarget<ContainerDeployConfig> {
 			const deployed: ContainerDeployedEnvironment[] = []
 
 			for (const env of config.environments) {
-				const silo = computeSilo(config.projectName, env.name)
-				const hostPort = computeHostPort(env.name)
-				const envDir = `/opt/apps/${config.projectName}/${env.name}`
-
-				const allEnv = {
-					PORT: String(CONTAINER_PORT),
-					...env.envVars,
-					...env.secrets,
-				}
-				await session.writeFile(
-					`${envDir}/.env`,
-					formatComposeEnv(allEnv),
-				) // eslint-disable-line no-await-in-loop -- sequential SSH commands by design
-
-				const composeContent = renderComposeFile({
-					image: config.image,
-					hostPort,
-				})
-				await session.writeFile(
-					`${envDir}/compose.yaml`,
-					composeContent,
-				) // eslint-disable-line no-await-in-loop -- sequential SSH commands by design
-
-				await session.exec(
-					`docker compose -p ${silo.id} -f ${envDir}/compose.yaml pull`,
-				) // eslint-disable-line no-await-in-loop -- sequential SSH commands by design
-				await session.exec(
-					`docker compose -p ${silo.id} -f ${envDir}/compose.yaml up -d --remove-orphans`,
-				) // eslint-disable-line no-await-in-loop -- sequential SSH commands by design
-
-				logger.info(`Deployed ${silo.id} on port ${hostPort}`)
-
-				upstreams.push({
-					hostname: env.hostname,
-					dial: `localhost:${hostPort}`,
-				})
-				deployed.push({
-					kind: 'container',
-					name: env.name,
-					imageRef: config.image,
-					url: `https://${env.hostname}`,
-					deployedAt: new Date(),
-				})
+				// oxlint-disable-next-line no-await-in-loop -- shared SSH session, per-env ops must serialize
+				const result = await this.deployEnvironment(
+					session,
+					env,
+					config.projectName,
+					config.image,
+				)
+				upstreams.push(result.upstream)
+				deployed.push(result.deployed)
 			}
 
 			const caddyConfig = JSON.stringify(
@@ -255,9 +241,57 @@ export class HetznerVpsTarget implements DeployTarget<ContainerDeployConfig> {
 		}
 	}
 
+	private async deployEnvironment(
+		session: SshSession,
+		env: EnvironmentDeployConfig,
+		projectName: string,
+		image: ImageRef,
+	): Promise<{
+		upstream: CaddyUpstream
+		deployed: ContainerDeployedEnvironment
+	}> {
+		const silo = computeSilo(projectName, env.name)
+		const hostPort = computeHostPort(env.name)
+		const envDir = `/opt/apps/${projectName}/${env.name}`
+
+		const allEnv = {
+			PORT: String(CONTAINER_PORT),
+			...env.envVars,
+			...env.secrets,
+		}
+		await session.writeFile(`${envDir}/.env`, formatComposeEnv(allEnv))
+		await session.writeFile(
+			`${envDir}/compose.yaml`,
+			renderComposeFile({ image, hostPort }),
+		)
+
+		await session.exec(
+			`docker compose -p ${silo.id} -f ${envDir}/compose.yaml pull`,
+		)
+		await session.exec(
+			`docker compose -p ${silo.id} -f ${envDir}/compose.yaml up -d --remove-orphans`,
+		)
+
+		logger.info(`Deployed ${silo.id} on port ${hostPort}`)
+
+		return {
+			upstream: {
+				hostname: env.hostname,
+				dial: `localhost:${hostPort}`,
+			},
+			deployed: {
+				kind: 'container',
+				name: env.name,
+				imageRef: image,
+				url: `https://${env.hostname}`,
+				deployedAt: new Date(),
+			},
+		}
+	}
+
 	private async waitForServerRunning(serverId: number): Promise<void> {
 		for (let attempt = 1; attempt <= MAX_POLL_ATTEMPTS; attempt++) {
-			const server = await describeServer(this.hcloudToken, serverId) // eslint-disable-line no-await-in-loop -- sequential polling by design
+			const server = await describeServer(this.hcloudToken, serverId) // oxlint-disable-line no-await-in-loop -- sequential polling by design
 			if (server.status === 'running') {
 				logger.info(`Server ${serverId} is running`)
 				return
@@ -265,7 +299,7 @@ export class HetznerVpsTarget implements DeployTarget<ContainerDeployConfig> {
 			logger.info(
 				`Server ${serverId} status: ${server.status} (attempt ${attempt}/${MAX_POLL_ATTEMPTS})`,
 			)
-			await sleep(POLL_INTERVAL_MS) // eslint-disable-line no-await-in-loop -- sequential polling by design
+			await sleep(POLL_INTERVAL_MS) // oxlint-disable-line no-await-in-loop -- sequential polling by design
 		}
 		throw new Error(
 			`Server ${serverId} did not reach "running" after ${MAX_POLL_ATTEMPTS} attempts`,
@@ -275,7 +309,7 @@ export class HetznerVpsTarget implements DeployTarget<ContainerDeployConfig> {
 	private async waitForSsh(host: string): Promise<void> {
 		for (let attempt = 1; attempt <= MAX_SSH_ATTEMPTS; attempt++) {
 			try {
-				// eslint-disable-next-line no-await-in-loop -- sequential retry by design
+				// oxlint-disable-next-line no-await-in-loop -- sequential retry by design
 				const session = await createSshSession({
 					host,
 					username: 'root',
@@ -288,7 +322,7 @@ export class HetznerVpsTarget implements DeployTarget<ContainerDeployConfig> {
 				logger.info(
 					`SSH not ready at ${host} (attempt ${attempt}/${MAX_SSH_ATTEMPTS})`,
 				)
-				await sleep(SSH_RETRY_INTERVAL_MS) // eslint-disable-line no-await-in-loop -- sequential retry by design
+				await sleep(SSH_RETRY_INTERVAL_MS) // oxlint-disable-line no-await-in-loop -- sequential retry by design
 			}
 		}
 
