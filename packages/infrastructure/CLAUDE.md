@@ -17,28 +17,55 @@ src/
   cli/                — Command orchestrators: read env vars, call domain + adapters
     env.ts            — Typed env var readers (requireEnv, getEnv)
     secrets.ts        — parseAllSecrets, pickSecrets (GitHub Secrets → Record)
-    create-target.ts  — Factory: config + env → DeployTarget instance
-    plan.command.ts
-    provision.command.ts  — target.ensureInfra() (Pages project, domains, DNS)
-    deploy.command.ts     — SITE_URL → GITHUB_ENV + target.deploy()
-    prod-gate.command.ts
-    publish-result.command.ts
+    deploy/           — Deploy-related commands
+      create-target.ts  — Factory: config + env → DeployTarget instance
+      provision.command.ts  — target.ensureInfra()
+      deploy.command.ts     — SITE_URL → GITHUB_ENV + target.deploy()
+    pipeline/         — Pipeline-related commands
+      plan.command.ts
+      prod-gate.command.ts
+      publish-result.command.ts
   domain/             — PURE business logic. NO IO, NO env vars, NO logger
-    deploy-target.ts  — DeployTarget interface + discriminated config/result types
     environment.ts    — resolveEnvironment + PipelineEnvironment type
-    quality-matrix.ts — buildQualityMatrix, hasProdGate
-    prod-gate.ts      — findDevRun, evaluateDevRun
-    publish-result.ts — parseSemanticReleaseOutput, buildSummary
+    deploy/           — Shared deploy concepts (provider-agnostic)
+      target.ts       — DeployTarget interface + discriminated config/result types
+      domain.ts       — resolveDeployDomain (hostname resolution)
+      env.ts          — computeDeployEnv
+      seo-guard.ts    — computeSeoGuardFiles
+    cloudflare/       — Cloudflare Pages domain logic
+      pages-domains.ts     — computePagesDomains, reconcilePagesDomain
+      pages-project-name.ts — computePagesProjectName
+      dns-records.ts        — computeDnsRecords, reconcileDnsRecord
+    hetzner/          — Hetzner VPS domain logic
+      caddy-config.ts       — Caddy JSON config types
+      build-caddy-config.ts — buildCaddyConfig (pure)
+      env-silo.ts           — EnvSilo type
+      compute-silo.ts       — computeSilo (pure)
+      compose-env.ts        — ComposeEnvInput type
+      resolve-compose-env.ts — resolveComposeEnv (pure)
+      vector-env.ts         — VectorTenantFields type
+      render-vector-env.ts  — renderVectorEnv (pure)
+    pipeline/         — Pipeline logic
+      quality-matrix.ts — buildQualityMatrix, hasProdGate
+      prod-gate.ts      — findDevRun, evaluateDevRun
+      publish-result.ts — parseSemanticReleaseOutput, buildSummary
   adapters/           — IO boundary: fs, fetch, GitHub Actions outputs
-    targets/          — DeployTarget implementations
-      cloudflare-pages.target.ts — orchestrator: ensureInfra + deploy
-      pages-project.ts           — provisionProject()
-      pages-domains.ts           — reconcileDomains()
-      pages-dns.ts               — reconcileDns()
-    github-output.ts  — writeOutput, writeSummary (GITHUB_OUTPUT / GITHUB_STEP_SUMMARY)
-    github-api.ts     — fetchWorkflowRuns
-    plan-outputs.ts   — writePlanOutputs (bridges domain tasks → GitHub Actions outputs)
-    semantic-release-output.ts
+    cloudflare/       — Cloudflare Pages adapter
+      target.ts       — CloudflarePagesTarget (DeployTarget impl)
+      pages-project.ts — provisionProject()
+      pages-domains.ts — reconcileDomains()
+      pages-dns.ts     — reconcileDns()
+    hetzner/          — Hetzner VPS adapter
+      hcloud-client.ts — typed fetch to Hetzner Cloud API
+      hcloud-state.ts  — R2 state read/write with ETag locking
+      ssh-session.ts   — ssh2 wrapper, ONE connection per deploy
+    r2/               — R2 (S3) adapter
+      r2-client.ts    — S3 SDK wrapper for state + certs
+    github/           — GitHub Actions adapter
+      api.ts          — fetchWorkflowRuns
+      plan-outputs.ts — writePlanOutputs
+      env.ts          — writeOutput, writeSummary
+    build-output/     — Build output file injection
   config/             — nextnode.toml schema + loader (self-contained layer)
     providers/        — Per-target validation (strategy pattern)
 ```

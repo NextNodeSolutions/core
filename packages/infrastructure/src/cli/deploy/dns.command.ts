@@ -4,7 +4,7 @@ const logger = createLogger()
 
 import { reconcileDns } from '../../adapters/cloudflare/pages-dns.ts'
 import type { DeployableConfig } from '../../config/types.ts'
-import { computePagesProjectName } from '../../domain/deploy/pages-project-name.ts'
+import { computePagesProjectName } from '../../domain/cloudflare/pages-project-name.ts'
 import { resolveEnvironment } from '../../domain/environment.ts'
 import { getEnv, requireEnv } from '../env.ts'
 
