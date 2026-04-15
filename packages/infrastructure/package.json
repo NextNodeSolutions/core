@@ -36,7 +36,8 @@
     "@aws-sdk/client-s3": "^3.1030.0",
     "@nextnode-solutions/logger": "^1.0.0",
     "smol-toml": "^1.6.1",
-    "ssh2": "^1.17.0"
+    "ssh2": "^1.17.0",
+    "yaml": "^2.8.3"
   },
   "devDependencies": {
     "@nextnode-solutions/standards": "workspace:*",

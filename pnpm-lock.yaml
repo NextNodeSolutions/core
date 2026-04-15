@@ -100,6 +100,9 @@ importers:
       ssh2:
         specifier: ^1.17.0
         version: 1.17.0
+      yaml:
+        specifier: ^2.8.3
+        version: 2.8.3
     devDependencies:
       '@nextnode-solutions/standards':
         specifier: workspace:*
