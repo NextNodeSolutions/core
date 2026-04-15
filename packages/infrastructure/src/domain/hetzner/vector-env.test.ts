@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { renderVectorEnv } from './render-vector-env.ts'
+import { renderVectorEnv } from './vector-env.ts'
 
 const fields = {
 	clientId: 'nextnode',

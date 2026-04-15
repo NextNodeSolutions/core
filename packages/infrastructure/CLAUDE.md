@@ -41,8 +41,7 @@ src/
       build-caddy-config.ts — buildCaddyConfig (pure)
       env-silo.ts           — EnvSilo type
       compute-silo.ts       — computeSilo (pure)
-      compose-env.ts        — ComposeEnvInput type
-      resolve-compose-env.ts — resolveComposeEnv (pure)
+      compose-env.ts        — formatComposeEnv (KEY=val serializer)
       vector-env.ts         — VectorTenantFields type
       render-vector-env.ts  — renderVectorEnv (pure)
     pipeline/         — Pipeline logic

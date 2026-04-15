@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { computeSilo } from './compute-silo.ts'
+import { computeSilo } from './env-silo.ts'
 
 describe('computeSilo', () => {
 	it('builds id from project and env', () => {

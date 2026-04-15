@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildCaddyConfig } from './build-caddy-config.ts'
 import type { CaddyConfigInput } from './caddy-config.ts'
+import { buildCaddyConfig } from './caddy-config.ts'
 
 const r2Storage = {
 	host: 'abc123.r2.cloudflarestorage.com',

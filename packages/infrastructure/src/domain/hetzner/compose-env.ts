@@ -1,6 +1,7 @@
-export interface ComposeEnvInput {
-	readonly hostname: string
-	readonly composeProjectName: string
-	readonly envName: string
-	readonly secrets: Readonly<Record<string, string>>
+export function formatComposeEnv(
+	env: Readonly<Record<string, string>>,
+): string {
+	return Object.entries(env)
+		.map(([key, value]) => `${key}=${value}`)
+		.join('\n')
 }
