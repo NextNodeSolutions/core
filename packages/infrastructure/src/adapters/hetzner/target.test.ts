@@ -75,7 +75,7 @@ const EXISTING_STATE = {
 } as const
 
 function stubEnvVars(): void {
-	vi.stubEnv('HCLOUD_TOKEN', 'hcloud-token')
+	vi.stubEnv('HETZNER_API_TOKEN', 'hcloud-token')
 	vi.stubEnv('DEPLOY_SSH_PRIVATE_KEY', 'fake-private-key')
 	vi.stubEnv('DEPLOY_SSH_PUBLIC_KEY', 'ssh-ed25519 AAAA test@ci')
 	vi.stubEnv('TAILSCALE_AUTH_KEY', 'tskey-auth-test')
@@ -117,11 +117,11 @@ afterEach(() => {
 
 describe('HetznerVpsTarget', () => {
 	describe('constructor', () => {
-		it('throws when HCLOUD_TOKEN is missing', () => {
-			vi.stubEnv('HCLOUD_TOKEN', '')
+		it('throws when HETZNER_API_TOKEN is missing', () => {
+			vi.stubEnv('HETZNER_API_TOKEN', '')
 
 			expect(() => new HetznerVpsTarget(HETZNER_CONFIG)).toThrow(
-				'HCLOUD_TOKEN env var is required',
+				'HETZNER_API_TOKEN env var is required',
 			)
 		})
 
@@ -452,20 +452,178 @@ describe('HetznerVpsTarget', () => {
 	})
 
 	describe('deploy', () => {
-		it('throws because deploy is not yet implemented', async () => {
+		const DEPLOY_IMAGE = {
+			registry: 'ghcr.io',
+			repository: 'acme/web',
+			tag: 'sha-abc123',
+		} as const
+
+		const DEPLOY_CONFIG = {
+			kind: 'container' as const,
+			projectName: 'acme-web',
+			image: DEPLOY_IMAGE,
+			environments: [
+				{
+					name: 'production',
+					hostname: 'acme-web.example.com',
+					envVars: { SITE_URL: 'https://acme-web.example.com' },
+					secrets: { DATABASE_URL: 'postgres://db:5432' },
+				},
+			],
+		}
+
+		it('throws when no state exists', async () => {
 			const target = new HetznerVpsTarget(HETZNER_CONFIG)
 
-			// @ts-expect-error -- deploy throws before reading config
-			await expect(target.deploy({})).rejects.toThrow(
-				'not yet implemented',
+			await expect(target.deploy(DEPLOY_CONFIG)).rejects.toThrow(
+				'No state for "acme-web"',
 			)
 		})
 
-		it('error message identifies the hetzner-vps target', async () => {
+		it('SSHs to the IP from state', async () => {
+			const { createSshSession: mockedSsh } =
+				await import('./ssh-session.ts')
+			seedState('10.0.0.5')
+
+			const target = new HetznerVpsTarget(HETZNER_CONFIG)
+			await target.deploy(DEPLOY_CONFIG)
+
+			expect(mockedSsh).toHaveBeenCalledWith(
+				expect.objectContaining({ host: '10.0.0.5' }),
+			)
+		})
+
+		it('writes .env with merged envVars and secrets', async () => {
+			const { createSshSession: mockedSsh } =
+				await import('./ssh-session.ts')
+			const mockSession = createMockSession()
+			seedState()
+			vi.mocked(mockedSsh).mockResolvedValueOnce(mockSession)
+
+			const target = new HetznerVpsTarget(HETZNER_CONFIG)
+			await target.deploy(DEPLOY_CONFIG)
+
+			expect(mockSession.writeFile).toHaveBeenCalledWith(
+				'/opt/apps/acme-web/production/.env',
+				expect.stringContaining(
+					'SITE_URL=https://acme-web.example.com',
+				),
+			)
+			expect(mockSession.writeFile).toHaveBeenCalledWith(
+				'/opt/apps/acme-web/production/.env',
+				expect.stringContaining('DATABASE_URL=postgres://db:5432'),
+			)
+		})
+
+		it('writes compose.yaml with image and port mapping', async () => {
+			const { createSshSession: mockedSsh } =
+				await import('./ssh-session.ts')
+			const mockSession = createMockSession()
+			seedState()
+			vi.mocked(mockedSsh).mockResolvedValueOnce(mockSession)
+
+			const target = new HetznerVpsTarget(HETZNER_CONFIG)
+			await target.deploy(DEPLOY_CONFIG)
+
+			expect(mockSession.writeFile).toHaveBeenCalledWith(
+				'/opt/apps/acme-web/production/compose.yaml',
+				expect.stringContaining('ghcr.io/acme/web:sha-abc123'),
+			)
+			expect(mockSession.writeFile).toHaveBeenCalledWith(
+				'/opt/apps/acme-web/production/compose.yaml',
+				expect.stringContaining('127.0.0.1:8080:3000'),
+			)
+		})
+
+		it('runs docker compose pull and up', async () => {
+			const { createSshSession: mockedSsh } =
+				await import('./ssh-session.ts')
+			const mockSession = createMockSession()
+			seedState()
+			vi.mocked(mockedSsh).mockResolvedValueOnce(mockSession)
+
+			const target = new HetznerVpsTarget(HETZNER_CONFIG)
+			await target.deploy(DEPLOY_CONFIG)
+
+			expect(mockSession.exec).toHaveBeenCalledWith(
+				expect.stringContaining(
+					'docker compose -p acme-web-production',
+				),
+			)
+			expect(mockSession.exec).toHaveBeenCalledWith(
+				expect.stringContaining('pull'),
+			)
+			expect(mockSession.exec).toHaveBeenCalledWith(
+				expect.stringContaining('up -d --remove-orphans'),
+			)
+		})
+
+		it('pushes Caddy config with upstream for deployed environment', async () => {
+			const { createSshSession: mockedSsh } =
+				await import('./ssh-session.ts')
+			const mockSession = createMockSession()
+			seedState()
+			vi.mocked(mockedSsh).mockResolvedValueOnce(mockSession)
+
+			const target = new HetznerVpsTarget(HETZNER_CONFIG)
+			await target.deploy(DEPLOY_CONFIG)
+
+			expect(mockSession.writeFile).toHaveBeenCalledWith(
+				'/etc/caddy/config.json',
+				expect.stringContaining('acme-web.example.com'),
+			)
+		})
+
+		it('reloads Caddy after writing config', async () => {
+			const { createSshSession: mockedSsh } =
+				await import('./ssh-session.ts')
+			const mockSession = createMockSession()
+			seedState()
+			vi.mocked(mockedSsh).mockResolvedValueOnce(mockSession)
+
+			const target = new HetznerVpsTarget(HETZNER_CONFIG)
+			await target.deploy(DEPLOY_CONFIG)
+
+			expect(mockSession.exec).toHaveBeenCalledWith(
+				'caddy reload --config /etc/caddy/config.json',
+			)
+		})
+
+		it('returns DeployResult with correct structure', async () => {
+			seedState()
+
+			const target = new HetznerVpsTarget(HETZNER_CONFIG)
+			const result = await target.deploy(DEPLOY_CONFIG)
+
+			expect(result.projectName).toBe('acme-web')
+			expect(result.durationMs).toBeGreaterThanOrEqual(0)
+			expect(result.deployedEnvironments).toHaveLength(1)
+			expect(result.deployedEnvironments[0]).toEqual(
+				expect.objectContaining({
+					kind: 'container',
+					name: 'production',
+					url: 'https://acme-web.example.com',
+					imageRef: DEPLOY_IMAGE,
+				}),
+			)
+		})
+
+		it('closes SSH session even when deploy throws', async () => {
+			const { createSshSession: mockedSsh } =
+				await import('./ssh-session.ts')
+			const mockSession = createMockSession()
+			seedState()
+			vi.mocked(mockedSsh).mockResolvedValueOnce(mockSession)
+			vi.mocked(mockSession.writeFile).mockRejectedValueOnce(
+				new Error('SSH write failed'),
+			)
+
 			const target = new HetznerVpsTarget(HETZNER_CONFIG)
 
-			// @ts-expect-error -- deploy throws before reading config
-			await expect(target.deploy({})).rejects.toThrow('hetzner-vps')
+			await expect(target.deploy(DEPLOY_CONFIG)).rejects.toThrow(
+				'SSH write failed',
+			)
+			expect(mockSession.close).toHaveBeenCalled()
 		})
 	})
 })

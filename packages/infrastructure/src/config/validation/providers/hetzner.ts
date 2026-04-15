@@ -1,58 +1,47 @@
 import type { HetznerDeployConfig } from '../../types.ts'
-import { isRecord } from '../../types.ts'
+import { DEFAULT_HETZNER_CONFIG, isRecord } from '../../types.ts'
 
 import type { DeployProviderValidator } from './registry.ts'
 
-export const DEFAULT_HETZNER_CONFIG: HetznerDeployConfig = {
-	serverType: 'cx23',
-	location: 'nbg1',
+type FieldResult = { error?: string; value?: string }
+
+function parseOptionalString(raw: unknown, path: string): FieldResult {
+	if (raw === undefined) return {}
+	if (typeof raw !== 'string' || raw === '') {
+		return { error: `${path} must be a non-empty string` }
+	}
+	return { value: raw }
 }
 
-function validateHetznerConfig(deployRecord: Record<string, unknown>): {
+function parseHetzner(rawHetzner: unknown): {
 	errors: string[]
-	hetzner: HetznerDeployConfig
+	hetzner?: HetznerDeployConfig
 } {
-	const rawHetzner = deployRecord['hetzner']
 	if (rawHetzner === undefined) {
 		return { errors: [], hetzner: DEFAULT_HETZNER_CONFIG }
 	}
 	if (!isRecord(rawHetzner)) {
-		return {
-			errors: ['[deploy.hetzner] must be a table'],
-			hetzner: DEFAULT_HETZNER_CONFIG,
-		}
+		return { errors: ['[deploy.hetzner] must be a table'] }
 	}
-	const errors: string[] = []
-	const rawServerType = rawHetzner['server_type']
-	const rawLocation = rawHetzner['location']
 
-	if (
-		rawServerType !== undefined &&
-		(typeof rawServerType !== 'string' || rawServerType === '')
-	) {
-		errors.push('deploy.hetzner.server_type must be a non-empty string')
-	}
-	if (
-		rawLocation !== undefined &&
-		(typeof rawLocation !== 'string' || rawLocation === '')
-	) {
-		errors.push('deploy.hetzner.location must be a non-empty string')
-	}
-	if (errors.length > 0) {
-		return { errors, hetzner: DEFAULT_HETZNER_CONFIG }
-	}
+	const serverType = parseOptionalString(
+		rawHetzner['server_type'],
+		'deploy.hetzner.server_type',
+	)
+	const location = parseOptionalString(
+		rawHetzner['location'],
+		'deploy.hetzner.location',
+	)
+	const errors = [serverType.error, location.error].filter(
+		(e): e is string => e !== undefined,
+	)
+	if (errors.length > 0) return { errors }
 
 	return {
 		errors: [],
 		hetzner: {
-			serverType:
-				typeof rawServerType === 'string'
-					? rawServerType
-					: DEFAULT_HETZNER_CONFIG.serverType,
-			location:
-				typeof rawLocation === 'string'
-					? rawLocation
-					: DEFAULT_HETZNER_CONFIG.location,
+			serverType: serverType.value ?? DEFAULT_HETZNER_CONFIG.serverType,
+			location: location.value ?? DEFAULT_HETZNER_CONFIG.location,
 		},
 	}
 }
@@ -60,17 +49,11 @@ function validateHetznerConfig(deployRecord: Record<string, unknown>): {
 export const hetznerVps: DeployProviderValidator = {
 	requiresDomain: true,
 	validate(deployRecord, secrets) {
-		const result = validateHetznerConfig(deployRecord)
-		if (result.errors.length > 0) {
-			return { errors: result.errors, deploy: undefined }
-		}
+		const { errors, hetzner } = parseHetzner(deployRecord['hetzner'])
+		if (!hetzner) return { errors, deploy: undefined }
 		return {
 			errors: [],
-			deploy: {
-				target: 'hetzner-vps',
-				secrets,
-				hetzner: result.hetzner,
-			},
+			deploy: { target: 'hetzner-vps', secrets, hetzner },
 		}
 	},
 }

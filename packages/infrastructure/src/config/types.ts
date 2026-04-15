@@ -33,6 +33,11 @@ export interface HetznerDeployConfig {
 	readonly location: string
 }
 
+export const DEFAULT_HETZNER_CONFIG: HetznerDeployConfig = {
+	serverType: 'cx23',
+	location: 'nbg1',
+}
+
 export interface ProjectSection {
 	readonly name: string
 	readonly type: ProjectType
