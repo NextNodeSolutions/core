@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { R2Operations } from '../r2/r2-client.types.ts'
+import type { R2Operations } from '../r2/client.types.ts'
 
 import { deleteState, readState, writeState } from './hcloud-state.ts'
 

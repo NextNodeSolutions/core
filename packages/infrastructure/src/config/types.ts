@@ -38,6 +38,10 @@ export const DEFAULT_HETZNER_CONFIG: HetznerDeployConfig = {
 	location: 'nbg1',
 }
 
+export const DEFAULT_R2_STATE_BUCKET = 'nextnode-state'
+export const DEFAULT_R2_CERTS_BUCKET = 'nextnode-certs'
+export const R2_BUCKET_LOCATION_HINT = 'weur'
+
 export interface ProjectSection {
 	readonly name: string
 	readonly type: ProjectType

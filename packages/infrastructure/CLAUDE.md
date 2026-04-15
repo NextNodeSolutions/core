@@ -32,10 +32,14 @@ src/
       domain.ts       — resolveDeployDomain (hostname resolution)
       env.ts          — computeDeployEnv
       seo-guard.ts    — computeSeoGuardFiles
-    cloudflare/       — Cloudflare Pages domain logic
+    cloudflare/       — Cloudflare domain logic
       pages-domains.ts     — computePagesDomains, reconcilePagesDomain
       pages-project-name.ts — computePagesProjectName
       dns-records.ts        — computeDnsRecords, reconcileDnsRecord
+      r2/                   — R2 provisioning pure logic
+        credentials.ts      — deriveR2Credentials (token → S3 creds via SHA256)
+        endpoint.ts         — computeR2Endpoint / computeR2Host
+        token-policy.ts     — buildR2TokenPolicy
     hetzner/          — Hetzner VPS domain logic
       caddy-config.ts       — Caddy JSON config types
       build-caddy-config.ts — buildCaddyConfig (pure)
@@ -49,17 +53,23 @@ src/
       prod-gate.ts      — findDevRun, evaluateDevRun
       publish-result.ts — parseSemanticReleaseOutput, buildSummary
   adapters/           — IO boundary: fs, fetch, GitHub Actions outputs
-    cloudflare/       — Cloudflare Pages adapter
+    cloudflare/       — Cloudflare API adapter
       target.ts       — CloudflarePagesTarget (DeployTarget impl)
       pages-project.ts — provisionProject()
       pages-domains.ts — reconcileDomains()
       pages-dns.ts     — reconcileDns()
+      accounts.ts           — resolveAccountId
+      permission-groups.ts  — resolveR2PermissionGroupIds
+      r2/                   — R2 bucket + token provisioning via CF API
+        buckets.ts          — ensureR2Bucket
+        tokens.ts           — createR2Token (POST /user/tokens)
     hetzner/          — Hetzner VPS adapter
       hcloud-client.ts — typed fetch to Hetzner Cloud API
       hcloud-state.ts  — R2 state read/write with ETag locking
       ssh-session.ts   — ssh2 wrapper, ONE connection per deploy
     r2/               — R2 (S3) adapter
-      r2-client.ts    — S3 SDK wrapper for state + certs
+      client.ts            — S3 SDK wrapper for state + certs
+      verify-credentials.ts — SigV4 handshake for R2 credential self-heal
     github/           — GitHub Actions adapter
       api.ts          — fetchWorkflowRuns
       plan-outputs.ts — writePlanOutputs

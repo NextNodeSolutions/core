@@ -50,7 +50,7 @@ vi.mock('node:timers/promises', () => ({
 // Mock R2Client (network boundary)
 const fakeR2State = new Map<string, string>()
 
-vi.mock('../r2/r2-client.ts', () => ({
+vi.mock('../r2/client.ts', () => ({
 	R2Client: vi.fn(() => ({
 		get: vi.fn(async (key: string) => {
 			const body = fakeR2State.get(key)
@@ -68,6 +68,15 @@ vi.mock('../r2/r2-client.ts', () => ({
 
 const HETZNER_CONFIG = { serverType: 'cpx22', location: 'nbg1' } as const
 
+const R2_CONFIG = {
+	accountId: 'acct',
+	endpoint: 'https://r2.example.com',
+	accessKeyId: 'r2-key',
+	secretAccessKey: 'r2-secret',
+	stateBucket: 'nextnode-state',
+	certsBucket: 'nextnode-certs',
+} as const
+
 const EXISTING_STATE = {
 	serverId: 42,
 	ip: '1.2.3.4',
@@ -79,11 +88,6 @@ function stubEnvVars(): void {
 	vi.stubEnv('DEPLOY_SSH_PRIVATE_KEY', 'fake-private-key')
 	vi.stubEnv('DEPLOY_SSH_PUBLIC_KEY', 'ssh-ed25519 AAAA test@ci')
 	vi.stubEnv('TAILSCALE_AUTH_KEY', 'tskey-auth-test')
-	vi.stubEnv('R2_ENDPOINT', 'https://r2.example.com')
-	vi.stubEnv('R2_ACCESS_KEY_ID', 'r2-key')
-	vi.stubEnv('R2_SECRET_ACCESS_KEY', 'r2-secret')
-	vi.stubEnv('R2_STATE_BUCKET', 'nextnode-state')
-	vi.stubEnv('R2_CERTS_BUCKET', 'nextnode-certs')
 	vi.stubEnv('NN_CLIENT_ID', 'nextnode')
 	vi.stubEnv('NN_VL_URL', 'http://vl.tail0.ts.net:9428')
 	vi.stubEnv('LOG_LEVEL', 'silent')
@@ -120,32 +124,24 @@ describe('HetznerVpsTarget', () => {
 		it('throws when HETZNER_API_TOKEN is missing', () => {
 			vi.stubEnv('HETZNER_API_TOKEN', '')
 
-			expect(() => new HetznerVpsTarget(HETZNER_CONFIG)).toThrow(
-				'HETZNER_API_TOKEN env var is required',
-			)
+			expect(
+				() => new HetznerVpsTarget(HETZNER_CONFIG, R2_CONFIG),
+			).toThrow('HETZNER_API_TOKEN env var is required')
 		})
 
 		it('throws when DEPLOY_SSH_PRIVATE_KEY is missing', () => {
 			vi.stubEnv('DEPLOY_SSH_PRIVATE_KEY', '')
 
-			expect(() => new HetznerVpsTarget(HETZNER_CONFIG)).toThrow(
-				'DEPLOY_SSH_PRIVATE_KEY env var is required',
-			)
-		})
-
-		it('throws when R2_ENDPOINT is missing', () => {
-			vi.stubEnv('R2_ENDPOINT', '')
-
-			expect(() => new HetznerVpsTarget(HETZNER_CONFIG)).toThrow(
-				'R2_ENDPOINT env var is required',
-			)
+			expect(
+				() => new HetznerVpsTarget(HETZNER_CONFIG, R2_CONFIG),
+			).toThrow('DEPLOY_SSH_PRIVATE_KEY env var is required')
 		})
 	})
 
 	describe('ensureInfra', () => {
 		describe('fresh provision', () => {
 			it('creates a VPS, firewall, and writes state', async () => {
-				const target = new HetznerVpsTarget(HETZNER_CONFIG)
+				const target = new HetznerVpsTarget(HETZNER_CONFIG, R2_CONFIG)
 
 				await target.ensureInfra('acme-web')
 
@@ -163,7 +159,7 @@ describe('HetznerVpsTarget', () => {
 				const { createServer: mockedCreate } =
 					await import('./hcloud-client.ts')
 
-				const target = new HetznerVpsTarget(HETZNER_CONFIG)
+				const target = new HetznerVpsTarget(HETZNER_CONFIG, R2_CONFIG)
 				await target.ensureInfra('acme-web')
 
 				expect(mockedCreate).toHaveBeenCalledWith(
@@ -179,7 +175,7 @@ describe('HetznerVpsTarget', () => {
 				const { createServer: mockedCreate } =
 					await import('./hcloud-client.ts')
 
-				const target = new HetznerVpsTarget(HETZNER_CONFIG)
+				const target = new HetznerVpsTarget(HETZNER_CONFIG, R2_CONFIG)
 				await target.ensureInfra('acme-web')
 
 				expect(mockedCreate).toHaveBeenCalledWith(
@@ -192,7 +188,7 @@ describe('HetznerVpsTarget', () => {
 				const { createServer: mockedCreate } =
 					await import('./hcloud-client.ts')
 
-				const target = new HetznerVpsTarget(HETZNER_CONFIG)
+				const target = new HetznerVpsTarget(HETZNER_CONFIG, R2_CONFIG)
 				await target.ensureInfra('acme-web')
 
 				expect(mockedCreate).toHaveBeenCalledWith(
@@ -210,7 +206,7 @@ describe('HetznerVpsTarget', () => {
 					new Error('Hetzner API create server: 422'),
 				)
 
-				const target = new HetznerVpsTarget(HETZNER_CONFIG)
+				const target = new HetznerVpsTarget(HETZNER_CONFIG, R2_CONFIG)
 
 				await expect(target.ensureInfra('acme-web')).rejects.toThrow(
 					'Hetzner API create server: 422',
@@ -224,7 +220,7 @@ describe('HetznerVpsTarget', () => {
 					new Error('Hetzner API create firewall: 422'),
 				)
 
-				const target = new HetznerVpsTarget(HETZNER_CONFIG)
+				const target = new HetznerVpsTarget(HETZNER_CONFIG, R2_CONFIG)
 
 				await expect(target.ensureInfra('acme-web')).rejects.toThrow(
 					'Hetzner API create firewall: 422',
@@ -238,7 +234,7 @@ describe('HetznerVpsTarget', () => {
 					new Error('Hetzner API apply firewall: 500'),
 				)
 
-				const target = new HetznerVpsTarget(HETZNER_CONFIG)
+				const target = new HetznerVpsTarget(HETZNER_CONFIG, R2_CONFIG)
 
 				await expect(target.ensureInfra('acme-web')).rejects.toThrow(
 					'Hetzner API apply firewall: 500',
@@ -252,7 +248,7 @@ describe('HetznerVpsTarget', () => {
 					await import('./hcloud-client.ts')
 				seedState()
 
-				const target = new HetznerVpsTarget(HETZNER_CONFIG)
+				const target = new HetznerVpsTarget(HETZNER_CONFIG, R2_CONFIG)
 				await target.ensureInfra('acme-web')
 
 				expect(mockedCreate).not.toHaveBeenCalled()
@@ -263,7 +259,7 @@ describe('HetznerVpsTarget', () => {
 					await import('../../cli/hetzner/converge.ts')
 				seedState()
 
-				const target = new HetznerVpsTarget(HETZNER_CONFIG)
+				const target = new HetznerVpsTarget(HETZNER_CONFIG, R2_CONFIG)
 				await target.ensureInfra('acme-web')
 
 				expect(mockedConverge).toHaveBeenCalled()
@@ -274,7 +270,7 @@ describe('HetznerVpsTarget', () => {
 					await import('./ssh-session.ts')
 				seedState('5.6.7.8')
 
-				const target = new HetznerVpsTarget(HETZNER_CONFIG)
+				const target = new HetznerVpsTarget(HETZNER_CONFIG, R2_CONFIG)
 				await target.ensureInfra('acme-web')
 
 				expect(mockedSsh).toHaveBeenCalledWith(
@@ -307,7 +303,7 @@ describe('HetznerVpsTarget', () => {
 						public_net: { ipv4: { ip: '1.2.3.4' } },
 					})
 
-				const target = new HetznerVpsTarget(HETZNER_CONFIG)
+				const target = new HetznerVpsTarget(HETZNER_CONFIG, R2_CONFIG)
 
 				await expect(
 					target.ensureInfra('acme-web'),
@@ -324,7 +320,7 @@ describe('HetznerVpsTarget', () => {
 					public_net: { ipv4: { ip: '1.2.3.4' } },
 				})
 
-				const target = new HetznerVpsTarget(HETZNER_CONFIG)
+				const target = new HetznerVpsTarget(HETZNER_CONFIG, R2_CONFIG)
 
 				await expect(target.ensureInfra('acme-web')).rejects.toThrow(
 					'did not reach "running" after 24 attempts',
@@ -343,7 +339,7 @@ describe('HetznerVpsTarget', () => {
 					})
 					.mockRejectedValueOnce(new Error('Hetzner API: 500'))
 
-				const target = new HetznerVpsTarget(HETZNER_CONFIG)
+				const target = new HetznerVpsTarget(HETZNER_CONFIG, R2_CONFIG)
 
 				await expect(target.ensureInfra('acme-web')).rejects.toThrow(
 					'Hetzner API: 500',
@@ -356,7 +352,7 @@ describe('HetznerVpsTarget', () => {
 				const { createSshSession: mockedSsh } =
 					await import('./ssh-session.ts')
 
-				const target = new HetznerVpsTarget(HETZNER_CONFIG)
+				const target = new HetznerVpsTarget(HETZNER_CONFIG, R2_CONFIG)
 				await target.ensureInfra('acme-web')
 
 				// 1 call from waitForSsh (first attempt succeeds) + 1 from runConvergence
@@ -374,7 +370,7 @@ describe('HetznerVpsTarget', () => {
 					.mockResolvedValueOnce(mockSession) // waitForSsh succeeds
 					.mockResolvedValueOnce(mockSession) // runConvergence session
 
-				const target = new HetznerVpsTarget(HETZNER_CONFIG)
+				const target = new HetznerVpsTarget(HETZNER_CONFIG, R2_CONFIG)
 
 				await expect(
 					target.ensureInfra('acme-web'),
@@ -388,7 +384,7 @@ describe('HetznerVpsTarget', () => {
 					new Error('Connection refused'),
 				)
 
-				const target = new HetznerVpsTarget(HETZNER_CONFIG)
+				const target = new HetznerVpsTarget(HETZNER_CONFIG, R2_CONFIG)
 
 				await expect(target.ensureInfra('acme-web')).rejects.toThrow(
 					'not reachable after 12 attempts',
@@ -410,7 +406,7 @@ describe('HetznerVpsTarget', () => {
 					new Error('converge failed'),
 				)
 
-				const target = new HetznerVpsTarget(HETZNER_CONFIG)
+				const target = new HetznerVpsTarget(HETZNER_CONFIG, R2_CONFIG)
 
 				await expect(target.ensureInfra('acme-web')).rejects.toThrow(
 					'converge failed',
@@ -427,7 +423,7 @@ describe('HetznerVpsTarget', () => {
 					new Error('SSH key rejected'),
 				)
 
-				const target = new HetznerVpsTarget(HETZNER_CONFIG)
+				const target = new HetznerVpsTarget(HETZNER_CONFIG, R2_CONFIG)
 
 				await expect(target.ensureInfra('acme-web')).rejects.toThrow(
 					'SSH key rejected',
@@ -439,7 +435,7 @@ describe('HetznerVpsTarget', () => {
 					await import('./ssh-session.ts')
 				seedState('10.0.0.1')
 
-				const target = new HetznerVpsTarget(HETZNER_CONFIG)
+				const target = new HetznerVpsTarget(HETZNER_CONFIG, R2_CONFIG)
 				await target.ensureInfra('acme-web')
 
 				expect(mockedSsh).toHaveBeenCalledWith({
@@ -473,7 +469,7 @@ describe('HetznerVpsTarget', () => {
 		}
 
 		it('throws when no state exists', async () => {
-			const target = new HetznerVpsTarget(HETZNER_CONFIG)
+			const target = new HetznerVpsTarget(HETZNER_CONFIG, R2_CONFIG)
 
 			await expect(target.deploy(DEPLOY_CONFIG)).rejects.toThrow(
 				'No state for "acme-web"',
@@ -485,7 +481,7 @@ describe('HetznerVpsTarget', () => {
 				await import('./ssh-session.ts')
 			seedState('10.0.0.5')
 
-			const target = new HetznerVpsTarget(HETZNER_CONFIG)
+			const target = new HetznerVpsTarget(HETZNER_CONFIG, R2_CONFIG)
 			await target.deploy(DEPLOY_CONFIG)
 
 			expect(mockedSsh).toHaveBeenCalledWith(
@@ -500,7 +496,7 @@ describe('HetznerVpsTarget', () => {
 			seedState()
 			vi.mocked(mockedSsh).mockResolvedValueOnce(mockSession)
 
-			const target = new HetznerVpsTarget(HETZNER_CONFIG)
+			const target = new HetznerVpsTarget(HETZNER_CONFIG, R2_CONFIG)
 			await target.deploy(DEPLOY_CONFIG)
 
 			expect(mockSession.writeFile).toHaveBeenCalledWith(
@@ -522,7 +518,7 @@ describe('HetznerVpsTarget', () => {
 			seedState()
 			vi.mocked(mockedSsh).mockResolvedValueOnce(mockSession)
 
-			const target = new HetznerVpsTarget(HETZNER_CONFIG)
+			const target = new HetznerVpsTarget(HETZNER_CONFIG, R2_CONFIG)
 			await target.deploy(DEPLOY_CONFIG)
 
 			expect(mockSession.writeFile).toHaveBeenCalledWith(
@@ -542,7 +538,7 @@ describe('HetznerVpsTarget', () => {
 			seedState()
 			vi.mocked(mockedSsh).mockResolvedValueOnce(mockSession)
 
-			const target = new HetznerVpsTarget(HETZNER_CONFIG)
+			const target = new HetznerVpsTarget(HETZNER_CONFIG, R2_CONFIG)
 			await target.deploy(DEPLOY_CONFIG)
 
 			expect(mockSession.exec).toHaveBeenCalledWith(
@@ -565,7 +561,7 @@ describe('HetznerVpsTarget', () => {
 			seedState()
 			vi.mocked(mockedSsh).mockResolvedValueOnce(mockSession)
 
-			const target = new HetznerVpsTarget(HETZNER_CONFIG)
+			const target = new HetznerVpsTarget(HETZNER_CONFIG, R2_CONFIG)
 			await target.deploy(DEPLOY_CONFIG)
 
 			expect(mockSession.writeFile).toHaveBeenCalledWith(
@@ -581,7 +577,7 @@ describe('HetznerVpsTarget', () => {
 			seedState()
 			vi.mocked(mockedSsh).mockResolvedValueOnce(mockSession)
 
-			const target = new HetznerVpsTarget(HETZNER_CONFIG)
+			const target = new HetznerVpsTarget(HETZNER_CONFIG, R2_CONFIG)
 			await target.deploy(DEPLOY_CONFIG)
 
 			expect(mockSession.exec).toHaveBeenCalledWith(
@@ -592,7 +588,7 @@ describe('HetznerVpsTarget', () => {
 		it('returns DeployResult with correct structure', async () => {
 			seedState()
 
-			const target = new HetznerVpsTarget(HETZNER_CONFIG)
+			const target = new HetznerVpsTarget(HETZNER_CONFIG, R2_CONFIG)
 			const result = await target.deploy(DEPLOY_CONFIG)
 
 			expect(result.projectName).toBe('acme-web')
@@ -618,7 +614,7 @@ describe('HetznerVpsTarget', () => {
 				new Error('SSH write failed'),
 			)
 
-			const target = new HetznerVpsTarget(HETZNER_CONFIG)
+			const target = new HetznerVpsTarget(HETZNER_CONFIG, R2_CONFIG)
 
 			await expect(target.deploy(DEPLOY_CONFIG)).rejects.toThrow(
 				'SSH write failed',

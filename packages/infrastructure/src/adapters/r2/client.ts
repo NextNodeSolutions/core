@@ -7,7 +7,7 @@ import {
 	S3Client,
 } from '@aws-sdk/client-s3'
 
-import type { R2ClientConfig, R2Object } from './r2-client.types.ts'
+import type { R2ClientConfig, R2Object } from './client.types.ts'
 
 export class R2Client {
 	private readonly s3: S3Client

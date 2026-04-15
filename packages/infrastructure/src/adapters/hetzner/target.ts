@@ -4,6 +4,7 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 import { converge } from '../../cli/hetzner/converge.ts'
 import type { HetznerVpsDeploySection } from '../../config/types.ts'
+import type { R2RuntimeConfig } from '../../domain/cloudflare/r2/runtime-config.ts'
 import type {
 	ContainerDeployConfig,
 	ContainerDeployedEnvironment,
@@ -22,7 +23,7 @@ import {
 import { computeSilo } from '../../domain/hetzner/env-silo.ts'
 import { renderVectorEnv } from '../../domain/hetzner/vector-env.ts'
 import { renderVectorToml } from '../../domain/hetzner/vector-toml.ts'
-import { R2Client } from '../r2/r2-client.ts'
+import { R2Client } from '../r2/client.ts'
 
 import type { CreateServerInput } from './hcloud-client.ts'
 import {
@@ -81,23 +82,28 @@ function requireEnv(name: string): string {
 export class HetznerVpsTarget implements DeployTarget<ContainerDeployConfig> {
 	readonly name = 'hetzner-vps'
 	private readonly hetzner: HetznerVpsDeploySection['hetzner']
+	private readonly r2Config: R2RuntimeConfig
 	private readonly hcloudToken: string
 	private readonly deployPrivateKey: string
 	private readonly deployPublicKey: string
 	private readonly tailscaleAuthKey: string
 	private readonly r2: R2Client
 
-	constructor(hetzner: HetznerVpsDeploySection['hetzner']) {
+	constructor(
+		hetzner: HetznerVpsDeploySection['hetzner'],
+		r2: R2RuntimeConfig,
+	) {
 		this.hetzner = hetzner
+		this.r2Config = r2
 		this.hcloudToken = requireEnv('HETZNER_API_TOKEN')
 		this.deployPrivateKey = requireEnv('DEPLOY_SSH_PRIVATE_KEY')
 		this.deployPublicKey = requireEnv('DEPLOY_SSH_PUBLIC_KEY')
 		this.tailscaleAuthKey = requireEnv('TAILSCALE_AUTH_KEY')
 		this.r2 = new R2Client({
-			endpoint: requireEnv('R2_ENDPOINT'),
-			accessKeyId: requireEnv('R2_ACCESS_KEY_ID'),
-			secretAccessKey: requireEnv('R2_SECRET_ACCESS_KEY'),
-			bucket: requireEnv('R2_STATE_BUCKET'),
+			endpoint: r2.endpoint,
+			accessKeyId: r2.accessKeyId,
+			secretAccessKey: r2.secretAccessKey,
+			bucket: r2.stateBucket,
 		})
 	}
 
@@ -226,10 +232,10 @@ export class HetznerVpsTarget implements DeployTarget<ContainerDeployConfig> {
 				buildCaddyConfig({
 					upstreams,
 					r2Storage: {
-						host: requireEnv('R2_ENDPOINT'),
-						bucket: requireEnv('R2_CERTS_BUCKET'),
-						accessId: requireEnv('R2_ACCESS_KEY_ID'),
-						secretKey: requireEnv('R2_SECRET_ACCESS_KEY'),
+						host: this.r2Config.endpoint,
+						bucket: this.r2Config.certsBucket,
+						accessId: this.r2Config.accessKeyId,
+						secretKey: this.r2Config.secretAccessKey,
 						prefix: `${config.projectName}/`,
 					},
 				}),
@@ -306,23 +312,30 @@ export class HetznerVpsTarget implements DeployTarget<ContainerDeployConfig> {
 				buildCaddyConfig({
 					upstreams: [],
 					r2Storage: {
-						host: requireEnv('R2_ENDPOINT'),
-						bucket: requireEnv('R2_CERTS_BUCKET'),
-						accessId: requireEnv('R2_ACCESS_KEY_ID'),
-						secretKey: requireEnv('R2_SECRET_ACCESS_KEY'),
+						host: this.r2Config.endpoint,
+						bucket: this.r2Config.certsBucket,
+						accessId: this.r2Config.accessKeyId,
+						secretKey: this.r2Config.secretAccessKey,
 						prefix: `${projectName}/`,
 					},
 				}),
 			)
 
+			const vlUrl = process.env['NN_VL_URL']
+			const vectorConfig = vlUrl
+				? {
+						vectorToml: renderVectorToml(),
+						vectorEnv: renderVectorEnv({
+							clientId: requireEnv('NN_CLIENT_ID'),
+							project: projectName,
+							vlUrl,
+						}),
+					}
+				: { vectorToml: undefined, vectorEnv: undefined }
+
 			await converge(session, {
 				projectName,
-				vectorToml: renderVectorToml(),
-				vectorEnv: renderVectorEnv({
-					clientId: requireEnv('NN_CLIENT_ID'),
-					project: projectName,
-					vlUrl: requireEnv('NN_VL_URL'),
-				}),
+				...vectorConfig,
 				caddyBaseConfig,
 			})
 		} finally {

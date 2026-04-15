@@ -18,7 +18,7 @@ export async function deployCommand(config: DeployableConfig): Promise<void> {
 		config.project.type,
 		getEnv('PIPELINE_ENVIRONMENT'),
 	)
-	const target = createTarget(config, environment)
+	const target = await createTarget(config, environment)
 
 	const pagesProjectName = computePagesProjectName(
 		config.project.name,
