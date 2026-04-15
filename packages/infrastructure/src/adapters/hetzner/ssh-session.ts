@@ -5,6 +5,17 @@ import type { SshSession, SshSessionConfig } from './ssh-session.types.ts'
 
 const DEFAULT_PORT = 22
 
+// RFC 4251 §9.1 — SFTP SSH_FX_NO_SUCH_FILE status code.
+const SFTP_STATUS_NO_SUCH_FILE = 2
+
+interface SftpError extends Error {
+	readonly code?: number | string
+}
+
+function isNotFoundError(err: SftpError): boolean {
+	return err.code === SFTP_STATUS_NO_SUCH_FILE || err.code === 'ENOENT'
+}
+
 function openSftp(conn: Client): Promise<SFTPWrapper> {
 	return new Promise((resolve, reject) => {
 		conn.sftp((err, sftp) => {
@@ -97,7 +108,7 @@ export async function createSshSession(
 			})
 		},
 
-		async readFile(remotePath: string): Promise<string> {
+		async readFile(remotePath: string): Promise<string | null> {
 			const sftp = await openSftp(conn)
 			return new Promise((resolve, reject) => {
 				let content = ''
@@ -108,14 +119,18 @@ export async function createSshSession(
 					content += String(chunk)
 				})
 				rs.on('end', () => resolve(content))
-				rs.on('error', (readErr: Error) =>
+				rs.on('error', (readErr: SftpError) => {
+					if (isNotFoundError(readErr)) {
+						resolve(null)
+						return
+					}
 					reject(
 						new Error(
 							`SSH readFile "${remotePath}" failed: ${readErr.message}`,
 							{ cause: readErr },
 						),
-					),
-				)
+					)
+				})
 			})
 		},
 
