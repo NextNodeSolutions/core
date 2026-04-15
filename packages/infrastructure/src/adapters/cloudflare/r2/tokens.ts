@@ -6,6 +6,7 @@ import {
 	authHeaders,
 	formatErrors,
 	parseEnvelope,
+	requireArrayResult,
 	requireObjectResult,
 	requireOk,
 } from '../api.ts'
@@ -63,4 +64,73 @@ export async function createR2Token(
 	}
 
 	return parseTokenResult(requireObjectResult(data, context))
+}
+
+export interface ListedToken {
+	readonly id: string
+	readonly name: string
+	readonly status: string
+}
+
+function parseListedToken(item: unknown): ListedToken {
+	if (typeof item !== 'object' || item === null) {
+		throw new Error('Cloudflare list tokens: item is not an object')
+	}
+	if (!('id' in item) || typeof item.id !== 'string') {
+		throw new Error('Cloudflare list tokens: id missing')
+	}
+	if (!('name' in item) || typeof item.name !== 'string') {
+		throw new Error('Cloudflare list tokens: name missing')
+	}
+	if (!('status' in item) || typeof item.status !== 'string') {
+		throw new Error('Cloudflare list tokens: status missing')
+	}
+	return { id: item.id, name: item.name, status: item.status }
+}
+
+/**
+ * List all tokens owned by the caller via `GET /user/tokens`.
+ * Used to locate stale tokens by name before rotating.
+ */
+export async function listUserTokens(
+	cfToken: string,
+): Promise<ReadonlyArray<ListedToken>> {
+	const response = await fetch(`${CLOUDFLARE_API_BASE}/user/tokens`, {
+		headers: authHeaders(cfToken),
+	})
+	await requireOk(response)
+
+	const data: unknown = await response.json()
+	const context = 'Cloudflare list user tokens'
+	const envelope = parseEnvelope(data, context)
+	if (!envelope.success) {
+		throw new Error(`${context} failed: ${formatErrors(envelope.errors)}`)
+	}
+
+	return requireArrayResult(data, context).map(parseListedToken)
+}
+
+/**
+ * Revoke a single API token via `DELETE /user/tokens/{id}`.
+ * Used after rotation to clean up superseded tokens.
+ */
+export async function deleteUserToken(
+	cfToken: string,
+	tokenId: string,
+): Promise<void> {
+	const response = await fetch(
+		`${CLOUDFLARE_API_BASE}/user/tokens/${encodeURIComponent(tokenId)}`,
+		{
+			method: 'DELETE',
+			headers: authHeaders(cfToken),
+		},
+	)
+	await requireOk(response)
+
+	const data: unknown = await response.json()
+	const context = `Cloudflare delete token "${tokenId}"`
+	const envelope = parseEnvelope(data, context)
+	if (!envelope.success) {
+		throw new Error(`${context} failed: ${formatErrors(envelope.errors)}`)
+	}
 }

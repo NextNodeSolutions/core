@@ -42,29 +42,117 @@ function unauthorized(): MockResponse {
 	}
 }
 
+interface ListedTokenFixture {
+	readonly id: string
+	readonly name: string
+	readonly status: string
+}
+
 interface FetchOverrides {
 	accountId?: string
 	tokenResult?: { id: string; value: string }
 	bucketExists?: boolean
 	verifyResults?: Array<'ok' | '401'>
+	existingTokens?: ReadonlyArray<ListedTokenFixture>
+	deleteFailsFor?: ReadonlyArray<string>
 }
 
 interface StubFetchContext {
 	fetchMock: ReturnType<typeof vi.fn>
 	urls: string[]
+	deletedTokenIds: string[]
+}
+
+const PERMISSION_GROUPS_BODY = {
+	success: true,
+	result: [
+		{ id: 'read-id', name: 'Workers R2 Storage Bucket Item Read' },
+		{ id: 'write-id', name: 'Workers R2 Storage Bucket Item Write' },
+	],
+	errors: [],
+}
+
+interface RouterContext {
+	readonly url: string
+	readonly method: string
+	readonly overrides: FetchOverrides
+	readonly verifyQueue: Array<'ok' | '401'>
+	readonly deletedTokenIds: string[]
+}
+
+function routeBucketEndpoints(ctx: RouterContext): MockResponse | undefined {
+	if (/\/r2\/buckets\/[^/]+$/.test(ctx.url)) {
+		return ctx.overrides.bucketExists
+			? okJson({ success: true, result: { name: 'x' }, errors: [] })
+			: notFound()
+	}
+	if (ctx.url.endsWith('/r2/buckets')) {
+		return okJson({ success: true, result: { name: 'x' }, errors: [] })
+	}
+	return undefined
+}
+
+function routeTokenEndpoints(ctx: RouterContext): MockResponse | undefined {
+	const byId = /\/user\/tokens\/([^/]+)$/.exec(ctx.url)
+	if (byId && ctx.method === 'DELETE') {
+		const id = byId[1] ?? ''
+		if (ctx.overrides.deleteFailsFor?.includes(id)) {
+			return {
+				ok: false,
+				status: 500,
+				json: () => Promise.resolve({}),
+				text: () => Promise.resolve('boom'),
+			}
+		}
+		ctx.deletedTokenIds.push(id)
+		return okJson({ success: true, result: { id }, errors: [] })
+	}
+	if (ctx.url.endsWith('/user/tokens')) {
+		const tokenResult = ctx.overrides.tokenResult ?? {
+			id: 'new-key-id',
+			value: 'raw-value',
+		}
+		if (ctx.method === 'POST') {
+			return okJson({
+				success: true,
+				result: tokenResult,
+				errors: [],
+			})
+		}
+		return okJson({
+			success: true,
+			result: ctx.overrides.existingTokens ?? [],
+			errors: [],
+		})
+	}
+	return undefined
+}
+
+function routeS3Endpoint(ctx: RouterContext): MockResponse | undefined {
+	if (!ctx.url.includes('r2.cloudflarestorage.com')) return undefined
+	const next = ctx.verifyQueue.shift() ?? 'ok'
+	if (next === 'ok') {
+		return {
+			ok: true,
+			status: 200,
+			json: () => Promise.resolve({}),
+			text: () => Promise.resolve(''),
+		}
+	}
+	return unauthorized()
 }
 
 function stubFetch(overrides: FetchOverrides = {}): StubFetchContext {
 	const accountId = overrides.accountId ?? 'acct-from-api'
-	const tokenResult = overrides.tokenResult ?? {
-		id: 'new-key-id',
-		value: 'raw-value',
-	}
 	const verifyQueue = [...(overrides.verifyResults ?? ['ok'])]
 	const urls: string[] = []
+	const deletedTokenIds: string[] = []
 
 	const fetchMock = vi.fn(
-		async (url: string | URL): Promise<MockResponse> => {
+		async (
+			url: string | URL,
+			init?: { method?: string },
+		): Promise<MockResponse> => {
 			const u = String(url)
 			urls.push(u)
 			if (u.endsWith('/v4/accounts')) {
@@ -75,60 +163,25 @@ function stubFetch(overrides: FetchOverrides = {}): StubFetchContext {
 				})
 			}
 			if (u.endsWith('/user/tokens/permission_groups')) {
-				return okJson({
-					success: true,
-					result: [
-						{
-							id: 'read-id',
-							name: 'Workers R2 Storage Bucket Item Read',
-						},
-						{
-							id: 'write-id',
-							name: 'Workers R2 Storage Bucket Item Write',
-						},
-					],
-					errors: [],
-				})
+				return okJson(PERMISSION_GROUPS_BODY)
 			}
-			if (/\/r2\/buckets\/[^/]+$/.test(u)) {
-				return overrides.bucketExists
-					? okJson({
-							success: true,
-							result: { name: 'x' },
-							errors: [],
-						})
-					: notFound()
+			const ctx: RouterContext = {
+				url: u,
+				method: init?.method ?? 'GET',
+				overrides,
+				verifyQueue,
+				deletedTokenIds,
 			}
-			if (u.endsWith('/r2/buckets')) {
-				return okJson({
-					success: true,
-					result: { name: 'x' },
-					errors: [],
-				})
-			}
-			if (u.endsWith('/user/tokens')) {
-				return okJson({
-					success: true,
-					result: tokenResult,
-					errors: [],
-				})
-			}
-			if (u.includes('r2.cloudflarestorage.com')) {
-				const next = verifyQueue.shift() ?? 'ok'
-				return next === 'ok'
-					? {
-							ok: true,
-							status: 200,
-							json: () => Promise.resolve({}),
-							text: () => Promise.resolve(''),
-						}
-					: unauthorized()
-			}
+			const routed =
+				routeBucketEndpoints(ctx) ??
+				routeTokenEndpoints(ctx) ??
+				routeS3Endpoint(ctx)
+			if (routed) return routed
 			throw new Error(`unexpected fetch: ${u}`)
 		},
 	)
 	vi.stubGlobal('fetch', fetchMock)
-	return { fetchMock, urls }
+	return { fetchMock, urls, deletedTokenIds }
 }
 
 interface GhStubOptions {
@@ -213,9 +266,63 @@ describe('ensureR2Setup', () => {
 
 		const result = await ensureR2Setup('cf-token')
 
-		expect(urls.filter(u => u.endsWith('/user/tokens'))).toHaveLength(1)
+		const tokenCreates = urls.filter(u => u.endsWith('/user/tokens'))
+		expect(tokenCreates).toHaveLength(2) // POST (create) + GET (list for cleanup)
 		expect(result.accessKeyId).toBe('new-key-id')
 		expect(result.secretAccessKey).toHaveLength(64)
+	})
+
+	it('continues revoking remaining tokens when one delete fails (best-effort)', async () => {
+		const { deletedTokenIds } = stubFetch({
+			verifyResults: ['ok'],
+			existingTokens: [
+				{
+					id: 'old-1',
+					name: 'nextnode-infrastructure-r2',
+					status: 'active',
+				},
+				{
+					id: 'old-2',
+					name: 'nextnode-infrastructure-r2',
+					status: 'active',
+				},
+				{
+					id: 'new-key-id',
+					name: 'nextnode-infrastructure-r2',
+					status: 'active',
+				},
+			],
+			deleteFailsFor: ['old-1'],
+		})
+		stubGh()
+
+		await expect(ensureR2Setup('cf-token')).resolves.toBeDefined()
+		expect(deletedTokenIds).toContain('old-2')
+		expect(deletedTokenIds).not.toContain('old-1')
+	})
+
+	it('revokes stale tokens with the same name after rotating', async () => {
+		const { deletedTokenIds } = stubFetch({
+			verifyResults: ['ok'],
+			existingTokens: [
+				{
+					id: 'old-1',
+					name: 'nextnode-infrastructure-r2',
+					status: 'active',
+				},
+				{
+					id: 'new-key-id',
+					name: 'nextnode-infrastructure-r2',
+					status: 'active',
+				},
+				{ id: 'other', name: 'unrelated', status: 'active' },
+			],
+		})
+		stubGh()
+
+		await ensureR2Setup('cf-token')
+
+		expect(deletedTokenIds).toEqual(['old-1'])
 	})
 
 	it('creates a token and stores org secrets on fresh bootstrap', async () => {
@@ -224,7 +331,7 @@ describe('ensureR2Setup', () => {
 
 		const result = await ensureR2Setup('cf-token')
 
-		expect(urls.filter(u => u.endsWith('/user/tokens'))).toHaveLength(1)
+		expect(urls.filter(u => u.endsWith('/user/tokens'))).toHaveLength(2) // POST (create) + GET (list for cleanup)
 		expect(result.accessKeyId).toBe('new-key-id')
 		const setCalls = spawnSyncMock.mock.calls.filter(
 			c => c[1]?.[0] === 'secret' && c[1]?.[1] === 'set',

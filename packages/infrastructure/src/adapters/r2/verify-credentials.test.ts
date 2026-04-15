@@ -69,6 +69,18 @@ describe('verifyR2Credentials', () => {
 		})
 	})
 
+	it('returns {valid:false} on 400 (malformed creds)', async () => {
+		const body =
+			'<?xml version="1.0" encoding="UTF-8"?><Error><Code>InvalidArgument</Code><Message>Credential access key has length 33, should be 32</Message></Error>'
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(status(400, body)))
+
+		await expect(verifyR2Credentials(INPUT)).resolves.toEqual({
+			valid: false,
+			status: 400,
+			body,
+		})
+	})
+
 	it('throws on 500', async () => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(status(500, 'boom')))
 		await expect(verifyR2Credentials(INPUT)).rejects.toThrow(

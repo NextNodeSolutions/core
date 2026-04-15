@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { createR2Token } from './tokens.ts'
+import { createR2Token, deleteUserToken, listUserTokens } from './tokens.ts'
 
 interface MockResponse {
 	ok: boolean
@@ -86,5 +86,87 @@ describe('createR2Token', () => {
 		await expect(createR2Token({ ...INPUT })).rejects.toThrow(
 			'[7003] invalid policy',
 		)
+	})
+})
+
+describe('listUserTokens', () => {
+	it('returns the parsed token list', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue(
+				okJson({
+					success: true,
+					result: [
+						{ id: 'a', name: 'nextnode-r2', status: 'active' },
+						{ id: 'b', name: 'other', status: 'disabled' },
+					],
+					errors: [],
+				}),
+			),
+		)
+
+		const result = await listUserTokens('parent-tok')
+
+		expect(result).toEqual([
+			{ id: 'a', name: 'nextnode-r2', status: 'active' },
+			{ id: 'b', name: 'other', status: 'disabled' },
+		])
+	})
+
+	it('throws when a token entry is missing required fields', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue(
+				okJson({
+					success: true,
+					result: [{ id: 'a', status: 'active' }],
+					errors: [],
+				}),
+			),
+		)
+
+		await expect(listUserTokens('parent-tok')).rejects.toThrow(
+			'name missing',
+		)
+	})
+})
+
+describe('deleteUserToken', () => {
+	it('sends DELETE for the given token id', async () => {
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValue(
+				okJson({ success: true, result: { id: 'tok-1' }, errors: [] }),
+			)
+		vi.stubGlobal('fetch', fetchMock)
+
+		await deleteUserToken('parent-tok', 'tok-1')
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			'https://api.cloudflare.com/client/v4/user/tokens/tok-1',
+			expect.objectContaining({
+				method: 'DELETE',
+				headers: expect.objectContaining({
+					Authorization: 'Bearer parent-tok',
+				}),
+			}),
+		)
+	})
+
+	it('throws when API reports success=false', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue(
+				okJson({
+					success: false,
+					result: {},
+					errors: [{ code: 9999, message: 'not found' }],
+				}),
+			),
+		)
+
+		await expect(
+			deleteUserToken('parent-tok', 'tok-missing'),
+		).rejects.toThrow('[9999] not found')
 	})
 })
