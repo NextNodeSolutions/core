@@ -189,7 +189,7 @@ describe('readFile', () => {
 		expect(result).toBe('file content here')
 	})
 
-	it('rejects on read stream error', async () => {
+	it('resolves null when the file does not exist (SFTP NO_SUCH_FILE)', async () => {
 		const session = await connectedSession()
 
 		mockSftp.mockImplementation(
@@ -198,7 +198,13 @@ describe('readFile', () => {
 					createReadStream() {
 						const rs = new EventEmitter()
 						process.nextTick(() => {
-							rs.emit('error', new Error('no such file'))
+							const err = Object.assign(
+								new Error('no such file'),
+								{
+									code: 2,
+								},
+							)
+							rs.emit('error', err)
 						})
 						return rs
 					},
@@ -206,8 +212,60 @@ describe('readFile', () => {
 			},
 		)
 
-		await expect(session.readFile('/missing')).rejects.toThrow(
-			/SSH readFile "\/missing" failed.*no such file/,
+		await expect(session.readFile('/missing')).resolves.toBeNull()
+	})
+
+	it('resolves null when the error code is ENOENT', async () => {
+		const session = await connectedSession()
+
+		mockSftp.mockImplementation(
+			(cb: (err: undefined, sftp: unknown) => void) => {
+				cb(undefined, {
+					createReadStream() {
+						const rs = new EventEmitter()
+						process.nextTick(() => {
+							const err = Object.assign(
+								new Error('no such file'),
+								{
+									code: 'ENOENT',
+								},
+							)
+							rs.emit('error', err)
+						})
+						return rs
+					},
+				})
+			},
+		)
+
+		await expect(session.readFile('/missing')).resolves.toBeNull()
+	})
+
+	it('rejects on a real read stream error (not NO_SUCH_FILE)', async () => {
+		const session = await connectedSession()
+
+		mockSftp.mockImplementation(
+			(cb: (err: undefined, sftp: unknown) => void) => {
+				cb(undefined, {
+					createReadStream() {
+						const rs = new EventEmitter()
+						process.nextTick(() => {
+							const err = Object.assign(
+								new Error('permission denied'),
+								{
+									code: 3,
+								},
+							)
+							rs.emit('error', err)
+						})
+						return rs
+					},
+				})
+			},
+		)
+
+		await expect(session.readFile('/forbidden')).rejects.toThrow(
+			/SSH readFile "\/forbidden" failed.*permission denied/,
 		)
 	})
 })
