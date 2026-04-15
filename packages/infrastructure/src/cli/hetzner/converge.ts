@@ -10,8 +10,8 @@ const CADDY_CONFIG_PATH = '/etc/caddy/config.json'
 
 export interface ConvergenceInput {
 	readonly projectName: string
-	readonly vectorToml: string
-	readonly vectorEnv: string
+	readonly vectorToml: string | undefined
+	readonly vectorEnv: string | undefined
 	readonly caddyBaseConfig: string
 }
 
@@ -32,21 +32,26 @@ export async function converge(
 	session: SshSession,
 	input: ConvergenceInput,
 ): Promise<void> {
-	// Vector config
-	const vectorTomlChanged = await pushFileIfChanged(
-		session,
-		VECTOR_TOML_PATH,
-		input.vectorToml,
-	)
-	const vectorEnvChanged = await pushFileIfChanged(
-		session,
-		VECTOR_ENV_PATH,
-		input.vectorEnv,
-	)
+	// Vector config — skipped when log sink (NN_VL_URL) is unknown at provision time.
+	// Re-run convergence once VL is reachable; this is the hot-update path.
+	if (input.vectorToml !== undefined && input.vectorEnv !== undefined) {
+		const vectorTomlChanged = await pushFileIfChanged(
+			session,
+			VECTOR_TOML_PATH,
+			input.vectorToml,
+		)
+		const vectorEnvChanged = await pushFileIfChanged(
+			session,
+			VECTOR_ENV_PATH,
+			input.vectorEnv,
+		)
 
-	if (vectorTomlChanged || vectorEnvChanged) {
-		await session.exec('systemctl restart vector')
-		logger.info('Restarted vector')
+		if (vectorTomlChanged || vectorEnvChanged) {
+			await session.exec('systemctl restart vector')
+			logger.info('Restarted vector')
+		}
+	} else {
+		logger.info('Skipping Vector config (NN_VL_URL not set)')
 	}
 
 	// Caddy base config

@@ -132,6 +132,20 @@ describe('converge', () => {
 		)
 	})
 
+	it('skips Vector when vectorToml and vectorEnv are undefined', async () => {
+		const files = new Map<string, string>()
+		const session = createFakeSession(files)
+
+		await converge(
+			session,
+			makeInput({ vectorToml: undefined, vectorEnv: undefined }),
+		)
+
+		expect(files.has('/etc/vector/vector.toml')).toBe(false)
+		expect(files.has('/etc/vector/vector.env')).toBe(false)
+		expect(session.execCalls).not.toContain('systemctl restart vector')
+	})
+
 	it('is idempotent - second run is a no-op', async () => {
 		const files = new Map<string, string>()
 		const session = createFakeSession(files)
