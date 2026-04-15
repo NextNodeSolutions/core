@@ -76,33 +76,25 @@ Create `adapters/hetzner/ssh-session.ts`:
 
 **Test:** unit tests with mocked ssh2 Client. Covers: exec returns stdout, writeFile+readFile, failing command returns stderr, close disposes connection.
 
-## 7 — cloud-init
+## 7 — cloud-init ✅
 
 ### 7.1 Write cloud-init bootstrap template
 
-~80 lines: docker-ce, tailscale, caddy+s3-plugin, vector, deploy user, UFW (22/80/443), `/opt/apps/`.
-
-**Test:** YAML lint passes. Template renders with test variables.
+Done. `domain/hetzner/cloud-init.ts` (types) + `domain/hetzner/render-cloud-init.ts` (pure renderer). Builds cloud-init as structured object, serializes via `yaml` lib. Installs docker-ce, tailscale, caddy+certmagic-s3, vector, deploy user, UFW (80/443 + SSH on tailscale0 only).
 
 ### 7.2 Write convergence script (idempotent SSH)
 
-Push vector.toml + vector.env, push Caddy base config, ensure project dirs. Skip if unchanged.
+Done. `domain/hetzner/render-vector-toml.ts` (Vector config renderer) + `cli/hetzner/converge.ts` (convergence orchestrator). Pushes vector.toml, vector.env, caddy base config via SSH. Restarts services only on change. Creates project dirs.
 
-**Test:** Run twice — second run is no-op (no restarts).
-
-## 8 — HetznerVpsTarget.ensureInfra
+## 8 — HetznerVpsTarget.ensureInfra ✅
 
 ### 8.1 Implement ensureInfra
 
-Wire adapters: read state → create VPS if missing → firewall (22/80/443) → wait for server running → wait SSH reachable → write state.
-
-**Test:** covers: first call creates, second call skips (idempotent), failure propagates.
+Done. `adapters/hetzner/target.ts` - `HetznerVpsTarget` implements `DeployTarget<ContainerDeployConfig>`. ensureInfra: read state -> create VPS + firewall if missing -> wait running -> wait SSH -> converge -> write state. Wired in `cli/deploy/create-target.ts`.
 
 ### 8.2 Provision CLI command
 
-`cli/hetzner/provision.command.ts` — reads env vars + config → `target.ensureInfra()` → logs success. Register as `hetzner-provision`.
-
-**Test:** `pnpm --filter @nextnode-solutions/infrastructure test -- provision.command`
+Already wired - `cli/deploy/provision.command.ts` calls `target.ensureInfra()` via `createTarget()` which now returns `HetznerVpsTarget` for `hetzner-vps` target.
 
 ## 9 — HetznerVpsTarget.deploy (deferred)
 
