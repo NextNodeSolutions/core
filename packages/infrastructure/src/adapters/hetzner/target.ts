@@ -26,11 +26,16 @@ import { computeSilo } from '../../domain/hetzner/env-silo.ts'
 import { renderVectorEnv } from '../../domain/hetzner/vector-env.ts'
 import { renderVectorToml } from '../../domain/hetzner/vector-toml.ts'
 import { R2Client } from '../r2/client.ts'
-import { mintAuthkey } from '../tailscale/oauth.ts'
+import {
+	deleteTailnetDevicesByHostname,
+	getTailnetIpByHostname,
+	mintAuthkey,
+} from '../tailscale/oauth.ts'
 
 import type { CreateServerInput } from './hcloud-client.ts'
 import {
 	applyFirewall,
+	assertServerTypeAvailable,
 	createFirewall,
 	createServer,
 	describeServer,
@@ -121,12 +126,30 @@ export class HetznerVpsTarget implements DeployTarget<ContainerDeployConfig> {
 			logger.info(
 				`VPS already provisioned for "${projectName}" (server ${existing.state.serverId})`,
 			)
-			await this.runConvergence(existing.state.ip, projectName)
+			await this.runConvergence(existing.state.tailnetIp, projectName)
 			return
 		}
 
+		await assertServerTypeAvailable(
+			this.hcloudToken,
+			this.hetzner.serverType,
+		)
+		logger.info(
+			`Preflight OK: server_type "${this.hetzner.serverType}" is available`,
+		)
+
 		await ensureSshKey(this.hcloudToken, SSH_KEY_NAME, this.deployPublicKey)
 		logger.info(`SSH key "${SSH_KEY_NAME}" ready in Hetzner project`)
+
+		const purged = await deleteTailnetDevicesByHostname(
+			this.tailscaleAuthKey,
+			projectName,
+		)
+		if (purged > 0) {
+			logger.info(
+				`Purged ${purged} stale tailnet device(s) with hostname "${projectName}"`,
+			)
+		}
 
 		const minted = await mintAuthkey(
 			this.tailscaleAuthKey,
@@ -159,6 +182,9 @@ export class HetznerVpsTarget implements DeployTarget<ContainerDeployConfig> {
 		)
 		const server = await createServer(this.hcloudToken, serverInput)
 
+		const publicIp = server.public_net.ipv4.ip
+		await this.waitForServerRunning(server.id)
+
 		const firewallName = `${projectName}-fw`
 		logger.info(`Creating firewall "${firewallName}"`)
 		const firewall = await createFirewall(
@@ -168,15 +194,19 @@ export class HetznerVpsTarget implements DeployTarget<ContainerDeployConfig> {
 		)
 		await applyFirewall(this.hcloudToken, firewall.id, server.id)
 
-		const ip = server.public_net.ipv4.ip
-		await this.waitForServerRunning(server.id)
-		await this.waitForSsh(ip)
-		await this.runConvergence(ip, projectName)
+		await this.waitForSsh(publicIp)
+		await this.runConvergence(publicIp, projectName)
+
+		const tailnetIp = await getTailnetIpByHostname(
+			this.tailscaleAuthKey,
+			projectName,
+		)
+		logger.info(`Tailnet IP for "${projectName}": ${tailnetIp}`)
 
 		await writeState(this.r2, projectName, {
 			serverId: server.id,
-			ip,
-			tailnetHostname: `${projectName}.tail0.ts.net`,
+			publicIp,
+			tailnetIp,
 		})
 
 		logger.info(`Infrastructure ready for "${projectName}"`)
@@ -193,7 +223,7 @@ export class HetznerVpsTarget implements DeployTarget<ContainerDeployConfig> {
 		}
 
 		const session = await createSshSession({
-			host: existing.state.ip,
+			host: existing.state.tailnetIp,
 			username: 'root',
 			privateKey: this.deployPrivateKey,
 		})
@@ -342,6 +372,10 @@ export class HetznerVpsTarget implements DeployTarget<ContainerDeployConfig> {
 		})
 
 		try {
+			logger.info('Waiting for cloud-init to finish…')
+			await session.exec('cloud-init status --wait')
+			logger.info('cloud-init complete')
+
 			const caddyBaseConfig = JSON.stringify(
 				buildCaddyConfig({
 					upstreams: [],

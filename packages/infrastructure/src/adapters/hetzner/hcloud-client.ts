@@ -41,6 +41,36 @@ function parseServer(data: unknown, context: string): HcloudServerResponse {
 	}
 }
 
+export async function assertServerTypeAvailable(
+	token: string,
+	serverTypeName: string,
+): Promise<void> {
+	const url = `${HCLOUD_API_BASE}/server_types?name=${encodeURIComponent(serverTypeName)}`
+	const response = await fetch(url, { headers: authHeaders(token) })
+	await requireOk(response, `list server_types name="${serverTypeName}"`)
+	const data: unknown = await response.json()
+	if (!isRecord(data) || !Array.isArray(data.server_types)) {
+		throw new Error(
+			`list server_types name="${serverTypeName}": missing \`server_types\` array`,
+		)
+	}
+	const [first] = data.server_types
+	if (!isRecord(first)) {
+		throw new Error(
+			`Hetzner server_type "${serverTypeName}" not found — check the SKU name`,
+		)
+	}
+	if (first.deprecated === true) {
+		const reason =
+			isRecord(first.deprecation) && typeof first.deprecation === 'object'
+				? ` (${JSON.stringify(first.deprecation)})`
+				: ''
+		throw new Error(
+			`Hetzner server_type "${serverTypeName}" is deprecated${reason} — pick a current SKU, never auto-substitute`,
+		)
+	}
+}
+
 function parseSshKey(
 	data: unknown,
 	context: string,

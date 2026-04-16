@@ -15,8 +15,8 @@ function createMockR2(): R2Operations {
 
 const validState = {
 	serverId: 123,
-	ip: '1.2.3.4',
-	tailnetHostname: 'acme-web.tail1234.ts.net',
+	publicIp: '1.2.3.4',
+	tailnetIp: '100.74.91.126',
 }
 
 let r2: R2Operations
@@ -54,7 +54,10 @@ describe('readState', () => {
 
 	it('throws on missing serverId', async () => {
 		vi.mocked(r2.get).mockResolvedValue({
-			body: JSON.stringify({ ip: '1.2.3.4', tailnetHostname: 'h' }),
+			body: JSON.stringify({
+				publicIp: '1.2.3.4',
+				tailnetIp: '100.1.2.3',
+			}),
 			etag: '"e"',
 		})
 

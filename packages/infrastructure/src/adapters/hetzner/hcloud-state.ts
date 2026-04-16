@@ -17,16 +17,16 @@ function parseState(raw: string, key: string): HcloudProjectState {
 	if (typeof data.serverId !== 'number') {
 		throw new Error(`Invalid state at "${key}": missing serverId`)
 	}
-	if (typeof data.ip !== 'string') {
-		throw new Error(`Invalid state at "${key}": missing ip`)
+	if (typeof data.publicIp !== 'string') {
+		throw new Error(`Invalid state at "${key}": missing publicIp`)
 	}
-	if (typeof data.tailnetHostname !== 'string') {
-		throw new Error(`Invalid state at "${key}": missing tailnetHostname`)
+	if (typeof data.tailnetIp !== 'string') {
+		throw new Error(`Invalid state at "${key}": missing tailnetIp`)
 	}
 	return {
 		serverId: data.serverId,
-		ip: data.ip,
-		tailnetHostname: data.tailnetHostname,
+		publicIp: data.publicIp,
+		tailnetIp: data.tailnetIp,
 	}
 }
 

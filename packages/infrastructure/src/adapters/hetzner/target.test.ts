@@ -26,6 +26,7 @@ vi.mock(import('./hcloud-client.ts'), async importOriginal => {
 		})),
 		applyFirewall: vi.fn(async () => undefined),
 		ensureSshKey: vi.fn(async () => ({ id: 7, name: 'nextnode-ci' })),
+		assertServerTypeAvailable: vi.fn(async () => undefined),
 	}
 })
 
@@ -49,6 +50,8 @@ vi.mock('../tailscale/oauth.ts', () => ({
 		key: 'tskey-auth-minted',
 		expires: '2099-01-01T00:00:00Z',
 	})),
+	getTailnetIpByHostname: vi.fn(async () => '100.74.91.126'),
+	deleteTailnetDevicesByHostname: vi.fn(async () => 0),
 }))
 
 // Mock node:timers/promises (sleep resolves instantly in tests)
@@ -88,8 +91,8 @@ const R2_CONFIG = {
 
 const EXISTING_STATE = {
 	serverId: 42,
-	ip: '1.2.3.4',
-	tailnetHostname: 'acme-web.tail0.ts.net',
+	publicIp: '1.2.3.4',
+	tailnetIp: '100.74.91.126',
 } as const
 
 function stubEnvVars(): void {
@@ -102,10 +105,10 @@ function stubEnvVars(): void {
 	vi.stubEnv('LOG_LEVEL', 'silent')
 }
 
-function seedState(ip = '1.2.3.4'): void {
+function seedState(publicIp = '1.2.3.4'): void {
 	fakeR2State.set(
 		'hetzner/acme-web.json',
-		JSON.stringify({ ...EXISTING_STATE, ip }),
+		JSON.stringify({ ...EXISTING_STATE, publicIp }),
 	)
 }
 
@@ -159,8 +162,8 @@ describe('HetznerVpsTarget', () => {
 				const state: unknown = JSON.parse(stateJson!)
 				expect(state).toEqual({
 					serverId: 42,
-					ip: '1.2.3.4',
-					tailnetHostname: 'acme-web.tail0.ts.net',
+					publicIp: '1.2.3.4',
+					tailnetIp: '100.74.91.126',
 				})
 			})
 
@@ -274,7 +277,7 @@ describe('HetznerVpsTarget', () => {
 				expect(mockedConverge).toHaveBeenCalled()
 			})
 
-			it('uses IP from state for the convergence SSH session', async () => {
+			it('uses tailnet IP from state for the convergence SSH session', async () => {
 				const { createSshSession: mockedSsh } =
 					await import('./ssh-session.ts')
 				seedState('5.6.7.8')
@@ -283,7 +286,7 @@ describe('HetznerVpsTarget', () => {
 				await target.ensureInfra('acme-web')
 
 				expect(mockedSsh).toHaveBeenCalledWith(
-					expect.objectContaining({ host: '5.6.7.8' }),
+					expect.objectContaining({ host: '100.74.91.126' }),
 				)
 			})
 		})
@@ -439,7 +442,7 @@ describe('HetznerVpsTarget', () => {
 				)
 			})
 
-			it('passes correct host and credentials to SSH session', async () => {
+			it('passes tailnet IP and credentials to SSH session on re-run', async () => {
 				const { createSshSession: mockedSsh } =
 					await import('./ssh-session.ts')
 				seedState('10.0.0.1')
@@ -448,7 +451,7 @@ describe('HetznerVpsTarget', () => {
 				await target.ensureInfra('acme-web')
 
 				expect(mockedSsh).toHaveBeenCalledWith({
-					host: '10.0.0.1',
+					host: '100.74.91.126',
 					username: 'root',
 					privateKey: 'fake-private-key',
 				})
@@ -485,7 +488,7 @@ describe('HetznerVpsTarget', () => {
 			)
 		})
 
-		it('SSHs to the IP from state', async () => {
+		it('SSHs to the tailnet IP from state', async () => {
 			const { createSshSession: mockedSsh } =
 				await import('./ssh-session.ts')
 			seedState('10.0.0.5')
@@ -494,7 +497,7 @@ describe('HetznerVpsTarget', () => {
 			await target.deploy(DEPLOY_CONFIG)
 
 			expect(mockedSsh).toHaveBeenCalledWith(
-				expect.objectContaining({ host: '10.0.0.5' }),
+				expect.objectContaining({ host: '100.74.91.126' }),
 			)
 		})
 
