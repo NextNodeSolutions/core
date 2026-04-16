@@ -79,6 +79,14 @@ jobs:
                   oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
                   tags: tag:ci
 
+            - name: Generate GitHub App token
+              id: app-token
+              uses: actions/create-github-app-token@v2
+              with:
+                  app-id: ${{ secrets.NEXTNODE_APP_ID }}
+                  private-key: ${{ secrets.NEXTNODE_APP_PRIVATE_KEY }}
+                  owner: NextNodeSolutions
+
             - name: Provision VPS
               run: node src/index.ts provision
               working-directory: .infra/packages/infrastructure
@@ -92,6 +100,7 @@ jobs:
                   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
                   R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
                   R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+                  GH_TOKEN: ${{ steps.app-token.outputs.token }}
 
     build-image:
         name: Build image
@@ -125,7 +134,6 @@ jobs:
             - name: Build and push
               uses: docker/bake-action@v6
               with:
-                  source: ${{ github.workspace }}
                   files: docker-compose.yml
                   targets: app
                   push: true
