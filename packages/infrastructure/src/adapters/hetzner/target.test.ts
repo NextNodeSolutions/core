@@ -406,7 +406,7 @@ describe('HetznerVpsTarget', () => {
 				const target = new HetznerVpsTarget(TARGET_CONFIG)
 
 				await expect(target.ensureInfra('acme-web')).rejects.toThrow(
-					'not reachable after 12 attempts',
+					'not reachable after 36 attempts',
 				)
 			})
 		})
