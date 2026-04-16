@@ -17,6 +17,7 @@ import { reconcilePagesDns } from './pages-dns.ts'
 import { reconcileDomains } from './pages-domains.ts'
 import { updatePagesEnvVars } from './pages-env.ts'
 import { provisionProject } from './pages-project.ts'
+import { getPagesProject } from './pages.ts'
 
 export interface CloudflarePagesTargetConfig {
 	readonly environment: AppEnvironment
@@ -48,12 +49,12 @@ export class CloudflarePagesTarget implements DeployTarget {
 		this.redirectDomains = config.redirectDomains
 	}
 
-	computeDeployEnv(projectName: string): DeployEnv {
+	async computeDeployEnv(projectName: string): Promise<DeployEnv> {
 		const pagesProjectName = computePagesProjectName(
 			projectName,
 			this.environment,
 		)
-		return { SITE_URL: this.resolveSiteUrl(pagesProjectName) }
+		return { SITE_URL: await this.resolveSiteUrl(pagesProjectName) }
 	}
 
 	async ensureInfra(projectName: string): Promise<void> {
@@ -86,9 +87,11 @@ export class CloudflarePagesTarget implements DeployTarget {
 			this.environment,
 		)
 
+		const subdomain = await this.fetchSubdomain(pagesProjectName)
+
 		await reconcilePagesDns({
 			accountId: this.accountId,
-			pagesProjectName,
+			pagesSubdomain: subdomain,
 			token: this.token,
 			domain,
 			redirectDomains: this.redirectDomains,
@@ -101,13 +104,13 @@ export class CloudflarePagesTarget implements DeployTarget {
 	async deploy(
 		projectName: string,
 		input: DeployInput,
+		env: DeployEnv,
 	): Promise<DeployResult> {
 		const start = Date.now()
 		const pagesProjectName = computePagesProjectName(
 			projectName,
 			this.environment,
 		)
-		const env = this.computeDeployEnv(projectName)
 
 		logger.info(`Syncing env vars to "${pagesProjectName}"`)
 		await updatePagesEnvVars(
@@ -134,10 +137,25 @@ export class CloudflarePagesTarget implements DeployTarget {
 		}
 	}
 
-	private resolveSiteUrl(pagesProjectName: string): string {
+	private async resolveSiteUrl(pagesProjectName: string): Promise<string> {
 		if (this.domain) {
 			return `https://${resolveDeployDomain(this.domain, this.environment)}`
 		}
-		return `https://${pagesProjectName}.pages.dev`
+		const subdomain = await this.fetchSubdomain(pagesProjectName)
+		return `https://${subdomain}`
+	}
+
+	private async fetchSubdomain(pagesProjectName: string): Promise<string> {
+		const project = await getPagesProject(
+			this.accountId,
+			pagesProjectName,
+			this.token,
+		)
+		if (!project) {
+			throw new Error(
+				`Pages project "${pagesProjectName}" not found — run provision first`,
+			)
+		}
+		return project.subdomain
 	}
 }

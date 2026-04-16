@@ -54,7 +54,11 @@ describe('getPagesProject', () => {
 		const fetchMock = vi.fn().mockResolvedValue(
 			okJson({
 				success: true,
-				result: { name: PROJECT, production_branch: 'main' },
+				result: {
+					name: PROJECT,
+					production_branch: 'main',
+					subdomain: `${PROJECT}.pages.dev`,
+				},
 				errors: [],
 			}),
 		)
@@ -62,7 +66,11 @@ describe('getPagesProject', () => {
 
 		const project = await getPagesProject(ACCOUNT, PROJECT, TOKEN)
 
-		expect(project).toEqual({ name: PROJECT, productionBranch: 'main' })
+		expect(project).toEqual({
+			name: PROJECT,
+			productionBranch: 'main',
+			subdomain: `${PROJECT}.pages.dev`,
+		})
 		expect(fetchMock).toHaveBeenCalledWith(
 			`https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/pages/projects/${PROJECT}`,
 			expect.objectContaining({
@@ -71,6 +79,27 @@ describe('getPagesProject', () => {
 				}),
 			}),
 		)
+	})
+
+	it('returns the auto-suffixed subdomain when the project name was already taken', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue(
+				okJson({
+					success: true,
+					result: {
+						name: PROJECT,
+						production_branch: 'main',
+						subdomain: `${PROJECT}-6zu.pages.dev`,
+					},
+					errors: [],
+				}),
+			),
+		)
+
+		const project = await getPagesProject(ACCOUNT, PROJECT, TOKEN)
+
+		expect(project?.subdomain).toBe(`${PROJECT}-6zu.pages.dev`)
 	})
 
 	it('returns null when the project does not exist (404)', async () => {
@@ -113,7 +142,11 @@ describe('getPagesProject', () => {
 		const fetchMock = vi.fn().mockResolvedValue(
 			okJson({
 				success: true,
-				result: { name: 'weird name', production_branch: 'main' },
+				result: {
+					name: 'weird name',
+					production_branch: 'main',
+					subdomain: 'weird-name.pages.dev',
+				},
 				errors: [],
 			}),
 		)
@@ -126,6 +159,23 @@ describe('getPagesProject', () => {
 			expect.any(Object),
 		)
 	})
+
+	it('throws when the API response omits subdomain', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue(
+				okJson({
+					success: true,
+					result: { name: PROJECT, production_branch: 'main' },
+					errors: [],
+				}),
+			),
+		)
+
+		await expect(getPagesProject(ACCOUNT, PROJECT, TOKEN)).rejects.toThrow(
+			'subdomain missing',
+		)
+	})
 })
 
 describe('createPagesProject', () => {
@@ -133,7 +183,11 @@ describe('createPagesProject', () => {
 		const fetchMock = vi.fn().mockResolvedValue(
 			okJson({
 				success: true,
-				result: { name: PROJECT, production_branch: 'main' },
+				result: {
+					name: PROJECT,
+					production_branch: 'main',
+					subdomain: `${PROJECT}.pages.dev`,
+				},
 				errors: [],
 			}),
 		)
@@ -146,7 +200,11 @@ describe('createPagesProject', () => {
 			TOKEN,
 		)
 
-		expect(project).toEqual({ name: PROJECT, productionBranch: 'main' })
+		expect(project).toEqual({
+			name: PROJECT,
+			productionBranch: 'main',
+			subdomain: `${PROJECT}.pages.dev`,
+		})
 		expect(fetchMock).toHaveBeenCalledWith(
 			`https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/pages/projects`,
 			expect.objectContaining({

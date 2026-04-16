@@ -12,6 +12,7 @@ import {
 export interface CloudflarePagesProject {
 	readonly name: string
 	readonly productionBranch: string
+	readonly subdomain: string
 }
 
 export interface CloudflarePagesDomain {
@@ -31,9 +32,13 @@ function parsePagesProject(item: unknown): CloudflarePagesProject {
 	) {
 		throw new Error('Cloudflare Pages project: production_branch missing')
 	}
+	if (!('subdomain' in item) || typeof item.subdomain !== 'string') {
+		throw new Error('Cloudflare Pages project: subdomain missing')
+	}
 	return {
 		name: item.name,
 		productionBranch: item.production_branch,
+		subdomain: item.subdomain,
 	}
 }
 

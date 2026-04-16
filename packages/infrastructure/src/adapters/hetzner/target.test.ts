@@ -478,11 +478,13 @@ describe('HetznerVpsTarget', () => {
 			image: DEPLOY_IMAGE,
 		}
 
+		const DEPLOY_ENV = { SITE_URL: 'https://acme-web.example.com' }
+
 		it('throws when no state exists', async () => {
 			const target = new HetznerVpsTarget(TARGET_CONFIG)
 
 			await expect(
-				target.deploy('acme-web', DEPLOY_INPUT),
+				target.deploy('acme-web', DEPLOY_INPUT, DEPLOY_ENV),
 			).rejects.toThrow('No state for "acme-web"')
 		})
 
@@ -492,7 +494,7 @@ describe('HetznerVpsTarget', () => {
 			seedState('10.0.0.5')
 
 			const target = new HetznerVpsTarget(TARGET_CONFIG)
-			await target.deploy('acme-web', DEPLOY_INPUT)
+			await target.deploy('acme-web', DEPLOY_INPUT, DEPLOY_ENV)
 
 			expect(mockedSsh).toHaveBeenCalledWith(
 				expect.objectContaining({ host: '100.74.91.126' }),
@@ -507,7 +509,7 @@ describe('HetznerVpsTarget', () => {
 			vi.mocked(mockedSsh).mockResolvedValueOnce(mockSession)
 
 			const target = new HetznerVpsTarget(TARGET_CONFIG)
-			await target.deploy('acme-web', DEPLOY_INPUT)
+			await target.deploy('acme-web', DEPLOY_INPUT, DEPLOY_ENV)
 
 			expect(mockSession.writeFile).toHaveBeenCalledWith(
 				'/opt/apps/acme-web/production/.env',
@@ -529,7 +531,7 @@ describe('HetznerVpsTarget', () => {
 			vi.mocked(mockedSsh).mockResolvedValueOnce(mockSession)
 
 			const target = new HetznerVpsTarget(TARGET_CONFIG)
-			await target.deploy('acme-web', DEPLOY_INPUT)
+			await target.deploy('acme-web', DEPLOY_INPUT, DEPLOY_ENV)
 
 			expect(mockSession.writeFile).toHaveBeenCalledWith(
 				'/opt/apps/acme-web/production/compose.yaml',
@@ -549,7 +551,7 @@ describe('HetznerVpsTarget', () => {
 			vi.mocked(mockedSsh).mockResolvedValueOnce(mockSession)
 
 			const target = new HetznerVpsTarget(TARGET_CONFIG)
-			await target.deploy('acme-web', DEPLOY_INPUT)
+			await target.deploy('acme-web', DEPLOY_INPUT, DEPLOY_ENV)
 
 			expect(mockSession.exec).toHaveBeenCalledWith(
 				expect.stringContaining(
@@ -572,7 +574,7 @@ describe('HetznerVpsTarget', () => {
 			vi.mocked(mockedSsh).mockResolvedValueOnce(mockSession)
 
 			const target = new HetznerVpsTarget(TARGET_CONFIG)
-			await target.deploy('acme-web', DEPLOY_INPUT)
+			await target.deploy('acme-web', DEPLOY_INPUT, DEPLOY_ENV)
 
 			expect(mockSession.writeFile).toHaveBeenCalledWith(
 				'/etc/caddy/config.json',
@@ -588,7 +590,7 @@ describe('HetznerVpsTarget', () => {
 			vi.mocked(mockedSsh).mockResolvedValueOnce(mockSession)
 
 			const target = new HetznerVpsTarget(TARGET_CONFIG)
-			await target.deploy('acme-web', DEPLOY_INPUT)
+			await target.deploy('acme-web', DEPLOY_INPUT, DEPLOY_ENV)
 
 			expect(mockSession.exec).toHaveBeenCalledWith(
 				'caddy reload --config /etc/caddy/config.json',
@@ -599,7 +601,11 @@ describe('HetznerVpsTarget', () => {
 			seedState()
 
 			const target = new HetznerVpsTarget(TARGET_CONFIG)
-			const result = await target.deploy('acme-web', DEPLOY_INPUT)
+			const result = await target.deploy(
+				'acme-web',
+				DEPLOY_INPUT,
+				DEPLOY_ENV,
+			)
 
 			expect(result.projectName).toBe('acme-web')
 			expect(result.durationMs).toBeGreaterThanOrEqual(0)
@@ -627,7 +633,7 @@ describe('HetznerVpsTarget', () => {
 			const target = new HetznerVpsTarget(TARGET_CONFIG)
 
 			await expect(
-				target.deploy('acme-web', DEPLOY_INPUT),
+				target.deploy('acme-web', DEPLOY_INPUT, DEPLOY_ENV),
 			).rejects.toThrow('SSH write failed')
 			expect(mockSession.close).toHaveBeenCalled()
 		})

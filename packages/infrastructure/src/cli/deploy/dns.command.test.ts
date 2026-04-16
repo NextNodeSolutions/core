@@ -39,6 +39,19 @@ function stubCloudflareApi(): ReturnType<typeof vi.fn<FetchImpl>> {
 		const url = urlOf(input)
 		const method = methodOf(init)
 
+		if (url.includes('/pages/projects/') && method === 'GET') {
+			return Promise.resolve(
+				okJson({
+					success: true,
+					result: {
+						name: 'my-site',
+						production_branch: 'main',
+						subdomain: 'my-site.pages.dev',
+					},
+					errors: [],
+				}),
+			)
+		}
 		if (url.includes('/zones?name=') && method === 'GET') {
 			return Promise.resolve(
 				okJson({

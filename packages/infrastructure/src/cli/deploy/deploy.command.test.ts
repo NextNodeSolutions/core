@@ -45,9 +45,39 @@ function stubFetch(): ReturnType<typeof vi.fn<FetchImpl>> {
 	return fetchMock
 }
 
-function extractBody(fetchMock: ReturnType<typeof vi.fn<FetchImpl>>): unknown {
-	const call = fetchMock.mock.calls[0]
-	if (!call) throw new Error('fetch was not called')
+function stubFetchWithProject(
+	subdomain: string,
+): ReturnType<typeof vi.fn<FetchImpl>> {
+	const impl: FetchImpl = (input, init) => {
+		const url = typeof input === 'string' ? input : input.toString()
+		const method = init?.method ?? 'GET'
+		if (url.includes('/pages/projects/') && method === 'GET') {
+			return Promise.resolve(
+				okJson({
+					success: true,
+					result: {
+						name: 'my-site',
+						production_branch: 'main',
+						subdomain,
+					},
+					errors: [],
+				}),
+			)
+		}
+		return Promise.resolve(
+			okJson({ success: true, result: {}, errors: [] }),
+		)
+	}
+	const fetchMock = vi.fn<FetchImpl>(impl)
+	vi.stubGlobal('fetch', fetchMock)
+	return fetchMock
+}
+
+function extractPatchBody(
+	fetchMock: ReturnType<typeof vi.fn<FetchImpl>>,
+): unknown {
+	const call = fetchMock.mock.calls.find(c => c[1]?.method === 'PATCH')
+	if (!call) throw new Error('no PATCH call recorded')
 	const body = call[1]?.body
 	if (typeof body !== 'string') throw new Error('body is not a string')
 	return JSON.parse(body)
@@ -110,7 +140,7 @@ describe('deployCommand', () => {
 			const ghEnv = readFileSync(envFile, 'utf-8')
 			expect(ghEnv).toContain('SITE_URL=https://example.com\n')
 
-			expect(extractBody(fetchMock)).toStrictEqual({
+			expect(extractPatchBody(fetchMock)).toStrictEqual({
 				deployment_configs: {
 					production: {
 						env_vars: {
@@ -134,13 +164,13 @@ describe('deployCommand', () => {
 			expect(ghEnv).toContain('SITE_URL=https://dev.example.com\n')
 		})
 
-		it('falls back to pages.dev when no domain', async () => {
-			stubFetch()
+		it('uses the live CF subdomain (auto-suffixed) when no domain is set', async () => {
+			stubFetchWithProject('my-site-6zu.pages.dev')
 
 			await deployCommand(STATIC_NO_DOMAIN)
 
 			const ghEnv = readFileSync(envFile, 'utf-8')
-			expect(ghEnv).toContain('SITE_URL=https://my-site.pages.dev\n')
+			expect(ghEnv).toContain('SITE_URL=https://my-site-6zu.pages.dev\n')
 		})
 
 		it('picks declared secrets from ALL_SECRETS', async () => {
@@ -155,7 +185,7 @@ describe('deployCommand', () => {
 
 			await deployCommand(STATIC_WITH_SECRETS)
 
-			expect(extractBody(fetchMock)).toStrictEqual({
+			expect(extractPatchBody(fetchMock)).toStrictEqual({
 				deployment_configs: {
 					production: {
 						env_vars: {
@@ -223,14 +253,18 @@ describe('deployCommand', () => {
 		it('passes parsed IMAGE_REF and empty secrets to the target', async () => {
 			await deployCommand(APP_WITH_DOMAIN)
 
-			expect(mockHetznerDeploy).toHaveBeenCalledWith('my-app', {
-				secrets: {},
-				image: {
-					registry: 'ghcr.io',
-					repository: 'acme/web',
-					tag: 'sha-abc123',
+			expect(mockHetznerDeploy).toHaveBeenCalledWith(
+				'my-app',
+				{
+					secrets: {},
+					image: {
+						registry: 'ghcr.io',
+						repository: 'acme/web',
+						tag: 'sha-abc123',
+					},
 				},
-			})
+				{ SITE_URL: 'https://example.com' },
+			)
 		})
 
 		it('picks declared secrets from ALL_SECRETS and passes them to the target', async () => {
@@ -249,6 +283,7 @@ describe('deployCommand', () => {
 				expect.objectContaining({
 					secrets: { DATABASE_URL: 'postgres://db:5432' },
 				}),
+				{ SITE_URL: 'https://example.com' },
 			)
 		})
 

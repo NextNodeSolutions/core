@@ -20,14 +20,14 @@ export async function deployCommand(config: DeployableConfig): Promise<void> {
 	)
 	const target = await createTarget(config, environment)
 
-	const env = target.computeDeployEnv(config.project.name)
+	const env = await target.computeDeployEnv(config.project.name)
 	for (const [key, value] of Object.entries(env)) {
 		writeEnvVar(key, value)
-		logger.info(`${key}=${value}`)
 	}
+	logger.info(`Wrote deploy env vars: ${Object.keys(env).join(', ')}`)
 
 	const input = buildDeployInput(config)
-	const result = await target.deploy(config.project.name, input)
+	const result = await target.deploy(config.project.name, input, env)
 
 	logger.info(
 		`Deploy complete for "${result.projectName}" in ${result.durationMs}ms`,
