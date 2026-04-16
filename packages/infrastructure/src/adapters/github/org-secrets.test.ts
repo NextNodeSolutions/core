@@ -12,22 +12,14 @@ function fail(exitCode: number, stderr: string): ExecResult {
 }
 
 describe('createOrgSecretsAdapter', () => {
-	it('passes the secret via --body-file - stdin', async () => {
+	it('passes the secret value via stdin', async () => {
 		const runner = vi.fn<GhRunner>().mockResolvedValue(ok())
 		const adapter = createOrgSecretsAdapter(runner)
 
 		await adapter.setOrgSecret('R2_ACCESS_KEY_ID', 'my-id', 'NextNodeOrg')
 
 		expect(runner).toHaveBeenCalledWith(
-			[
-				'secret',
-				'set',
-				'R2_ACCESS_KEY_ID',
-				'--org',
-				'NextNodeOrg',
-				'--body-file',
-				'-',
-			],
+			['secret', 'set', 'R2_ACCESS_KEY_ID', '--org', 'NextNodeOrg'],
 			'my-id',
 		)
 	})
