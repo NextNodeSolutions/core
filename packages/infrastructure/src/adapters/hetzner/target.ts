@@ -204,14 +204,14 @@ export class HetznerVpsTarget implements DeployTarget {
 		)
 		await applyFirewall(this.hcloudToken, firewall.id, server.id)
 
-		await this.waitForSsh(publicIp)
-		await this.runConvergence(publicIp, projectName)
-
 		const tailnetIp = await getTailnetIpByHostname(
 			this.tailscaleAuthKey,
 			projectName,
 		)
 		logger.info(`Tailnet IP for "${projectName}": ${tailnetIp}`)
+
+		await this.waitForSsh(tailnetIp)
+		await this.runConvergence(tailnetIp, projectName)
 
 		await writeState(this.r2, projectName, {
 			serverId: server.id,
