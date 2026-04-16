@@ -132,7 +132,7 @@ export class HetznerVpsTarget implements DeployTarget {
 
 		const session = await createSshSession({
 			host: existing.state.tailnetIp,
-			username: 'root',
+			username: 'deploy',
 			privateKey: this.config.credentials.deployPrivateKey,
 		})
 

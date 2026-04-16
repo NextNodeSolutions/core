@@ -25,7 +25,7 @@ export interface ConvergeVpsInput {
 export async function convergeVps(input: ConvergeVpsInput): Promise<void> {
 	const session = await createSshSession({
 		host: input.host,
-		username: 'root',
+		username: 'deploy',
 		privateKey: input.deployPrivateKey,
 	})
 

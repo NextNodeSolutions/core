@@ -47,7 +47,7 @@ export async function converge(
 		)
 
 		if (vectorTomlChanged || vectorEnvChanged) {
-			await session.exec('systemctl restart vector')
+			await session.exec('sudo systemctl restart vector')
 			logger.info('Restarted vector')
 		}
 	} else {
@@ -62,14 +62,14 @@ export async function converge(
 	)
 
 	if (caddyChanged) {
-		await session.exec('systemctl restart caddy')
+		await session.exec('sudo systemctl restart caddy')
 		logger.info('Restarted caddy')
 	}
 
-	// Project directories
+	// Project directories — deploy is the SSH user, so mkdir creates dirs
+	// owned by deploy. No chown needed.
 	const basePath = `/opt/apps/${input.projectName}`
 	await session.exec(`mkdir -p ${basePath}/dev ${basePath}/production`)
-	await session.exec(`chown -R deploy:deploy ${basePath}`)
 
 	logger.info(`Convergence complete for "${input.projectName}"`)
 }

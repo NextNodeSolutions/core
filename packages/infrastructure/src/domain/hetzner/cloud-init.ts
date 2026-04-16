@@ -6,9 +6,20 @@ export interface CloudInitInput {
 	readonly deployPublicKey: string
 }
 
+export interface CloudInitUser {
+	readonly name: string
+	readonly shell: string
+	readonly sudo: string
+	readonly lock_passwd: boolean
+	readonly ssh_authorized_keys: ReadonlyArray<string>
+}
+
 export interface CloudInitConfig {
 	readonly package_update: boolean
 	readonly packages: ReadonlyArray<string>
+	readonly ssh_pwauth: boolean
+	readonly disable_root: boolean
+	readonly users: ReadonlyArray<CloudInitUser>
 	readonly write_files: ReadonlyArray<{
 		readonly path: string
 		readonly content: string
@@ -21,6 +32,12 @@ export function isCloudInitConfig(value: unknown): value is CloudInitConfig {
 	return (
 		'packages' in value &&
 		Array.isArray(value.packages) &&
+		'ssh_pwauth' in value &&
+		typeof value.ssh_pwauth === 'boolean' &&
+		'disable_root' in value &&
+		typeof value.disable_root === 'boolean' &&
+		'users' in value &&
+		Array.isArray(value.users) &&
 		'write_files' in value &&
 		Array.isArray(value.write_files) &&
 		'runcmd' in value &&
@@ -66,16 +83,30 @@ RestartSec=5
 WantedBy=multi-user.target
 `
 
-function buildWriteFiles(
-	deployPublicKey: string,
-): ReadonlyArray<{ readonly path: string; readonly content: string }> {
+function buildUsers(deployPublicKey: string): ReadonlyArray<CloudInitUser> {
+	// Declarative user creation runs BEFORE runcmd, so the SSH key is
+	// installed early. lock_passwd removes any password hash entirely — no
+	// password login, no expiration edge cases. NOPASSWD:ALL is equivalent
+	// in privilege to docker-group membership (which deploy also has), so
+	// we don't lose isolation by granting it.
+	return [
+		{
+			name: 'deploy',
+			shell: '/bin/bash',
+			sudo: 'ALL=(ALL) NOPASSWD:ALL',
+			lock_passwd: true,
+			ssh_authorized_keys: [deployPublicKey],
+		},
+	]
+}
+
+function buildWriteFiles(): ReadonlyArray<{
+	readonly path: string
+	readonly content: string
+}> {
 	return [
 		{ path: '/etc/systemd/system/vector.service', content: VECTOR_UNIT },
 		{ path: '/etc/systemd/system/caddy.service', content: CADDY_UNIT },
-		{
-			path: '/root/.ssh/authorized_keys',
-			content: `${deployPublicKey}\n`,
-		},
 		{ path: '/etc/caddy/config.json', content: '{}\n' },
 	]
 }
@@ -85,11 +116,6 @@ function buildRuncmd(
 	tailscaleHostname: string,
 ): ReadonlyArray<string> {
 	return [
-		// sshd rejects authorized_keys if /root/.ssh isn't 0700 or the file
-		// isn't 0600 — cloud-init write_files creates parents with 0755.
-		'chmod 700 /root/.ssh',
-		'chmod 600 /root/.ssh/authorized_keys',
-
 		// Tailscale FIRST: unlocks SSH via tailnet in ~10s so the runner can
 		// poll the Tailscale API and proceed while the rest of runcmd (Docker,
 		// Caddy, Vector) keeps installing. convergeVps gates on `cloud-init
@@ -113,15 +139,20 @@ function buildRuncmd(
 		'systemctl daemon-reload',
 		'systemctl enable vector',
 
-		// Deploy user (non-root docker runner)
-		'useradd -m -s /bin/bash deploy',
+		// deploy user was created declaratively via `users:`. Docker group
+		// exists only after Docker install above, so we wire it here.
 		'usermod -aG docker deploy',
+
+		// Give deploy write access to service config dirs so convergence
+		// can push Caddy/Vector configs via SFTP without sudo. Services
+		// still run as root; they only need read access to these files.
+		'chown -R deploy:deploy /etc/caddy /etc/vector',
 
 		// App directory
 		'mkdir -p /opt/apps',
 		'chown deploy:deploy /opt/apps',
 
-		// UFW firewall
+		// UFW firewall — SSH is tailnet-only; 80/443 public for Caddy.
 		'ufw default deny incoming',
 		'ufw default allow outgoing',
 		'ufw allow 80/tcp',
@@ -135,7 +166,13 @@ export function renderCloudInit(input: CloudInitInput): string {
 	const config = {
 		package_update: true,
 		packages: PACKAGES,
-		write_files: buildWriteFiles(input.deployPublicKey),
+		// Hard-disable SSH password auth and root login. Combined with
+		// UFW restricting port 22 to tailscale0, the server has no
+		// public SSH surface at all.
+		ssh_pwauth: false,
+		disable_root: true,
+		users: buildUsers(input.deployPublicKey),
+		write_files: buildWriteFiles(),
 		runcmd: buildRuncmd(input.tailscaleAuthKey, input.tailscaleHostname),
 	} satisfies CloudInitConfig
 
