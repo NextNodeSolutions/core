@@ -26,7 +26,9 @@ export interface ReconcileDnsInput {
 	readonly environment: AppEnvironment
 }
 
-export async function reconcileDns(input: ReconcileDnsInput): Promise<void> {
+export async function reconcilePagesDns(
+	input: ReconcileDnsInput,
+): Promise<void> {
 	const records = computeDnsRecords({
 		domain: input.domain,
 		redirectDomains: input.redirectDomains,

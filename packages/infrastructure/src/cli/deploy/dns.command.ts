@@ -2,11 +2,11 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
 
-import { reconcileDns } from '../../adapters/cloudflare/pages-dns.ts'
 import type { DeployableConfig } from '../../config/types.ts'
-import { computePagesProjectName } from '../../domain/cloudflare/pages-project-name.ts'
 import { resolveEnvironment } from '../../domain/environment.ts'
-import { getEnv, requireEnv } from '../env.ts'
+import { getEnv } from '../env.ts'
+
+import { createTarget } from './create-target.ts'
 
 export async function dnsCommand(config: DeployableConfig): Promise<void> {
 	if (!config.project.domain) {
@@ -20,20 +20,7 @@ export async function dnsCommand(config: DeployableConfig): Promise<void> {
 		config.project.type,
 		getEnv('PIPELINE_ENVIRONMENT'),
 	)
-	const token = requireEnv('CLOUDFLARE_API_TOKEN')
-	const pagesProjectName = computePagesProjectName(
-		config.project.name,
-		environment,
-	)
+	const target = await createTarget(config, environment)
 
-	await reconcileDns({
-		accountId: requireEnv('CLOUDFLARE_ACCOUNT_ID'),
-		pagesProjectName,
-		token,
-		domain: config.project.domain,
-		redirectDomains: config.project.redirectDomains,
-		environment,
-	})
-
-	logger.info('DNS reconciliation complete')
+	await target.reconcileDns(config.project.name, config.project.domain)
 }

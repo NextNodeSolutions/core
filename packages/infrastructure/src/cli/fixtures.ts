@@ -1,5 +1,41 @@
 import type { DeployableConfig } from '../config/types.ts'
 
+export const APP_WITH_DOMAIN: DeployableConfig = {
+	project: {
+		type: 'app',
+		name: 'my-app',
+		domain: 'example.com',
+		redirectDomains: [],
+		filter: false,
+	},
+	scripts: { lint: 'lint', test: 'test', build: 'build' },
+	package: false,
+	environment: { development: true },
+	deploy: {
+		target: 'hetzner-vps',
+		hetzner: { serverType: 'cx23', location: 'nbg1' },
+		secrets: [],
+	},
+}
+
+export const APP_WITH_SECRETS: DeployableConfig = {
+	project: {
+		type: 'app',
+		name: 'my-app',
+		domain: 'example.com',
+		redirectDomains: [],
+		filter: false,
+	},
+	scripts: { lint: 'lint', test: 'test', build: 'build' },
+	package: false,
+	environment: { development: true },
+	deploy: {
+		target: 'hetzner-vps',
+		hetzner: { serverType: 'cx23', location: 'nbg1' },
+		secrets: ['DATABASE_URL'],
+	},
+}
+
 export const STATIC_WITH_DOMAIN: DeployableConfig = {
 	project: {
 		type: 'static',
