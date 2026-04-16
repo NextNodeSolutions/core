@@ -59,9 +59,20 @@ export interface DeployResult {
 
 export interface DeployTarget {
 	readonly name: string
-	computeDeployEnv(projectName: string): DeployEnv
+	/**
+	 * Resolve the env vars to inject into the deployed runtime. Returned as
+	 * `DeployEnv | Promise<DeployEnv>` so sync impls (e.g. Hetzner, where
+	 * SITE_URL is pure config arithmetic) don't pay async ceremony, while
+	 * impls that need IO (e.g. Cloudflare looking up the live `*.pages.dev`
+	 * subdomain) can return a Promise. Callers `await` either way.
+	 */
+	computeDeployEnv(projectName: string): DeployEnv | Promise<DeployEnv>
 	ensureInfra(projectName: string): Promise<void>
 	reconcileDns(projectName: string, domain: string): Promise<void>
-	deploy(projectName: string, input: DeployInput): Promise<DeployResult>
+	deploy(
+		projectName: string,
+		input: DeployInput,
+		env: DeployEnv,
+	): Promise<DeployResult>
 	describe?(projectName: string): Promise<TargetState | null>
 }

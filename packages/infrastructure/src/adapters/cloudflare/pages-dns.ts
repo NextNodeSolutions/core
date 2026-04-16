@@ -19,7 +19,7 @@ const logger = createLogger()
 
 export interface ReconcileDnsInput {
 	readonly accountId: string
-	readonly pagesProjectName: string
+	readonly pagesSubdomain: string
 	readonly token: string
 	readonly domain: string
 	readonly redirectDomains: ReadonlyArray<string>
@@ -33,7 +33,7 @@ export async function reconcilePagesDns(
 		domain: input.domain,
 		redirectDomains: input.redirectDomains,
 		environment: input.environment,
-		projectName: input.pagesProjectName,
+		pagesSubdomain: input.pagesSubdomain,
 	})
 
 	const zoneIds = await resolveAllZoneIds(records, input.token)

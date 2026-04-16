@@ -69,7 +69,11 @@ function stubCloudflareApi(): ReturnType<typeof vi.fn<FetchImpl>> {
 			return Promise.resolve(
 				okJson({
 					success: true,
-					result: { name: 'my-site', production_branch: 'main' },
+					result: {
+						name: 'my-site',
+						production_branch: 'main',
+						subdomain: 'my-site.pages.dev',
+					},
 					errors: [],
 				}),
 			)

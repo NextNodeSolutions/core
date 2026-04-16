@@ -17,15 +17,24 @@ export interface DnsRecordsInput {
 	readonly domain: string
 	readonly redirectDomains: ReadonlyArray<string>
 	readonly environment: AppEnvironment
-	readonly projectName: string
+	/**
+	 * The actual `*.pages.dev` hostname assigned by Cloudflare to the
+	 * project (e.g. `my-site.pages.dev` or, when the desired name is
+	 * already taken globally, `my-site-6zu.pages.dev`). MUST be read
+	 * from the Pages API (`result.subdomain`) — never derived from the
+	 * project name, since CF auto-suffixes on cross-account collisions
+	 * and a CNAME pointing at the bare project name yields a
+	 * "CNAME Cross-User Banned" (1014) error.
+	 */
+	readonly pagesSubdomain: string
 }
 
 /**
  * Compute the desired DNS records for a Cloudflare Pages static site.
  *
  * Rules:
- * - Production: `{domain}` + each `redirect_domain` CNAME -> `{projectName}.pages.dev`, proxied
- * - Development: `dev.{domain}` CNAME -> `{projectName}.pages.dev`, unproxied
+ * - Production: `{domain}` + each `redirect_domain` CNAME -> `{pagesSubdomain}`, proxied
+ * - Development: `dev.{domain}` CNAME -> `{pagesSubdomain}`, unproxied
  *
  * Proxied records use TTL=1 (Cloudflare auto). Unproxied use TTL=300.
  * Dev stays unproxied so the zone cache is never applied (matches
@@ -34,7 +43,7 @@ export interface DnsRecordsInput {
 export function computeDnsRecords(
 	input: DnsRecordsInput,
 ): ReadonlyArray<DesiredDnsRecord> {
-	const target = `${input.projectName}.pages.dev`
+	const target = input.pagesSubdomain
 
 	if (input.environment === 'production') {
 		return [

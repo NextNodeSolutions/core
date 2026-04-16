@@ -235,6 +235,7 @@ export class HetznerVpsTarget implements DeployTarget {
 	async deploy(
 		projectName: string,
 		input: DeployInput,
+		env: DeployEnv,
 	): Promise<DeployResult> {
 		const start = Date.now()
 
@@ -242,7 +243,6 @@ export class HetznerVpsTarget implements DeployTarget {
 			throw new Error('image is required for Hetzner VPS deploys')
 		}
 
-		const env = this.computeDeployEnv()
 		const hostname = resolveDeployDomain(this.domain, this.environment)
 
 		const existing = await readState(this.r2, projectName)

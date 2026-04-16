@@ -14,7 +14,7 @@ describe('computeDnsRecords', () => {
 				domain: 'example.com',
 				redirectDomains: [],
 				environment: 'production',
-				projectName: 'my-site',
+				pagesSubdomain: 'my-site.pages.dev',
 			})
 
 			expect(records).toEqual([
@@ -34,7 +34,7 @@ describe('computeDnsRecords', () => {
 				domain: 'example.com',
 				redirectDomains: ['example.fr', 'example.net'],
 				environment: 'production',
-				projectName: 'my-site',
+				pagesSubdomain: 'my-site.pages.dev',
 			})
 
 			expect(records).toHaveLength(3)
@@ -57,15 +57,15 @@ describe('computeDnsRecords', () => {
 			})
 		})
 
-		it('targets the correct Pages project name', () => {
+		it('targets the actual Pages subdomain (CF auto-suffixes on collision)', () => {
 			const records = computeDnsRecords({
 				domain: 'example.com',
 				redirectDomains: [],
 				environment: 'production',
-				projectName: 'blog',
+				pagesSubdomain: 'blog-6zu.pages.dev',
 			})
 
-			expect(records[0]?.content).toBe('blog.pages.dev')
+			expect(records[0]?.content).toBe('blog-6zu.pages.dev')
 		})
 	})
 
@@ -75,7 +75,7 @@ describe('computeDnsRecords', () => {
 				domain: 'example.com',
 				redirectDomains: [],
 				environment: 'development',
-				projectName: 'my-site',
+				pagesSubdomain: 'my-site.pages.dev',
 			})
 
 			expect(records).toEqual([
@@ -95,7 +95,7 @@ describe('computeDnsRecords', () => {
 				domain: 'example.com',
 				redirectDomains: ['example.fr', 'example.net'],
 				environment: 'development',
-				projectName: 'my-site',
+				pagesSubdomain: 'my-site.pages.dev',
 			})
 
 			expect(records).toHaveLength(1)
