@@ -1,6 +1,65 @@
 import { describe, expect, it } from 'vitest'
 
-import { parseImageRef } from './image-ref.ts'
+import { computeImageRef, parseImageRef } from './image-ref.ts'
+
+describe('computeImageRef', () => {
+	it('normalizes a standard GitHub repository + full sha to a GHCR ref', () => {
+		expect(
+			computeImageRef({
+				repository: 'acme/web',
+				sha: 'abc1234567890abcdef1234567890abcdef12345',
+			}),
+		).toEqual({
+			registry: 'ghcr.io',
+			repository: 'acme/web',
+			tag: 'sha-abc1234',
+		})
+	})
+
+	it('lowercases owner and repo (GHCR requires lowercase)', () => {
+		expect(
+			computeImageRef({
+				repository: 'NextNodeSolutions/Core',
+				sha: 'ABCDEF0123456789',
+			}),
+		).toEqual({
+			registry: 'ghcr.io',
+			repository: 'nextnodesolutions/core',
+			tag: 'sha-ABCDEF0',
+		})
+	})
+
+	it('accepts a sha of exactly 7 chars', () => {
+		expect(
+			computeImageRef({ repository: 'org/app', sha: '1234567' }),
+		).toEqual({
+			registry: 'ghcr.io',
+			repository: 'org/app',
+			tag: 'sha-1234567',
+		})
+	})
+
+	it('throws when repository has no "/" separator', () => {
+		expect(() =>
+			computeImageRef({
+				repository: 'noslash',
+				sha: 'abc1234567890',
+			}),
+		).toThrow('Invalid repository "noslash": expected "<owner>/<repo>"')
+	})
+
+	it('throws when sha is shorter than 7 chars', () => {
+		expect(() =>
+			computeImageRef({ repository: 'org/app', sha: 'abc123' }),
+		).toThrow('Invalid sha "abc123": expected at least 7 chars')
+	})
+
+	it('throws on empty sha', () => {
+		expect(() =>
+			computeImageRef({ repository: 'org/app', sha: '' }),
+		).toThrow('Invalid sha "": expected at least 7 chars')
+	})
+})
 
 describe('parseImageRef', () => {
 	it('parses a standard GHCR image ref', () => {
