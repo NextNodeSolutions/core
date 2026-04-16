@@ -6,7 +6,7 @@ vi.mock('node:timers/promises', () => ({
 	setTimeout: vi.fn(() => Promise.resolve()),
 }))
 
-import { ensureR2Setup } from './ensure-r2.ts'
+import { ensureR2Setup } from './ensure-setup.ts'
 
 interface MockResponse {
 	ok: boolean

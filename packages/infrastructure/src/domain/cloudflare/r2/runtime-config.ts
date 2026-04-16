@@ -1,7 +1,8 @@
 /**
- * Runtime-resolved R2 configuration threaded from `ensureR2Setup`
- * to any adapter that needs R2 (HetznerVpsTarget, etc). Passing it
- * explicitly avoids hidden coupling via `process.env` mutation.
+ * Runtime-resolved R2 configuration threaded from either `ensureR2Setup`
+ * (provision-time bootstrap) or `loadR2Runtime` (deploy-time load) to any
+ * adapter that needs R2 (HetznerVpsTarget, etc). Passing it explicitly
+ * avoids hidden coupling via `process.env` mutation.
  */
 export interface R2RuntimeConfig {
 	readonly accountId: string
