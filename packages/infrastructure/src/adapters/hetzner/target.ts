@@ -55,7 +55,7 @@ const SSH_KEY_NAME = 'nextnode-ci'
 const POLL_INTERVAL_MS = 5_000
 const MAX_POLL_ATTEMPTS = 24
 const SSH_RETRY_INTERVAL_MS = 5_000
-const MAX_SSH_ATTEMPTS = 12
+const MAX_SSH_ATTEMPTS = 36
 const TAILSCALE_AUTHKEY_TTL_SECONDS = 600
 const TAILSCALE_TAG = 'tag:ci'
 
@@ -204,14 +204,19 @@ export class HetznerVpsTarget implements DeployTarget {
 		)
 		await applyFirewall(this.hcloudToken, firewall.id, server.id)
 
+		// SSH via MagicDNS hostname: runner's tailscaled resolves `projectName`
+		// to the VPS tailnet IP as soon as the VPS registers. waitForSsh is the
+		// readiness signal — no separate API poll needed for device discovery.
+		await this.waitForSsh(projectName)
+		await this.runConvergence(projectName, projectName)
+
+		// Device is guaranteed in the netmap since SSH just succeeded, so this
+		// is a one-shot call (the poll loop inside is defensive, not needed).
 		const tailnetIp = await getTailnetIpByHostname(
 			this.tailscaleAuthKey,
 			projectName,
 		)
 		logger.info(`Tailnet IP for "${projectName}": ${tailnetIp}`)
-
-		await this.waitForSsh(tailnetIp)
-		await this.runConvergence(tailnetIp, projectName)
 
 		await writeState(this.r2, projectName, {
 			serverId: server.id,
