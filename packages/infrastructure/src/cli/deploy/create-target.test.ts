@@ -1,8 +1,29 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { utils as sshUtils } from 'ssh2'
+import {
+	afterEach,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from 'vitest'
 
 import type { HetznerDeployableConfig } from '../../config/types.ts'
 
 import { createTarget } from './create-target.ts'
+
+let TEST_PRIVATE_KEY: string
+let TEST_PUBLIC_LINE: string
+
+beforeAll(() => {
+	const kp = sshUtils.generateKeyPairSync('ed25519')
+	TEST_PRIVATE_KEY = kp.private
+	const parsed = sshUtils.parseKey(TEST_PRIVATE_KEY)
+	if (parsed instanceof Error) throw parsed
+	if (Array.isArray(parsed)) throw new Error('unexpected multi-key parse')
+	TEST_PUBLIC_LINE = `${parsed.type} ${parsed.getPublicSSH().toString('base64')}`
+})
 
 vi.mock('./ensure-r2.ts', () => ({
 	ensureR2Setup: vi.fn(async () => ({
@@ -42,9 +63,8 @@ function stubHetznerEnv(): void {
 	vi.stubEnv('HETZNER_API_TOKEN', 'hcloud')
 	vi.stubEnv(
 		'DEPLOY_SSH_PRIVATE_KEY_B64',
-		Buffer.from('priv').toString('base64'),
+		Buffer.from(TEST_PRIVATE_KEY).toString('base64'),
 	)
-	vi.stubEnv('DEPLOY_SSH_PUBLIC_KEY', 'pub')
 	vi.stubEnv('TAILSCALE_AUTH_KEY', 'tskey')
 }
 
@@ -70,12 +90,27 @@ describe('createTarget — Hetzner env wiring', () => {
 			expect.objectContaining({
 				credentials: {
 					hcloudToken: 'hcloud',
-					deployPrivateKey: 'priv',
-					deployPublicKey: 'pub',
+					deployPrivateKey: TEST_PRIVATE_KEY,
+					deployPublicKey: TEST_PUBLIC_LINE,
 					tailscaleAuthKey: 'tskey',
 				},
 			}),
 		)
+	})
+
+	it('derives the public key from the private key', async () => {
+		stubHetznerEnv()
+
+		const { HetznerVpsTarget } =
+			await import('../../adapters/hetzner/target.ts')
+
+		await createTarget(HETZNER_CONFIG, 'production')
+
+		const call = vi.mocked(HetznerVpsTarget).mock.calls[0]?.[0]
+		expect(call?.credentials.deployPublicKey).toMatch(
+			/^ssh-ed25519 [A-Za-z0-9+/=]+$/,
+		)
+		expect(call?.credentials.deployPublicKey).toBe(TEST_PUBLIC_LINE)
 	})
 
 	it('omits the vector block when NN_VL_URL is unset', async () => {
@@ -110,6 +145,10 @@ describe('createTarget — Hetzner env wiring', () => {
 
 	it('throws when HETZNER_API_TOKEN is missing', async () => {
 		vi.stubEnv('CLOUDFLARE_API_TOKEN', 'cf')
+		vi.stubEnv(
+			'DEPLOY_SSH_PRIVATE_KEY_B64',
+			Buffer.from(TEST_PRIVATE_KEY).toString('base64'),
+		)
 
 		await expect(
 			createTarget(HETZNER_CONFIG, 'production'),
@@ -118,7 +157,6 @@ describe('createTarget — Hetzner env wiring', () => {
 
 	it('throws when DEPLOY_SSH_PRIVATE_KEY_B64 is missing', async () => {
 		vi.stubEnv('CLOUDFLARE_API_TOKEN', 'cf')
-		vi.stubEnv('HETZNER_API_TOKEN', 'hcloud')
 
 		await expect(
 			createTarget(HETZNER_CONFIG, 'production'),

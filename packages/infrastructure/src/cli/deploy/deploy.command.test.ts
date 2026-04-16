@@ -2,7 +2,16 @@ import { readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { utils as sshUtils } from 'ssh2'
+import {
+	afterEach,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from 'vitest'
 
 import type { DeployResult } from '../../domain/deploy/target.ts'
 import {
@@ -234,13 +243,18 @@ describe('deployCommand', () => {
 			durationMs: 42,
 		}
 
+		let testPrivateKey: string
+
+		beforeAll(() => {
+			testPrivateKey = sshUtils.generateKeyPairSync('ed25519').private
+		})
+
 		beforeEach(() => {
 			vi.stubEnv('HETZNER_API_TOKEN', 'hcloud-token')
 			vi.stubEnv(
 				'DEPLOY_SSH_PRIVATE_KEY_B64',
-				Buffer.from('fake-private-key').toString('base64'),
+				Buffer.from(testPrivateKey).toString('base64'),
 			)
-			vi.stubEnv('DEPLOY_SSH_PUBLIC_KEY', 'ssh-ed25519 AAAA test@ci')
 			vi.stubEnv('TAILSCALE_AUTH_KEY', 'tskey-auth-test')
 			vi.stubEnv('IMAGE_REF', 'ghcr.io/acme/web:sha-abc123')
 			mockHetznerDeploy.mockResolvedValue(HETZNER_DEPLOY_RESULT)
