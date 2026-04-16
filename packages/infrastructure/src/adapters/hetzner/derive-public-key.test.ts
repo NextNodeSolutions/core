@@ -1,7 +1,9 @@
-import { utils as sshUtils } from 'ssh2'
+import ssh2 from 'ssh2'
 import { describe, expect, it } from 'vitest'
 
 import { derivePublicKey } from './derive-public-key.ts'
+
+const { utils: sshUtils } = ssh2
 
 describe('derivePublicKey', () => {
 	it('returns the OpenSSH authorized_keys line for an ed25519 private key', () => {

@@ -1,4 +1,6 @@
-import { utils as sshUtils } from 'ssh2'
+import ssh2 from 'ssh2'
+
+const { utils: sshUtils } = ssh2
 
 export function derivePublicKey(privateKeyPem: string): string {
 	const parsed = sshUtils.parseKey(privateKeyPem)
