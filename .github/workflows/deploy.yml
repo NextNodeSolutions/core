@@ -64,7 +64,7 @@ jobs:
 
     provision:
         name: Provision
-        needs: plan
+        needs: [plan, quality]
         runs-on: ubuntu-latest
         steps:
             - uses: NextNodeSolutions/core/.github/actions/setup@main
@@ -104,7 +104,7 @@ jobs:
 
     build-image:
         name: Build image
-        needs: plan
+        needs: [plan, quality]
         runs-on: ubuntu-latest
         outputs:
             image_ref: ${{ steps.compute.outputs.image_ref }}
@@ -144,7 +144,7 @@ jobs:
 
     deploy:
         name: Deploy
-        needs: [plan, quality, provision, build-image]
+        needs: [plan, provision, build-image]
         runs-on: ubuntu-latest
         environment:
             name: ${{ inputs.environment }}
