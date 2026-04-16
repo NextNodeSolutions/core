@@ -5,6 +5,7 @@ import { renderCloudInit } from '../../domain/hetzner/cloud-init.ts'
 import { DEFAULT_FIREWALL_RULES } from '../../domain/hetzner/firewall-rules.ts'
 import {
 	deleteTailnetDevicesByHostname,
+	getTailnetIpByHostname,
 	mintAuthkey,
 } from '../tailscale/oauth.ts'
 
@@ -42,6 +43,7 @@ export interface ProvisionVpsInput {
 export interface ProvisionVpsResult {
 	readonly serverId: number
 	readonly publicIp: string
+	readonly tailnetIp: string
 }
 
 export async function provisionVps(
@@ -115,15 +117,24 @@ export async function provisionVps(
 	)
 	await applyFirewall(credentials.hcloudToken, firewall.id, server.id)
 
-	// SSH via MagicDNS hostname: runner's tailscaled resolves `projectName`
-	// to the VPS tailnet IP as soon as the VPS registers.
+	// Poll the Tailscale API for the device's tailnet IP. Since `tailscale up`
+	// runs first in cloud-init runcmd, the device registers within seconds of
+	// cloud-init reaching that line — well before Docker/Caddy/Vector finish
+	// installing.
+	const tailnetIp = await getTailnetIpByHostname(
+		credentials.tailscaleAuthKey,
+		input.projectName,
+	)
+	logger.info(`Tailnet IP for "${input.projectName}": ${tailnetIp}`)
+
 	await waitForSsh({
-		host: input.projectName,
+		host: tailnetIp,
 		privateKey: credentials.deployPrivateKey,
 	})
 
 	return {
 		serverId: server.id,
 		publicIp: server.public_net.ipv4.ip,
+		tailnetIp,
 	}
 }

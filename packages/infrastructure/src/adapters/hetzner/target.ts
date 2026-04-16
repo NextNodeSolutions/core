@@ -12,7 +12,6 @@ import type {
 import type { AppEnvironment } from '../../domain/environment.ts'
 import { buildCaddyForProject } from '../../domain/hetzner/caddy-for-project.ts'
 import { R2Client } from '../r2/client.ts'
-import { getTailnetIpByHostname } from '../tailscale/oauth.ts'
 
 import { CADDY_CONFIG_PATH } from './constants.ts'
 import { convergeVps } from './converge-vps.ts'
@@ -81,26 +80,18 @@ export class HetznerVpsTarget implements DeployTarget {
 			hetzner: this.config.hetzner,
 		})
 
-		// Device is guaranteed in the netmap since SSH just succeeded, so this
-		// is a one-shot call (the poll loop inside is defensive, not needed).
 		await convergeVps({
-			host: projectName,
+			host: provisioned.tailnetIp,
 			projectName,
 			r2: this.config.r2,
 			vector: this.config.vector,
 			deployPrivateKey: this.config.credentials.deployPrivateKey,
 		})
 
-		const tailnetIp = await getTailnetIpByHostname(
-			this.config.credentials.tailscaleAuthKey,
-			projectName,
-		)
-		logger.info(`Tailnet IP for "${projectName}": ${tailnetIp}`)
-
 		await writeState(this.r2, projectName, {
 			serverId: provisioned.serverId,
 			publicIp: provisioned.publicIp,
-			tailnetIp,
+			tailnetIp: provisioned.tailnetIp,
 		})
 
 		logger.info(`Infrastructure ready for "${projectName}"`)
