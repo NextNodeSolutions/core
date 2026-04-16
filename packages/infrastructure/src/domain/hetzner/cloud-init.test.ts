@@ -95,6 +95,19 @@ describe('renderCloudInit', () => {
 			)
 		})
 
+		it('installs and joins Tailscale before Docker so SSH unlocks early', () => {
+			const cmds = commands()
+			const tailscaleUpIdx = cmds.indexOf(
+				'tailscale up --authkey=tskey-auth-abc123 --hostname=acme-web',
+			)
+			const dockerIdx = cmds.indexOf(
+				'curl -fsSL https://get.docker.com | sh',
+			)
+			expect(tailscaleUpIdx).toBeGreaterThanOrEqual(0)
+			expect(dockerIdx).toBeGreaterThanOrEqual(0)
+			expect(tailscaleUpIdx).toBeLessThan(dockerIdx)
+		})
+
 		it('installs Caddy with certmagic-s3 plugin', () => {
 			const caddyCmd = commands().find(c => c.includes('certmagic-s3'))
 			expect(caddyCmd).toBeDefined()

@@ -85,12 +85,15 @@ function buildRuncmd(
 	tailscaleHostname: string,
 ): ReadonlyArray<string> {
 	return [
-		// Docker CE
-		'curl -fsSL https://get.docker.com | sh',
-
-		// Tailscale
+		// Tailscale FIRST: unlocks SSH via tailnet in ~10s so the runner can
+		// poll the Tailscale API and proceed while the rest of runcmd (Docker,
+		// Caddy, Vector) keeps installing. convergeVps gates on `cloud-init
+		// status --wait` before touching those.
 		'curl -fsSL https://tailscale.com/install.sh | sh',
 		`tailscale up --authkey=${tailscaleAuthKey} --hostname=${tailscaleHostname}`,
+
+		// Docker CE
+		'curl -fsSL https://get.docker.com | sh',
 
 		// Caddy with S3 storage plugin
 		'curl -fsSL "https://caddyserver.com/api/download?os=linux&arch=amd64&p=github.com/ss098/certmagic-s3" -o /usr/bin/caddy',

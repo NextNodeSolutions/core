@@ -4,7 +4,7 @@ import { isRecord } from '../../config/types.ts'
 
 const TAILSCALE_API_BASE = 'https://api.tailscale.com/api/v2'
 const DEVICE_POLL_INTERVAL_MS = 2_000
-const DEVICE_POLL_MAX_ATTEMPTS = 15
+const DEVICE_POLL_MAX_ATTEMPTS = 45
 
 export interface MintedAuthkey {
 	readonly key: string
