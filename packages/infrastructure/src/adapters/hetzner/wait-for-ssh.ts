@@ -13,6 +13,7 @@ export interface WaitForSshInput {
 }
 
 export async function waitForSsh(input: WaitForSshInput): Promise<void> {
+	let lastError: unknown
 	for (let attempt = 1; attempt <= MAX_SSH_ATTEMPTS; attempt++) {
 		try {
 			// oxlint-disable-next-line no-await-in-loop -- sequential retry by design
@@ -24,9 +25,11 @@ export async function waitForSsh(input: WaitForSshInput): Promise<void> {
 			session.close()
 			logger.info(`SSH reachable at ${input.host}`)
 			return
-		} catch {
+		} catch (err) {
+			lastError = err
+			const message = err instanceof Error ? err.message : String(err)
 			logger.info(
-				`SSH not ready at ${input.host} (attempt ${attempt}/${MAX_SSH_ATTEMPTS})`,
+				`SSH not ready at ${input.host} (attempt ${attempt}/${MAX_SSH_ATTEMPTS}): ${message}`,
 			)
 			// oxlint-disable-next-line no-await-in-loop -- sequential retry by design
 			await sleep(SSH_RETRY_INTERVAL_MS)
@@ -35,5 +38,6 @@ export async function waitForSsh(input: WaitForSshInput): Promise<void> {
 
 	throw new Error(
 		`SSH to ${input.host} not reachable after ${MAX_SSH_ATTEMPTS} attempts`,
+		{ cause: lastError },
 	)
 }

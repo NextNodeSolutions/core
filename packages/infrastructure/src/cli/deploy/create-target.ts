@@ -7,7 +7,7 @@ import {
 } from '../../config/types.ts'
 import type { DeployTarget } from '../../domain/deploy/target.ts'
 import type { AppEnvironment } from '../../domain/environment.ts'
-import { getEnv, requireEnv } from '../env.ts'
+import { getEnv, requireB64Env, requireEnv } from '../env.ts'
 
 import { ensureR2Setup } from './ensure-r2.ts'
 
@@ -25,7 +25,7 @@ export async function createTarget(
 			domain: config.project.domain,
 			credentials: {
 				hcloudToken: requireEnv('HETZNER_API_TOKEN'),
-				deployPrivateKey: requireEnv('DEPLOY_SSH_PRIVATE_KEY'),
+				deployPrivateKey: requireB64Env('DEPLOY_SSH_PRIVATE_KEY_B64'),
 				deployPublicKey: requireEnv('DEPLOY_SSH_PUBLIC_KEY'),
 				tailscaleAuthKey: requireEnv('TAILSCALE_AUTH_KEY'),
 			},
