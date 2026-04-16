@@ -5,36 +5,33 @@ import {
 } from '../../config/types.ts'
 import type { DeployTarget } from '../../domain/deploy/target.ts'
 import type { AppEnvironment } from '../../domain/environment.ts'
-import { resolveEnvironment } from '../../domain/environment.ts'
-import { getEnv, requireEnv } from '../env.ts'
-import { ensureR2Setup } from '../r2/ensure-setup.ts'
+import { requireEnv } from '../env.ts'
+import { loadR2Runtime } from '../r2/load-runtime.ts'
 
 import { createCloudflarePagesTarget } from './create-cloudflare-pages-target.ts'
 import { createHetznerTarget } from './create-hetzner-target.ts'
 
-async function buildProvisionTarget(
+/**
+ * Build a DeployTarget for a runtime operation (deploy, dns) that consumes
+ * already-provisioned infrastructure. For Hetzner, loads R2 creds from env
+ * and verifies them via SigV4 — fails loud on stale creds.
+ *
+ * This is deliberately NOT used by `provisionCommand`: provision needs the
+ * full R2 bootstrap (bucket creation, token rotation, org-secret persistence)
+ * that only `ensureR2Setup` provides.
+ */
+export async function buildRuntimeTarget(
 	config: DeployableConfig,
 	environment: AppEnvironment,
 ): Promise<DeployTarget> {
 	if (isHetznerDeployableConfig(config)) {
-		const r2 = await ensureR2Setup(requireEnv('CLOUDFLARE_API_TOKEN'))
+		const r2 = await loadR2Runtime(requireEnv('CLOUDFLARE_API_TOKEN'))
 		return createHetznerTarget(config, environment, r2)
 	}
 	if (isCloudflarePagesDeployableConfig(config)) {
 		return createCloudflarePagesTarget(config, environment)
 	}
 	throw new Error(
-		'provisionCommand: unknown deploy target — config validation should have caught this',
+		'buildRuntimeTarget: unknown deploy target — config validation should have caught this',
 	)
-}
-
-export async function provisionCommand(
-	config: DeployableConfig,
-): Promise<void> {
-	const environment = resolveEnvironment(
-		config.project.type,
-		getEnv('PIPELINE_ENVIRONMENT'),
-	)
-	const target = await buildProvisionTarget(config, environment)
-	await target.ensureInfra(config.project.name)
 }

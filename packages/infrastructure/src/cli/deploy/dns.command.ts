@@ -6,7 +6,7 @@ import type { DeployableConfig } from '../../config/types.ts'
 import { resolveEnvironment } from '../../domain/environment.ts'
 import { getEnv } from '../env.ts'
 
-import { createTarget } from './create-target.ts'
+import { buildRuntimeTarget } from './build-runtime-target.ts'
 
 export async function dnsCommand(config: DeployableConfig): Promise<void> {
 	if (!config.project.domain) {
@@ -20,7 +20,6 @@ export async function dnsCommand(config: DeployableConfig): Promise<void> {
 		config.project.type,
 		getEnv('PIPELINE_ENVIRONMENT'),
 	)
-	const target = await createTarget(config, environment)
-
+	const target = await buildRuntimeTarget(config, environment)
 	await target.reconcileDns(config.project.name, config.project.domain)
 }

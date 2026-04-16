@@ -10,7 +10,7 @@ import type { DeployInput } from '../../domain/deploy/target.ts'
 import { resolveEnvironment } from '../../domain/environment.ts'
 import { getEnv, requireEnv } from '../env.ts'
 
-import { createTarget } from './create-target.ts'
+import { buildRuntimeTarget } from './build-runtime-target.ts'
 import { parseAllSecrets, pickSecrets } from './secrets.ts'
 
 export async function deployCommand(config: DeployableConfig): Promise<void> {
@@ -18,7 +18,7 @@ export async function deployCommand(config: DeployableConfig): Promise<void> {
 		config.project.type,
 		getEnv('PIPELINE_ENVIRONMENT'),
 	)
-	const target = await createTarget(config, environment)
+	const target = await buildRuntimeTarget(config, environment)
 
 	const env = await target.computeDeployEnv(config.project.name)
 	for (const [key, value] of Object.entries(env)) {

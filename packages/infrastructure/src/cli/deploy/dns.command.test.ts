@@ -1,8 +1,49 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import ssh2 from 'ssh2'
+import {
+	afterEach,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from 'vitest'
 
-import { STATIC_NO_DOMAIN, STATIC_WITH_DOMAIN } from '../fixtures.ts'
+const { utils: sshUtils } = ssh2
+
+import {
+	APP_WITH_DOMAIN,
+	STATIC_NO_DOMAIN,
+	STATIC_WITH_DOMAIN,
+} from '../fixtures.ts'
 
 import { dnsCommand } from './dns.command.ts'
+
+// Mock loadR2Runtime (network boundary: Cloudflare accounts API + SigV4 verify)
+vi.mock(import('../r2/load-runtime.ts'), async () => ({
+	loadR2Runtime: vi.fn(async () => ({
+		accountId: 'acct',
+		endpoint: 'https://r2.example.com',
+		accessKeyId: 'r2-key',
+		secretAccessKey: 'r2-secret',
+		stateBucket: 'nextnode-state',
+		certsBucket: 'nextnode-certs',
+	})),
+}))
+
+// Mock HetznerVpsTarget class (network boundary: SSH, R2, Hetzner Cloud API)
+const { mockHetznerReconcileDns } = vi.hoisted(() => ({
+	mockHetznerReconcileDns: vi.fn(),
+}))
+vi.mock('../../adapters/hetzner/target.ts', () => ({
+	HetznerVpsTarget: vi.fn(() => ({
+		name: 'hetzner-vps',
+		reconcileDns: mockHetznerReconcileDns,
+		ensureInfra: vi.fn(),
+		computeDeployEnv: vi.fn(),
+		deploy: vi.fn(),
+	})),
+}))
 
 interface MockResponse {
 	ok: boolean
@@ -129,6 +170,48 @@ describe('dnsCommand', () => {
 
 		await expect(dnsCommand(STATIC_WITH_DOMAIN)).rejects.toThrow(
 			'CLOUDFLARE_API_TOKEN env var',
+		)
+	})
+})
+
+describe('dnsCommand — hetzner dispatch', () => {
+	let testPrivateKey: string
+
+	beforeAll(() => {
+		testPrivateKey = sshUtils.generateKeyPairSync('ed25519').private
+	})
+
+	beforeEach(() => {
+		vi.stubEnv('PIPELINE_ENVIRONMENT', 'production')
+		vi.stubEnv('CLOUDFLARE_API_TOKEN', 'cf-token')
+		vi.stubEnv('HETZNER_API_TOKEN', 'hcloud-token')
+		vi.stubEnv(
+			'DEPLOY_SSH_PRIVATE_KEY_B64',
+			Buffer.from(testPrivateKey).toString('base64'),
+		)
+		vi.stubEnv('TAILSCALE_AUTH_KEY', 'tskey-auth-test')
+	})
+
+	afterEach(() => {
+		vi.unstubAllEnvs()
+		vi.unstubAllGlobals()
+		vi.restoreAllMocks()
+		mockHetznerReconcileDns.mockReset()
+	})
+
+	it('dispatches to the Hetzner target (no CF-only guard regression)', async () => {
+		mockHetznerReconcileDns.mockResolvedValue(undefined)
+		const { loadR2Runtime } = await import('../r2/load-runtime.ts')
+		const { HetznerVpsTarget } =
+			await import('../../adapters/hetzner/target.ts')
+
+		await dnsCommand(APP_WITH_DOMAIN)
+
+		expect(loadR2Runtime).toHaveBeenCalledWith('cf-token')
+		expect(HetznerVpsTarget).toHaveBeenCalled()
+		expect(mockHetznerReconcileDns).toHaveBeenCalledWith(
+			'my-app',
+			'example.com',
 		)
 	})
 })
