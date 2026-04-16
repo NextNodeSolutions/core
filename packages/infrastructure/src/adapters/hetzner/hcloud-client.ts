@@ -1,7 +1,8 @@
 import { isRecord } from '../../config/types.ts'
+import type { FirewallRule } from '../../domain/hetzner/firewall-rules.ts'
 
 import { HCLOUD_API_BASE, authHeaders, requireOk } from './hcloud-api.ts'
-import type { FirewallRule, HcloudFirewallResponse } from './hcloud-firewall.ts'
+import type { HcloudFirewallResponse } from './hcloud-firewall.ts'
 import type { HcloudServerResponse } from './hcloud-server.ts'
 
 export interface CreateServerInput {
