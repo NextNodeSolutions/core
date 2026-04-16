@@ -4,27 +4,28 @@ export interface ImageRef {
 	readonly tag: string
 }
 
-export interface EnvironmentDeployConfig {
-	readonly name: string
-	readonly hostname: string
-	readonly envVars: Readonly<Record<string, string>>
+/**
+ * Env vars that the deploy target owns and exposes to:
+ *   1. The deployed runtime (via container .env or Pages env_vars)
+ *   2. The CI pipeline (via GITHUB_ENV) so later steps can use them
+ *
+ * These are authoritative — features like mail/auth depend on them being
+ * correct across every environment. Each Strategy MUST compute these
+ * itself; no caller builds them by hand.
+ *
+ * Extend as config-as-code features land (SUPABASE_URL, INTERNAL_SITE_URL,
+ * etc.). Treat additions as opt-in: keep new keys optional unless every
+ * target can always produce them.
+ */
+export interface DeployEnv {
+	readonly SITE_URL: string
+	readonly [key: string]: string
+}
+
+export interface DeployInput {
 	readonly secrets: Readonly<Record<string, string>>
+	readonly image?: ImageRef
 }
-
-export interface ContainerDeployConfig {
-	readonly kind: 'container'
-	readonly projectName: string
-	readonly image: ImageRef
-	readonly environments: ReadonlyArray<EnvironmentDeployConfig>
-}
-
-export interface StaticDeployConfig {
-	readonly kind: 'static'
-	readonly projectName: string
-	readonly environments: ReadonlyArray<EnvironmentDeployConfig>
-}
-
-export type ProjectDeployConfig = ContainerDeployConfig | StaticDeployConfig
 
 interface BaseDeployedEnvironment {
 	readonly name: string
@@ -56,11 +57,11 @@ export interface DeployResult {
 	readonly durationMs: number
 }
 
-export interface DeployTarget<
-	TConfig extends ProjectDeployConfig = ProjectDeployConfig,
-> {
+export interface DeployTarget {
 	readonly name: string
+	computeDeployEnv(projectName: string): DeployEnv
 	ensureInfra(projectName: string): Promise<void>
-	deploy(config: TConfig): Promise<DeployResult>
+	reconcileDns(projectName: string, domain: string): Promise<void>
+	deploy(projectName: string, input: DeployInput): Promise<DeployResult>
 	describe?(projectName: string): Promise<TargetState | null>
 }

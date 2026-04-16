@@ -6,9 +6,33 @@ export interface NextNodeConfig {
 	readonly deploy: DeploySection | false
 }
 
-export interface DeployableConfig extends NextNodeConfig {
+export interface HetznerDeployableConfig extends NextNodeConfig {
+	readonly project: ProjectSection & {
+		readonly type: DeployableProjectType
+		readonly domain: string
+	}
+	readonly deploy: HetznerVpsDeploySection
+}
+
+export interface CloudflarePagesDeployableConfig extends NextNodeConfig {
 	readonly project: ProjectSection & { readonly type: DeployableProjectType }
-	readonly deploy: DeploySection
+	readonly deploy: CloudflarePagesDeploySection
+}
+
+export type DeployableConfig =
+	| HetznerDeployableConfig
+	| CloudflarePagesDeployableConfig
+
+export function isHetznerDeployableConfig(
+	config: DeployableConfig,
+): config is HetznerDeployableConfig {
+	return config.deploy.target === 'hetzner-vps'
+}
+
+export function isCloudflarePagesDeployableConfig(
+	config: DeployableConfig,
+): config is CloudflarePagesDeployableConfig {
+	return config.deploy.target === 'cloudflare-pages'
 }
 
 export const DEPLOYABLE_PROJECT_TYPES = ['app', 'static'] as const

@@ -28,9 +28,9 @@ src/
   domain/             — PURE business logic. NO IO, NO env vars, NO logger
     environment.ts    — resolveEnvironment + PipelineEnvironment type
     deploy/           — Shared deploy concepts (provider-agnostic)
-      target.ts       — DeployTarget interface + discriminated config/result types
+      target.ts       — DeployTarget interface + DeployInput + DeployResult
       domain.ts       — resolveDeployDomain (hostname resolution)
-      env.ts          — computeDeployEnv
+      image-ref.ts    — parseImageRef
       seo-guard.ts    — computeSeoGuardFiles
     cloudflare/       — Cloudflare domain logic
       pages-domains.ts     — computePagesDomains, reconcilePagesDomain

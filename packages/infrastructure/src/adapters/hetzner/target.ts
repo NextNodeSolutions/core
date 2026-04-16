@@ -5,14 +5,16 @@ import { createLogger } from '@nextnode-solutions/logger'
 import { converge } from '../../cli/hetzner/converge.ts'
 import type { HetznerVpsDeploySection } from '../../config/types.ts'
 import type { R2RuntimeConfig } from '../../domain/cloudflare/r2/runtime-config.ts'
+import { resolveDeployDomain } from '../../domain/deploy/domain.ts'
 import type {
-	ContainerDeployConfig,
 	ContainerDeployedEnvironment,
+	DeployEnv,
+	DeployInput,
 	DeployResult,
 	DeployTarget,
-	EnvironmentDeployConfig,
 	ImageRef,
 } from '../../domain/deploy/target.ts'
+import type { AppEnvironment } from '../../domain/environment.ts'
 import type { CaddyUpstream } from '../../domain/hetzner/caddy-config.ts'
 import { buildCaddyConfig } from '../../domain/hetzner/caddy-config.ts'
 import { renderCloudInit } from '../../domain/hetzner/cloud-init.ts'
@@ -91,31 +93,39 @@ function requireEnv(name: string): string {
 	return value
 }
 
-export class HetznerVpsTarget implements DeployTarget<ContainerDeployConfig> {
+export interface HetznerVpsTargetConfig {
+	readonly hetzner: HetznerVpsDeploySection['hetzner']
+	readonly r2: R2RuntimeConfig
+	readonly environment: AppEnvironment
+	readonly domain: string
+}
+
+export class HetznerVpsTarget implements DeployTarget {
 	readonly name = 'hetzner-vps'
 	private readonly hetzner: HetznerVpsDeploySection['hetzner']
 	private readonly r2Config: R2RuntimeConfig
+	private readonly environment: AppEnvironment
+	private readonly domain: string
 	private readonly hcloudToken: string
 	private readonly deployPrivateKey: string
 	private readonly deployPublicKey: string
 	private readonly tailscaleAuthKey: string
 	private readonly r2: R2Client
 
-	constructor(
-		hetzner: HetznerVpsDeploySection['hetzner'],
-		r2: R2RuntimeConfig,
-	) {
-		this.hetzner = hetzner
-		this.r2Config = r2
+	constructor(config: HetznerVpsTargetConfig) {
+		this.hetzner = config.hetzner
+		this.r2Config = config.r2
+		this.environment = config.environment
+		this.domain = config.domain
 		this.hcloudToken = requireEnv('HETZNER_API_TOKEN')
 		this.deployPrivateKey = requireEnv('DEPLOY_SSH_PRIVATE_KEY')
 		this.deployPublicKey = requireEnv('DEPLOY_SSH_PUBLIC_KEY')
 		this.tailscaleAuthKey = requireEnv('TAILSCALE_AUTH_KEY')
 		this.r2 = new R2Client({
-			endpoint: r2.endpoint,
-			accessKeyId: r2.accessKeyId,
-			secretAccessKey: r2.secretAccessKey,
-			bucket: r2.stateBucket,
+			endpoint: config.r2.endpoint,
+			accessKeyId: config.r2.accessKeyId,
+			secretAccessKey: config.r2.secretAccessKey,
+			bucket: config.r2.stateBucket,
 		})
 	}
 
@@ -212,13 +222,33 @@ export class HetznerVpsTarget implements DeployTarget<ContainerDeployConfig> {
 		logger.info(`Infrastructure ready for "${projectName}"`)
 	}
 
-	async deploy(config: ContainerDeployConfig): Promise<DeployResult> {
+	async reconcileDns(): Promise<void> {
+		throw new Error('reconcileDns not implemented for Hetzner VPS yet')
+	}
+
+	computeDeployEnv(): DeployEnv {
+		return {
+			SITE_URL: `https://${resolveDeployDomain(this.domain, this.environment)}`,
+		}
+	}
+
+	async deploy(
+		projectName: string,
+		input: DeployInput,
+	): Promise<DeployResult> {
 		const start = Date.now()
 
-		const existing = await readState(this.r2, config.projectName)
+		if (!input.image) {
+			throw new Error('image is required for Hetzner VPS deploys')
+		}
+
+		const env = this.computeDeployEnv()
+		const hostname = resolveDeployDomain(this.domain, this.environment)
+
+		const existing = await readState(this.r2, projectName)
 		if (!existing) {
 			throw new Error(
-				`No state for "${config.projectName}" - run ensureInfra first`,
+				`No state for "${projectName}" - run ensureInfra first`,
 			)
 		}
 
@@ -229,30 +259,24 @@ export class HetznerVpsTarget implements DeployTarget<ContainerDeployConfig> {
 		})
 
 		try {
-			const upstreams: CaddyUpstream[] = []
-			const deployed: ContainerDeployedEnvironment[] = []
-
-			for (const env of config.environments) {
-				// oxlint-disable-next-line no-await-in-loop -- shared SSH session, per-env ops must serialize
-				const result = await this.deployEnvironment(
-					session,
-					env,
-					config.projectName,
-					config.image,
-				)
-				upstreams.push(result.upstream)
-				deployed.push(result.deployed)
-			}
+			const { upstream, deployed } = await this.deployEnvironment(
+				session,
+				projectName,
+				hostname,
+				env,
+				input.secrets,
+				input.image,
+			)
 
 			const caddyConfig = JSON.stringify(
 				buildCaddyConfig({
-					upstreams,
+					upstreams: [upstream],
 					r2Storage: {
 						host: this.r2Config.endpoint,
 						bucket: this.r2Config.certsBucket,
 						accessId: this.r2Config.accessKeyId,
 						secretKey: this.r2Config.secretAccessKey,
-						prefix: `${config.projectName}/`,
+						prefix: `${projectName}/`,
 					},
 				}),
 			)
@@ -262,8 +286,8 @@ export class HetznerVpsTarget implements DeployTarget<ContainerDeployConfig> {
 			logger.info('Caddy config reloaded')
 
 			return {
-				projectName: config.projectName,
-				deployedEnvironments: deployed,
+				projectName,
+				deployedEnvironments: [deployed],
 				durationMs: Date.now() - start,
 			}
 		} finally {
@@ -273,21 +297,23 @@ export class HetznerVpsTarget implements DeployTarget<ContainerDeployConfig> {
 
 	private async deployEnvironment(
 		session: SshSession,
-		env: EnvironmentDeployConfig,
 		projectName: string,
+		hostname: string,
+		env: DeployEnv,
+		secrets: Readonly<Record<string, string>>,
 		image: ImageRef,
 	): Promise<{
 		upstream: CaddyUpstream
 		deployed: ContainerDeployedEnvironment
 	}> {
-		const silo = computeSilo(projectName, env.name)
-		const hostPort = computeHostPort(env.name)
-		const envDir = `/opt/apps/${projectName}/${env.name}`
+		const silo = computeSilo(projectName, this.environment)
+		const hostPort = computeHostPort(this.environment)
+		const envDir = `/opt/apps/${projectName}/${this.environment}`
 
 		const allEnv = {
 			PORT: String(CONTAINER_PORT),
-			...env.envVars,
-			...env.secrets,
+			...env,
+			...secrets,
 		}
 		await session.writeFile(`${envDir}/.env`, formatComposeEnv(allEnv))
 		await session.writeFile(
@@ -306,14 +332,14 @@ export class HetznerVpsTarget implements DeployTarget<ContainerDeployConfig> {
 
 		return {
 			upstream: {
-				hostname: env.hostname,
+				hostname,
 				dial: `localhost:${hostPort}`,
 			},
 			deployed: {
 				kind: 'container',
-				name: env.name,
+				name: this.environment,
 				imageRef: image,
-				url: `https://${env.hostname}`,
+				url: env.SITE_URL,
 				deployedAt: new Date(),
 			},
 		}

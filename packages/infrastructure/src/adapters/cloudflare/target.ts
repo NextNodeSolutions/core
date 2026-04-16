@@ -3,14 +3,17 @@ import { createLogger } from '@nextnode-solutions/logger'
 const logger = createLogger()
 
 import { computePagesProjectName } from '../../domain/cloudflare/pages-project-name.ts'
+import { resolveDeployDomain } from '../../domain/deploy/domain.ts'
 import type {
+	DeployEnv,
+	DeployInput,
 	DeployResult,
 	DeployTarget,
-	StaticDeployConfig,
 	StaticDeployedEnvironment,
 } from '../../domain/deploy/target.ts'
 import type { AppEnvironment } from '../../domain/environment.ts'
 
+import { reconcilePagesDns } from './pages-dns.ts'
 import { reconcileDomains } from './pages-domains.ts'
 import { updatePagesEnvVars } from './pages-env.ts'
 import { provisionProject } from './pages-project.ts'
@@ -29,7 +32,7 @@ function requireEnv(name: string): string {
 	return value
 }
 
-export class CloudflarePagesTarget implements DeployTarget<StaticDeployConfig> {
+export class CloudflarePagesTarget implements DeployTarget {
 	readonly name = 'cloudflare-pages'
 	private readonly accountId: string
 	private readonly token: string
@@ -43,6 +46,14 @@ export class CloudflarePagesTarget implements DeployTarget<StaticDeployConfig> {
 		this.environment = config.environment
 		this.domain = config.domain
 		this.redirectDomains = config.redirectDomains
+	}
+
+	computeDeployEnv(projectName: string): DeployEnv {
+		const pagesProjectName = computePagesProjectName(
+			projectName,
+			this.environment,
+		)
+		return { SITE_URL: this.resolveSiteUrl(pagesProjectName) }
 	}
 
 	async ensureInfra(projectName: string): Promise<void> {
@@ -69,40 +80,64 @@ export class CloudflarePagesTarget implements DeployTarget<StaticDeployConfig> {
 		)
 	}
 
-	async deploy(config: StaticDeployConfig): Promise<DeployResult> {
-		const start = Date.now()
+	async reconcileDns(projectName: string, domain: string): Promise<void> {
 		const pagesProjectName = computePagesProjectName(
-			config.projectName,
+			projectName,
 			this.environment,
 		)
 
-		const env = config.environments[0]
-		if (!env) {
-			throw new Error('deploy requires at least one environment config')
-		}
+		await reconcilePagesDns({
+			accountId: this.accountId,
+			pagesProjectName,
+			token: this.token,
+			domain,
+			redirectDomains: this.redirectDomains,
+			environment: this.environment,
+		})
+
+		logger.info('DNS reconciliation complete')
+	}
+
+	async deploy(
+		projectName: string,
+		input: DeployInput,
+	): Promise<DeployResult> {
+		const start = Date.now()
+		const pagesProjectName = computePagesProjectName(
+			projectName,
+			this.environment,
+		)
+		const env = this.computeDeployEnv(projectName)
 
 		logger.info(`Syncing env vars to "${pagesProjectName}"`)
 		await updatePagesEnvVars(
 			this.accountId,
 			pagesProjectName,
 			this.token,
-			env.envVars,
-			env.secrets,
+			env,
+			input.secrets,
 		)
 
 		const deployed: StaticDeployedEnvironment = {
 			kind: 'static',
-			name: env.name,
-			url: `https://${env.hostname}`,
+			name: this.environment,
+			url: env.SITE_URL,
 			deployedAt: new Date(),
 		}
 
 		logger.info(`Env vars synced to "${pagesProjectName}"`)
 
 		return {
-			projectName: config.projectName,
+			projectName,
 			deployedEnvironments: [deployed],
 			durationMs: Date.now() - start,
 		}
+	}
+
+	private resolveSiteUrl(pagesProjectName: string): string {
+		if (this.domain) {
+			return `https://${resolveDeployDomain(this.domain, this.environment)}`
+		}
+		return `https://${pagesProjectName}.pages.dev`
 	}
 }
