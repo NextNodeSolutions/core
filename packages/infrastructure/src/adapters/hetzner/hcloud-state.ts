@@ -1,7 +1,11 @@
+import { createLogger } from '@nextnode-solutions/logger'
+
 import { isRecord } from '../../config/types.ts'
 import type { R2Operations } from '../r2/client.types.ts'
 
 import type { HcloudProjectState } from './hcloud-state.types.ts'
+
+const logger = createLogger()
 
 const MAX_RETRIES = 3
 
@@ -59,6 +63,9 @@ export async function writeState(
 		try {
 			return await r2.put(key, body, ifMatch) // eslint-disable-line no-await-in-loop -- sequential retries by design
 		} catch (error) {
+			logger.warn(
+				`writeState attempt ${attempt}/${MAX_RETRIES} failed for "${projectName}": ${String(error)}`,
+			)
 			lastError = error
 		}
 	}

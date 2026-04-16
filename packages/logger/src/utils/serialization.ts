@@ -45,7 +45,10 @@ export const safeStringify = (value: unknown): string => {
 
 		return JSON.stringify(value, replacer, 2)
 	} catch (error) {
-		// Last resort fallback
+		// Business rule: logger internals MUST NOT log through the logger
+		// (would recurse through the same serialization path). Embedding
+		// the error message in the returned string still surfaces the
+		// failure reason in whichever log line triggered serialization.
 		return `[Serialization Error: ${error instanceof Error ? error.message : 'Unknown error'}]`
 	}
 }
