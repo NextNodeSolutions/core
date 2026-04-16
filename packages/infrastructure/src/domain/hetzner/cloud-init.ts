@@ -73,7 +73,7 @@ function buildWriteFiles(
 		{ path: '/etc/systemd/system/vector.service', content: VECTOR_UNIT },
 		{ path: '/etc/systemd/system/caddy.service', content: CADDY_UNIT },
 		{
-			path: '/home/deploy/.ssh/authorized_keys',
+			path: '/root/.ssh/authorized_keys',
 			content: `${deployPublicKey}\n`,
 		},
 		{ path: '/etc/caddy/config.json', content: '{}\n' },
@@ -85,6 +85,11 @@ function buildRuncmd(
 	tailscaleHostname: string,
 ): ReadonlyArray<string> {
 	return [
+		// sshd rejects authorized_keys if /root/.ssh isn't 0700 or the file
+		// isn't 0600 — cloud-init write_files creates parents with 0755.
+		'chmod 700 /root/.ssh',
+		'chmod 600 /root/.ssh/authorized_keys',
+
 		// Tailscale FIRST: unlocks SSH via tailnet in ~10s so the runner can
 		// poll the Tailscale API and proceed while the rest of runcmd (Docker,
 		// Caddy, Vector) keeps installing. convergeVps gates on `cloud-init
@@ -108,12 +113,8 @@ function buildRuncmd(
 		'systemctl daemon-reload',
 		'systemctl enable vector',
 
-		// Deploy user
+		// Deploy user (non-root docker runner)
 		'useradd -m -s /bin/bash deploy',
-		'mkdir -p /home/deploy/.ssh',
-		'chown -R deploy:deploy /home/deploy/.ssh',
-		'chmod 700 /home/deploy/.ssh',
-		'chmod 600 /home/deploy/.ssh/authorized_keys',
 		'usermod -aG docker deploy',
 
 		// App directory

@@ -6,7 +6,6 @@ import {
 	createServer,
 	deleteServer,
 	describeServer,
-	ensureSshKey,
 } from './hcloud-client.ts'
 
 const TOKEN = 'hcloud-test-token'
@@ -74,7 +73,6 @@ const createServerInput = {
 	serverType: 'cpx22',
 	location: 'nbg1',
 	image: 'ubuntu-24.04',
-	sshKeys: ['nextnode-ci'],
 	userData: '#cloud-config\n',
 	labels: { project: 'acme-web' },
 } as const
@@ -97,7 +95,7 @@ describe('createServer', () => {
 		expect(body.server_type).toBe('cpx22')
 		expect(body.location).toBe('nbg1')
 		expect(body.image).toBe('ubuntu-24.04')
-		expect(body.ssh_keys).toStrictEqual(['nextnode-ci'])
+		expect(body.ssh_keys).toBeUndefined()
 		expect(body.start_after_create).toBe(true)
 	})
 
@@ -202,77 +200,6 @@ describe('createFirewall', () => {
 		const body = lastBody(mock)
 		expect(body.name).toBe('acme-web-fw')
 		expect(body.rules).toStrictEqual(rules)
-	})
-})
-
-describe('ensureSshKey', () => {
-	const PUBLIC_KEY = 'ssh-ed25519 AAAA test@ci'
-
-	it('returns existing key without creating when found by name', async () => {
-		const mock = vi
-			.fn()
-			.mockResolvedValueOnce(
-				okJson({ ssh_keys: [{ id: 7, name: 'nextnode-ci' }] }),
-			)
-		vi.stubGlobal('fetch', mock)
-
-		const result = await ensureSshKey(TOKEN, 'nextnode-ci', PUBLIC_KEY)
-
-		expect(result).toStrictEqual({ id: 7, name: 'nextnode-ci' })
-		expect(mock).toHaveBeenCalledTimes(1)
-		const [url, init] = lastCall(mock)
-		expect(url).toBe(
-			'https://api.hetzner.cloud/v1/ssh_keys?name=nextnode-ci',
-		)
-		expect(init.method).toBeUndefined()
-	})
-
-	it('creates key when none exists with that name', async () => {
-		const mock = vi
-			.fn()
-			.mockResolvedValueOnce(okJson({ ssh_keys: [] }))
-			.mockResolvedValueOnce(
-				okJson({ ssh_key: { id: 8, name: 'nextnode-ci' } }),
-			)
-		vi.stubGlobal('fetch', mock)
-
-		const result = await ensureSshKey(TOKEN, 'nextnode-ci', PUBLIC_KEY)
-
-		expect(result).toStrictEqual({ id: 8, name: 'nextnode-ci' })
-		expect(mock).toHaveBeenCalledTimes(2)
-		const [createUrl, createInit] = lastCall(mock)
-		expect(createUrl).toBe('https://api.hetzner.cloud/v1/ssh_keys')
-		expect(createInit.method).toBe('POST')
-		const body = JSON.parse(String(createInit.body))
-		expect(body).toStrictEqual({
-			name: 'nextnode-ci',
-			public_key: PUBLIC_KEY,
-		})
-	})
-
-	it('throws on list error', async () => {
-		vi.stubGlobal(
-			'fetch',
-			vi.fn().mockResolvedValue(httpError(401, 'unauthorized')),
-		)
-
-		await expect(
-			ensureSshKey(TOKEN, 'nextnode-ci', PUBLIC_KEY),
-		).rejects.toThrow(/list ssh_keys name="nextnode-ci".*401/)
-	})
-
-	it('throws on create error', async () => {
-		vi.stubGlobal(
-			'fetch',
-			vi
-				.fn()
-				.mockResolvedValueOnce(okJson({ ssh_keys: [] }))
-				.mockResolvedValueOnce(httpError(422, 'invalid key')),
-		)
-
-		await expect(
-			ensureSshKey(TOKEN, 'nextnode-ci', PUBLIC_KEY),
-		).rejects.toThrow(/create ssh_key "nextnode-ci".*422/)
 	})
 })
 

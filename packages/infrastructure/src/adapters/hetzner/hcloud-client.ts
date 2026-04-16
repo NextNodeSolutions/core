@@ -10,7 +10,6 @@ export interface CreateServerInput {
 	readonly serverType: string
 	readonly location: string
 	readonly image: string
-	readonly sshKeys: ReadonlyArray<string>
 	readonly userData: string
 	readonly labels: Readonly<Record<string, string>>
 }
@@ -72,58 +71,6 @@ export async function assertServerTypeAvailable(
 	}
 }
 
-function parseSshKey(
-	data: unknown,
-	context: string,
-): { readonly id: number; readonly name: string } {
-	if (!isRecord(data) || !isRecord(data.ssh_key)) {
-		throw new Error(`${context}: missing \`ssh_key\` in response`)
-	}
-	const k = data.ssh_key
-	if (typeof k.id !== 'number' || typeof k.name !== 'string') {
-		throw new Error(`${context}: invalid ssh_key shape`)
-	}
-	return { id: k.id, name: k.name }
-}
-
-function findExistingSshKey(
-	data: unknown,
-): { readonly id: number; readonly name: string } | null {
-	if (!isRecord(data)) return null
-	if (!Array.isArray(data.ssh_keys) || data.ssh_keys.length === 0) return null
-	const first = data.ssh_keys[0]
-	if (
-		!isRecord(first) ||
-		typeof first.id !== 'number' ||
-		typeof first.name !== 'string'
-	) {
-		return null
-	}
-	return { id: first.id, name: first.name }
-}
-
-export async function ensureSshKey(
-	token: string,
-	name: string,
-	publicKey: string,
-): Promise<{ readonly id: number; readonly name: string }> {
-	const listUrl = `${HCLOUD_API_BASE}/ssh_keys?name=${encodeURIComponent(name)}`
-	const listResponse = await fetch(listUrl, { headers: authHeaders(token) })
-	await requireOk(listResponse, `list ssh_keys name="${name}"`)
-	const listData: unknown = await listResponse.json()
-	const existing = findExistingSshKey(listData)
-	if (existing) return existing
-
-	const createResponse = await fetch(`${HCLOUD_API_BASE}/ssh_keys`, {
-		method: 'POST',
-		headers: authHeaders(token),
-		body: JSON.stringify({ name, public_key: publicKey }),
-	})
-	await requireOk(createResponse, `create ssh_key "${name}"`)
-	const createData: unknown = await createResponse.json()
-	return parseSshKey(createData, `create ssh_key "${name}"`)
-}
-
 function parseFirewall(data: unknown, context: string): HcloudFirewallResponse {
 	if (!isRecord(data) || !isRecord(data.firewall)) {
 		throw new Error(`${context}: missing \`firewall\` in response`)
@@ -147,7 +94,6 @@ export async function createServer(
 			server_type: input.serverType,
 			location: input.location,
 			image: input.image,
-			ssh_keys: input.sshKeys,
 			user_data: input.userData,
 			labels: input.labels,
 			start_after_create: true,

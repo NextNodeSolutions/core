@@ -25,7 +25,6 @@ vi.mock(import('./hcloud-client.ts'), async importOriginal => {
 			name: 'acme-web-fw',
 		})),
 		applyFirewall: vi.fn(async () => undefined),
-		ensureSshKey: vi.fn(async () => ({ id: 7, name: 'nextnode-ci' })),
 		assertServerTypeAvailable: vi.fn(async () => undefined),
 	}
 })

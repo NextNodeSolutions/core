@@ -65,8 +65,8 @@ describe('renderCloudInit', () => {
 			)
 		})
 
-		it('writes the deploy SSH authorized_keys', () => {
-			const file = findFile('/home/deploy/.ssh/authorized_keys')
+		it('writes the root SSH authorized_keys', () => {
+			const file = findFile('/root/.ssh/authorized_keys')
 			expect(file).toBeDefined()
 			expect(file!.content).toContain('ssh-ed25519 AAAAC3Nz... deploy@ci')
 		})
@@ -144,6 +144,21 @@ describe('renderCloudInit', () => {
 
 		it('does not open port 22 globally', () => {
 			expect(commands()).not.toContain('ufw allow 22/tcp')
+		})
+
+		it('chmods /root/.ssh before tailscale brings up SSH', () => {
+			const cmds = commands()
+			const chmodDir = cmds.indexOf('chmod 700 /root/.ssh')
+			const chmodFile = cmds.indexOf(
+				'chmod 600 /root/.ssh/authorized_keys',
+			)
+			const tailscaleUp = cmds.indexOf(
+				'tailscale up --authkey=tskey-auth-abc123 --hostname=acme-web',
+			)
+			expect(chmodDir).toBeGreaterThanOrEqual(0)
+			expect(chmodFile).toBeGreaterThanOrEqual(0)
+			expect(chmodDir).toBeLessThan(tailscaleUp)
+			expect(chmodFile).toBeLessThan(tailscaleUp)
 		})
 	})
 })

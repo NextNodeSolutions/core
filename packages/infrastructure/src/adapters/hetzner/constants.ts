@@ -1,5 +1,4 @@
 export const HCLOUD_IMAGE = 'debian-12'
-export const SSH_KEY_NAME = 'nextnode-ci'
 
 export const POLL_INTERVAL_MS = 5_000
 export const MAX_POLL_ATTEMPTS = 24
