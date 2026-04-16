@@ -40,7 +40,10 @@ const HETZNER_CONFIG: HetznerDeployableConfig = {
 function stubHetznerEnv(): void {
 	vi.stubEnv('CLOUDFLARE_API_TOKEN', 'cf')
 	vi.stubEnv('HETZNER_API_TOKEN', 'hcloud')
-	vi.stubEnv('DEPLOY_SSH_PRIVATE_KEY', 'priv')
+	vi.stubEnv(
+		'DEPLOY_SSH_PRIVATE_KEY_B64',
+		Buffer.from('priv').toString('base64'),
+	)
 	vi.stubEnv('DEPLOY_SSH_PUBLIC_KEY', 'pub')
 	vi.stubEnv('TAILSCALE_AUTH_KEY', 'tskey')
 }
@@ -113,13 +116,13 @@ describe('createTarget — Hetzner env wiring', () => {
 		).rejects.toThrow('HETZNER_API_TOKEN env var is required')
 	})
 
-	it('throws when DEPLOY_SSH_PRIVATE_KEY is missing', async () => {
+	it('throws when DEPLOY_SSH_PRIVATE_KEY_B64 is missing', async () => {
 		vi.stubEnv('CLOUDFLARE_API_TOKEN', 'cf')
 		vi.stubEnv('HETZNER_API_TOKEN', 'hcloud')
 
 		await expect(
 			createTarget(HETZNER_CONFIG, 'production'),
-		).rejects.toThrow('DEPLOY_SSH_PRIVATE_KEY env var is required')
+		).rejects.toThrow('DEPLOY_SSH_PRIVATE_KEY_B64 env var is required')
 	})
 
 	it('throws when NN_CLIENT_ID is missing but NN_VL_URL is set', async () => {

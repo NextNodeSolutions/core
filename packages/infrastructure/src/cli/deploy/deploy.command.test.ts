@@ -236,7 +236,10 @@ describe('deployCommand', () => {
 
 		beforeEach(() => {
 			vi.stubEnv('HETZNER_API_TOKEN', 'hcloud-token')
-			vi.stubEnv('DEPLOY_SSH_PRIVATE_KEY', 'fake-private-key')
+			vi.stubEnv(
+				'DEPLOY_SSH_PRIVATE_KEY_B64',
+				Buffer.from('fake-private-key').toString('base64'),
+			)
 			vi.stubEnv('DEPLOY_SSH_PUBLIC_KEY', 'ssh-ed25519 AAAA test@ci')
 			vi.stubEnv('TAILSCALE_AUTH_KEY', 'tskey-auth-test')
 			vi.stubEnv('IMAGE_REF', 'ghcr.io/acme/web:sha-abc123')
