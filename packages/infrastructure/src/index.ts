@@ -1,5 +1,6 @@
 import { createLogger } from '@nextnode-solutions/logger'
 
+import { computeImageRefCommand } from './cli/deploy/compute-image-ref.command.ts'
 import { deployCommand } from './cli/deploy/deploy.command.ts'
 import { dnsCommand } from './cli/deploy/dns.command.ts'
 import { provisionCommand } from './cli/deploy/provision.command.ts'
@@ -32,6 +33,7 @@ const DEPLOY_COMMANDS: Record<string, DeployCommand> = {
 const STANDALONE_COMMANDS: Record<string, StandaloneCommand> = {
 	'prod-gate': prodGateCommand,
 	'publish-result': publishResultCommand,
+	'compute-image-ref': computeImageRefCommand,
 }
 
 const ALL_COMMAND_NAMES = [
