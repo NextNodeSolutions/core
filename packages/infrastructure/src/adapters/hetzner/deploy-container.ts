@@ -46,6 +46,7 @@ export async function deployContainer(
 		...input.env,
 		...input.secrets,
 	}
+	await session.exec(`mkdir -p ${envDir}`)
 	await session.writeFile(`${envDir}/.env`, formatComposeEnv(allEnv))
 	await session.writeFile(
 		`${envDir}/compose.yaml`,
