@@ -248,7 +248,13 @@ export const createResendProvider = (
 			try {
 				await resendClient.domains.list()
 				return true
-			} catch {
+			} catch (error) {
+				logger.error('Resend validateConfig failed', {
+					details: {
+						error:
+							error instanceof Error ? error.message : 'unknown',
+					},
+				})
 				return false
 			}
 		},

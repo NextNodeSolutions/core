@@ -144,8 +144,14 @@ export const parseLocation = (
 			file,
 			line,
 		}
-	} catch {
-		// Fallback if stack trace parsing fails
+	} catch (error) {
+		// Business rule: logging must never be blocked by broken stack
+		// parsing. Report 'unknown' location so the actual log entry still
+		// goes through, but surface the parse failure via `console.warn`
+		// (the logger cannot log itself without recursing here).
+		console.warn(
+			`[logger] stack trace parsing failed: ${error instanceof Error ? error.message : String(error)}`,
+		)
 		return isProduction
 			? { function: 'unknown' }
 			: { function: 'unknown', file: 'unknown', line: 0 }

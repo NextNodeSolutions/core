@@ -39,7 +39,14 @@ export const detectRuntime = (): RuntimeEnvironment => {
 export const hasCryptoSupport = (): boolean => {
 	try {
 		return !!(crypto && typeof crypto.randomUUID === 'function')
-	} catch {
+	} catch (error) {
+		// Business rule: feature detection — access to `crypto` can throw in
+		// locked-down envs (SES, some workers). Report unavailability, but
+		// surface the reason so misconfig stays debuggable. `console.warn`
+		// is used because the logger itself depends on this probe.
+		console.warn(
+			`[logger] crypto capability probe failed: ${error instanceof Error ? error.message : String(error)}`,
+		)
 		return false
 	}
 }
