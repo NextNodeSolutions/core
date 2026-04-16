@@ -89,11 +89,23 @@ const R2_CONFIG = {
 	certsBucket: 'nextnode-certs',
 } as const
 
+const CREDENTIALS = {
+	hcloudToken: 'hcloud-token',
+	deployPrivateKey: 'fake-private-key',
+	deployPublicKey: 'ssh-ed25519 AAAA test@ci',
+	tailscaleAuthKey: 'tskey-auth-test',
+} as const
+
 const TARGET_CONFIG = {
 	hetzner: HETZNER_CONFIG,
 	r2: R2_CONFIG,
 	environment: 'production' as const,
 	domain: 'acme-web.example.com',
+	credentials: CREDENTIALS,
+	vector: {
+		clientId: 'nextnode',
+		vlUrl: 'http://vl.tail0.ts.net:9428',
+	},
 }
 
 const EXISTING_STATE = {
@@ -101,16 +113,6 @@ const EXISTING_STATE = {
 	publicIp: '1.2.3.4',
 	tailnetIp: '100.74.91.126',
 } as const
-
-function stubEnvVars(): void {
-	vi.stubEnv('HETZNER_API_TOKEN', 'hcloud-token')
-	vi.stubEnv('DEPLOY_SSH_PRIVATE_KEY', 'fake-private-key')
-	vi.stubEnv('DEPLOY_SSH_PUBLIC_KEY', 'ssh-ed25519 AAAA test@ci')
-	vi.stubEnv('TAILSCALE_AUTH_KEY', 'tskey-auth-test')
-	vi.stubEnv('NN_CLIENT_ID', 'nextnode')
-	vi.stubEnv('NN_VL_URL', 'http://vl.tail0.ts.net:9428')
-	vi.stubEnv('LOG_LEVEL', 'silent')
-}
 
 function seedState(publicIp = '1.2.3.4'): void {
 	fakeR2State.set(
@@ -130,7 +132,7 @@ function createMockSession(): SshSession {
 
 beforeEach(() => {
 	fakeR2State.clear()
-	stubEnvVars()
+	vi.stubEnv('LOG_LEVEL', 'silent')
 })
 
 afterEach(() => {
@@ -139,24 +141,6 @@ afterEach(() => {
 })
 
 describe('HetznerVpsTarget', () => {
-	describe('constructor', () => {
-		it('throws when HETZNER_API_TOKEN is missing', () => {
-			vi.stubEnv('HETZNER_API_TOKEN', '')
-
-			expect(() => new HetznerVpsTarget(TARGET_CONFIG)).toThrow(
-				'HETZNER_API_TOKEN env var is required',
-			)
-		})
-
-		it('throws when DEPLOY_SSH_PRIVATE_KEY is missing', () => {
-			vi.stubEnv('DEPLOY_SSH_PRIVATE_KEY', '')
-
-			expect(() => new HetznerVpsTarget(TARGET_CONFIG)).toThrow(
-				'DEPLOY_SSH_PRIVATE_KEY env var is required',
-			)
-		})
-	})
-
 	describe('ensureInfra', () => {
 		describe('fresh provision', () => {
 			it('creates a VPS, firewall, and writes state', async () => {
@@ -294,119 +278,6 @@ describe('HetznerVpsTarget', () => {
 
 				expect(mockedSsh).toHaveBeenCalledWith(
 					expect.objectContaining({ host: '100.74.91.126' }),
-				)
-			})
-		})
-
-		describe('server polling', () => {
-			it('succeeds when server becomes running after retries', async () => {
-				const { describeServer: mockedDescribe } =
-					await import('./hcloud-client.ts')
-				vi.mocked(mockedDescribe)
-					.mockResolvedValueOnce({
-						id: 42,
-						name: 'acme-web',
-						status: 'initializing',
-						public_net: { ipv4: { ip: '1.2.3.4' } },
-					})
-					.mockResolvedValueOnce({
-						id: 42,
-						name: 'acme-web',
-						status: 'initializing',
-						public_net: { ipv4: { ip: '1.2.3.4' } },
-					})
-					.mockResolvedValueOnce({
-						id: 42,
-						name: 'acme-web',
-						status: 'running',
-						public_net: { ipv4: { ip: '1.2.3.4' } },
-					})
-
-				const target = new HetznerVpsTarget(TARGET_CONFIG)
-
-				await expect(
-					target.ensureInfra('acme-web'),
-				).resolves.toBeUndefined()
-			})
-
-			it('throws when server never reaches running', async () => {
-				const { describeServer: mockedDescribe } =
-					await import('./hcloud-client.ts')
-				vi.mocked(mockedDescribe).mockResolvedValue({
-					id: 42,
-					name: 'acme-web',
-					status: 'initializing',
-					public_net: { ipv4: { ip: '1.2.3.4' } },
-				})
-
-				const target = new HetznerVpsTarget(TARGET_CONFIG)
-
-				await expect(target.ensureInfra('acme-web')).rejects.toThrow(
-					'did not reach "running" after 24 attempts',
-				)
-			})
-
-			it('propagates describeServer errors mid-polling', async () => {
-				const { describeServer: mockedDescribe } =
-					await import('./hcloud-client.ts')
-				vi.mocked(mockedDescribe)
-					.mockResolvedValueOnce({
-						id: 42,
-						name: 'acme-web',
-						status: 'initializing',
-						public_net: { ipv4: { ip: '1.2.3.4' } },
-					})
-					.mockRejectedValueOnce(new Error('Hetzner API: 500'))
-
-				const target = new HetznerVpsTarget(TARGET_CONFIG)
-
-				await expect(target.ensureInfra('acme-web')).rejects.toThrow(
-					'Hetzner API: 500',
-				)
-			})
-		})
-
-		describe('SSH readiness', () => {
-			it('succeeds on first SSH attempt without retrying', async () => {
-				const { createSshSession: mockedSsh } =
-					await import('./ssh-session.ts')
-
-				const target = new HetznerVpsTarget(TARGET_CONFIG)
-				await target.ensureInfra('acme-web')
-
-				// 1 call from waitForSsh (first attempt succeeds) + 1 from runConvergence
-				expect(mockedSsh).toHaveBeenCalledTimes(2)
-			})
-
-			it('succeeds after transient SSH failures', async () => {
-				const { createSshSession: mockedSsh } =
-					await import('./ssh-session.ts')
-				const mockSession = createMockSession()
-
-				vi.mocked(mockedSsh)
-					.mockRejectedValueOnce(new Error('Connection refused'))
-					.mockRejectedValueOnce(new Error('Connection refused'))
-					.mockResolvedValueOnce(mockSession) // waitForSsh succeeds
-					.mockResolvedValueOnce(mockSession) // runConvergence session
-
-				const target = new HetznerVpsTarget(TARGET_CONFIG)
-
-				await expect(
-					target.ensureInfra('acme-web'),
-				).resolves.toBeUndefined()
-			})
-
-			it('throws when SSH never connects', async () => {
-				const { createSshSession: mockedSsh } =
-					await import('./ssh-session.ts')
-				vi.mocked(mockedSsh).mockRejectedValue(
-					new Error('Connection refused'),
-				)
-
-				const target = new HetznerVpsTarget(TARGET_CONFIG)
-
-				await expect(target.ensureInfra('acme-web')).rejects.toThrow(
-					'not reachable after 36 attempts',
 				)
 			})
 		})

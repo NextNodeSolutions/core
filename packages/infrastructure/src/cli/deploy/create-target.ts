@@ -7,7 +7,7 @@ import {
 } from '../../config/types.ts'
 import type { DeployTarget } from '../../domain/deploy/target.ts'
 import type { AppEnvironment } from '../../domain/environment.ts'
-import { requireEnv } from '../env.ts'
+import { getEnv, requireEnv } from '../env.ts'
 
 import { ensureR2Setup } from './ensure-r2.ts'
 
@@ -17,11 +17,21 @@ export async function createTarget(
 ): Promise<DeployTarget> {
 	if (isHetznerDeployableConfig(config)) {
 		const r2 = await ensureR2Setup(requireEnv('CLOUDFLARE_API_TOKEN'))
+		const vlUrl = getEnv('NN_VL_URL')
 		return new HetznerVpsTarget({
 			hetzner: config.deploy.hetzner,
 			r2,
 			environment,
 			domain: config.project.domain,
+			credentials: {
+				hcloudToken: requireEnv('HETZNER_API_TOKEN'),
+				deployPrivateKey: requireEnv('DEPLOY_SSH_PRIVATE_KEY'),
+				deployPublicKey: requireEnv('DEPLOY_SSH_PUBLIC_KEY'),
+				tailscaleAuthKey: requireEnv('TAILSCALE_AUTH_KEY'),
+			},
+			vector: vlUrl
+				? { clientId: requireEnv('NN_CLIENT_ID'), vlUrl }
+				: null,
 		})
 	}
 
