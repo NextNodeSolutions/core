@@ -1,4 +1,5 @@
 import { CloudflarePagesTarget } from '../../adapters/cloudflare/target.ts'
+import { derivePublicKey } from '../../adapters/hetzner/derive-public-key.ts'
 import { HetznerVpsTarget } from '../../adapters/hetzner/target.ts'
 import type { DeployableConfig } from '../../config/types.ts'
 import {
@@ -18,6 +19,7 @@ export async function createTarget(
 	if (isHetznerDeployableConfig(config)) {
 		const r2 = await ensureR2Setup(requireEnv('CLOUDFLARE_API_TOKEN'))
 		const vlUrl = getEnv('NN_VL_URL')
+		const deployPrivateKey = requireB64Env('DEPLOY_SSH_PRIVATE_KEY_B64')
 		return new HetznerVpsTarget({
 			hetzner: config.deploy.hetzner,
 			r2,
@@ -25,8 +27,8 @@ export async function createTarget(
 			domain: config.project.domain,
 			credentials: {
 				hcloudToken: requireEnv('HETZNER_API_TOKEN'),
-				deployPrivateKey: requireB64Env('DEPLOY_SSH_PRIVATE_KEY_B64'),
-				deployPublicKey: requireEnv('DEPLOY_SSH_PUBLIC_KEY'),
+				deployPrivateKey,
+				deployPublicKey: derivePublicKey(deployPrivateKey),
 				tailscaleAuthKey: requireEnv('TAILSCALE_AUTH_KEY'),
 			},
 			vector: vlUrl
