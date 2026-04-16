@@ -11,7 +11,6 @@ import {
 
 import {
 	HCLOUD_IMAGE,
-	SSH_KEY_NAME,
 	TAILSCALE_AUTHKEY_TTL_SECONDS,
 	TAILSCALE_TAG,
 } from './constants.ts'
@@ -21,7 +20,6 @@ import {
 	assertServerTypeAvailable,
 	createFirewall,
 	createServer,
-	ensureSshKey,
 } from './hcloud-client.ts'
 import { waitForServerRunning } from './wait-for-server-running.ts'
 import { waitForSsh } from './wait-for-ssh.ts'
@@ -58,13 +56,6 @@ export async function provisionVps(
 		`Preflight OK: server_type "${input.hetzner.serverType}" is available`,
 	)
 
-	await ensureSshKey(
-		credentials.hcloudToken,
-		SSH_KEY_NAME,
-		credentials.deployPublicKey,
-	)
-	logger.info(`SSH key "${SSH_KEY_NAME}" ready in Hetzner project`)
-
 	const purged = await deleteTailnetDevicesByHostname(
 		credentials.tailscaleAuthKey,
 		input.projectName,
@@ -96,7 +87,6 @@ export async function provisionVps(
 		serverType: input.hetzner.serverType,
 		location: input.hetzner.location,
 		image: HCLOUD_IMAGE,
-		sshKeys: [SSH_KEY_NAME],
 		userData: cloudInit,
 		labels: { project: input.projectName, managed_by: 'nextnode' },
 	}
