@@ -38,7 +38,7 @@ export function createOrgSecretsAdapter(
 	return {
 		async setOrgSecret(name, value, org) {
 			const result = await runner(
-				['secret', 'set', name, '--org', org, '--body-file', '-'],
+				['secret', 'set', name, '--org', org],
 				value,
 			)
 			if (result.exitCode !== 0) {

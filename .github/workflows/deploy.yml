@@ -126,6 +126,7 @@ jobs:
               uses: docker/bake-action@v6
               with:
                   source: ${{ github.workspace }}
+                  files: docker-compose.yml
                   targets: app
                   push: true
                   set: |
