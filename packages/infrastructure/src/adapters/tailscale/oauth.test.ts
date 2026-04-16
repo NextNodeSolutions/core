@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { mintAuthkey } from './oauth.ts'
+import { deleteTailnetDevicesByHostname, mintAuthkey } from './oauth.ts'
 
 const CLIENT_SECRET = 'tskey-client-abc123'
 
@@ -151,5 +151,93 @@ describe('mintAuthkey', () => {
 		await expect(
 			mintAuthkey(CLIENT_SECRET, ['tag:ci'], 600, 'probe'),
 		).rejects.toThrow('invalid response shape')
+	})
+})
+
+describe('deleteTailnetDevicesByHostname', () => {
+	it('deletes every device matching the hostname and returns count', async () => {
+		const mock = vi
+			.fn()
+			.mockResolvedValueOnce(okJson({ access_token: 'bearer' }))
+			.mockResolvedValueOnce(
+				okJson({
+					devices: [
+						{ id: '111', hostname: 'hetzner-e2e' },
+						{ id: '222', hostname: 'other-project' },
+						{ id: '333', hostname: 'hetzner-e2e' },
+					],
+				}),
+			)
+			.mockResolvedValueOnce(okJson({}))
+			.mockResolvedValueOnce(okJson({}))
+		vi.stubGlobal('fetch', mock)
+
+		const count = await deleteTailnetDevicesByHostname(
+			CLIENT_SECRET,
+			'hetzner-e2e',
+		)
+
+		expect(count).toBe(2)
+		const [url1, init1] = callAt(mock, 2)
+		expect(url1).toBe('https://api.tailscale.com/api/v2/device/111')
+		expect(init1.method).toBe('DELETE')
+		const [url2, init2] = callAt(mock, 3)
+		expect(url2).toBe('https://api.tailscale.com/api/v2/device/333')
+		expect(init2.method).toBe('DELETE')
+	})
+
+	it('returns 0 when no device matches', async () => {
+		const mock = vi
+			.fn()
+			.mockResolvedValueOnce(okJson({ access_token: 'bearer' }))
+			.mockResolvedValueOnce(
+				okJson({ devices: [{ id: '111', hostname: 'other' }] }),
+			)
+		vi.stubGlobal('fetch', mock)
+
+		const count = await deleteTailnetDevicesByHostname(
+			CLIENT_SECRET,
+			'hetzner-e2e',
+		)
+
+		expect(count).toBe(0)
+		expect(mock).toHaveBeenCalledTimes(2)
+	})
+
+	it('throws on list devices HTTP error', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi
+				.fn()
+				.mockResolvedValueOnce(okJson({ access_token: 'bearer' }))
+				.mockResolvedValueOnce(httpError(401, 'forbidden')),
+		)
+
+		await expect(
+			deleteTailnetDevicesByHostname(CLIENT_SECRET, 'x'),
+		).rejects.toThrow(/list devices.*401.*forbidden/)
+	})
+
+	it('throws on delete HTTP error mid-way', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi
+				.fn()
+				.mockResolvedValueOnce(okJson({ access_token: 'bearer' }))
+				.mockResolvedValueOnce(
+					okJson({
+						devices: [
+							{ id: '111', hostname: 'x' },
+							{ id: '222', hostname: 'x' },
+						],
+					}),
+				)
+				.mockResolvedValueOnce(okJson({}))
+				.mockResolvedValueOnce(httpError(500, 'boom')),
+		)
+
+		await expect(
+			deleteTailnetDevicesByHostname(CLIENT_SECRET, 'x'),
+		).rejects.toThrow(/delete device 222.*500.*boom/)
 	})
 })
