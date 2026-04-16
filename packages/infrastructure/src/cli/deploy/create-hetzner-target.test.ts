@@ -12,8 +12,9 @@ import {
 const { utils: sshUtils } = ssh2
 
 import type { HetznerDeployableConfig } from '../../config/types.ts'
+import type { R2RuntimeConfig } from '../../domain/cloudflare/r2/runtime-config.ts'
 
-import { createTarget } from './create-target.ts'
+import { createHetznerTarget } from './create-hetzner-target.ts'
 
 let TEST_PRIVATE_KEY: string
 let TEST_PUBLIC_LINE: string
@@ -26,17 +27,6 @@ beforeAll(() => {
 	if (Array.isArray(parsed)) throw new Error('unexpected multi-key parse')
 	TEST_PUBLIC_LINE = `${parsed.type} ${parsed.getPublicSSH().toString('base64')}`
 })
-
-vi.mock('./ensure-r2.ts', () => ({
-	ensureR2Setup: vi.fn(async () => ({
-		accountId: 'acct',
-		endpoint: 'https://r2.example.com',
-		accessKeyId: 'r2-key',
-		secretAccessKey: 'r2-secret',
-		stateBucket: 'nextnode-state',
-		certsBucket: 'nextnode-certs',
-	})),
-}))
 
 vi.mock('../../adapters/hetzner/target.ts', () => ({
 	HetznerVpsTarget: vi.fn(),
@@ -60,8 +50,16 @@ const HETZNER_CONFIG: HetznerDeployableConfig = {
 	},
 }
 
+const FAKE_R2: R2RuntimeConfig = {
+	accountId: 'acct',
+	endpoint: 'https://acct.r2.cloudflarestorage.com',
+	accessKeyId: 'r2-key',
+	secretAccessKey: 'r2-secret',
+	stateBucket: 'nextnode-state',
+	certsBucket: 'nextnode-certs',
+}
+
 function stubHetznerEnv(): void {
-	vi.stubEnv('CLOUDFLARE_API_TOKEN', 'cf')
 	vi.stubEnv('HETZNER_API_TOKEN', 'hcloud')
 	vi.stubEnv(
 		'DEPLOY_SSH_PRIVATE_KEY_B64',
@@ -79,14 +77,14 @@ afterEach(() => {
 	vi.unstubAllEnvs()
 })
 
-describe('createTarget — Hetzner env wiring', () => {
+describe('createHetznerTarget', () => {
 	it('wires credentials from env into the target config', async () => {
 		stubHetznerEnv()
 
 		const { HetznerVpsTarget } =
 			await import('../../adapters/hetzner/target.ts')
 
-		await createTarget(HETZNER_CONFIG, 'production')
+		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_R2)
 
 		expect(HetznerVpsTarget).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -100,13 +98,26 @@ describe('createTarget — Hetzner env wiring', () => {
 		)
 	})
 
+	it('passes through the injected R2RuntimeConfig', async () => {
+		stubHetznerEnv()
+
+		const { HetznerVpsTarget } =
+			await import('../../adapters/hetzner/target.ts')
+
+		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_R2)
+
+		expect(HetznerVpsTarget).toHaveBeenCalledWith(
+			expect.objectContaining({ r2: FAKE_R2 }),
+		)
+	})
+
 	it('derives the public key from the private key', async () => {
 		stubHetznerEnv()
 
 		const { HetznerVpsTarget } =
 			await import('../../adapters/hetzner/target.ts')
 
-		await createTarget(HETZNER_CONFIG, 'production')
+		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_R2)
 
 		const call = vi.mocked(HetznerVpsTarget).mock.calls[0]?.[0]
 		expect(call?.credentials.deployPublicKey).toMatch(
@@ -121,7 +132,7 @@ describe('createTarget — Hetzner env wiring', () => {
 		const { HetznerVpsTarget } =
 			await import('../../adapters/hetzner/target.ts')
 
-		await createTarget(HETZNER_CONFIG, 'production')
+		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_R2)
 
 		expect(HetznerVpsTarget).toHaveBeenCalledWith(
 			expect.objectContaining({ vector: null }),
@@ -136,7 +147,7 @@ describe('createTarget — Hetzner env wiring', () => {
 		const { HetznerVpsTarget } =
 			await import('../../adapters/hetzner/target.ts')
 
-		await createTarget(HETZNER_CONFIG, 'production')
+		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_R2)
 
 		expect(HetznerVpsTarget).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -145,32 +156,29 @@ describe('createTarget — Hetzner env wiring', () => {
 		)
 	})
 
-	it('throws when HETZNER_API_TOKEN is missing', async () => {
-		vi.stubEnv('CLOUDFLARE_API_TOKEN', 'cf')
+	it('throws when HETZNER_API_TOKEN is missing', () => {
 		vi.stubEnv(
 			'DEPLOY_SSH_PRIVATE_KEY_B64',
 			Buffer.from(TEST_PRIVATE_KEY).toString('base64'),
 		)
 
-		await expect(
-			createTarget(HETZNER_CONFIG, 'production'),
-		).rejects.toThrow('HETZNER_API_TOKEN env var is required')
+		expect(() =>
+			createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_R2),
+		).toThrow('HETZNER_API_TOKEN env var is required')
 	})
 
-	it('throws when DEPLOY_SSH_PRIVATE_KEY_B64 is missing', async () => {
-		vi.stubEnv('CLOUDFLARE_API_TOKEN', 'cf')
-
-		await expect(
-			createTarget(HETZNER_CONFIG, 'production'),
-		).rejects.toThrow('DEPLOY_SSH_PRIVATE_KEY_B64 env var is required')
+	it('throws when DEPLOY_SSH_PRIVATE_KEY_B64 is missing', () => {
+		expect(() =>
+			createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_R2),
+		).toThrow('DEPLOY_SSH_PRIVATE_KEY_B64 env var is required')
 	})
 
-	it('throws when NN_CLIENT_ID is missing but NN_VL_URL is set', async () => {
+	it('throws when NN_CLIENT_ID is missing but NN_VL_URL is set', () => {
 		stubHetznerEnv()
 		vi.stubEnv('NN_VL_URL', 'http://vl:9428')
 
-		await expect(
-			createTarget(HETZNER_CONFIG, 'production'),
-		).rejects.toThrow('NN_CLIENT_ID env var is required')
+		expect(() =>
+			createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_R2),
+		).toThrow('NN_CLIENT_ID env var is required')
 	})
 })
