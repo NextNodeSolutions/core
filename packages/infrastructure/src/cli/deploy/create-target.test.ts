@@ -1,4 +1,4 @@
-import { utils as sshUtils } from 'ssh2'
+import ssh2 from 'ssh2'
 import {
 	afterEach,
 	beforeAll,
@@ -8,6 +8,8 @@ import {
 	it,
 	vi,
 } from 'vitest'
+
+const { utils: sshUtils } = ssh2
 
 import type { HetznerDeployableConfig } from '../../config/types.ts'
 
