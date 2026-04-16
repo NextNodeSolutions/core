@@ -39,6 +39,41 @@ describe('renderCloudInit', () => {
 		expect(config.packages).toContain('ca-certificates')
 	})
 
+	describe('SSH hardening', () => {
+		it('disables SSH password authentication', () => {
+			expect(parseCloudInit().ssh_pwauth).toBe(false)
+		})
+
+		it('disables root SSH login', () => {
+			expect(parseCloudInit().disable_root).toBe(true)
+		})
+	})
+
+	describe('users', () => {
+		it('creates a single deploy user', () => {
+			const config = parseCloudInit()
+			expect(config.users).toHaveLength(1)
+			expect(config.users[0]!.name).toBe('deploy')
+		})
+
+		it('installs the deploy SSH public key on the deploy user', () => {
+			const deploy = parseCloudInit().users[0]!
+			expect(deploy.ssh_authorized_keys).toContain(
+				'ssh-ed25519 AAAAC3Nz... deploy@ci',
+			)
+		})
+
+		it('grants deploy passwordless sudo', () => {
+			const deploy = parseCloudInit().users[0]!
+			expect(deploy.sudo).toBe('ALL=(ALL) NOPASSWD:ALL')
+		})
+
+		it('locks the deploy user password (no password login possible)', () => {
+			const deploy = parseCloudInit().users[0]!
+			expect(deploy.lock_passwd).toBe(true)
+		})
+	})
+
 	describe('write_files', () => {
 		function findFile(
 			path: string,
@@ -65,10 +100,9 @@ describe('renderCloudInit', () => {
 			)
 		})
 
-		it('writes the root SSH authorized_keys', () => {
-			const file = findFile('/root/.ssh/authorized_keys')
-			expect(file).toBeDefined()
-			expect(file!.content).toContain('ssh-ed25519 AAAAC3Nz... deploy@ci')
+		it('does not write any root SSH keys (root login disabled)', () => {
+			const rootKey = findFile('/root/.ssh/authorized_keys')
+			expect(rootKey).toBeUndefined()
 		})
 
 		it('writes an empty Caddy config.json', () => {
@@ -120,10 +154,24 @@ describe('renderCloudInit', () => {
 			expect(cmds).toContain('systemctl enable vector')
 		})
 
-		it('creates deploy user with docker group', () => {
+		it('adds deploy to docker group after Docker install', () => {
 			const cmds = commands()
-			expect(cmds).toContain('useradd -m -s /bin/bash deploy')
-			expect(cmds).toContain('usermod -aG docker deploy')
+			const dockerIdx = cmds.indexOf(
+				'curl -fsSL https://get.docker.com | sh',
+			)
+			const usermodIdx = cmds.indexOf('usermod -aG docker deploy')
+			expect(dockerIdx).toBeGreaterThanOrEqual(0)
+			expect(usermodIdx).toBeGreaterThan(dockerIdx)
+		})
+
+		it('does not create deploy via useradd (handled by users: declarative section)', () => {
+			expect(commands()).not.toContain('useradd -m -s /bin/bash deploy')
+		})
+
+		it('transfers /etc/caddy and /etc/vector ownership to deploy', () => {
+			expect(commands()).toContain(
+				'chown -R deploy:deploy /etc/caddy /etc/vector',
+			)
 		})
 
 		it('creates /opt/apps owned by deploy', () => {
@@ -144,21 +192,6 @@ describe('renderCloudInit', () => {
 
 		it('does not open port 22 globally', () => {
 			expect(commands()).not.toContain('ufw allow 22/tcp')
-		})
-
-		it('chmods /root/.ssh before tailscale brings up SSH', () => {
-			const cmds = commands()
-			const chmodDir = cmds.indexOf('chmod 700 /root/.ssh')
-			const chmodFile = cmds.indexOf(
-				'chmod 600 /root/.ssh/authorized_keys',
-			)
-			const tailscaleUp = cmds.indexOf(
-				'tailscale up --authkey=tskey-auth-abc123 --hostname=acme-web',
-			)
-			expect(chmodDir).toBeGreaterThanOrEqual(0)
-			expect(chmodFile).toBeGreaterThanOrEqual(0)
-			expect(chmodDir).toBeLessThan(tailscaleUp)
-			expect(chmodFile).toBeLessThan(tailscaleUp)
 		})
 	})
 })

@@ -329,7 +329,7 @@ describe('HetznerVpsTarget', () => {
 
 				expect(mockedSsh).toHaveBeenCalledWith({
 					host: '100.74.91.126',
-					username: 'root',
+					username: 'deploy',
 					privateKey: 'fake-private-key',
 				})
 			})

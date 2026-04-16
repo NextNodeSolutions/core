@@ -19,7 +19,7 @@ export async function waitForSsh(input: WaitForSshInput): Promise<void> {
 			// oxlint-disable-next-line no-await-in-loop -- sequential retry by design
 			const session = await createSshSession({
 				host: input.host,
-				username: 'root',
+				username: 'deploy',
 				privateKey: input.privateKey,
 			})
 			session.close()

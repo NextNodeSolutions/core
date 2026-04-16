@@ -69,7 +69,7 @@ describe('converge', () => {
 
 		await converge(session, makeInput())
 
-		expect(session.execCalls).toContain('systemctl restart vector')
+		expect(session.execCalls).toContain('sudo systemctl restart vector')
 	})
 
 	it('restarts vector when env changes', async () => {
@@ -82,7 +82,7 @@ describe('converge', () => {
 
 		await converge(session, makeInput())
 
-		expect(session.execCalls).toContain('systemctl restart vector')
+		expect(session.execCalls).toContain('sudo systemctl restart vector')
 	})
 
 	it('restarts caddy when config changes', async () => {
@@ -95,7 +95,7 @@ describe('converge', () => {
 
 		await converge(session, makeInput())
 
-		expect(session.execCalls).toContain('systemctl restart caddy')
+		expect(session.execCalls).toContain('sudo systemctl restart caddy')
 	})
 
 	it('does not restart services when nothing changed', async () => {
@@ -109,7 +109,7 @@ describe('converge', () => {
 		await converge(session, makeInput())
 
 		const restartCalls = session.execCalls.filter(c =>
-			c.startsWith('systemctl restart'),
+			c.startsWith('sudo systemctl restart'),
 		)
 		expect(restartCalls).toHaveLength(0)
 	})
@@ -127,9 +127,16 @@ describe('converge', () => {
 		expect(session.execCalls).toContain(
 			'mkdir -p /opt/apps/acme-web/dev /opt/apps/acme-web/production',
 		)
-		expect(session.execCalls).toContain(
-			'chown -R deploy:deploy /opt/apps/acme-web',
-		)
+	})
+
+	it('does not chown project dir (SSH user is deploy, mkdir already owned by deploy)', async () => {
+		const files = new Map<string, string>()
+		const session = createFakeSession(files)
+
+		await converge(session, makeInput())
+
+		const chownCalls = session.execCalls.filter(c => c.startsWith('chown'))
+		expect(chownCalls).toHaveLength(0)
 	})
 
 	it('skips Vector when vectorToml and vectorEnv are undefined', async () => {
@@ -159,7 +166,7 @@ describe('converge', () => {
 		await converge(session, input)
 
 		const restartCalls = session.execCalls.filter(c =>
-			c.startsWith('systemctl restart'),
+			c.startsWith('sudo systemctl restart'),
 		)
 		expect(restartCalls).toHaveLength(0)
 	})
