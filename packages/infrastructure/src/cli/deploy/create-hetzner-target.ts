@@ -24,6 +24,7 @@ export function createHetznerTarget(
 		r2,
 		environment,
 		domain: config.project.domain,
+		internal: config.project.internal,
 		credentials: {
 			hcloudToken: requireEnv('HETZNER_API_TOKEN'),
 			deployPrivateKey,

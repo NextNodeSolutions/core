@@ -21,6 +21,7 @@ export async function freshProvision(
 	const { serverId, publicIp } = await createVps(config.credentials, {
 		projectName,
 		hetzner: config.hetzner,
+		internal: config.internal,
 	})
 
 	const createdEtag = await writeState(r2, projectName, {
@@ -35,6 +36,7 @@ export async function freshProvision(
 	const { tailnetIp } = await completeProvisioning(config.credentials, {
 		serverId,
 		projectName,
+		internal: config.internal,
 	})
 
 	const provisionedEtag = await writeState(
@@ -109,6 +111,7 @@ async function resumeFromCreated(
 	const { tailnetIp } = await completeProvisioning(config.credentials, {
 		serverId: state.serverId,
 		projectName,
+		internal: config.internal,
 	})
 
 	const provisionedEtag = await writeState(
@@ -145,10 +148,12 @@ async function runConvergence(
 	await convergeVps({
 		host: state.tailnetIp,
 		projectName,
+		internal: config.internal,
 		r2: config.r2,
 		vector: config.vector,
 		deployPrivateKey: config.credentials.deployPrivateKey,
 		acmeEmail: config.acmeEmail,
+		cloudflareApiToken: config.cloudflareApiToken,
 	})
 
 	await writeState(

@@ -13,6 +13,7 @@ const APP_PROJECT: ProjectSection = {
 	filter: false,
 	domain: undefined,
 	redirectDomains: [],
+	internal: false,
 }
 const FILTERED_PROJECT: ProjectSection = {
 	name: 'my-monorepo',
@@ -20,6 +21,7 @@ const FILTERED_PROJECT: ProjectSection = {
 	filter: '@scope/app',
 	domain: undefined,
 	redirectDomains: [],
+	internal: false,
 }
 
 const DEV_PIPELINE: PipelineContext = {

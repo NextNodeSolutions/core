@@ -19,10 +19,12 @@ export interface ConvergeVpsVector {
 export interface ConvergeVpsInput {
 	readonly host: string
 	readonly projectName: string
+	readonly internal: boolean
 	readonly r2: R2RuntimeConfig
 	readonly vector: ConvergeVpsVector | null
 	readonly deployPrivateKey: string
 	readonly acmeEmail: string
+	readonly cloudflareApiToken: string
 }
 
 export async function convergeVps(input: ConvergeVpsInput): Promise<void> {
@@ -46,6 +48,8 @@ export async function convergeVps(input: ConvergeVpsInput): Promise<void> {
 				r2: input.r2,
 				upstreams: existingUpstreams,
 				acmeEmail: input.acmeEmail,
+				internal: input.internal,
+				cloudflareApiToken: input.cloudflareApiToken,
 			}),
 		)
 

@@ -118,6 +118,7 @@ const TARGET_CONFIG = {
 	r2: R2_CONFIG,
 	environment: 'production' as const,
 	domain: 'acme-web.example.com',
+	internal: false,
 	credentials: CREDENTIALS,
 	vector: {
 		clientId: 'nextnode',
@@ -583,7 +584,9 @@ describe('HetznerVpsTarget', () => {
 
 			await expect(
 				target.deploy('acme-web', DEPLOY_INPUT, DEPLOY_ENV),
-			).rejects.toThrow('No deployable state for "acme-web"')
+			).rejects.toThrow(
+				'Invariant: expected deployable state for "acme-web"',
+			)
 		})
 
 		it('throws when state is still in created phase', async () => {
@@ -597,7 +600,9 @@ describe('HetznerVpsTarget', () => {
 
 			await expect(
 				target.deploy('acme-web', DEPLOY_INPUT, DEPLOY_ENV),
-			).rejects.toThrow('No deployable state for "acme-web"')
+			).rejects.toThrow(
+				'Invariant: expected deployable state for "acme-web"',
+			)
 		})
 
 		it('SSHs to the tailnet IP from state', async () => {
@@ -760,7 +765,9 @@ describe('HetznerVpsTarget', () => {
 
 			await expect(
 				target.reconcileDns('acme-web', 'acme-web.example.com'),
-			).rejects.toThrow('No state for "acme-web"')
+			).rejects.toThrow(
+				'Invariant: expected deployable state for "acme-web"',
+			)
 		})
 
 		it('computes A records from state publicIp and calls reconciler', async () => {
@@ -816,6 +823,30 @@ describe('HetznerVpsTarget', () => {
 			await expect(
 				target.reconcileDns('acme-web', 'acme-web.example.com'),
 			).rejects.toThrow('Cloudflare zone not found')
+		})
+
+		it('uses tailnet IP for internal projects', async () => {
+			seedState({
+				...CONVERGED_STATE,
+				publicIp: '5.6.7.8',
+				tailnetIp: '100.64.0.5',
+			})
+
+			const target = new HetznerVpsTarget({
+				...TARGET_CONFIG,
+				internal: true,
+			})
+			await target.reconcileDns('acme-web', 'acme-web.example.com')
+
+			expect(mockReconcileDnsRecords).toHaveBeenCalledWith(
+				[
+					expect.objectContaining({
+						content: '100.64.0.5',
+						proxied: false,
+					}),
+				],
+				'cf-token',
+			)
 		})
 	})
 })
