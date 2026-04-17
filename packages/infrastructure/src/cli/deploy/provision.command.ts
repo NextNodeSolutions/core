@@ -1,8 +1,10 @@
+import { writeSummary } from '../../adapters/github/output.ts'
 import type { DeployableConfig } from '../../config/types.ts'
 import {
 	isCloudflarePagesDeployableConfig,
 	isHetznerDeployableConfig,
 } from '../../config/types.ts'
+import { buildProvisionSummary } from '../../domain/deploy/provision-summary.ts'
 import type { DeployTarget } from '../../domain/deploy/target.ts'
 import type { AppEnvironment } from '../../domain/environment.ts'
 import { resolveEnvironment } from '../../domain/environment.ts'
@@ -24,7 +26,7 @@ async function buildProvisionTarget(
 		return createCloudflarePagesTarget(config, environment)
 	}
 	throw new Error(
-		'provisionCommand: unknown deploy target — config validation should have caught this',
+		'provisionCommand: unknown deploy target - config validation should have caught this',
 	)
 }
 
@@ -36,5 +38,9 @@ export async function provisionCommand(
 		getEnv('PIPELINE_ENVIRONMENT'),
 	)
 	const target = await buildProvisionTarget(config, environment)
-	await target.ensureInfra(config.project.name)
+	const result = await target.ensureInfra(config.project.name)
+
+	writeSummary(
+		buildProvisionSummary(result, config.project.name, target.name),
+	)
 }

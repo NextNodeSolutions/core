@@ -179,6 +179,24 @@ describe('HetznerVpsTarget', () => {
 				)
 			})
 
+			it('returns a VpsProvisionResult with server details', async () => {
+				const target = new HetznerVpsTarget(TARGET_CONFIG)
+
+				const result = await target.ensureInfra('acme-web')
+
+				expect(result).toEqual(
+					expect.objectContaining({
+						kind: 'vps',
+						serverId: 42,
+						serverType: 'cpx22',
+						location: 'nbg1',
+						publicIp: '1.2.3.4',
+						tailnetIp: '100.74.91.126',
+					}),
+				)
+				expect(result.durationMs).toBeGreaterThanOrEqual(0)
+			})
+
 			it('passes correct serverType and location to createServer', async () => {
 				const { createServer: mockedCreate } =
 					await import('./hcloud-client.ts')

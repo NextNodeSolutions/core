@@ -10,6 +10,7 @@ import type {
 	DeployInput,
 	DeployResult,
 	DeployTarget,
+	ProvisionResult,
 	StaticDeployedEnvironment,
 } from '../../domain/deploy/target.ts'
 import type { AppEnvironment } from '../../domain/environment.ts'
@@ -58,7 +59,8 @@ export class CloudflarePagesTarget implements DeployTarget {
 		return { SITE_URL: await this.resolveSiteUrl(pagesProjectName) }
 	}
 
-	async ensureInfra(projectName: string): Promise<void> {
+	async ensureInfra(projectName: string): Promise<ProvisionResult> {
+		const start = Date.now()
 		const pagesProjectName = computePagesProjectName(
 			projectName,
 			this.environment,
@@ -80,6 +82,12 @@ export class CloudflarePagesTarget implements DeployTarget {
 		logger.info(
 			`Infrastructure ready for "${pagesProjectName}" (${this.environment})`,
 		)
+
+		return {
+			kind: 'static',
+			pagesProjectName,
+			durationMs: Date.now() - start,
+		}
 	}
 
 	async reconcileDns(projectName: string, domain: string): Promise<void> {

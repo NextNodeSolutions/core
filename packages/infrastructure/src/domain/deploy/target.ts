@@ -47,6 +47,24 @@ export type DeployedEnvironment =
 	| ContainerDeployedEnvironment
 	| StaticDeployedEnvironment
 
+export interface VpsProvisionResult {
+	readonly kind: 'vps'
+	readonly serverId: number
+	readonly serverType: string
+	readonly location: string
+	readonly publicIp: string
+	readonly tailnetIp: string
+	readonly durationMs: number
+}
+
+export interface StaticProvisionResult {
+	readonly kind: 'static'
+	readonly pagesProjectName: string
+	readonly durationMs: number
+}
+
+export type ProvisionResult = VpsProvisionResult | StaticProvisionResult
+
 export interface TargetState {
 	readonly projectName: string
 	readonly environments: ReadonlyArray<DeployedEnvironment>
@@ -68,7 +86,7 @@ export interface DeployTarget {
 	 * subdomain) can return a Promise. Callers `await` either way.
 	 */
 	computeDeployEnv(projectName: string): DeployEnv | Promise<DeployEnv>
-	ensureInfra(projectName: string): Promise<void>
+	ensureInfra(projectName: string): Promise<ProvisionResult>
 	reconcileDns(projectName: string, domain: string): Promise<void>
 	deploy(
 		projectName: string,
