@@ -124,6 +124,7 @@ const TARGET_CONFIG = {
 		vlUrl: 'http://vl.tail0.ts.net:9428',
 	},
 	cloudflareApiToken: 'cf-token',
+	acmeEmail: 'test@example.com',
 }
 
 const CONVERGED_STATE: HcloudProjectState = {

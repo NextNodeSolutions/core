@@ -167,6 +167,53 @@ export async function updateDnsRecord(
 	return parseDnsRecord(requireObjectResult(data, context))
 }
 
+export async function getZoneSslMode(
+	zoneId: string,
+	token: string,
+): Promise<string> {
+	const response = await fetch(
+		`${CLOUDFLARE_API_BASE}/zones/${zoneId}/settings/ssl`,
+		{ headers: authHeaders(token) },
+	)
+	await requireOk(response)
+
+	const data: unknown = await response.json()
+	const context = `Cloudflare SSL mode for zone ${zoneId}`
+	const envelope = parseEnvelope(data, context)
+	if (!envelope.success) {
+		throw new Error(`${context} failed: ${formatErrors(envelope.errors)}`)
+	}
+
+	const result = requireObjectResult(data, context)
+	if (!('value' in result) || typeof result.value !== 'string') {
+		throw new Error(`${context}: missing or invalid "value" field`)
+	}
+	return result.value
+}
+
+export async function setZoneSslMode(
+	zoneId: string,
+	mode: string,
+	token: string,
+): Promise<void> {
+	const response = await fetch(
+		`${CLOUDFLARE_API_BASE}/zones/${zoneId}/settings/ssl`,
+		{
+			method: 'PATCH',
+			headers: authHeaders(token),
+			body: JSON.stringify({ value: mode }),
+		},
+	)
+	await requireOk(response)
+
+	const data: unknown = await response.json()
+	const context = `Cloudflare set SSL mode for zone ${zoneId}`
+	const envelope = parseEnvelope(data, context)
+	if (!envelope.success) {
+		throw new Error(`${context} failed: ${formatErrors(envelope.errors)}`)
+	}
+}
+
 export async function deleteDnsRecord(
 	zoneId: string,
 	recordId: string,

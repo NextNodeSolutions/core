@@ -107,6 +107,24 @@ function stubCloudflareApi(): ReturnType<typeof vi.fn<FetchImpl>> {
 				okJson({ success: true, result: [], errors: [] }),
 			)
 		}
+		if (url.includes('/settings/ssl') && method === 'GET') {
+			return Promise.resolve(
+				okJson({
+					success: true,
+					result: { id: 'ssl', value: 'strict' },
+					errors: [],
+				}),
+			)
+		}
+		if (url.includes('/settings/ssl') && method === 'PATCH') {
+			return Promise.resolve(
+				okJson({
+					success: true,
+					result: { id: 'ssl', value: 'strict' },
+					errors: [],
+				}),
+			)
+		}
 		if (url.includes('/dns_records') && method === 'POST') {
 			return Promise.resolve(
 				okJson({

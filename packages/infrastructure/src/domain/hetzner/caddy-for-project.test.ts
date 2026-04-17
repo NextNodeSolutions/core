@@ -19,6 +19,7 @@ describe('buildCaddyForProject', () => {
 			projectName: 'acme-web',
 			r2: R2,
 			upstreams: [],
+			acmeEmail: 'test@example.com',
 		})
 
 		const storage = config.apps.tls.automation.policies[0]?.storage
@@ -32,6 +33,22 @@ describe('buildCaddyForProject', () => {
 		})
 	})
 
+	it('threads acmeEmail into issuers', () => {
+		const config = buildCaddyForProject({
+			projectName: 'acme-web',
+			r2: R2,
+			upstreams: [
+				{ hostname: 'acme.example.com', dial: 'localhost:8080' },
+			],
+			acmeEmail: 'infra@nextnode.fr',
+		})
+
+		const issuers = config.apps.tls.automation.policies[0]?.issuers
+		expect(issuers).toStrictEqual([
+			{ module: 'acme', email: 'infra@nextnode.fr' },
+		])
+	})
+
 	it('maps upstream routes verbatim', () => {
 		const config = buildCaddyForProject({
 			projectName: 'acme-web',
@@ -39,6 +56,7 @@ describe('buildCaddyForProject', () => {
 			upstreams: [
 				{ hostname: 'acme.example.com', dial: 'localhost:8080' },
 			],
+			acmeEmail: 'test@example.com',
 		})
 
 		expect(config.apps.http.servers.https.routes).toHaveLength(1)

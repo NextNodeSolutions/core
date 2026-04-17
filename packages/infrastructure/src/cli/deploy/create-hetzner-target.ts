@@ -5,9 +5,11 @@ import type { R2RuntimeConfig } from '../../domain/cloudflare/r2/runtime-config.
 import type { AppEnvironment } from '../../domain/environment.ts'
 import { getEnv, requireB64Env, requireEnv } from '../env.ts'
 
+const ACME_EMAIL = 'infra@nextnode.fr'
+
 /**
  * Pure factory for the Hetzner VPS deploy target. Takes the already-resolved
- * R2 runtime config — callers pick bootstrap (`ensureR2Setup`, provision) or
+ * R2 runtime config - callers pick bootstrap (`ensureR2Setup`, provision) or
  * runtime-load (`loadR2Runtime`, deploy) before calling this.
  */
 export function createHetznerTarget(
@@ -30,5 +32,6 @@ export function createHetznerTarget(
 		},
 		vector: vlUrl ? { clientId: requireEnv('NN_CLIENT_ID'), vlUrl } : null,
 		cloudflareApiToken: requireEnv('CLOUDFLARE_API_TOKEN'),
+		acmeEmail: ACME_EMAIL,
 	})
 }

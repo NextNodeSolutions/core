@@ -29,6 +29,7 @@ jobs:
             quality_matrix: ${{ steps.plan.outputs.quality_matrix }}
             project_name: ${{ steps.plan.outputs.project_name }}
             has_prod_gate: ${{ steps.plan.outputs.has_prod_gate }}
+            has_domain: ${{ steps.plan.outputs.has_domain }}
         steps:
             - uses: NextNodeSolutions/core/.github/actions/setup@main
               with:
@@ -101,6 +102,31 @@ jobs:
                   R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
                   R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
                   GH_TOKEN: ${{ steps.app-token.outputs.token }}
+
+    dns:
+        name: DNS
+        needs: [plan, quality, provision]
+        if: needs.plan.outputs.has_domain == 'true'
+        runs-on: ubuntu-latest
+        steps:
+            - uses: NextNodeSolutions/core/.github/actions/setup@main
+              with:
+                  infra: 'true'
+                  deps: 'false'
+
+            - name: Reconcile DNS
+              run: node src/index.ts dns
+              working-directory: .infra/packages/infrastructure
+              env:
+                  PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
+                  PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
+                  HETZNER_API_TOKEN: ${{ secrets.HETZNER_API_TOKEN }}
+                  DEPLOY_SSH_PRIVATE_KEY_B64: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY_B64 }}
+                  TAILSCALE_AUTH_KEY: ${{ secrets.TS_OAUTH_SECRET }}
+                  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+                  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+                  R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+                  R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
 
     build-image:
         name: Build image

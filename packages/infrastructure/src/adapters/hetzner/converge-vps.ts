@@ -2,9 +2,11 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 import { converge } from '../../cli/hetzner/converge.ts'
 import type { R2RuntimeConfig } from '../../domain/cloudflare/r2/runtime-config.ts'
+import { extractUpstreams } from '../../domain/hetzner/caddy-config.ts'
 import { buildCaddyForProject } from '../../domain/hetzner/caddy-for-project.ts'
 import { selectVectorConfig } from '../../domain/hetzner/vector-config.ts'
 
+import { CADDY_CONFIG_PATH } from './constants.ts'
 import { createSshSession } from './ssh-session.ts'
 
 const logger = createLogger()
@@ -20,6 +22,7 @@ export interface ConvergeVpsInput {
 	readonly r2: R2RuntimeConfig
 	readonly vector: ConvergeVpsVector | null
 	readonly deployPrivateKey: string
+	readonly acmeEmail: string
 }
 
 export async function convergeVps(input: ConvergeVpsInput): Promise<void> {
@@ -34,11 +37,15 @@ export async function convergeVps(input: ConvergeVpsInput): Promise<void> {
 		await session.exec('cloud-init status --wait')
 		logger.info('cloud-init complete')
 
-		const caddyBaseConfig = JSON.stringify(
+		const existingConfig = await session.readFile(CADDY_CONFIG_PATH)
+		const existingUpstreams = extractUpstreams(existingConfig ?? '')
+
+		const caddyConfig = JSON.stringify(
 			buildCaddyForProject({
 				projectName: input.projectName,
 				r2: input.r2,
-				upstreams: [],
+				upstreams: existingUpstreams,
+				acmeEmail: input.acmeEmail,
 			}),
 		)
 
@@ -56,7 +63,7 @@ export async function convergeVps(input: ConvergeVpsInput): Promise<void> {
 			projectName: input.projectName,
 			vectorToml: vectorSelection.vectorToml,
 			vectorEnv: vectorSelection.vectorEnv,
-			caddyBaseConfig,
+			caddyConfig,
 		})
 	} finally {
 		session.close()

@@ -6,8 +6,10 @@ import { reconcileDnsRecord } from '../../domain/cloudflare/dns-records.ts'
 import {
 	createDnsRecord,
 	deleteDnsRecord,
+	getZoneSslMode,
 	listDnsRecords,
 	lookupZoneId,
+	setZoneSslMode,
 	updateDnsRecord,
 } from './dns.ts'
 
@@ -62,11 +64,40 @@ export async function applyDnsRecord(
 	logger.info(`DNS updated: ${desired.name} (${proxiedLabel})`)
 }
 
+const REQUIRED_SSL_MODE = 'strict'
+
+async function ensureSslModeForProxiedZones(
+	records: ReadonlyArray<DesiredDnsRecord>,
+	zoneIds: Map<string, string>,
+	token: string,
+): Promise<void> {
+	const proxiedZoneNames = [
+		...new Set(records.filter(r => r.proxied).map(r => r.zoneName)),
+	]
+
+	await Promise.all(
+		proxiedZoneNames.map(async zoneName => {
+			const zoneId = zoneIds.get(zoneName)
+			if (!zoneId) throw new Error(`Zone ID not resolved for ${zoneName}`)
+
+			const current = await getZoneSslMode(zoneId, token)
+			if (current === REQUIRED_SSL_MODE) return
+
+			await setZoneSslMode(zoneId, REQUIRED_SSL_MODE, token)
+			logger.info(
+				`SSL mode for "${zoneName}" changed from "${current}" to "${REQUIRED_SSL_MODE}"`,
+			)
+		}),
+	)
+}
+
 export async function reconcileDnsRecords(
 	records: ReadonlyArray<DesiredDnsRecord>,
 	token: string,
 ): Promise<void> {
 	const zoneIds = await resolveAllZoneIds(records, token)
+
+	await ensureSslModeForProxiedZones(records, zoneIds, token)
 
 	await Promise.all(
 		records.map(desired => {
