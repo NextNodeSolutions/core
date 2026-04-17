@@ -16,10 +16,12 @@ const R2: R2RuntimeConfig = {
 describe('buildCaddyForProject', () => {
 	it('binds the R2 storage block to the project prefix', () => {
 		const config = buildCaddyForProject({
+			internal: false,
 			projectName: 'acme-web',
 			r2: R2,
 			upstreams: [],
 			acmeEmail: 'test@example.com',
+			cloudflareApiToken: 'unused',
 		})
 
 		const storage = config.apps.tls.automation.policies[0]?.storage
@@ -35,12 +37,14 @@ describe('buildCaddyForProject', () => {
 
 	it('threads acmeEmail into issuers', () => {
 		const config = buildCaddyForProject({
+			internal: false,
 			projectName: 'acme-web',
 			r2: R2,
 			upstreams: [
 				{ hostname: 'acme.example.com', dial: 'localhost:8080' },
 			],
 			acmeEmail: 'infra@nextnode.fr',
+			cloudflareApiToken: 'unused',
 		})
 
 		const issuers = config.apps.tls.automation.policies[0]?.issuers
@@ -51,17 +55,56 @@ describe('buildCaddyForProject', () => {
 
 	it('maps upstream routes verbatim', () => {
 		const config = buildCaddyForProject({
+			internal: false,
 			projectName: 'acme-web',
 			r2: R2,
 			upstreams: [
 				{ hostname: 'acme.example.com', dial: 'localhost:8080' },
 			],
 			acmeEmail: 'test@example.com',
+			cloudflareApiToken: 'unused',
 		})
 
 		expect(config.apps.http.servers.https.routes).toHaveLength(1)
 		expect(config.apps.http.servers.https.routes[0]?.match).toEqual([
 			{ host: ['acme.example.com'] },
 		])
+	})
+
+	it('uses DNS-01 challenge for internal projects', () => {
+		const config = buildCaddyForProject({
+			internal: true,
+			projectName: 'monitor',
+			r2: R2,
+			upstreams: [
+				{ hostname: 'monitor.nextnode.fr', dial: 'localhost:8080' },
+			],
+			acmeEmail: 'infra@nextnode.fr',
+			cloudflareApiToken: 'cf-token-abc',
+		})
+
+		const issuer = config.apps.tls.automation.policies[0]?.issuers[0]
+		if (!issuer || issuer.module !== 'acme')
+			throw new Error('Expected ACME issuer')
+		expect(issuer.challenges?.dns?.provider).toStrictEqual({
+			name: 'cloudflare',
+			api_token: 'cf-token-abc',
+		})
+		expect(issuer.challenges?.http).toStrictEqual({ disabled: true })
+	})
+
+	it('stores certs in R2 for internal projects', () => {
+		const config = buildCaddyForProject({
+			internal: true,
+			projectName: 'monitor',
+			r2: R2,
+			upstreams: [],
+			acmeEmail: 'infra@nextnode.fr',
+			cloudflareApiToken: 'cf-token-abc',
+		})
+
+		const storage = config.apps.tls.automation.policies[0]?.storage
+		expect(storage?.module).toBe('s3')
+		expect(storage?.prefix).toBe('monitor/')
 	})
 })

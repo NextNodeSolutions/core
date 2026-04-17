@@ -4,6 +4,7 @@ export interface CloudInitInput {
 	readonly tailscaleAuthKey: string
 	readonly tailscaleHostname: string
 	readonly deployPublicKey: string
+	readonly internal: boolean
 }
 
 export interface CloudInitUser {
@@ -111,9 +112,37 @@ function buildWriteFiles(): ReadonlyArray<{
 	]
 }
 
+const CADDY_DOWNLOAD_URL =
+	'https://caddyserver.com/api/download?os=linux&arch=amd64&p=github.com/ss098/certmagic-s3&p=github.com/caddy-dns/cloudflare'
+
+function buildUfwRules(internal: boolean): ReadonlyArray<string> {
+	if (internal) {
+		// Internal mode: all traffic restricted to tailscale0 interface
+		return [
+			'ufw default deny incoming',
+			'ufw default allow outgoing',
+			'ufw allow in on tailscale0 to any port 80 proto tcp',
+			'ufw allow in on tailscale0 to any port 443 proto tcp',
+			'ufw allow in on tailscale0 to any port 22 proto tcp',
+			'ufw --force enable',
+		]
+	}
+
+	// Public mode: HTTP/HTTPS open, SSH tailnet-only
+	return [
+		'ufw default deny incoming',
+		'ufw default allow outgoing',
+		'ufw allow 80/tcp',
+		'ufw allow 443/tcp',
+		'ufw allow in on tailscale0 to any port 22 proto tcp',
+		'ufw --force enable',
+	]
+}
+
 function buildRuncmd(
 	tailscaleAuthKey: string,
 	tailscaleHostname: string,
+	internal: boolean,
 ): ReadonlyArray<string> {
 	return [
 		// Tailscale FIRST: unlocks SSH via tailnet in ~10s so the runner can
@@ -126,8 +155,8 @@ function buildRuncmd(
 		// Docker CE
 		'curl -fsSL https://get.docker.com | sh',
 
-		// Caddy with S3 storage plugin
-		'curl -fsSL "https://caddyserver.com/api/download?os=linux&arch=amd64&p=github.com/ss098/certmagic-s3" -o /usr/bin/caddy',
+		// Caddy with S3 storage + Cloudflare DNS plugins
+		`curl -fsSL "${CADDY_DOWNLOAD_URL}" -o /usr/bin/caddy`,
 		'chmod +x /usr/bin/caddy',
 		'mkdir -p /etc/caddy',
 		'systemctl daemon-reload',
@@ -152,13 +181,8 @@ function buildRuncmd(
 		'mkdir -p /opt/apps',
 		'chown deploy:deploy /opt/apps',
 
-		// UFW firewall — SSH is tailnet-only; 80/443 public for Caddy.
-		'ufw default deny incoming',
-		'ufw default allow outgoing',
-		'ufw allow 80/tcp',
-		'ufw allow 443/tcp',
-		'ufw allow in on tailscale0 to any port 22 proto tcp',
-		'ufw --force enable',
+		// UFW firewall
+		...buildUfwRules(internal),
 	]
 }
 
@@ -173,7 +197,11 @@ export function renderCloudInit(input: CloudInitInput): string {
 		disable_root: true,
 		users: buildUsers(input.deployPublicKey),
 		write_files: buildWriteFiles(),
-		runcmd: buildRuncmd(input.tailscaleAuthKey, input.tailscaleHostname),
+		runcmd: buildRuncmd(
+			input.tailscaleAuthKey,
+			input.tailscaleHostname,
+			input.internal,
+		),
 	} satisfies CloudInitConfig
 
 	return `#cloud-config\n${stringify(config, { lineWidth: 0, blockQuote: 'literal' })}`
