@@ -16,6 +16,7 @@ const APP_CONFIG: NextNodeConfig = {
 		filter: false,
 		domain: undefined,
 		redirectDomains: [],
+		internal: false,
 	},
 	scripts: { lint: 'lint', test: 'test', build: 'build' },
 	package: false,
@@ -34,6 +35,7 @@ const PACKAGE_CONFIG: NextNodeConfig = {
 		filter: false,
 		domain: undefined,
 		redirectDomains: [],
+		internal: false,
 	},
 	scripts: { lint: 'lint', test: 'test', build: 'build' },
 	package: false,
@@ -48,6 +50,7 @@ const PUBLISHABLE_CONFIG: NextNodeConfig = {
 		filter: '@nextnode-solutions/logger',
 		domain: undefined,
 		redirectDomains: [],
+		internal: false,
 	},
 	scripts: { lint: 'lint', test: 'test', build: 'build' },
 	package: { access: 'public' },
@@ -197,6 +200,7 @@ describe('writePlanOutputs', () => {
 				filter: false,
 				domain: undefined,
 				redirectDomains: [],
+				internal: false,
 			},
 		}
 

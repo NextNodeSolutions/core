@@ -41,6 +41,7 @@ export interface HetznerVpsTargetConfig {
 	readonly r2: R2RuntimeConfig
 	readonly environment: AppEnvironment
 	readonly domain: string
+	readonly internal: boolean
 	readonly credentials: HetznerCredentials
 	readonly vector: HetznerVectorConfig | null
 	readonly cloudflareApiToken: string
@@ -105,9 +106,9 @@ export class HetznerVpsTarget implements DeployTarget {
 
 	async reconcileDns(projectName: string, domain: string): Promise<void> {
 		const existing = await readState(this.r2, projectName)
-		if (!existing) {
+		if (!existing || existing.state.phase === 'created') {
 			throw new Error(
-				`No state for "${projectName}" — run ensureInfra first`,
+				`Invariant: expected deployable state for "${projectName}"`,
 			)
 		}
 
@@ -115,6 +116,8 @@ export class HetznerVpsTarget implements DeployTarget {
 			domain,
 			environment: this.config.environment,
 			publicIp: existing.state.publicIp,
+			internal: this.config.internal,
+			tailnetIp: existing.state.tailnetIp,
 		})
 
 		await reconcileDnsRecords(records, this.config.cloudflareApiToken)
@@ -147,7 +150,7 @@ export class HetznerVpsTarget implements DeployTarget {
 		const existing = await readState(this.r2, projectName)
 		if (!existing || existing.state.phase === 'created') {
 			throw new Error(
-				`No deployable state for "${projectName}" — run ensureInfra first`,
+				`Invariant: expected deployable state for "${projectName}"`,
 			)
 		}
 
@@ -174,6 +177,8 @@ export class HetznerVpsTarget implements DeployTarget {
 					r2: this.config.r2,
 					upstreams: [upstream],
 					acmeEmail: this.config.acmeEmail,
+					internal: this.config.internal,
+					cloudflareApiToken: this.config.cloudflareApiToken,
 				}),
 			)
 

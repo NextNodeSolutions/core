@@ -39,6 +39,7 @@ const HETZNER_CONFIG: HetznerDeployableConfig = {
 		filter: false,
 		domain: 'acme-web.example.com',
 		redirectDomains: [],
+		internal: false,
 	},
 	scripts: { lint: false, test: false, build: false },
 	package: false,

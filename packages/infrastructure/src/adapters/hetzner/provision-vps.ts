@@ -2,7 +2,7 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 import type { HetznerVpsDeploySection } from '../../config/types.ts'
 import { renderCloudInit } from '../../domain/hetzner/cloud-init.ts'
-import { DEFAULT_FIREWALL_RULES } from '../../domain/hetzner/firewall-rules.ts'
+import { computeFirewallRules } from '../../domain/hetzner/firewall-rules.ts'
 import {
 	deleteTailnetDevicesByHostname,
 	getTailnetIpByHostname,
@@ -36,6 +36,7 @@ export interface ProvisionVpsCredentials {
 export interface CreateVpsInput {
 	readonly projectName: string
 	readonly hetzner: HetznerVpsDeploySection['hetzner']
+	readonly internal: boolean
 }
 
 export interface CreateVpsResult {
@@ -46,6 +47,7 @@ export interface CreateVpsResult {
 export interface CompleteProvisioningInput {
 	readonly serverId: number
 	readonly projectName: string
+	readonly internal: boolean
 }
 
 export interface CompleteProvisioningResult {
@@ -88,6 +90,7 @@ export async function createVps(
 		tailscaleAuthKey: minted.key,
 		tailscaleHostname: input.projectName,
 		deployPublicKey: credentials.deployPublicKey,
+		internal: input.internal,
 	})
 
 	const serverInput: CreateServerInput = {
@@ -121,7 +124,7 @@ export async function completeProvisioning(
 	const firewall = await createFirewall(
 		credentials.hcloudToken,
 		firewallName,
-		DEFAULT_FIREWALL_RULES,
+		computeFirewallRules(input.internal),
 	)
 	await applyFirewall(credentials.hcloudToken, firewall.id, input.serverId)
 
