@@ -1,3 +1,4 @@
+import { computeR2Host } from '../cloudflare/r2/addressing.ts'
 import type { R2RuntimeConfig } from '../cloudflare/r2/runtime-config.ts'
 
 import type { CaddyJsonConfig, CaddyUpstream } from './caddy-config.ts'
@@ -15,7 +16,7 @@ export function buildCaddyForProject(
 	return buildCaddyConfig({
 		upstreams: input.upstreams,
 		r2Storage: {
-			host: input.r2.endpoint,
+			host: computeR2Host(input.r2.accountId),
 			bucket: input.r2.certsBucket,
 			accessId: input.r2.accessKeyId,
 			secretKey: input.r2.secretAccessKey,

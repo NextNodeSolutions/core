@@ -24,7 +24,7 @@ describe('buildCaddyForProject', () => {
 		const storage = config.apps.tls.automation.policies[0]?.storage
 		expect(storage).toEqual({
 			module: 's3',
-			host: 'https://r2.example.com',
+			host: 'acct.r2.cloudflarestorage.com',
 			bucket: 'certs',
 			access_id: 'key',
 			secret_key: 'secret',
