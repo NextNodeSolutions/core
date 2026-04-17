@@ -16,10 +16,9 @@ import { reconcileDnsRecords } from '../cloudflare/reconcile-dns.ts'
 import { R2Client } from '../r2/client.ts'
 
 import { CADDY_CONFIG_PATH } from './constants.ts'
-import { convergeVps } from './converge-vps.ts'
 import { deployContainer } from './deploy-container.ts'
-import { readState, writeState } from './hcloud-state.ts'
-import { provisionVps } from './provision-vps.ts'
+import { freshProvision, resumeFromState } from './ensure-infra.ts'
+import { readState } from './hcloud-state.ts'
 import { createSshSession } from './ssh-session.ts'
 
 const logger = createLogger()
@@ -65,39 +64,17 @@ export class HetznerVpsTarget implements DeployTarget {
 		const existing = await readState(this.r2, projectName)
 
 		if (existing) {
-			logger.info(
-				`VPS already provisioned for "${projectName}" (server ${existing.state.serverId})`,
-			)
-			await convergeVps({
-				host: existing.state.tailnetIp,
+			await resumeFromState(
+				this.config,
+				this.r2,
 				projectName,
-				r2: this.config.r2,
-				vector: this.config.vector,
-				deployPrivateKey: this.config.credentials.deployPrivateKey,
-			})
+				existing.state,
+				existing.etag,
+			)
 			return
 		}
 
-		const provisioned = await provisionVps(this.config.credentials, {
-			projectName,
-			hetzner: this.config.hetzner,
-		})
-
-		await convergeVps({
-			host: provisioned.tailnetIp,
-			projectName,
-			r2: this.config.r2,
-			vector: this.config.vector,
-			deployPrivateKey: this.config.credentials.deployPrivateKey,
-		})
-
-		await writeState(this.r2, projectName, {
-			serverId: provisioned.serverId,
-			publicIp: provisioned.publicIp,
-			tailnetIp: provisioned.tailnetIp,
-		})
-
-		logger.info(`Infrastructure ready for "${projectName}"`)
+		await freshProvision(this.config, this.r2, projectName)
 	}
 
 	async reconcileDns(projectName: string, domain: string): Promise<void> {
@@ -142,9 +119,9 @@ export class HetznerVpsTarget implements DeployTarget {
 		)
 
 		const existing = await readState(this.r2, projectName)
-		if (!existing) {
+		if (!existing || existing.state.phase === 'created') {
 			throw new Error(
-				`No state for "${projectName}" — run ensureInfra first`,
+				`No deployable state for "${projectName}" — run ensureInfra first`,
 			)
 		}
 

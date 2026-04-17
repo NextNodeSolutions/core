@@ -1,5 +1,6 @@
 import { isRecord } from '../../config/types.ts'
 import type { FirewallRule } from '../../domain/hetzner/firewall-rules.ts'
+import { HTTP_NOT_FOUND } from '../http.ts'
 
 import { HCLOUD_API_BASE, authHeaders, requireOk } from './hcloud-api.ts'
 import type { HcloudFirewallResponse } from './hcloud-firewall.ts'
@@ -14,12 +15,9 @@ export interface CreateServerInput {
 	readonly labels: Readonly<Record<string, string>>
 }
 
-function parseServer(data: unknown, context: string): HcloudServerResponse {
-	if (!isRecord(data) || !isRecord(data.server)) {
-		throw new Error(`${context}: missing \`server\` in response`)
-	}
-	const s = data.server
+function parseServerObject(s: unknown, context: string): HcloudServerResponse {
 	if (
+		!isRecord(s) ||
 		typeof s.id !== 'number' ||
 		typeof s.name !== 'string' ||
 		typeof s.status !== 'string'
@@ -39,6 +37,16 @@ function parseServer(data: unknown, context: string): HcloudServerResponse {
 		status: s.status,
 		public_net: { ipv4: { ip: s.public_net.ipv4.ip } },
 	}
+}
+
+function parseServerResponse(
+	data: unknown,
+	context: string,
+): HcloudServerResponse {
+	if (!isRecord(data) || !isRecord(data.server)) {
+		throw new Error(`${context}: missing \`server\` in response`)
+	}
+	return parseServerObject(data.server, context)
 }
 
 export async function assertServerTypeAvailable(
@@ -101,7 +109,7 @@ export async function createServer(
 	})
 	await requireOk(response, `create server "${input.name}"`)
 	const data: unknown = await response.json()
-	return parseServer(data, `create server "${input.name}"`)
+	return parseServerResponse(data, `create server "${input.name}"`)
 }
 
 export async function describeServer(
@@ -113,7 +121,40 @@ export async function describeServer(
 	})
 	await requireOk(response, `describe server ${serverId}`)
 	const data: unknown = await response.json()
-	return parseServer(data, `describe server ${serverId}`)
+	return parseServerResponse(data, `describe server ${serverId}`)
+}
+
+export async function findServerById(
+	token: string,
+	serverId: number,
+): Promise<HcloudServerResponse | null> {
+	const response = await fetch(`${HCLOUD_API_BASE}/servers/${serverId}`, {
+		headers: authHeaders(token),
+	})
+	if (response.status === HTTP_NOT_FOUND) return null
+	await requireOk(response, `find server ${serverId}`)
+	const data: unknown = await response.json()
+	return parseServerResponse(data, `find server ${serverId}`)
+}
+
+export async function findServersByLabels(
+	token: string,
+	labels: Readonly<Record<string, string>>,
+): Promise<ReadonlyArray<HcloudServerResponse>> {
+	const selector = Object.entries(labels)
+		.map(([k, v]) => `${k}=${v}`)
+		.join(',')
+	const url = `${HCLOUD_API_BASE}/servers?label_selector=${encodeURIComponent(selector)}`
+	const response = await fetch(url, { headers: authHeaders(token) })
+	await requireOk(response, `list servers label_selector="${selector}"`)
+	const data: unknown = await response.json()
+	if (!isRecord(data) || !Array.isArray(data.servers)) {
+		throw new Error(
+			`list servers label_selector="${selector}": missing \`servers\` array`,
+		)
+	}
+	const servers: ReadonlyArray<unknown> = data.servers
+	return servers.map((s, i) => parseServerObject(s, `servers[${i}]`))
 }
 
 export async function deleteServer(

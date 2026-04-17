@@ -90,7 +90,7 @@ Done. `adapters/hetzner/target.ts` - `HetznerVpsTarget` implements `DeployTarget
 
 Already wired - `cli/deploy/provision.command.ts` calls `target.ensureInfra()` via `createTarget()` which now returns `HetznerVpsTarget` for `hetzner-vps` target.
 
-### 8.3 Phase-based state + orphan-safe re-entrancy
+### 8.3 Phase-based state + orphan-safe re-entrancy ✅
 
 **Problem.** Today `writeState` only runs at the end of `ensureInfra`. If provisioning crashes mid-flight (SSH timeout, converge fail, Caddy reload error), no state is written, and the next run re-enters `fresh provision` → creates a second VPS. Orphans accumulate silently and bill.
 
