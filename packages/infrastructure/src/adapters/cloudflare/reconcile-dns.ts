@@ -1,11 +1,7 @@
 import { createLogger } from '@nextnode-solutions/logger'
 
 import type { DesiredDnsRecord } from '../../domain/cloudflare/dns-records.ts'
-import {
-	computeDnsRecords,
-	reconcileDnsRecord,
-} from '../../domain/cloudflare/dns-records.ts'
-import type { AppEnvironment } from '../../domain/environment.ts'
+import { reconcileDnsRecord } from '../../domain/cloudflare/dns-records.ts'
 
 import {
 	createDnsRecord,
@@ -17,39 +13,7 @@ import {
 
 const logger = createLogger()
 
-export interface ReconcileDnsInput {
-	readonly accountId: string
-	readonly pagesSubdomain: string
-	readonly token: string
-	readonly domain: string
-	readonly redirectDomains: ReadonlyArray<string>
-	readonly environment: AppEnvironment
-}
-
-export async function reconcilePagesDns(
-	input: ReconcileDnsInput,
-): Promise<void> {
-	const records = computeDnsRecords({
-		domain: input.domain,
-		redirectDomains: input.redirectDomains,
-		environment: input.environment,
-		pagesSubdomain: input.pagesSubdomain,
-	})
-
-	const zoneIds = await resolveAllZoneIds(records, input.token)
-
-	await Promise.all(
-		records.map(desired => {
-			const zoneId = zoneIds.get(desired.zoneName)
-			if (!zoneId) {
-				throw new Error(`Zone ID not resolved for ${desired.zoneName}`)
-			}
-			return applyDnsRecord(zoneId, desired, input.token)
-		}),
-	)
-}
-
-async function resolveAllZoneIds(
+export async function resolveAllZoneIds(
 	records: ReadonlyArray<DesiredDnsRecord>,
 	token: string,
 ): Promise<Map<string, string>> {
@@ -65,7 +29,7 @@ async function resolveAllZoneIds(
 	return new Map(entries)
 }
 
-async function applyDnsRecord(
+export async function applyDnsRecord(
 	zoneId: string,
 	desired: DesiredDnsRecord,
 	token: string,
@@ -96,4 +60,21 @@ async function applyDnsRecord(
 	}
 	await updateDnsRecord(zoneId, action.recordId, desired, token)
 	logger.info(`DNS updated: ${desired.name} (${proxiedLabel})`)
+}
+
+export async function reconcileDnsRecords(
+	records: ReadonlyArray<DesiredDnsRecord>,
+	token: string,
+): Promise<void> {
+	const zoneIds = await resolveAllZoneIds(records, token)
+
+	await Promise.all(
+		records.map(desired => {
+			const zoneId = zoneIds.get(desired.zoneName)
+			if (!zoneId) {
+				throw new Error(`Zone ID not resolved for ${desired.zoneName}`)
+			}
+			return applyDnsRecord(zoneId, desired, token)
+		}),
+	)
 }

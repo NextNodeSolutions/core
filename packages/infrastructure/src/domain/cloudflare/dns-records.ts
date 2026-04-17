@@ -7,7 +7,7 @@ const MIN_DOMAIN_PARTS = 2
 export interface DesiredDnsRecord {
 	readonly zoneName: string
 	readonly name: string
-	readonly type: 'CNAME'
+	readonly type: 'CNAME' | 'A'
 	readonly content: string
 	readonly proxied: boolean
 	readonly ttl: number

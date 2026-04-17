@@ -64,17 +64,11 @@ Done. `adapters/hetzner/hcloud-state.ts` — `readState`, `writeState` (3x retry
 
 Done. `adapters/r2/r2-client.ts` — `R2Client` class wrapping `@aws-sdk/client-s3`. Types + `R2Operations` interface in `r2-client.types.ts`. S3Client injectable for testing.
 
-## 6 — SSH session
+## 6 — SSH session ✅
 
 ### 6.1 Create ssh-session.ts
 
-Create `adapters/hetzner/ssh-session.ts`:
-- Wrapper around `ssh2` Client
-- `createSshSession(host, keyPath, user?)` → `SshSession`
-- Methods: `exec(cmd)`, `writeFile(path, content)`, `readFile(path)`, `close()`
-- Single connection reused
-
-**Test:** unit tests with mocked ssh2 Client. Covers: exec returns stdout, writeFile+readFile, failing command returns stderr, close disposes connection.
+Done. `adapters/hetzner/ssh-session.ts` — `createSshSession({ host, username, privateKey })` → `SshSession`. Methods: `exec(cmd)`, `writeFile(path, content)`, `readFile(path)`, `close()`. Types in `ssh-session.types.ts`, tests in `ssh-session.test.ts`.
 
 ## 7 — cloud-init ✅
 
@@ -131,34 +125,34 @@ Already wired - `cli/deploy/provision.command.ts` calls `target.ensureInfra()` v
 
 **Test:** run `ensureInfra`, kill process mid-convergence (simulate SSH drop), re-run → must reuse existing server, not create a second one. Validate phases in state JSON at each interruption point.
 
-### 9.1 Remote Docker Compose adapter
+### 9.1 Remote Docker Compose ✅
 
-`adapters/hetzner/remote-docker-compose.ts` — compose ops via SshSession: `pull`, `up`, `down`, `getPort`, `getLogs`, `waitHealthy`.
+Done. `adapters/hetzner/deploy-container.ts` — `deployContainer(session, input)`: writes `.env` + `compose.yaml`, registry login, `docker compose pull` + `up -d`, returns `CaddyUpstream` + `ContainerDeployedEnvironment`. Domain helpers: `compose-file.ts` (renderComposeFile, computeHostPort), `compose-env.ts` (formatComposeEnv).
 
-### 9.2 Caddy admin client adapter
+### 9.2 Caddy reload ✅
 
-`adapters/hetzner/caddy-admin-client.ts` — POST /load via SshSession.
+Done. Inline in `HetznerVpsTarget.deploy()` (`adapters/hetzner/target.ts`): builds Caddy JSON config via `buildCaddyForProject`, writes to `CADDY_CONFIG_PATH`, runs `caddy reload`. Base config pushed during convergence (`converge-vps.ts`).
 
-### 9.3 VL log verifier adapter
+### 9.3 VL log verifier — deferred
 
-`adapters/hetzner/vl-log-verifier.ts` — poll VictoriaLogs `/select/logsql/query`.
+Not implemented. VictoriaLogs query verification after deploy. Low priority — logs flow via Vector regardless; this would be a post-deploy assertion.
 
-### 9.4 Implement HetznerVpsTarget.deploy
+### 9.4 Implement HetznerVpsTarget.deploy ✅
 
-Wire adapters: load state → 1 SSH session → per env (silo + hostname + env vars + compose pull/up + healthcheck + ports) → Caddy POST → HTTPS probe → VL verify → update state.
+Done. `adapters/hetzner/target.ts` — `deploy()`: read state → SSH session → `deployContainer` → build Caddy config with upstream → write + reload Caddy → return `DeployResult`.
 
-### 9.5 Deploy CLI command
+### 9.5 Deploy CLI command ✅
 
-`cli/hetzner/deploy.command.ts` — reads env vars + config + image ref + secrets → `target.deploy()`.
+Done. `cli/deploy/deploy.command.ts` — orchestrates env vars + config + image ref + secrets → `target.deploy()`. Hetzner target factory in `cli/deploy/create-hetzner-target.ts`.
 
-## 10 — HetznerVpsTarget.describe + teardown (deferred)
+## 10 — HetznerVpsTarget.describe + teardown
 
 - `describe`: read state + SSH docker compose ps → TargetState
 - `teardown`: compose down + hcloud delete server + hcloud delete firewall + **delete Tailscale device via `DELETE /api/v2/device/:id`** + remove R2 state.
     - **Why the Tailscale delete is mandatory:** devices are non-ephemeral by design (ephemeral carries a GC-on-transient-outage risk that would permanently lock the VPS out of the tailnet, with no backdoor since UFW closes public SSH). Without an explicit device delete at teardown, re-provisioning the same project name collides with the old entry and Tailscale appends `-1`/`-2` suffixes, producing the duplicate-device accumulation we already hit in E2E. Device id is resolved at teardown via `GET /tailnet/-/devices` filtered on `hostname` — no need to persist it in state.
 - CLI commands: `hetzner-describe`, `hetzner-teardown`
 
-## 11 — CI workflow (deferred)
+## 11 — CI workflow
 
 - `plan` command outputs `deploy_target` from nextnode.toml
 - Route workflows: `cloudflare-pages` → existing, `hetzner-vps` → new job (build+push GHCR → join tailnet → provision → deploy)
