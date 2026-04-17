@@ -117,10 +117,6 @@ export class HetznerVpsTarget implements DeployTarget {
 		if (!input.image) {
 			throw new Error('image is required for Hetzner VPS deploys')
 		}
-		if (!input.registryToken) {
-			throw new Error('registryToken is required for Hetzner VPS deploys')
-		}
-
 		const hostname = resolveDeployDomain(
 			this.config.domain,
 			this.config.environment,
@@ -147,7 +143,7 @@ export class HetznerVpsTarget implements DeployTarget {
 				env,
 				secrets: input.secrets,
 				image: input.image,
-				registryToken: input.registryToken,
+				registryToken: input.registryToken!,
 			})
 
 			const caddyConfig = JSON.stringify(
