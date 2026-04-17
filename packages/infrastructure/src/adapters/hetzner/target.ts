@@ -8,6 +8,7 @@ import type {
 	DeployInput,
 	DeployResult,
 	DeployTarget,
+	VpsProvisionResult,
 } from '../../domain/deploy/target.ts'
 import type { AppEnvironment } from '../../domain/environment.ts'
 import { buildCaddyForProject } from '../../domain/hetzner/caddy-for-project.ts'
@@ -61,7 +62,8 @@ export class HetznerVpsTarget implements DeployTarget {
 		})
 	}
 
-	async ensureInfra(projectName: string): Promise<void> {
+	async ensureInfra(projectName: string): Promise<VpsProvisionResult> {
+		const start = Date.now()
 		const existing = await readState(this.r2, projectName)
 
 		if (existing) {
@@ -72,10 +74,33 @@ export class HetznerVpsTarget implements DeployTarget {
 				existing.state,
 				existing.etag,
 			)
-			return
+			return this.readProvisionResult(projectName, start)
 		}
 
 		await freshProvision(this.config, this.r2, projectName)
+		return this.readProvisionResult(projectName, start)
+	}
+
+	private async readProvisionResult(
+		projectName: string,
+		startMs: number,
+	): Promise<VpsProvisionResult> {
+		const finalState = await readState(this.r2, projectName)
+		if (!finalState || finalState.state.phase === 'created') {
+			throw new Error(
+				`Provisioning did not reach a deployable state for "${projectName}"`,
+			)
+		}
+
+		return {
+			kind: 'vps',
+			serverId: finalState.state.serverId,
+			serverType: this.config.hetzner.serverType,
+			location: this.config.hetzner.location,
+			publicIp: finalState.state.publicIp,
+			tailnetIp: finalState.state.tailnetIp,
+			durationMs: Date.now() - startMs,
+		}
 	}
 
 	async reconcileDns(projectName: string, domain: string): Promise<void> {

@@ -126,18 +126,22 @@ vi.mock('../../adapters/hetzner/target.ts', () => ({
 
 describe('deployCommand', () => {
 	let envFile: string
+	let summaryFile: string
 
 	beforeEach(() => {
 		const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
 		envFile = join(tmpdir(), `gh-env-${id}.txt`)
+		summaryFile = join(tmpdir(), `gh-summary-${id}.txt`)
 		vi.stubEnv('PIPELINE_ENVIRONMENT', 'production')
 		vi.stubEnv('CLOUDFLARE_ACCOUNT_ID', 'acct-123')
 		vi.stubEnv('CLOUDFLARE_API_TOKEN', 'cf-token')
 		vi.stubEnv('GITHUB_ENV', envFile)
+		vi.stubEnv('GITHUB_STEP_SUMMARY', summaryFile)
 	})
 
 	afterEach(() => {
 		rmSync(envFile, { force: true })
+		rmSync(summaryFile, { force: true })
 		vi.unstubAllEnvs()
 		vi.unstubAllGlobals()
 		vi.restoreAllMocks()
@@ -269,6 +273,16 @@ describe('deployCommand', () => {
 
 			const ghEnv = readFileSync(envFile, 'utf-8')
 			expect(ghEnv).toContain('SITE_URL=https://example.com\n')
+		})
+
+		it('writes deploy summary to GITHUB_STEP_SUMMARY', async () => {
+			await deployCommand(APP_WITH_DOMAIN)
+
+			const summary = readFileSync(summaryFile, 'utf-8')
+			expect(summary).toContain('Deployed `my-app` to production')
+			expect(summary).toContain('https://example.com')
+			expect(summary).toContain('ghcr.io/acme/web:sha-abc123')
+			expect(summary).toContain('hetzner-vps')
 		})
 
 		it('passes parsed IMAGE_REF and empty secrets to the target', async () => {

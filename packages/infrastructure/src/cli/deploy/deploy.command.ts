@@ -3,8 +3,10 @@ import { createLogger } from '@nextnode-solutions/logger'
 const logger = createLogger()
 
 import { writeEnvVar } from '../../adapters/github/env.ts'
+import { writeSummary } from '../../adapters/github/output.ts'
 import type { DeployableConfig } from '../../config/types.ts'
 import { isHetznerDeployableConfig } from '../../config/types.ts'
+import { buildDeploySummary } from '../../domain/deploy/deploy-summary.ts'
 import { parseImageRef } from '../../domain/deploy/image-ref.ts'
 import type { DeployInput } from '../../domain/deploy/target.ts'
 import { resolveEnvironment } from '../../domain/environment.ts'
@@ -29,6 +31,7 @@ export async function deployCommand(config: DeployableConfig): Promise<void> {
 	const input = buildDeployInput(config)
 	const result = await target.deploy(config.project.name, input, env)
 
+	writeSummary(buildDeploySummary(result, target.name))
 	logger.info(
 		`Deploy complete for "${result.projectName}" in ${result.durationMs}ms`,
 	)
