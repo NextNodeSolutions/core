@@ -9,14 +9,19 @@ export interface VpsDnsRecordsInput {
 	readonly domain: string
 	readonly environment: AppEnvironment
 	readonly publicIp: string
+	readonly internal: boolean
+	readonly tailnetIp: string
 }
 
 /**
  * Compute the desired DNS records for a Hetzner VPS deploy target.
  *
- * Rules:
+ * Public rules:
  * - Production: `{domain}` A record → VPS public IP, proxied (Cloudflare CDN)
  * - Development: `dev.{domain}` A record → VPS public IP, unproxied (direct)
+ *
+ * Internal rules:
+ * - A record → tailnet IP, never proxied (CGNAT range, unreachable from public internet)
  *
  * Proxied records use TTL=1 (Cloudflare auto). Unproxied use TTL=300.
  */
@@ -24,8 +29,21 @@ export function computeVpsDnsRecords(
 	input: VpsDnsRecordsInput,
 ): ReadonlyArray<DesiredDnsRecord> {
 	const hostname = resolveDeployDomain(input.domain, input.environment)
-	const proxied = input.environment === 'production'
 
+	if (input.internal) {
+		return [
+			{
+				zoneName: extractRootDomain(hostname),
+				name: hostname,
+				type: 'A',
+				content: input.tailnetIp,
+				proxied: false,
+				ttl: DNS_TTL_UNPROXIED,
+			},
+		]
+	}
+
+	const proxied = input.environment === 'production'
 	return [
 		{
 			zoneName: extractRootDomain(hostname),

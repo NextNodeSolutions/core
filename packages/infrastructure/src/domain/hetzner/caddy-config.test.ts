@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import type { CaddyConfigInput } from './caddy-config.ts'
-import { buildCaddyConfig, extractUpstreams } from './caddy-config.ts'
+import type {
+	CaddyConfigInput,
+	InternalCaddyConfigInput,
+} from './caddy-config.ts'
+import {
+	buildCaddyConfig,
+	buildInternalCaddyConfig,
+	extractUpstreams,
+} from './caddy-config.ts'
 
 const r2Storage = {
 	host: 'abc123.r2.cloudflarestorage.com',
@@ -158,5 +165,97 @@ describe('extractUpstreams', () => {
 		const json = JSON.stringify(config)
 
 		expect(extractUpstreams(json)).toStrictEqual([])
+	})
+})
+
+describe('buildInternalCaddyConfig', () => {
+	function makeInternalInput(
+		upstreams: InternalCaddyConfigInput['upstreams'],
+	): InternalCaddyConfigInput {
+		return {
+			upstreams,
+			r2Storage,
+			acmeEmail: 'test@example.com',
+			cloudflareApiToken: 'cf-token-123',
+		}
+	}
+
+	it('uses DNS-01 challenge with Cloudflare provider', () => {
+		const config = buildInternalCaddyConfig(
+			makeInternalInput([
+				{ hostname: 'monitor.example.com', dial: '127.0.0.1:8080' },
+			]),
+		)
+
+		const issuer = config.apps.tls.automation.policies[0]?.issuers[0]
+		expect(issuer).toStrictEqual({
+			module: 'acme',
+			email: 'test@example.com',
+			challenges: {
+				http: { disabled: true },
+				'tls-alpn': { disabled: true },
+				dns: {
+					provider: {
+						name: 'cloudflare',
+						api_token: 'cf-token-123',
+					},
+				},
+			},
+		})
+	})
+
+	it('disables HTTP-01 and TLS-ALPN challenges', () => {
+		const config = buildInternalCaddyConfig(
+			makeInternalInput([
+				{ hostname: 'monitor.example.com', dial: '127.0.0.1:8080' },
+			]),
+		)
+
+		const issuer = config.apps.tls.automation.policies[0]?.issuers[0]
+		if (!issuer || issuer.module !== 'acme')
+			throw new Error('Expected ACME issuer')
+		expect(issuer.challenges?.http).toStrictEqual({ disabled: true })
+		expect(issuer.challenges?.['tls-alpn']).toStrictEqual({
+			disabled: true,
+		})
+	})
+
+	it('stores certs in R2 (same as public mode)', () => {
+		const config = buildInternalCaddyConfig(
+			makeInternalInput([
+				{ hostname: 'monitor.example.com', dial: '127.0.0.1:8080' },
+			]),
+		)
+
+		expect(config.apps.tls.automation.policies[0]?.storage).toStrictEqual({
+			module: 's3',
+			host: 'abc123.r2.cloudflarestorage.com',
+			bucket: 'nextnode-certs',
+			access_id: 'R2_ACCESS_KEY',
+			secret_key: 'R2_SECRET_KEY',
+			prefix: 'certs',
+		})
+	})
+
+	it('builds routes identical to public mode', () => {
+		const upstreams = [
+			{ hostname: 'monitor.example.com', dial: '127.0.0.1:8080' },
+		] as const
+		const internal = buildInternalCaddyConfig(
+			makeInternalInput([...upstreams]),
+		)
+		const publicConfig = buildCaddyConfig(makeInput([...upstreams]))
+
+		expect(internal.apps.http).toStrictEqual(publicConfig.apps.http)
+	})
+
+	it('produces valid JSON for Caddy /load endpoint', () => {
+		const config = buildInternalCaddyConfig(
+			makeInternalInput([
+				{ hostname: 'monitor.example.com', dial: '127.0.0.1:8080' },
+			]),
+		)
+		const json = JSON.stringify(config)
+		expect(() => JSON.parse(json)).not.toThrow()
 	})
 })

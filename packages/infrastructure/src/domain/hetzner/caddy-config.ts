@@ -14,7 +14,23 @@ export interface R2StorageConfig {
 export interface AcmeIssuer {
 	readonly module: 'acme'
 	readonly email: string
+	readonly challenges?: {
+		readonly http?: { readonly disabled: boolean }
+		readonly 'tls-alpn'?: { readonly disabled: boolean }
+		readonly dns?: {
+			readonly provider: {
+				readonly name: string
+				readonly api_token: string
+			}
+		}
+	}
 }
+
+export interface InternalIssuer {
+	readonly module: 'internal'
+}
+
+export type CaddyIssuer = AcmeIssuer | InternalIssuer
 
 export interface CaddyConfigInput {
 	readonly upstreams: ReadonlyArray<CaddyUpstream>
@@ -33,17 +49,19 @@ export interface CaddyHandler {
 	readonly upstreams: ReadonlyArray<{ readonly dial: string }>
 }
 
+export interface CaddyS3Storage {
+	readonly module: string
+	readonly host: string
+	readonly bucket: string
+	readonly access_id: string
+	readonly secret_key: string
+	readonly prefix: string
+}
+
 export interface CaddyTlsPolicy {
 	readonly subjects: ReadonlyArray<string>
-	readonly issuers: ReadonlyArray<AcmeIssuer>
-	readonly storage: {
-		readonly module: string
-		readonly host: string
-		readonly bucket: string
-		readonly access_id: string
-		readonly secret_key: string
-		readonly prefix: string
-	}
+	readonly issuers: ReadonlyArray<CaddyIssuer>
+	readonly storage?: CaddyS3Storage
 }
 
 export interface CaddyJsonConfig {
@@ -148,6 +166,73 @@ export function buildCaddyConfig(input: CaddyConfigInput): CaddyJsonConfig {
 							subjects: hostnames,
 							issuers: [
 								{ module: 'acme', email: input.acmeEmail },
+							],
+							storage: {
+								module: 's3',
+								host: input.r2Storage.host,
+								bucket: input.r2Storage.bucket,
+								access_id: input.r2Storage.accessId,
+								secret_key: input.r2Storage.secretKey,
+								prefix: input.r2Storage.prefix,
+							},
+						},
+					],
+				},
+			},
+		},
+	}
+}
+
+export interface InternalCaddyConfigInput {
+	readonly upstreams: ReadonlyArray<CaddyUpstream>
+	readonly r2Storage: R2StorageConfig
+	readonly acmeEmail: string
+	readonly cloudflareApiToken: string
+}
+
+/**
+ * Build a Caddy JSON config for internal (Tailscale-only) projects.
+ *
+ * Uses DNS-01 challenge via Cloudflare instead of HTTP-01, so Let's Encrypt
+ * can issue real certs even though the server is not publicly reachable.
+ * Certs are stored in R2 (same as public mode).
+ */
+export function buildInternalCaddyConfig(
+	input: InternalCaddyConfigInput,
+): CaddyJsonConfig {
+	const hostnames = input.upstreams.map(u => u.hostname)
+
+	return {
+		apps: {
+			http: {
+				servers: {
+					https: {
+						listen: [':443'],
+						routes: input.upstreams.map(buildRoute),
+					},
+				},
+			},
+			tls: {
+				automation: {
+					policies: [
+						{
+							subjects: hostnames,
+							issuers: [
+								{
+									module: 'acme',
+									email: input.acmeEmail,
+									challenges: {
+										http: { disabled: true },
+										'tls-alpn': { disabled: true },
+										dns: {
+											provider: {
+												name: 'cloudflare',
+												api_token:
+													input.cloudflareApiToken,
+											},
+										},
+									},
+								},
 							],
 							storage: {
 								module: 's3',

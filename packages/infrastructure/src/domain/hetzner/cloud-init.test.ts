@@ -8,10 +8,15 @@ const INPUT = {
 	tailscaleAuthKey: 'tskey-auth-abc123',
 	tailscaleHostname: 'acme-web',
 	deployPublicKey: 'ssh-ed25519 AAAAC3Nz... deploy@ci',
+	internal: false,
 } as const
 
-function parseCloudInit(): CloudInitConfig {
-	const yamlBody = renderCloudInit(INPUT).replace(/^#cloud-config\n/, '')
+const INTERNAL_INPUT = { ...INPUT, internal: true } as const
+
+function parseCloudInit(
+	input: typeof INPUT | typeof INTERNAL_INPUT = INPUT,
+): CloudInitConfig {
+	const yamlBody = renderCloudInit(input).replace(/^#cloud-config\n/, '')
 	const parsed: unknown = parse(yamlBody)
 	if (!isCloudInitConfig(parsed)) {
 		throw new Error('Parsed YAML is not a valid cloud-init config')
@@ -142,10 +147,11 @@ describe('renderCloudInit', () => {
 			expect(tailscaleUpIdx).toBeLessThan(dockerIdx)
 		})
 
-		it('installs Caddy with certmagic-s3 plugin', () => {
+		it('installs Caddy with certmagic-s3 and cloudflare DNS plugins', () => {
 			const caddyCmd = commands().find(c => c.includes('certmagic-s3'))
 			expect(caddyCmd).toBeDefined()
 			expect(caddyCmd).toContain('/usr/bin/caddy')
+			expect(caddyCmd).toContain('caddy-dns/cloudflare')
 		})
 
 		it('enables Caddy and Vector systemd units', () => {
@@ -192,6 +198,34 @@ describe('renderCloudInit', () => {
 
 		it('does not open port 22 globally', () => {
 			expect(commands()).not.toContain('ufw allow 22/tcp')
+		})
+
+		describe('internal mode UFW', () => {
+			function internalCommands(): ReadonlyArray<string> {
+				return parseCloudInit(INTERNAL_INPUT).runcmd
+			}
+
+			it('restricts HTTP to tailscale0 only', () => {
+				const cmds = internalCommands()
+				expect(cmds).toContain(
+					'ufw allow in on tailscale0 to any port 80 proto tcp',
+				)
+				expect(cmds).not.toContain('ufw allow 80/tcp')
+			})
+
+			it('restricts HTTPS to tailscale0 only', () => {
+				const cmds = internalCommands()
+				expect(cmds).toContain(
+					'ufw allow in on tailscale0 to any port 443 proto tcp',
+				)
+				expect(cmds).not.toContain('ufw allow 443/tcp')
+			})
+
+			it('restricts SSH to tailscale0 only', () => {
+				expect(internalCommands()).toContain(
+					'ufw allow in on tailscale0 to any port 22 proto tcp',
+				)
+			})
 		})
 	})
 })
