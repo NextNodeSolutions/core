@@ -101,6 +101,7 @@ const TARGET_CONFIG = {
 	environment: 'production' as const,
 	domain: 'acme-web.example.com',
 	credentials: CREDENTIALS,
+	registryToken: 'ghs_fake_registry_token',
 	vector: {
 		clientId: 'nextnode',
 		vlUrl: 'http://vl.tail0.ts.net:9428',

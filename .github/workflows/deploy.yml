@@ -175,4 +175,5 @@ jobs:
                   R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
                   R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
                   IMAGE_REF: ${{ needs.build-image.outputs.image_ref }}
+                  GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   ALL_SECRETS: ${{ toJSON(secrets) }}

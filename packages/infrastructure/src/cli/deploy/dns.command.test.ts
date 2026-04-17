@@ -190,6 +190,7 @@ describe('dnsCommand — hetzner dispatch', () => {
 			Buffer.from(testPrivateKey).toString('base64'),
 		)
 		vi.stubEnv('TAILSCALE_AUTH_KEY', 'tskey-auth-test')
+		vi.stubEnv('GHCR_TOKEN', 'ghs_fake_token')
 	})
 
 	afterEach(() => {

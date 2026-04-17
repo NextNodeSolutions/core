@@ -66,6 +66,7 @@ function stubHetznerEnv(): void {
 		Buffer.from(TEST_PRIVATE_KEY).toString('base64'),
 	)
 	vi.stubEnv('TAILSCALE_AUTH_KEY', 'tskey')
+	vi.stubEnv('GHCR_TOKEN', 'ghs_fake_token')
 }
 
 beforeEach(() => {
