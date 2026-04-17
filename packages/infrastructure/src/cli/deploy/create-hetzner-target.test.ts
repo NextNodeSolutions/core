@@ -66,6 +66,7 @@ function stubHetznerEnv(): void {
 		Buffer.from(TEST_PRIVATE_KEY).toString('base64'),
 	)
 	vi.stubEnv('TAILSCALE_AUTH_KEY', 'tskey')
+	vi.stubEnv('CLOUDFLARE_API_TOKEN', 'cf-token')
 }
 
 beforeEach(() => {
@@ -161,6 +162,7 @@ describe('createHetznerTarget', () => {
 			'DEPLOY_SSH_PRIVATE_KEY_B64',
 			Buffer.from(TEST_PRIVATE_KEY).toString('base64'),
 		)
+		vi.stubEnv('CLOUDFLARE_API_TOKEN', 'cf-token')
 
 		expect(() =>
 			createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_R2),
@@ -180,5 +182,31 @@ describe('createHetznerTarget', () => {
 		expect(() =>
 			createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_R2),
 		).toThrow('NN_CLIENT_ID env var is required')
+	})
+
+	it('throws when CLOUDFLARE_API_TOKEN is missing', () => {
+		vi.stubEnv('HETZNER_API_TOKEN', 'hcloud')
+		vi.stubEnv(
+			'DEPLOY_SSH_PRIVATE_KEY_B64',
+			Buffer.from(TEST_PRIVATE_KEY).toString('base64'),
+		)
+		vi.stubEnv('TAILSCALE_AUTH_KEY', 'tskey')
+
+		expect(() =>
+			createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_R2),
+		).toThrow('CLOUDFLARE_API_TOKEN env var is required')
+	})
+
+	it('passes cloudflareApiToken from env', async () => {
+		stubHetznerEnv()
+
+		const { HetznerVpsTarget } =
+			await import('../../adapters/hetzner/target.ts')
+
+		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_R2)
+
+		expect(HetznerVpsTarget).toHaveBeenCalledWith(
+			expect.objectContaining({ cloudflareApiToken: 'cf-token' }),
+		)
 	})
 })

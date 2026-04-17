@@ -11,6 +11,8 @@ import type {
 } from '../../domain/deploy/target.ts'
 import type { AppEnvironment } from '../../domain/environment.ts'
 import { buildCaddyForProject } from '../../domain/hetzner/caddy-for-project.ts'
+import { computeVpsDnsRecords } from '../../domain/hetzner/dns-records.ts'
+import { reconcileDnsRecords } from '../cloudflare/reconcile-dns.ts'
 import { R2Client } from '../r2/client.ts'
 
 import { CADDY_CONFIG_PATH } from './constants.ts'
@@ -41,6 +43,7 @@ export interface HetznerVpsTargetConfig {
 	readonly domain: string
 	readonly credentials: HetznerCredentials
 	readonly vector: HetznerVectorConfig | null
+	readonly cloudflareApiToken: string
 }
 
 export class HetznerVpsTarget implements DeployTarget {
@@ -97,8 +100,24 @@ export class HetznerVpsTarget implements DeployTarget {
 		logger.info(`Infrastructure ready for "${projectName}"`)
 	}
 
-	async reconcileDns(): Promise<void> {
-		throw new Error('reconcileDns not implemented for Hetzner VPS yet')
+	async reconcileDns(projectName: string, domain: string): Promise<void> {
+		const existing = await readState(this.r2, projectName)
+		if (!existing) {
+			throw new Error(
+				`No state for "${projectName}" — run ensureInfra first`,
+			)
+		}
+
+		const records = computeVpsDnsRecords({
+			domain,
+			environment: this.config.environment,
+			publicIp: existing.state.publicIp,
+		})
+
+		await reconcileDnsRecords(records, this.config.cloudflareApiToken)
+		logger.info(
+			`DNS reconciled for "${projectName}" (${this.config.environment})`,
+		)
 	}
 
 	computeDeployEnv(): DeployEnv {
@@ -125,7 +144,7 @@ export class HetznerVpsTarget implements DeployTarget {
 		const existing = await readState(this.r2, projectName)
 		if (!existing) {
 			throw new Error(
-				`No state for "${projectName}" - run ensureInfra first`,
+				`No state for "${projectName}" — run ensureInfra first`,
 			)
 		}
 

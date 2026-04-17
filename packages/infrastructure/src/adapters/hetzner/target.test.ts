@@ -58,6 +58,14 @@ vi.mock('node:timers/promises', () => ({
 	setTimeout: vi.fn(async () => undefined),
 }))
 
+// Mock Cloudflare DNS reconciliation (network boundary: Cloudflare API)
+const { mockReconcileDnsRecords } = vi.hoisted(() => ({
+	mockReconcileDnsRecords: vi.fn(async () => undefined),
+}))
+vi.mock('../cloudflare/reconcile-dns.ts', () => ({
+	reconcileDnsRecords: mockReconcileDnsRecords,
+}))
+
 // Mock R2Client (network boundary)
 const fakeR2State = new Map<string, string>()
 
@@ -105,6 +113,7 @@ const TARGET_CONFIG = {
 		clientId: 'nextnode',
 		vlUrl: 'http://vl.tail0.ts.net:9428',
 	},
+	cloudflareApiToken: 'cf-token',
 }
 
 const EXISTING_STATE = {
@@ -507,6 +516,71 @@ describe('HetznerVpsTarget', () => {
 				target.deploy('acme-web', DEPLOY_INPUT, DEPLOY_ENV),
 			).rejects.toThrow('SSH write failed')
 			expect(mockSession.close).toHaveBeenCalled()
+		})
+	})
+
+	describe('reconcileDns', () => {
+		it('throws when no state exists', async () => {
+			const target = new HetznerVpsTarget(TARGET_CONFIG)
+
+			await expect(
+				target.reconcileDns('acme-web', 'acme-web.example.com'),
+			).rejects.toThrow('No state for "acme-web"')
+		})
+
+		it('computes A records from state publicIp and calls reconciler', async () => {
+			seedState('5.6.7.8')
+
+			const target = new HetznerVpsTarget(TARGET_CONFIG)
+			await target.reconcileDns('acme-web', 'acme-web.example.com')
+
+			expect(mockReconcileDnsRecords).toHaveBeenCalledWith(
+				[
+					{
+						zoneName: 'example.com',
+						name: 'acme-web.example.com',
+						type: 'A',
+						content: '5.6.7.8',
+						proxied: true,
+						ttl: 1,
+					},
+				],
+				'cf-token',
+			)
+		})
+
+		it('uses dev subdomain for development environment', async () => {
+			seedState('5.6.7.8')
+
+			const target = new HetznerVpsTarget({
+				...TARGET_CONFIG,
+				environment: 'development',
+			})
+			await target.reconcileDns('acme-web', 'acme-web.example.com')
+
+			expect(mockReconcileDnsRecords).toHaveBeenCalledWith(
+				[
+					expect.objectContaining({
+						name: 'dev.acme-web.example.com',
+						proxied: false,
+						ttl: 300,
+					}),
+				],
+				'cf-token',
+			)
+		})
+
+		it('propagates errors from the DNS reconciler', async () => {
+			seedState()
+			mockReconcileDnsRecords.mockRejectedValueOnce(
+				new Error('Cloudflare zone not found'),
+			)
+
+			const target = new HetznerVpsTarget(TARGET_CONFIG)
+
+			await expect(
+				target.reconcileDns('acme-web', 'acme-web.example.com'),
+			).rejects.toThrow('Cloudflare zone not found')
 		})
 	})
 })

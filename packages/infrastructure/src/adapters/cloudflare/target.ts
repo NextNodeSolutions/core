@@ -2,6 +2,7 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
 
+import { computeDnsRecords } from '../../domain/cloudflare/dns-records.ts'
 import { computePagesProjectName } from '../../domain/cloudflare/pages-project-name.ts'
 import { resolveDeployDomain } from '../../domain/deploy/domain.ts'
 import type {
@@ -13,11 +14,11 @@ import type {
 } from '../../domain/deploy/target.ts'
 import type { AppEnvironment } from '../../domain/environment.ts'
 
-import { reconcilePagesDns } from './pages-dns.ts'
 import { reconcileDomains } from './pages-domains.ts'
 import { updatePagesEnvVars } from './pages-env.ts'
 import { provisionProject } from './pages-project.ts'
 import { getPagesProject } from './pages.ts'
+import { reconcileDnsRecords } from './reconcile-dns.ts'
 
 export interface CloudflarePagesTargetConfig {
 	readonly environment: AppEnvironment
@@ -89,15 +90,14 @@ export class CloudflarePagesTarget implements DeployTarget {
 
 		const subdomain = await this.fetchSubdomain(pagesProjectName)
 
-		await reconcilePagesDns({
-			accountId: this.accountId,
-			pagesSubdomain: subdomain,
-			token: this.token,
+		const records = computeDnsRecords({
 			domain,
 			redirectDomains: this.redirectDomains,
 			environment: this.environment,
+			pagesSubdomain: subdomain,
 		})
 
+		await reconcileDnsRecords(records, this.token)
 		logger.info('DNS reconciliation complete')
 	}
 

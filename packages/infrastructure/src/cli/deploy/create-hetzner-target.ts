@@ -29,5 +29,6 @@ export function createHetznerTarget(
 			tailscaleAuthKey: requireEnv('TAILSCALE_AUTH_KEY'),
 		},
 		vector: vlUrl ? { clientId: requireEnv('NN_CLIENT_ID'), vlUrl } : null,
+		cloudflareApiToken: requireEnv('CLOUDFLARE_API_TOKEN'),
 	})
 }
