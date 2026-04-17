@@ -37,7 +37,11 @@ export async function deployCommand(config: DeployableConfig): Promise<void> {
 function buildDeployInput(config: DeployableConfig): DeployInput {
 	const secrets = loadSecrets(config.deploy.secrets)
 	if (isHetznerDeployableConfig(config)) {
-		return { secrets, image: parseImageRef(requireEnv('IMAGE_REF')) }
+		return {
+			secrets,
+			image: parseImageRef(requireEnv('IMAGE_REF')),
+			registryToken: requireEnv('GHCR_TOKEN'),
+		}
 	}
 	return { secrets }
 }

@@ -28,7 +28,6 @@ export function createHetznerTarget(
 			deployPublicKey: derivePublicKey(deployPrivateKey),
 			tailscaleAuthKey: requireEnv('TAILSCALE_AUTH_KEY'),
 		},
-		registryToken: requireEnv('GHCR_TOKEN'),
 		vector: vlUrl ? { clientId: requireEnv('NN_CLIENT_ID'), vlUrl } : null,
 	})
 }

@@ -283,6 +283,7 @@ describe('deployCommand', () => {
 						repository: 'acme/web',
 						tag: 'sha-abc123',
 					},
+					registryToken: 'ghs_fake_token',
 				},
 				{ SITE_URL: 'https://example.com' },
 			)
