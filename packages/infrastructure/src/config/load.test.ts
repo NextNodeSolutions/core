@@ -544,6 +544,129 @@ describe('parseConfig', () => {
 		})
 	})
 
+	describe('project.internal', () => {
+		it('defaults internal to false when not provided', () => {
+			const result = parseConfig({
+				project: { name: 'my-app', type: 'package' },
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok) return
+
+			expect(result.config.project.internal).toBe(false)
+		})
+
+		it('accepts internal set to true', () => {
+			const result = parseConfig({
+				project: {
+					name: 'monitor',
+					type: 'app',
+					domain: 'monitor.nextnode.fr',
+					internal: true,
+				},
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok) return
+
+			expect(result.config.project.internal).toBe(true)
+		})
+
+		it('accepts internal set to false', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+					internal: false,
+				},
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok) return
+
+			expect(result.config.project.internal).toBe(false)
+		})
+
+		it('rejects non-boolean internal value', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+					internal: 'yes',
+				},
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'project.internal must be a boolean',
+			)
+		})
+
+		it('rejects internal with cloudflare-pages target', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-site',
+					type: 'static',
+					internal: true,
+				},
+				deploy: { target: 'cloudflare-pages' },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'project.internal is not supported with deploy target "cloudflare-pages"',
+			)
+		})
+
+		it('rejects internal with inferred cloudflare-pages target', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-site',
+					type: 'static',
+					internal: true,
+				},
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'project.internal is not supported with deploy target "cloudflare-pages"',
+			)
+		})
+
+		it('accepts internal with hetzner-vps target', () => {
+			const result = parseConfig({
+				project: {
+					name: 'monitor',
+					type: 'app',
+					domain: 'monitor.nextnode.fr',
+					internal: true,
+				},
+				deploy: {
+					target: 'hetzner-vps',
+					hetzner: { server_type: 'cx23', location: 'nbg1' },
+				},
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok) return
+
+			expect(result.config.project.internal).toBe(true)
+			expect(result.config.deploy).toEqual({
+				target: 'hetzner-vps',
+				secrets: [],
+				hetzner: { serverType: 'cx23', location: 'nbg1' },
+			})
+		})
+	})
+
 	describe('deploy section', () => {
 		it('defaults to cloudflare-pages with empty secrets for static projects', () => {
 			const result = parseConfig({
