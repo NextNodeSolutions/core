@@ -148,6 +148,7 @@ async function runConvergence(
 		r2: config.r2,
 		vector: config.vector,
 		deployPrivateKey: config.credentials.deployPrivateKey,
+		acmeEmail: config.acmeEmail,
 	})
 
 	await writeState(

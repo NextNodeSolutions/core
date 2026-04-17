@@ -8,6 +8,7 @@ export interface CaddyForProjectInput {
 	readonly projectName: string
 	readonly r2: R2RuntimeConfig
 	readonly upstreams: ReadonlyArray<CaddyUpstream>
+	readonly acmeEmail: string
 }
 
 export function buildCaddyForProject(
@@ -15,6 +16,7 @@ export function buildCaddyForProject(
 ): CaddyJsonConfig {
 	return buildCaddyConfig({
 		upstreams: input.upstreams,
+		acmeEmail: input.acmeEmail,
 		r2Storage: {
 			host: computeR2Host(input.r2.accountId),
 			bucket: input.r2.certsBucket,

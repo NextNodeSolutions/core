@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { CaddyConfigInput } from './caddy-config.ts'
-import { buildCaddyConfig } from './caddy-config.ts'
+import { buildCaddyConfig, extractUpstreams } from './caddy-config.ts'
 
 const r2Storage = {
 	host: 'abc123.r2.cloudflarestorage.com',
@@ -12,7 +12,7 @@ const r2Storage = {
 } as const
 
 function makeInput(upstreams: CaddyConfigInput['upstreams']): CaddyConfigInput {
-	return { upstreams, r2Storage }
+	return { upstreams, r2Storage, acmeEmail: 'test@example.com' }
 }
 
 describe('buildCaddyConfig', () => {
@@ -77,6 +77,19 @@ describe('buildCaddyConfig', () => {
 		])
 	})
 
+	it('includes ACME issuer with email in TLS policy', () => {
+		const config = buildCaddyConfig(
+			makeInput([
+				{ hostname: 'acme.example.com', dial: '127.0.0.1:8080' },
+			]),
+		)
+
+		const issuers = config.apps.tls.automation.policies[0]?.issuers
+		expect(issuers).toStrictEqual([
+			{ module: 'acme', email: 'test@example.com' },
+		])
+	})
+
 	it('configures R2 storage via caddy-storage-s3 module', () => {
 		const config = buildCaddyConfig(
 			makeInput([
@@ -103,5 +116,47 @@ describe('buildCaddyConfig', () => {
 		)
 		const json = JSON.stringify(config)
 		expect(() => JSON.parse(json)).not.toThrow()
+	})
+})
+
+describe('extractUpstreams', () => {
+	it('round-trips a single-upstream config', () => {
+		const upstreams = [
+			{ hostname: 'acme.example.com', dial: '127.0.0.1:8080' },
+		]
+		const config = buildCaddyConfig(makeInput(upstreams))
+		const json = JSON.stringify(config)
+
+		expect(extractUpstreams(json)).toStrictEqual(upstreams)
+	})
+
+	it('round-trips a multi-upstream config', () => {
+		const upstreams = [
+			{ hostname: 'acme.example.com', dial: '127.0.0.1:8080' },
+			{ hostname: 'dev.acme.example.com', dial: '127.0.0.1:8081' },
+		]
+		const config = buildCaddyConfig(makeInput(upstreams))
+		const json = JSON.stringify(config)
+
+		expect(extractUpstreams(json)).toStrictEqual(upstreams)
+	})
+
+	it('returns empty array for empty object', () => {
+		expect(extractUpstreams('{}')).toStrictEqual([])
+	})
+
+	it('returns empty array for empty string', () => {
+		expect(extractUpstreams('')).toStrictEqual([])
+	})
+
+	it('throws on malformed JSON', () => {
+		expect(() => extractUpstreams('not json')).toThrow()
+	})
+
+	it('returns empty array when routes array is empty', () => {
+		const config = buildCaddyConfig(makeInput([]))
+		const json = JSON.stringify(config)
+
+		expect(extractUpstreams(json)).toStrictEqual([])
 	})
 })

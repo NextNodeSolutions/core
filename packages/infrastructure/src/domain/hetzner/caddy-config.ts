@@ -11,9 +11,15 @@ export interface R2StorageConfig {
 	readonly prefix: string
 }
 
+export interface AcmeIssuer {
+	readonly module: 'acme'
+	readonly email: string
+}
+
 export interface CaddyConfigInput {
 	readonly upstreams: ReadonlyArray<CaddyUpstream>
 	readonly r2Storage: R2StorageConfig
+	readonly acmeEmail: string
 }
 
 export interface CaddyRoute {
@@ -29,6 +35,7 @@ export interface CaddyHandler {
 
 export interface CaddyTlsPolicy {
 	readonly subjects: ReadonlyArray<string>
+	readonly issuers: ReadonlyArray<AcmeIssuer>
 	readonly storage: {
 		readonly module: string
 		readonly host: string
@@ -70,6 +77,57 @@ function buildRoute(upstream: CaddyUpstream): CaddyRoute {
 	}
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null
+}
+
+function extractRoutes(configJson: string): ReadonlyArray<unknown> {
+	if (!configJson.trim()) return []
+
+	const parsed: unknown = JSON.parse(configJson)
+	if (!isRecord(parsed) || !isRecord(parsed.apps)) return []
+	if (!isRecord(parsed.apps.http) || !isRecord(parsed.apps.http.servers))
+		return []
+
+	const httpsServer = parsed.apps.http.servers.https
+	if (!isRecord(httpsServer) || !Array.isArray(httpsServer.routes)) return []
+
+	return httpsServer.routes
+}
+
+function parseRouteUpstream(route: unknown): CaddyUpstream | null {
+	if (!isRecord(route)) return null
+
+	const match = route.match
+	const handle = route.handle
+	if (!Array.isArray(match) || !Array.isArray(handle)) return null
+
+	const firstMatch: unknown = match[0]
+	const firstHandle: unknown = handle[0]
+	if (!isRecord(firstMatch) || !isRecord(firstHandle)) return null
+
+	if (
+		!Array.isArray(firstMatch.host) ||
+		typeof firstMatch.host[0] !== 'string'
+	)
+		return null
+
+	if (!Array.isArray(firstHandle.upstreams)) return null
+	const firstUpstream: unknown = firstHandle.upstreams[0]
+	if (!isRecord(firstUpstream) || typeof firstUpstream.dial !== 'string')
+		return null
+
+	return { hostname: firstMatch.host[0], dial: firstUpstream.dial }
+}
+
+export function extractUpstreams(
+	configJson: string,
+): ReadonlyArray<CaddyUpstream> {
+	return extractRoutes(configJson)
+		.map(parseRouteUpstream)
+		.filter((u): u is CaddyUpstream => u !== null)
+}
+
 export function buildCaddyConfig(input: CaddyConfigInput): CaddyJsonConfig {
 	const hostnames = input.upstreams.map(u => u.hostname)
 
@@ -88,6 +146,9 @@ export function buildCaddyConfig(input: CaddyConfigInput): CaddyJsonConfig {
 					policies: [
 						{
 							subjects: hostnames,
+							issuers: [
+								{ module: 'acme', email: input.acmeEmail },
+							],
 							storage: {
 								module: 's3',
 								host: input.r2Storage.host,

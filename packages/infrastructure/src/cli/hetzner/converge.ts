@@ -12,7 +12,7 @@ export interface ConvergenceInput {
 	readonly projectName: string
 	readonly vectorToml: string | undefined
 	readonly vectorEnv: string | undefined
-	readonly caddyBaseConfig: string
+	readonly caddyConfig: string
 }
 
 async function pushFileIfChanged(
@@ -58,7 +58,7 @@ export async function converge(
 	const caddyChanged = await pushFileIfChanged(
 		session,
 		CADDY_CONFIG_PATH,
-		input.caddyBaseConfig,
+		input.caddyConfig,
 	)
 
 	if (caddyChanged) {

@@ -14,7 +14,7 @@ function makeInput(overrides?: Partial<ConvergenceInput>): ConvergenceInput {
 		projectName: 'acme-web',
 		vectorToml: VECTOR_TOML,
 		vectorEnv: VECTOR_ENV,
-		caddyBaseConfig: CADDY_CONFIG,
+		caddyConfig: CADDY_CONFIG,
 		...overrides,
 	}
 }

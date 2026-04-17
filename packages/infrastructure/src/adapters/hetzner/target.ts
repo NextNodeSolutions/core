@@ -43,6 +43,7 @@ export interface HetznerVpsTargetConfig {
 	readonly credentials: HetznerCredentials
 	readonly vector: HetznerVectorConfig | null
 	readonly cloudflareApiToken: string
+	readonly acmeEmail: string
 }
 
 export class HetznerVpsTarget implements DeployTarget {
@@ -147,6 +148,7 @@ export class HetznerVpsTarget implements DeployTarget {
 					projectName,
 					r2: this.config.r2,
 					upstreams: [upstream],
+					acmeEmail: this.config.acmeEmail,
 				}),
 			)
 
