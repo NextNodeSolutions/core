@@ -40,6 +40,7 @@ export interface HetznerVpsTargetConfig {
 	readonly environment: AppEnvironment
 	readonly domain: string
 	readonly credentials: HetznerCredentials
+	readonly registryToken: string
 	readonly vector: HetznerVectorConfig | null
 }
 
@@ -144,6 +145,7 @@ export class HetznerVpsTarget implements DeployTarget {
 				env,
 				secrets: input.secrets,
 				image: input.image,
+				registryToken: this.config.registryToken,
 			})
 
 			const caddyConfig = JSON.stringify(

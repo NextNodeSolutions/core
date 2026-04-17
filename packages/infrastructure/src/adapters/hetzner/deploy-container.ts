@@ -19,6 +19,8 @@ import type { SshSession } from './ssh-session.types.ts'
 
 const logger = createLogger()
 
+const REGISTRY_TOKEN_USER = '__token__'
+
 export interface DeployContainerInput {
 	readonly projectName: string
 	readonly environment: AppEnvironment
@@ -26,6 +28,7 @@ export interface DeployContainerInput {
 	readonly env: DeployEnv
 	readonly secrets: Readonly<Record<string, string>>
 	readonly image: ImageRef
+	readonly registryToken: string
 }
 
 export interface DeployContainerResult {
@@ -53,6 +56,13 @@ export async function deployContainer(
 		renderComposeFile({ image: input.image, hostPort }),
 	)
 
+	await loginToRegistry(
+		session,
+		input.image.registry,
+		input.registryToken,
+		envDir,
+	)
+
 	await session.exec(
 		`docker compose -p ${silo.id} -f ${envDir}/compose.yaml pull`,
 	)
@@ -75,4 +85,18 @@ export async function deployContainer(
 			deployedAt: new Date(),
 		},
 	}
+}
+
+async function loginToRegistry(
+	session: SshSession,
+	registry: string,
+	token: string,
+	envDir: string,
+): Promise<void> {
+	const tokenPath = `${envDir}/.registry-token`
+	await session.writeFile(tokenPath, token)
+	await session.exec(
+		`cat ${tokenPath} | docker login ${registry} -u ${REGISTRY_TOKEN_USER} --password-stdin; code=$?; rm -f ${tokenPath}; exit $code`,
+	)
+	logger.info(`Authenticated to ${registry}`)
 }

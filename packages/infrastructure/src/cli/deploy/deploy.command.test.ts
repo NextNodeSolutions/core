@@ -259,6 +259,7 @@ describe('deployCommand', () => {
 				Buffer.from(testPrivateKey).toString('base64'),
 			)
 			vi.stubEnv('TAILSCALE_AUTH_KEY', 'tskey-auth-test')
+			vi.stubEnv('GHCR_TOKEN', 'ghs_fake_token')
 			vi.stubEnv('IMAGE_REF', 'ghcr.io/acme/web:sha-abc123')
 			mockHetznerDeploy.mockResolvedValue(HETZNER_DEPLOY_RESULT)
 		})
