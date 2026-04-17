@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type { HcloudProjectState } from './hcloud-state.types.ts'
 import type { SshSession } from './ssh-session.types.ts'
 import { HetznerVpsTarget } from './target.ts'
 
@@ -20,6 +21,13 @@ vi.mock(import('./hcloud-client.ts'), async importOriginal => {
 			status: 'running',
 			public_net: { ipv4: { ip: '1.2.3.4' } },
 		})),
+		findServerById: vi.fn(async () => ({
+			id: 42,
+			name: 'acme-web',
+			status: 'running',
+			public_net: { ipv4: { ip: '1.2.3.4' } },
+		})),
+		findServersByLabels: vi.fn(async () => []),
 		createFirewall: vi.fn(async () => ({
 			id: 99,
 			name: 'acme-web-fw',
@@ -80,7 +88,9 @@ vi.mock('../r2/client.ts', () => ({
 			fakeR2State.set(key, body)
 			return 'etag-2'
 		}),
-		delete: vi.fn(async () => undefined),
+		delete: vi.fn(async (key: string) => {
+			fakeR2State.delete(key)
+		}),
 		exists: vi.fn(async (key: string) => fakeR2State.has(key)),
 	})),
 }))
@@ -116,17 +126,16 @@ const TARGET_CONFIG = {
 	cloudflareApiToken: 'cf-token',
 }
 
-const EXISTING_STATE = {
+const CONVERGED_STATE: HcloudProjectState = {
+	phase: 'converged',
 	serverId: 42,
 	publicIp: '1.2.3.4',
 	tailnetIp: '100.74.91.126',
-} as const
+	convergedAt: '2026-04-17T10:00:00.000Z',
+}
 
-function seedState(publicIp = '1.2.3.4'): void {
-	fakeR2State.set(
-		'hetzner/acme-web.json',
-		JSON.stringify({ ...EXISTING_STATE, publicIp }),
-	)
+function seedState(state: HcloudProjectState = CONVERGED_STATE): void {
+	fakeR2State.set('hetzner/acme-web.json', JSON.stringify(state))
 }
 
 function createMockSession(): SshSession {
@@ -151,7 +160,7 @@ afterEach(() => {
 describe('HetznerVpsTarget', () => {
 	describe('ensureInfra', () => {
 		describe('fresh provision', () => {
-			it('creates a VPS, firewall, and writes state', async () => {
+			it('creates a VPS, writes state at each phase, and converges', async () => {
 				const target = new HetznerVpsTarget(TARGET_CONFIG)
 
 				await target.ensureInfra('acme-web')
@@ -159,11 +168,14 @@ describe('HetznerVpsTarget', () => {
 				const stateJson = fakeR2State.get('hetzner/acme-web.json')
 				expect(stateJson).toBeDefined()
 				const state: unknown = JSON.parse(stateJson!)
-				expect(state).toEqual({
-					serverId: 42,
-					publicIp: '1.2.3.4',
-					tailnetIp: '100.74.91.126',
-				})
+				expect(state).toEqual(
+					expect.objectContaining({
+						phase: 'converged',
+						serverId: 42,
+						publicIp: '1.2.3.4',
+						tailnetIp: '100.74.91.126',
+					}),
+				)
 			})
 
 			it('passes correct serverType and location to createServer', async () => {
@@ -210,6 +222,38 @@ describe('HetznerVpsTarget', () => {
 				)
 			})
 
+			it('checks for orphan servers before creating', async () => {
+				const { findServersByLabels: mockedFind } =
+					await import('./hcloud-client.ts')
+
+				const target = new HetznerVpsTarget(TARGET_CONFIG)
+				await target.ensureInfra('acme-web')
+
+				expect(mockedFind).toHaveBeenCalledWith('hcloud-token', {
+					project: 'acme-web',
+					managed_by: 'nextnode',
+				})
+			})
+
+			it('throws on orphan server detection', async () => {
+				const { findServersByLabels: mockedFind } =
+					await import('./hcloud-client.ts')
+				vi.mocked(mockedFind).mockResolvedValueOnce([
+					{
+						id: 99,
+						name: 'acme-web',
+						status: 'running',
+						public_net: { ipv4: { ip: '9.9.9.9' } },
+					},
+				])
+
+				const target = new HetznerVpsTarget(TARGET_CONFIG)
+
+				await expect(target.ensureInfra('acme-web')).rejects.toThrow(
+					/Orphan server\(s\) detected.*IDs: 99/,
+				)
+			})
+
 			it('propagates errors from server creation', async () => {
 				const { createServer: mockedCreate } =
 					await import('./hcloud-client.ts')
@@ -251,10 +295,137 @@ describe('HetznerVpsTarget', () => {
 					'Hetzner API apply firewall: 500',
 				)
 			})
+
+			it('writes created state before completing provisioning', async () => {
+				const { createServer: mockedCreate } =
+					await import('./hcloud-client.ts')
+				// Make completeProvisioning fail to observe intermediate state
+				const { createFirewall: mockedFw } =
+					await import('./hcloud-client.ts')
+				vi.mocked(mockedFw).mockRejectedValueOnce(
+					new Error('firewall fail'),
+				)
+
+				// Capture state after createServer writes it
+				vi.mocked(mockedCreate).mockImplementationOnce(async () => ({
+					id: 42,
+					name: 'acme-web',
+					status: 'initializing',
+					public_net: { ipv4: { ip: '1.2.3.4' } },
+				}))
+
+				const target = new HetznerVpsTarget(TARGET_CONFIG)
+				await expect(target.ensureInfra('acme-web')).rejects.toThrow(
+					'firewall fail',
+				)
+
+				const stateJson = fakeR2State.get('hetzner/acme-web.json')
+				expect(stateJson).toBeDefined()
+				expect(JSON.parse(stateJson!)).toEqual({
+					phase: 'created',
+					serverId: 42,
+					publicIp: '1.2.3.4',
+				})
+			})
 		})
 
-		describe('existing state', () => {
-			it('skips VPS creation when state already exists', async () => {
+		describe('resume from created', () => {
+			it('skips server creation and completes provisioning', async () => {
+				const { createServer: mockedCreate } =
+					await import('./hcloud-client.ts')
+				seedState({
+					phase: 'created',
+					serverId: 42,
+					publicIp: '1.2.3.4',
+				})
+
+				const target = new HetznerVpsTarget(TARGET_CONFIG)
+				await target.ensureInfra('acme-web')
+
+				expect(mockedCreate).not.toHaveBeenCalled()
+			})
+
+			it('reality-checks the server still exists', async () => {
+				const { findServerById: mockedFind } =
+					await import('./hcloud-client.ts')
+				seedState({
+					phase: 'created',
+					serverId: 42,
+					publicIp: '1.2.3.4',
+				})
+
+				const target = new HetznerVpsTarget(TARGET_CONFIG)
+				await target.ensureInfra('acme-web')
+
+				expect(mockedFind).toHaveBeenCalledWith('hcloud-token', 42)
+			})
+
+			it('advances to converged after completing all steps', async () => {
+				seedState({
+					phase: 'created',
+					serverId: 42,
+					publicIp: '1.2.3.4',
+				})
+
+				const target = new HetznerVpsTarget(TARGET_CONFIG)
+				await target.ensureInfra('acme-web')
+
+				const stateJson = fakeR2State.get('hetzner/acme-web.json')
+				expect(JSON.parse(stateJson!)).toEqual(
+					expect.objectContaining({
+						phase: 'converged',
+						serverId: 42,
+						publicIp: '1.2.3.4',
+						tailnetIp: '100.74.91.126',
+					}),
+				)
+			})
+		})
+
+		describe('resume from provisioned', () => {
+			it('skips server creation and provisioning, only converges', async () => {
+				const { createServer: mockedCreate } =
+					await import('./hcloud-client.ts')
+				const { converge: mockedConverge } =
+					await import('../../cli/hetzner/converge.ts')
+				seedState({
+					phase: 'provisioned',
+					serverId: 42,
+					publicIp: '1.2.3.4',
+					tailnetIp: '100.74.91.126',
+				})
+
+				const target = new HetznerVpsTarget(TARGET_CONFIG)
+				await target.ensureInfra('acme-web')
+
+				expect(mockedCreate).not.toHaveBeenCalled()
+				expect(mockedConverge).toHaveBeenCalled()
+			})
+
+			it('advances to converged', async () => {
+				seedState({
+					phase: 'provisioned',
+					serverId: 42,
+					publicIp: '1.2.3.4',
+					tailnetIp: '100.74.91.126',
+				})
+
+				const target = new HetznerVpsTarget(TARGET_CONFIG)
+				await target.ensureInfra('acme-web')
+
+				const stateJson = fakeR2State.get('hetzner/acme-web.json')
+				expect(JSON.parse(stateJson!)).toEqual(
+					expect.objectContaining({
+						phase: 'converged',
+						serverId: 42,
+						tailnetIp: '100.74.91.126',
+					}),
+				)
+			})
+		})
+
+		describe('resume from converged', () => {
+			it('skips VPS creation when state is converged', async () => {
 				const { createServer: mockedCreate } =
 					await import('./hcloud-client.ts')
 				seedState()
@@ -265,7 +436,7 @@ describe('HetznerVpsTarget', () => {
 				expect(mockedCreate).not.toHaveBeenCalled()
 			})
 
-			it('still runs convergence when state already exists', async () => {
+			it('still runs convergence when state is converged', async () => {
 				const { converge: mockedConverge } =
 					await import('../../cli/hetzner/converge.ts')
 				seedState()
@@ -279,13 +450,38 @@ describe('HetznerVpsTarget', () => {
 			it('uses tailnet IP from state for the convergence SSH session', async () => {
 				const { createSshSession: mockedSsh } =
 					await import('./ssh-session.ts')
-				seedState('5.6.7.8')
+				seedState({
+					...CONVERGED_STATE,
+					tailnetIp: '100.99.88.77',
+				})
 
 				const target = new HetznerVpsTarget(TARGET_CONFIG)
 				await target.ensureInfra('acme-web')
 
 				expect(mockedSsh).toHaveBeenCalledWith(
-					expect.objectContaining({ host: '100.74.91.126' }),
+					expect.objectContaining({ host: '100.99.88.77' }),
+				)
+			})
+		})
+
+		describe('stale state recovery', () => {
+			it('wipes state and re-provisions when server is 404', async () => {
+				const { findServerById: mockedFind } =
+					await import('./hcloud-client.ts')
+				const { createServer: mockedCreate } =
+					await import('./hcloud-client.ts')
+				vi.mocked(mockedFind).mockResolvedValueOnce(null)
+				seedState()
+
+				const target = new HetznerVpsTarget(TARGET_CONFIG)
+				await target.ensureInfra('acme-web')
+
+				// Should have deleted stale state then created a new server
+				expect(mockedCreate).toHaveBeenCalled()
+				// Final state should be converged with the new server
+				const stateJson = fakeR2State.get('hetzner/acme-web.json')
+				expect(JSON.parse(stateJson!)).toEqual(
+					expect.objectContaining({ phase: 'converged' }),
 				)
 			})
 		})
@@ -331,13 +527,16 @@ describe('HetznerVpsTarget', () => {
 			it('passes tailnet IP and credentials to SSH session on re-run', async () => {
 				const { createSshSession: mockedSsh } =
 					await import('./ssh-session.ts')
-				seedState('10.0.0.1')
+				seedState({
+					...CONVERGED_STATE,
+					tailnetIp: '100.10.0.1',
+				})
 
 				const target = new HetznerVpsTarget(TARGET_CONFIG)
 				await target.ensureInfra('acme-web')
 
 				expect(mockedSsh).toHaveBeenCalledWith({
-					host: '100.74.91.126',
+					host: '100.10.0.1',
 					username: 'deploy',
 					privateKey: 'fake-private-key',
 				})
@@ -365,19 +564,36 @@ describe('HetznerVpsTarget', () => {
 
 			await expect(
 				target.deploy('acme-web', DEPLOY_INPUT, DEPLOY_ENV),
-			).rejects.toThrow('No state for "acme-web"')
+			).rejects.toThrow('No deployable state for "acme-web"')
+		})
+
+		it('throws when state is still in created phase', async () => {
+			seedState({
+				phase: 'created',
+				serverId: 42,
+				publicIp: '1.2.3.4',
+			})
+
+			const target = new HetznerVpsTarget(TARGET_CONFIG)
+
+			await expect(
+				target.deploy('acme-web', DEPLOY_INPUT, DEPLOY_ENV),
+			).rejects.toThrow('No deployable state for "acme-web"')
 		})
 
 		it('SSHs to the tailnet IP from state', async () => {
 			const { createSshSession: mockedSsh } =
 				await import('./ssh-session.ts')
-			seedState('10.0.0.5')
+			seedState({
+				...CONVERGED_STATE,
+				tailnetIp: '100.10.0.5',
+			})
 
 			const target = new HetznerVpsTarget(TARGET_CONFIG)
 			await target.deploy('acme-web', DEPLOY_INPUT, DEPLOY_ENV)
 
 			expect(mockedSsh).toHaveBeenCalledWith(
-				expect.objectContaining({ host: '100.74.91.126' }),
+				expect.objectContaining({ host: '100.10.0.5' }),
 			)
 		})
 
@@ -529,7 +745,7 @@ describe('HetznerVpsTarget', () => {
 		})
 
 		it('computes A records from state publicIp and calls reconciler', async () => {
-			seedState('5.6.7.8')
+			seedState({ ...CONVERGED_STATE, publicIp: '5.6.7.8' })
 
 			const target = new HetznerVpsTarget(TARGET_CONFIG)
 			await target.reconcileDns('acme-web', 'acme-web.example.com')
@@ -550,7 +766,7 @@ describe('HetznerVpsTarget', () => {
 		})
 
 		it('uses dev subdomain for development environment', async () => {
-			seedState('5.6.7.8')
+			seedState({ ...CONVERGED_STATE, publicIp: '5.6.7.8' })
 
 			const target = new HetznerVpsTarget({
 				...TARGET_CONFIG,

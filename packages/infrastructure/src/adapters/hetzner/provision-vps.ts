@@ -33,21 +33,29 @@ export interface ProvisionVpsCredentials {
 	readonly deployPrivateKey: string
 }
 
-export interface ProvisionVpsInput {
+export interface CreateVpsInput {
 	readonly projectName: string
 	readonly hetzner: HetznerVpsDeploySection['hetzner']
 }
 
-export interface ProvisionVpsResult {
+export interface CreateVpsResult {
 	readonly serverId: number
 	readonly publicIp: string
+}
+
+export interface CompleteProvisioningInput {
+	readonly serverId: number
+	readonly projectName: string
+}
+
+export interface CompleteProvisioningResult {
 	readonly tailnetIp: string
 }
 
-export async function provisionVps(
+export async function createVps(
 	credentials: ProvisionVpsCredentials,
-	input: ProvisionVpsInput,
-): Promise<ProvisionVpsResult> {
+	input: CreateVpsInput,
+): Promise<CreateVpsResult> {
 	await assertServerTypeAvailable(
 		credentials.hcloudToken,
 		input.hetzner.serverType,
@@ -96,21 +104,27 @@ export async function provisionVps(
 	)
 	const server = await createServer(credentials.hcloudToken, serverInput)
 
-	await waitForServerRunning(credentials.hcloudToken, server.id)
+	return {
+		serverId: server.id,
+		publicIp: server.public_net.ipv4.ip,
+	}
+}
+
+export async function completeProvisioning(
+	credentials: ProvisionVpsCredentials,
+	input: CompleteProvisioningInput,
+): Promise<CompleteProvisioningResult> {
+	await waitForServerRunning(credentials.hcloudToken, input.serverId)
 
 	const firewallName = `${input.projectName}-fw`
-	logger.info(`Creating firewall "${firewallName}"`)
+	logger.info(`Ensuring firewall "${firewallName}"`)
 	const firewall = await createFirewall(
 		credentials.hcloudToken,
 		firewallName,
 		DEFAULT_FIREWALL_RULES,
 	)
-	await applyFirewall(credentials.hcloudToken, firewall.id, server.id)
+	await applyFirewall(credentials.hcloudToken, firewall.id, input.serverId)
 
-	// Poll the Tailscale API for the device's tailnet IP. Since `tailscale up`
-	// runs first in cloud-init runcmd, the device registers within seconds of
-	// cloud-init reaching that line — well before Docker/Caddy/Vector finish
-	// installing.
 	const tailnetIp = await getTailnetIpByHostname(
 		credentials.tailscaleAuthKey,
 		input.projectName,
@@ -122,9 +136,5 @@ export async function provisionVps(
 		privateKey: credentials.deployPrivateKey,
 	})
 
-	return {
-		serverId: server.id,
-		publicIp: server.public_net.ipv4.ip,
-		tailnetIp,
-	}
+	return { tailnetIp }
 }

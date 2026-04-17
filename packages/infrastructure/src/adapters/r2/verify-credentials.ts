@@ -1,14 +1,11 @@
 import { signSigV4Request } from '../../domain/aws/sigv4.ts'
 import { computeR2Host } from '../../domain/cloudflare/r2/addressing.ts'
-
-const BAD_REQUEST = 400
-const UNAUTHORIZED = 401
-const FORBIDDEN = 403
+import { HTTP_BAD_REQUEST, HTTP_FORBIDDEN, HTTP_UNAUTHORIZED } from '../http.ts'
 
 const INVALID_CRED_STATUSES: ReadonlySet<number> = new Set([
-	BAD_REQUEST,
-	UNAUTHORIZED,
-	FORBIDDEN,
+	HTTP_BAD_REQUEST,
+	HTTP_UNAUTHORIZED,
+	HTTP_FORBIDDEN,
 ])
 
 export interface VerifyR2CredentialsInput {
