@@ -40,7 +40,6 @@ export interface HetznerVpsTargetConfig {
 	readonly environment: AppEnvironment
 	readonly domain: string
 	readonly credentials: HetznerCredentials
-	readonly registryToken: string
 	readonly vector: HetznerVectorConfig | null
 }
 
@@ -118,6 +117,9 @@ export class HetznerVpsTarget implements DeployTarget {
 		if (!input.image) {
 			throw new Error('image is required for Hetzner VPS deploys')
 		}
+		if (!input.registryToken) {
+			throw new Error('registryToken is required for Hetzner VPS deploys')
+		}
 
 		const hostname = resolveDeployDomain(
 			this.config.domain,
@@ -145,7 +147,7 @@ export class HetznerVpsTarget implements DeployTarget {
 				env,
 				secrets: input.secrets,
 				image: input.image,
-				registryToken: this.config.registryToken,
+				registryToken: input.registryToken,
 			})
 
 			const caddyConfig = JSON.stringify(

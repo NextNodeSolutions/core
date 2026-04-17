@@ -25,6 +25,7 @@ export interface DeployEnv {
 export interface DeployInput {
 	readonly secrets: Readonly<Record<string, string>>
 	readonly image?: ImageRef
+	readonly registryToken?: string
 }
 
 interface BaseDeployedEnvironment {
