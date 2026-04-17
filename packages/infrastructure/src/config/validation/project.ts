@@ -75,6 +75,11 @@ export function validateProjectSection(
 	const domainResult = validateDomainFields(raw)
 	errors.push(...domainResult.errors)
 
+	const internal = raw['internal']
+	if (internal !== undefined && typeof internal !== 'boolean') {
+		errors.push('project.internal must be a boolean')
+	}
+
 	if (errors.length > 0 || typeof name !== 'string' || !isProjectType(type)) {
 		return { ok: false, errors }
 	}
@@ -87,6 +92,7 @@ export function validateProjectSection(
 			filter: isScriptValue(filter) ? filter : false,
 			domain: domainResult.domain,
 			redirectDomains: domainResult.redirectDomains,
+			internal: internal === true,
 		},
 	}
 }

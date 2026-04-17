@@ -65,6 +65,18 @@ export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 	const deployResult = validateDeploySection(raw['deploy'], type, hasDomain)
 	if (!deployResult.ok) return { ok: false, errors: deployResult.errors }
 
+	if (
+		projectResult.section.internal &&
+		deployResult.section.target === 'cloudflare-pages'
+	) {
+		return {
+			ok: false,
+			errors: [
+				'project.internal is not supported with deploy target "cloudflare-pages"',
+			],
+		}
+	}
+
 	return {
 		ok: true,
 		config: {

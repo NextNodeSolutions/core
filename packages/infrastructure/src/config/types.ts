@@ -72,6 +72,7 @@ export interface ProjectSection {
 	readonly filter: string | false
 	readonly domain: string | undefined
 	readonly redirectDomains: ReadonlyArray<string>
+	readonly internal: boolean
 }
 
 export interface ScriptsSection {
