@@ -1,7 +1,9 @@
 import {
 	DeleteObjectCommand,
+	DeleteObjectsCommand,
 	GetObjectCommand,
 	HeadObjectCommand,
+	ListObjectsV2Command,
 	NoSuchKey,
 	PutObjectCommand,
 	S3Client,
@@ -76,5 +78,43 @@ export class R2Client {
 			if (name === 'NotFound' || name === '404') return false
 			throw new Error(`R2 exists "${key}"`, { cause: error })
 		}
+	}
+
+	async deleteByPrefix(prefix: string): Promise<number> {
+		let deletedCount = 0
+		let continuationToken: string | undefined
+
+		/* eslint-disable no-await-in-loop -- pagination is intentionally sequential */
+		do {
+			const listResponse = await this.s3.send(
+				new ListObjectsV2Command({
+					Bucket: this.bucket,
+					Prefix: prefix,
+					ContinuationToken: continuationToken,
+				}),
+			)
+
+			const keysToDelete: Array<{ Key: string }> = []
+			for (const object of listResponse.Contents ?? []) {
+				if (typeof object.Key === 'string') {
+					keysToDelete.push({ Key: object.Key })
+				}
+			}
+
+			if (keysToDelete.length > 0) {
+				await this.s3.send(
+					new DeleteObjectsCommand({
+						Bucket: this.bucket,
+						Delete: { Objects: keysToDelete },
+					}),
+				)
+				deletedCount += keysToDelete.length
+			}
+
+			continuationToken = listResponse.NextContinuationToken
+		} while (continuationToken !== undefined)
+		/* eslint-enable no-await-in-loop */
+
+		return deletedCount
 	}
 }

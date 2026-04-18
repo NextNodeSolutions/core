@@ -10,6 +10,7 @@ function createMockR2(): R2Operations {
 		put: vi.fn(),
 		delete: vi.fn(),
 		exists: vi.fn(),
+		deleteByPrefix: vi.fn(),
 	}
 }
 
