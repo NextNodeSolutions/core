@@ -57,6 +57,9 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./dist/index.js"
+    },
+    "./config/types": {
+      "types": "./src/config/types.ts"
     }
   }
 }

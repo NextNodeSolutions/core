@@ -1,4 +1,4 @@
-import type { MonitoringSloConfig } from '@nextnode-solutions/infrastructure/config/schema'
+import type { MonitoringSloConfig } from '@nextnode-solutions/infrastructure/config/types'
 import { describe, expect, it } from 'vitest'
 
 import {

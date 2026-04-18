@@ -1,4 +1,4 @@
-import type { MonitoringSloConfig } from '@nextnode-solutions/infrastructure/config/schema'
+import type { MonitoringSloConfig } from '@nextnode-solutions/infrastructure/config/types'
 
 /**
  * Google SRE workbook multi-window multi-burn-rate alerting windows.
