@@ -1,6 +1,7 @@
 import { createLogger } from '@nextnode-solutions/logger'
 
 import type { HetznerVpsDeploySection } from '../../../config/types.ts'
+import type { ResourceOutcome } from '../../../domain/deploy/target.ts'
 import {
 	renderCloudInit,
 	renderProjectCloudInit,
@@ -46,6 +47,7 @@ export interface CreateVpsInput {
 export interface CreateVpsResult {
 	readonly serverId: number
 	readonly publicIp: string
+	readonly outcome: ResourceOutcome
 }
 
 export interface CompleteProvisioningInput {
@@ -56,6 +58,8 @@ export interface CompleteProvisioningInput {
 
 export interface CompleteProvisioningResult {
 	readonly tailnetIp: string
+	readonly firewallOutcome: ResourceOutcome
+	readonly tailscaleOutcome: ResourceOutcome
 }
 
 export async function createVps(
@@ -126,6 +130,7 @@ export async function createVps(
 	return {
 		serverId: server.id,
 		publicIp: server.public_net.ipv4.ip,
+		outcome: { handled: true, detail: `created #${String(server.id)}` },
 	}
 }
 
@@ -155,5 +160,12 @@ export async function completeProvisioning(
 		privateKey: credentials.deployPrivateKey,
 	})
 
-	return { tailnetIp }
+	return {
+		tailnetIp,
+		firewallOutcome: { handled: true, detail: `created "${firewallName}"` },
+		tailscaleOutcome: {
+			handled: true,
+			detail: `joined (${tailnetIp})`,
+		},
+	}
 }

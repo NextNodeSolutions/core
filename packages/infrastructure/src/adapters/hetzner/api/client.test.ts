@@ -4,9 +4,11 @@ import {
 	applyFirewall,
 	createFirewall,
 	createServer,
+	deleteFirewall,
 	deleteImage,
 	deleteServer,
 	describeServer,
+	findFirewallsByName,
 	findImagesByLabels,
 } from './client.ts'
 
@@ -163,7 +165,16 @@ describe('deleteServer', () => {
 		expect(init.method).toBe('DELETE')
 	})
 
-	it('throws on error', async () => {
+	it('returns silently when server is already gone (404)', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue(httpError(404, 'not found')),
+		)
+
+		await expect(deleteServer(TOKEN, 123)).resolves.toBeUndefined()
+	})
+
+	it('throws on non-404 error', async () => {
 		vi.stubGlobal(
 			'fetch',
 			vi.fn().mockResolvedValue(httpError(403, 'forbidden')),
@@ -171,6 +182,92 @@ describe('deleteServer', () => {
 
 		await expect(deleteServer(TOKEN, 123)).rejects.toThrow(
 			/delete server 123.*403/,
+		)
+	})
+})
+
+describe('findFirewallsByName', () => {
+	const firewallListPayload = {
+		firewalls: [{ id: 42, name: 'acme-web-fw' }],
+	}
+
+	it('sends name query param and returns parsed firewalls', async () => {
+		const mock = vi.fn().mockResolvedValue(okJson(firewallListPayload))
+		vi.stubGlobal('fetch', mock)
+
+		const result = await findFirewallsByName(TOKEN, 'acme-web-fw')
+
+		expect(result).toHaveLength(1)
+		expect(result[0]!.id).toBe(42)
+		expect(result[0]!.name).toBe('acme-web-fw')
+
+		const [url] = lastCall(mock)
+		expect(url).toContain('/firewalls?name=acme-web-fw')
+	})
+
+	it('returns empty array when no firewalls match', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue(okJson({ firewalls: [] })),
+		)
+
+		const result = await findFirewallsByName(TOKEN, 'nonexistent')
+
+		expect(result).toHaveLength(0)
+	})
+
+	it('throws on HTTP error', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue(httpError(401, 'unauthorized')),
+		)
+
+		await expect(findFirewallsByName(TOKEN, 'acme-web-fw')).rejects.toThrow(
+			/list firewalls.*401.*unauthorized/,
+		)
+	})
+
+	it('throws on missing firewalls array in response', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue(okJson({ unexpected: true })),
+		)
+
+		await expect(findFirewallsByName(TOKEN, 'acme-web-fw')).rejects.toThrow(
+			/missing `firewalls` array/,
+		)
+	})
+})
+
+describe('deleteFirewall', () => {
+	it('sends DELETE request to correct URL', async () => {
+		const mock = vi.fn().mockResolvedValue(noContent())
+		vi.stubGlobal('fetch', mock)
+
+		await deleteFirewall(TOKEN, 42)
+
+		const [url, init] = lastCall(mock)
+		expect(url).toBe('https://api.hetzner.cloud/v1/firewalls/42')
+		expect(init.method).toBe('DELETE')
+	})
+
+	it('returns silently when firewall is already gone (404)', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue(httpError(404, 'not found')),
+		)
+
+		await expect(deleteFirewall(TOKEN, 42)).resolves.toBeUndefined()
+	})
+
+	it('throws on non-404 error', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue(httpError(403, 'forbidden')),
+		)
+
+		await expect(deleteFirewall(TOKEN, 42)).rejects.toThrow(
+			/delete firewall 42.*403/,
 		)
 	})
 })

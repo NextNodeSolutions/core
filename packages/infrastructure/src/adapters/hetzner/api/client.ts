@@ -161,6 +161,10 @@ export async function findServersByLabels(
 	return servers.map((s, i) => parseServerObject(s, `servers[${i}]`))
 }
 
+/**
+ * Delete a server. Returns silently if the server is already gone (404),
+ * making this safe for idempotent teardown.
+ */
 export async function deleteServer(
 	token: string,
 	serverId: number,
@@ -169,7 +173,51 @@ export async function deleteServer(
 		method: 'DELETE',
 		headers: authHeaders(token),
 	})
+	if (response.status === HTTP_NOT_FOUND) return
 	await requireOk(response, `delete server ${serverId}`)
+}
+
+export async function findFirewallsByName(
+	token: string,
+	name: string,
+): Promise<ReadonlyArray<HcloudFirewallResponse>> {
+	const url = new URL(`${HCLOUD_API_BASE}/firewalls`)
+	url.searchParams.set('name', name)
+	const response = await fetch(url, { headers: authHeaders(token) })
+	await requireOk(response, `list firewalls name="${name}"`)
+	const data: unknown = await response.json()
+	if (!isRecord(data) || !Array.isArray(data.firewalls)) {
+		throw new Error(
+			`list firewalls name="${name}": missing \`firewalls\` array`,
+		)
+	}
+	const firewalls: ReadonlyArray<unknown> = data.firewalls
+	return firewalls.map((fw, i) => {
+		if (
+			!isRecord(fw) ||
+			typeof fw.id !== 'number' ||
+			typeof fw.name !== 'string'
+		) {
+			throw new Error(`firewalls[${i}]: invalid firewall shape`)
+		}
+		return { id: fw.id, name: fw.name }
+	})
+}
+
+/**
+ * Delete a firewall. Returns silently if already gone (404),
+ * making this safe for idempotent teardown.
+ */
+export async function deleteFirewall(
+	token: string,
+	firewallId: number,
+): Promise<void> {
+	const response = await fetch(`${HCLOUD_API_BASE}/firewalls/${firewallId}`, {
+		method: 'DELETE',
+		headers: authHeaders(token),
+	})
+	if (response.status === HTTP_NOT_FOUND) return
+	await requireOk(response, `delete firewall ${firewallId}`)
 }
 
 export async function createFirewall(

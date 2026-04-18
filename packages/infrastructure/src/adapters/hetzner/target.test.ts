@@ -1,8 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type {
+	TeardownResult,
+	VpsTeardownResult,
+} from '../../domain/deploy/target.ts'
+
 import type { SshSession } from './ssh/session.types.ts'
 import type { HcloudProjectState } from './state/types.ts'
 import { HetznerVpsTarget } from './target.ts'
+
+function requireVps(result: TeardownResult): VpsTeardownResult {
+	if (result.kind !== 'vps') {
+		throw new Error(`Expected kind=vps, got ${result.kind}`)
+	}
+	return result
+}
 
 // Mock hcloud-client (network boundary)
 vi.mock(import('./api/client.ts'), async importOriginal => {
@@ -35,6 +47,9 @@ vi.mock(import('./api/client.ts'), async importOriginal => {
 		})),
 		applyFirewall: vi.fn(async () => undefined),
 		assertServerTypeAvailable: vi.fn(async () => undefined),
+		deleteServer: vi.fn(async () => undefined),
+		findFirewallsByName: vi.fn(async () => []),
+		deleteFirewall: vi.fn(async () => undefined),
 	}
 })
 
@@ -73,6 +88,14 @@ const { mockReconcileDnsRecords } = vi.hoisted(() => ({
 }))
 vi.mock('../cloudflare/dns/reconcile.ts', () => ({
 	reconcileDnsRecords: mockReconcileDnsRecords,
+}))
+
+// Mock Cloudflare DNS delete (network boundary: Cloudflare API)
+const { mockDeleteDnsRecordsByName } = vi.hoisted(() => ({
+	mockDeleteDnsRecordsByName: vi.fn(async () => 0),
+}))
+vi.mock('../cloudflare/dns/delete-records.ts', () => ({
+	deleteDnsRecordsByName: mockDeleteDnsRecordsByName,
 }))
 
 // Mock R2Client (network boundary)
@@ -848,6 +871,120 @@ describe('HetznerVpsTarget', () => {
 				],
 				'cf-token',
 			)
+		})
+	})
+
+	describe('teardown', () => {
+		it('deletes all resources when state exists', async () => {
+			seedState()
+			const { deleteServer: mockedDelete } =
+				await import('./api/client.ts')
+			const { findFirewallsByName: mockedFindFw } =
+				await import('./api/client.ts')
+			const { deleteTailnetDevicesByHostname: mockedTailscale } =
+				await import('../tailscale/oauth.ts')
+			vi.mocked(mockedFindFw).mockResolvedValueOnce([
+				{ id: 99, name: 'acme-web-fw' },
+			])
+			vi.mocked(mockedTailscale).mockResolvedValueOnce(1)
+			mockDeleteDnsRecordsByName.mockResolvedValueOnce(1)
+
+			const target = new HetznerVpsTarget(TARGET_CONFIG)
+			const raw = await target.teardown(
+				'acme-web',
+				'acme-web.example.com',
+			)
+			const result = requireVps(raw)
+
+			expect(result.outcome.server.handled).toBe(true)
+			expect(result.outcome.server.detail).toContain('#42')
+			expect(result.outcome.firewall.handled).toBe(true)
+			expect(result.outcome.tailscale.handled).toBe(true)
+			expect(result.outcome.dns.handled).toBe(true)
+			expect(result.outcome.state.handled).toBe(true)
+			expect(mockedDelete).toHaveBeenCalledWith('hcloud-token', 42)
+		})
+
+		it('reports server as already gone when no state and no orphans', async () => {
+			const target = new HetznerVpsTarget(TARGET_CONFIG)
+			const result = requireVps(
+				await target.teardown('acme-web', 'acme-web.example.com'),
+			)
+
+			expect(result.outcome.server.handled).toBe(false)
+			expect(result.outcome.server.detail).toBe('already gone')
+		})
+
+		it('deletes orphan servers found by labels when no state exists', async () => {
+			const { findServersByLabels: mockedFind } =
+				await import('./api/client.ts')
+			const { deleteServer: mockedDelete } =
+				await import('./api/client.ts')
+			vi.mocked(mockedFind).mockResolvedValueOnce([
+				{
+					id: 99,
+					name: 'acme-web',
+					status: 'running',
+					public_net: { ipv4: { ip: '9.9.9.9' } },
+				},
+			])
+
+			const target = new HetznerVpsTarget(TARGET_CONFIG)
+			const result = requireVps(
+				await target.teardown('acme-web', 'acme-web.example.com'),
+			)
+
+			expect(result.outcome.server.handled).toBe(true)
+			expect(result.outcome.server.detail).toContain('orphan')
+			expect(mockedDelete).toHaveBeenCalledWith('hcloud-token', 99)
+		})
+
+		it('reports firewall as not found when it does not exist', async () => {
+			seedState()
+
+			const target = new HetznerVpsTarget(TARGET_CONFIG)
+			const result = requireVps(
+				await target.teardown('acme-web', 'acme-web.example.com'),
+			)
+
+			expect(result.outcome.firewall.handled).toBe(false)
+			expect(result.outcome.firewall.detail).toBe('not found')
+		})
+
+		it('skips DNS when no domain is configured', async () => {
+			seedState()
+
+			const target = new HetznerVpsTarget({
+				...TARGET_CONFIG,
+				domain: 'acme-web.example.com',
+			})
+			const result = requireVps(
+				await target.teardown('acme-web', undefined),
+			)
+
+			expect(result.outcome.dns.handled).toBe(false)
+			expect(result.outcome.dns.detail).toBe('no domain configured')
+			expect(mockDeleteDnsRecordsByName).not.toHaveBeenCalled()
+		})
+
+		it('deletes R2 state', async () => {
+			seedState()
+
+			const target = new HetznerVpsTarget(TARGET_CONFIG)
+			await target.teardown('acme-web', 'acme-web.example.com')
+
+			expect(fakeR2State.has('hetzner/acme-web.json')).toBe(false)
+		})
+
+		it('returns a VpsTeardownResult with correct duration', async () => {
+			seedState()
+
+			const target = new HetznerVpsTarget(TARGET_CONFIG)
+			const result = requireVps(
+				await target.teardown('acme-web', 'acme-web.example.com'),
+			)
+
+			expect(result.durationMs).toBeGreaterThanOrEqual(0)
 		})
 	})
 })
