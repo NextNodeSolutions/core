@@ -19,7 +19,15 @@ describe('createOrgSecretsAdapter', () => {
 		await adapter.setOrgSecret('R2_ACCESS_KEY_ID', 'my-id', 'NextNodeOrg')
 
 		expect(runner).toHaveBeenCalledWith(
-			['secret', 'set', 'R2_ACCESS_KEY_ID', '--org', 'NextNodeOrg'],
+			[
+				'secret',
+				'set',
+				'R2_ACCESS_KEY_ID',
+				'--org',
+				'NextNodeOrg',
+				'--visibility',
+				'all',
+			],
 			'my-id',
 		)
 	})
