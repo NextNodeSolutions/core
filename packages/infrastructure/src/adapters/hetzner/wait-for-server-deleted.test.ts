@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type { HcloudServerResponse } from './api/server.ts'
 import { waitForServerDeleted } from './wait-for-server-deleted.ts'
 
 vi.mock(import('./api/client.ts'), async importOriginal => {
@@ -23,6 +24,15 @@ afterEach(() => {
 	vi.unstubAllEnvs()
 })
 
+const serverFixture = (
+	status: 'deleting' | 'running',
+): HcloudServerResponse => ({
+	id: 42,
+	name: 'x',
+	status,
+	public_net: { ipv4: { ip: '1.2.3.4' } },
+})
+
 describe('waitForServerDeleted', () => {
 	it('resolves immediately when the server is already gone', async () => {
 		await expect(waitForServerDeleted('t', 42)).resolves.toBeUndefined()
@@ -31,18 +41,8 @@ describe('waitForServerDeleted', () => {
 	it('polls until the server returns 404', async () => {
 		const { findServerById: mocked } = await import('./api/client.ts')
 		vi.mocked(mocked)
-			.mockResolvedValueOnce({
-				id: 42,
-				name: 'x',
-				status: 'deleting',
-				public_net: { ipv4: { ip: '1.2.3.4' } },
-			})
-			.mockResolvedValueOnce({
-				id: 42,
-				name: 'x',
-				status: 'deleting',
-				public_net: { ipv4: { ip: '1.2.3.4' } },
-			})
+			.mockResolvedValueOnce(serverFixture('deleting'))
+			.mockResolvedValueOnce(serverFixture('deleting'))
 			.mockResolvedValueOnce(null)
 
 		await expect(waitForServerDeleted('t', 42)).resolves.toBeUndefined()
@@ -50,12 +50,7 @@ describe('waitForServerDeleted', () => {
 
 	it('throws after max attempts when the server persists', async () => {
 		const { findServerById: mocked } = await import('./api/client.ts')
-		vi.mocked(mocked).mockResolvedValue({
-			id: 42,
-			name: 'x',
-			status: 'running',
-			public_net: { ipv4: { ip: '1.2.3.4' } },
-		})
+		vi.mocked(mocked).mockResolvedValue(serverFixture('running'))
 
 		await expect(waitForServerDeleted('t', 42)).rejects.toThrow(
 			'still present after 24 attempts',

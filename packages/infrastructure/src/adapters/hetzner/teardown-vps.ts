@@ -29,7 +29,6 @@ export async function teardownServer(
 		const { serverId } = existing.state
 		await deleteServer(hcloudToken, serverId)
 		await waitForServerDeleted(hcloudToken, serverId)
-		logger.info(`Server #${String(serverId)} deleted`)
 		return {
 			handled: true,
 			detail: `deleted #${String(serverId)}`,
@@ -44,8 +43,12 @@ export async function teardownServer(
 		return { handled: false, detail: 'already gone' }
 	}
 
-	await Promise.all(orphans.map(s => deleteServer(hcloudToken, s.id)))
-	await Promise.all(orphans.map(s => waitForServerDeleted(hcloudToken, s.id)))
+	await Promise.all(
+		orphans.map(async s => {
+			await deleteServer(hcloudToken, s.id)
+			await waitForServerDeleted(hcloudToken, s.id)
+		}),
+	)
 	const ids = orphans.map(s => String(s.id)).join(', ')
 	logger.info(`Orphan server(s) deleted: ${ids}`)
 	return { handled: true, detail: `deleted orphan(s) #${ids}` }
