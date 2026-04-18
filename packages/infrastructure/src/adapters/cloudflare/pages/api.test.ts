@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
 	attachPagesDomain,
 	createPagesProject,
+	deletePagesProject,
 	getPagesProject,
 	listPagesDomains,
 } from './api.ts'
@@ -334,6 +335,62 @@ describe('listPagesDomains', () => {
 
 		await expect(listPagesDomains(ACCOUNT, PROJECT, TOKEN)).rejects.toThrow(
 			'[10001] Invalid account',
+		)
+	})
+})
+
+describe('deletePagesProject', () => {
+	it('sends DELETE request and returns true on success', async () => {
+		const fetchMock = vi.fn().mockResolvedValue({
+			ok: true,
+			status: 200,
+			json: () => Promise.resolve(null),
+			text: () => Promise.resolve(''),
+		})
+		vi.stubGlobal('fetch', fetchMock)
+
+		const deleted = await deletePagesProject(ACCOUNT, PROJECT, TOKEN)
+
+		expect(deleted).toBe(true)
+		expect(fetchMock).toHaveBeenCalledWith(
+			`https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/pages/projects/${PROJECT}`,
+			expect.objectContaining({ method: 'DELETE' }),
+		)
+	})
+
+	it('returns false when the project is already gone (404)', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(notFound()))
+
+		const deleted = await deletePagesProject(ACCOUNT, PROJECT, TOKEN)
+
+		expect(deleted).toBe(false)
+	})
+
+	it('throws on non-404 HTTP errors', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue(httpError(403, 'forbidden')),
+		)
+
+		await expect(
+			deletePagesProject(ACCOUNT, PROJECT, TOKEN),
+		).rejects.toThrow('Cloudflare API returned 403')
+	})
+
+	it('URL-encodes the project name', async () => {
+		const fetchMock = vi.fn().mockResolvedValue({
+			ok: true,
+			status: 200,
+			json: () => Promise.resolve(null),
+			text: () => Promise.resolve(''),
+		})
+		vi.stubGlobal('fetch', fetchMock)
+
+		await deletePagesProject(ACCOUNT, 'weird name', TOKEN)
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			`https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/pages/projects/weird%20name`,
+			expect.any(Object),
 		)
 	})
 })

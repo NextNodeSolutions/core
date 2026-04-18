@@ -6,6 +6,7 @@ import {
 	findStalePagesDomains,
 	reconcilePagesDomain,
 } from '../../../domain/cloudflare/pages-domains.ts'
+import type { ResourceOutcome } from '../../../domain/deploy/target.ts'
 import type { AppEnvironment } from '../../../domain/environment.ts'
 
 import type { CloudflarePagesDomain } from './api.ts'
@@ -24,7 +25,7 @@ export interface ReconcileDomainsInput {
 
 export async function reconcileDomains(
 	input: ReconcileDomainsInput,
-): Promise<void> {
+): Promise<ResourceOutcome> {
 	const desired = computePagesDomains({
 		domain: input.domain,
 		redirectDomains: input.redirectDomains,
@@ -54,6 +55,11 @@ export async function reconcileDomains(
 		logger.warn(
 			`${stale.length} attached domain(s) not in config: ${stale.map(s => s.name).join(', ')}`,
 		)
+	}
+
+	return {
+		handled: true,
+		detail: `reconciled for "${input.domain}"`,
 	}
 }
 
