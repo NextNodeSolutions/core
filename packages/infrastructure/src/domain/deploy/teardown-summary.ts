@@ -1,12 +1,12 @@
 import { formatDuration } from './deploy-summary.ts'
-import type { ProvisionResult } from './target.ts'
+import type { TeardownResult } from './target.ts'
 
-export function buildProvisionSummary(
-	result: ProvisionResult,
+export function buildTeardownSummary(
+	result: TeardownResult,
 	projectName: string,
 	targetName: string,
 ): string {
-	const heading = `### :white_check_mark: Infrastructure ready for \`${projectName}\``
+	const heading = `### :wastebasket: Infrastructure torn down for \`${projectName}\``
 	const rows = buildSummaryRows(result, targetName)
 	const table = renderKeyValueTable(rows)
 
@@ -14,7 +14,7 @@ export function buildProvisionSummary(
 }
 
 function buildSummaryRows(
-	result: ProvisionResult,
+	result: TeardownResult,
 	targetName: string,
 ): ReadonlyArray<readonly [string, string]> {
 	const rows: Array<readonly [string, string]> = []

@@ -1,4 +1,7 @@
-import type { DesiredDnsRecord } from '../cloudflare/dns-records.ts'
+import type {
+	DesiredDnsRecord,
+	DnsRecordLookup,
+} from '../cloudflare/dns-records.ts'
 import { extractRootDomain } from '../cloudflare/dns-records.ts'
 import { resolveDeployDomain } from '../deploy/domain.ts'
 import type { AppEnvironment } from '../environment.ts'
@@ -25,6 +28,19 @@ export interface VpsDnsRecordsInput {
  *
  * Proxied records use TTL=1 (Cloudflare auto). Unproxied use TTL=300.
  */
+/**
+ * Compute the DNS record lookups for a Hetzner VPS teardown.
+ * Returns only the zoneName + name pairs needed to find and delete
+ * records - no IP required.
+ */
+export function computeVpsDnsLookups(input: {
+	readonly domain: string
+	readonly environment: AppEnvironment
+}): ReadonlyArray<DnsRecordLookup> {
+	const hostname = resolveDeployDomain(input.domain, input.environment)
+	return [{ zoneName: extractRootDomain(hostname), name: hostname }]
+}
+
 export function computeVpsDnsRecords(
 	input: VpsDnsRecordsInput,
 ): ReadonlyArray<DesiredDnsRecord> {

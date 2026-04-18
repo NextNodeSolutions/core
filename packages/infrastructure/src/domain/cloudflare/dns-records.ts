@@ -4,9 +4,17 @@ import type { AppEnvironment } from '../environment.ts'
 const DNS_TTL_UNPROXIED = 300
 const MIN_DOMAIN_PARTS = 2
 
-export interface DesiredDnsRecord {
+/**
+ * Minimal identifier for a DNS record - just enough to look it up
+ * in Cloudflare. Used by teardown to find records to delete without
+ * needing the full record content (IP, subdomain, etc.).
+ */
+export interface DnsRecordLookup {
 	readonly zoneName: string
 	readonly name: string
+}
+
+export interface DesiredDnsRecord extends DnsRecordLookup {
 	readonly type: 'CNAME' | 'A'
 	readonly content: string
 	readonly proxied: boolean
@@ -61,6 +69,33 @@ export function computeDnsRecords(
 			false,
 		),
 	]
+}
+
+/**
+ * Compute the DNS record lookups for a Cloudflare Pages teardown.
+ * Returns only the zoneName + name pairs needed to find and delete
+ * records - no subdomain or content required.
+ */
+export function computePagesDnsLookups(input: {
+	readonly domain: string
+	readonly redirectDomains: ReadonlyArray<string>
+	readonly environment: AppEnvironment
+}): ReadonlyArray<DnsRecordLookup> {
+	if (input.environment === 'production') {
+		return [
+			buildLookup(input.domain),
+			...input.redirectDomains.map(buildLookup),
+		]
+	}
+
+	return [buildLookup(resolveDeployDomain(input.domain, input.environment))]
+}
+
+function buildLookup(hostname: string): DnsRecordLookup {
+	return {
+		zoneName: extractRootDomain(hostname),
+		name: hostname,
+	}
 }
 
 function buildCname(

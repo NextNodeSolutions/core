@@ -1,3 +1,6 @@
+import type { PagesManagedResource } from '../cloudflare/managed-resources.ts'
+import type { VpsManagedResource } from '../hetzner/managed-resources.ts'
+
 export interface ImageRef {
 	readonly registry: string
 	readonly repository: string
@@ -49,6 +52,7 @@ export type DeployedEnvironment =
 
 export interface VpsProvisionResult {
 	readonly kind: 'vps'
+	readonly outcome: VpsResourceOutcome
 	readonly serverId: number
 	readonly serverType: string
 	readonly location: string
@@ -59,6 +63,7 @@ export interface VpsProvisionResult {
 
 export interface StaticProvisionResult {
 	readonly kind: 'static'
+	readonly outcome: PagesResourceOutcome
 	readonly pagesProjectName: string
 	readonly durationMs: number
 }
@@ -75,6 +80,40 @@ export interface DeployResult {
 	readonly deployedEnvironments: ReadonlyArray<DeployedEnvironment>
 	readonly durationMs: number
 }
+
+// -- Resource outcome types --------------------------------------------------
+
+export interface ResourceOutcome {
+	readonly handled: boolean
+	readonly detail: string
+}
+
+/**
+ * Mapped from VPS_MANAGED_RESOURCES - adding a resource to the tuple
+ * breaks both provision and teardown until both handle it.
+ */
+export type VpsResourceOutcome = Readonly<
+	Record<VpsManagedResource, ResourceOutcome>
+>
+
+export type PagesResourceOutcome = Readonly<
+	Record<PagesManagedResource, ResourceOutcome>
+>
+
+export interface VpsTeardownResult {
+	readonly kind: 'vps'
+	readonly outcome: VpsResourceOutcome
+	readonly durationMs: number
+}
+
+export interface StaticTeardownResult {
+	readonly kind: 'static'
+	readonly pagesProjectName: string
+	readonly outcome: PagesResourceOutcome
+	readonly durationMs: number
+}
+
+export type TeardownResult = VpsTeardownResult | StaticTeardownResult
 
 export interface DeployTarget {
 	readonly name: string
@@ -93,5 +132,9 @@ export interface DeployTarget {
 		input: DeployInput,
 		env: DeployEnv,
 	): Promise<DeployResult>
+	teardown(
+		projectName: string,
+		domain: string | undefined,
+	): Promise<TeardownResult>
 	describe?(projectName: string): Promise<TargetState | null>
 }
