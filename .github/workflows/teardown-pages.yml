@@ -1,0 +1,76 @@
+name: Teardown Cloudflare Pages
+
+# Tears down a single Cloudflare Pages project (project + DNS) for a target
+# NextNode repo. Run manually from the GitHub UI — access to this workflow is
+# controlled by write access to the core repo.
+
+on:
+    workflow_dispatch:
+        inputs:
+            repository:
+                type: string
+                required: true
+                description: 'owner/repo of the target (e.g. NextNodeSolutions/my-site)'
+            environment:
+                type: choice
+                required: true
+                options:
+                    - development
+                    - production
+                description: 'Environment to tear down'
+            confirm:
+                type: string
+                required: true
+                description: 'Type the project name (matches [project].name in the target nextnode.toml) to authorize teardown'
+            config_file:
+                type: string
+                default: nextnode.toml
+                description: 'Path to nextnode.toml inside the target repo'
+
+permissions:
+    contents: read
+
+jobs:
+    teardown:
+        name: Teardown
+        runs-on: ubuntu-latest
+        steps:
+            - uses: NextNodeSolutions/core/.github/actions/setup@main
+              with:
+                  infra: 'true'
+                  deps: 'false'
+
+            - name: Generate GitHub App token
+              id: app-token
+              uses: actions/create-github-app-token@v2
+              with:
+                  app-id: ${{ secrets.NEXTNODE_APP_ID }}
+                  private-key: ${{ secrets.NEXTNODE_APP_PRIVATE_KEY }}
+                  owner: NextNodeSolutions
+
+            - name: Checkout target repository
+              uses: actions/checkout@v6
+              with:
+                  repository: ${{ inputs.repository }}
+                  token: ${{ steps.app-token.outputs.token }}
+                  path: target
+                  sparse-checkout: ${{ inputs.config_file }}
+                  sparse-checkout-cone-mode: false
+
+            - name: Guard teardown confirmation
+              run: node src/index.ts teardown-guard
+              working-directory: .infra/packages/infrastructure
+              env:
+                  PIPELINE_CONFIG_FILE: ${{ github.workspace }}/target/${{ inputs.config_file }}
+                  PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
+                  TEARDOWN_CONFIRM: ${{ inputs.confirm }}
+
+            - name: Teardown
+              run: node src/index.ts teardown
+              working-directory: .infra/packages/infrastructure
+              env:
+                  PIPELINE_CONFIG_FILE: ${{ github.workspace }}/target/${{ inputs.config_file }}
+                  PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
+                  TEARDOWN_TARGET: project
+                  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+                  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
