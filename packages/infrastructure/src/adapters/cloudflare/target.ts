@@ -3,8 +3,10 @@ import { createLogger } from '@nextnode-solutions/logger'
 const logger = createLogger()
 
 import { computeDnsRecords } from '../../domain/cloudflare/dns-records.ts'
+import { PAGES_MANAGED_RESOURCES } from '../../domain/cloudflare/managed-resources.ts'
 import { computePagesProjectName } from '../../domain/cloudflare/pages-project-name.ts'
 import { resolveDeployDomain } from '../../domain/deploy/domain.ts'
+import { executeHandlers } from '../../domain/deploy/execute-handlers.ts'
 import type {
 	DeployEnv,
 	DeployInput,
@@ -12,6 +14,7 @@ import type {
 	DeployTarget,
 	ProvisionResult,
 	StaticDeployedEnvironment,
+	TeardownResult,
 } from '../../domain/deploy/target.ts'
 import type { AppEnvironment } from '../../domain/environment.ts'
 
@@ -20,6 +23,7 @@ import { getPagesProject } from './pages/api.ts'
 import { reconcileDomains } from './pages/domains.ts'
 import { updatePagesEnvVars } from './pages/env.ts'
 import { provisionProject } from './pages/project.ts'
+import { teardownPagesDns, teardownProject } from './teardown-pages.ts'
 
 export interface CloudflarePagesTargetConfig {
 	readonly environment: AppEnvironment
@@ -66,18 +70,23 @@ export class CloudflarePagesTarget implements DeployTarget {
 			this.environment,
 		)
 
-		await provisionProject(this.accountId, pagesProjectName, this.token)
-
-		if (this.domain) {
-			await reconcileDomains({
-				accountId: this.accountId,
-				pagesProjectName,
-				token: this.token,
-				domain: this.domain,
-				redirectDomains: this.redirectDomains,
-				environment: this.environment,
-			})
-		}
+		const outcome = await executeHandlers(PAGES_MANAGED_RESOURCES, {
+			'pages-project': () =>
+				provisionProject(this.accountId, pagesProjectName, this.token),
+			dns: () => {
+				if (!this.domain) {
+					return { handled: false, detail: 'no domain configured' }
+				}
+				return reconcileDomains({
+					accountId: this.accountId,
+					pagesProjectName,
+					token: this.token,
+					domain: this.domain,
+					redirectDomains: this.redirectDomains,
+					environment: this.environment,
+				})
+			},
+		})
 
 		logger.info(
 			`Infrastructure ready for "${pagesProjectName}" (${this.environment})`,
@@ -85,6 +94,7 @@ export class CloudflarePagesTarget implements DeployTarget {
 
 		return {
 			kind: 'static',
+			outcome,
 			pagesProjectName,
 			durationMs: Date.now() - start,
 		}
@@ -141,6 +151,38 @@ export class CloudflarePagesTarget implements DeployTarget {
 		return {
 			projectName,
 			deployedEnvironments: [deployed],
+			durationMs: Date.now() - start,
+		}
+	}
+
+	async teardown(
+		projectName: string,
+		domain: string | undefined,
+	): Promise<TeardownResult> {
+		const start = Date.now()
+		const pagesProjectName = computePagesProjectName(
+			projectName,
+			this.environment,
+		)
+
+		const outcome = await executeHandlers(PAGES_MANAGED_RESOURCES, {
+			'pages-project': () =>
+				teardownProject(this.accountId, pagesProjectName, this.token),
+			dns: () =>
+				teardownPagesDns(
+					domain,
+					this.redirectDomains,
+					this.environment,
+					this.token,
+				),
+		})
+
+		logger.info(`Teardown complete for "${projectName}"`)
+
+		return {
+			kind: 'static',
+			pagesProjectName,
+			outcome,
 			durationMs: Date.now() - start,
 		}
 	}

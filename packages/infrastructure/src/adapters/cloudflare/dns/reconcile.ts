@@ -1,6 +1,9 @@
 import { createLogger } from '@nextnode-solutions/logger'
 
-import type { DesiredDnsRecord } from '../../../domain/cloudflare/dns-records.ts'
+import type {
+	DesiredDnsRecord,
+	DnsRecordLookup,
+} from '../../../domain/cloudflare/dns-records.ts'
 import { reconcileDnsRecord } from '../../../domain/cloudflare/dns-records.ts'
 
 import {
@@ -16,7 +19,7 @@ import {
 const logger = createLogger()
 
 export async function resolveAllZoneIds(
-	records: ReadonlyArray<DesiredDnsRecord>,
+	records: ReadonlyArray<DnsRecordLookup>,
 	token: string,
 ): Promise<Map<string, string>> {
 	const uniqueZones = [...new Set(records.map(r => r.zoneName))]

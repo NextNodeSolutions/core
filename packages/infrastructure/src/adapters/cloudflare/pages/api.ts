@@ -175,3 +175,25 @@ export async function createPagesProject(
 
 	return parsePagesProject(requireObjectResult(data, context))
 }
+
+/**
+ * Delete a Cloudflare Pages project. Returns `true` if the project was
+ * deleted, `false` if it was already gone (404). All other HTTP errors
+ * propagate - this is safe for idempotent teardown.
+ */
+export async function deletePagesProject(
+	accountId: string,
+	projectName: string,
+	token: string,
+): Promise<boolean> {
+	const response = await fetch(
+		`${CLOUDFLARE_API_BASE}/accounts/${accountId}/pages/projects/${encodeURIComponent(projectName)}`,
+		{
+			method: 'DELETE',
+			headers: authHeaders(token),
+		},
+	)
+	if (response.status === HTTP_NOT_FOUND) return false
+	await requireOk(response)
+	return true
+}
