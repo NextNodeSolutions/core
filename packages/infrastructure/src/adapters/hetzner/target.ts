@@ -3,16 +3,20 @@ import { createLogger } from '@nextnode-solutions/logger'
 import type { HetznerVpsDeploySection } from '../../config/types.ts'
 import type { R2RuntimeConfig } from '../../domain/cloudflare/r2/runtime-config.ts'
 import { resolveDeployDomain } from '../../domain/deploy/domain.ts'
+import { executeHandlers } from '../../domain/deploy/execute-handlers.ts'
 import type {
 	DeployEnv,
 	DeployInput,
 	DeployResult,
 	DeployTarget,
+	TeardownResult,
 	VpsProvisionResult,
+	VpsResourceOutcome,
 } from '../../domain/deploy/target.ts'
 import type { AppEnvironment } from '../../domain/environment.ts'
 import { buildCaddyForProject } from '../../domain/hetzner/caddy-for-project.ts'
 import { computeVpsDnsRecords } from '../../domain/hetzner/dns-records.ts'
+import { VPS_MANAGED_RESOURCES } from '../../domain/hetzner/managed-resources.ts'
 import { reconcileDnsRecords } from '../cloudflare/dns/reconcile.ts'
 import { R2Client } from '../r2/client.ts'
 
@@ -21,6 +25,13 @@ import { deployContainer } from './deploy-container.ts'
 import { freshProvision, resumeFromState } from './provision/ensure-infra.ts'
 import { createSshSession } from './ssh/session.ts'
 import { readState } from './state/read-write.ts'
+import {
+	teardownFirewall,
+	teardownServer,
+	teardownTailscale,
+	teardownVpsDns,
+	teardownVpsState,
+} from './teardown-vps.ts'
 
 const logger = createLogger()
 
@@ -67,24 +78,23 @@ export class HetznerVpsTarget implements DeployTarget {
 		const start = Date.now()
 		const existing = await readState(this.r2, projectName)
 
-		if (existing) {
-			await resumeFromState(
-				this.config,
-				this.r2,
-				projectName,
-				existing.state,
-				existing.etag,
-			)
-			return this.readProvisionResult(projectName, start)
-		}
+		const outcome = existing
+			? await resumeFromState(
+					this.config,
+					this.r2,
+					projectName,
+					existing.state,
+					existing.etag,
+				)
+			: await freshProvision(this.config, this.r2, projectName)
 
-		await freshProvision(this.config, this.r2, projectName)
-		return this.readProvisionResult(projectName, start)
+		return this.readProvisionResult(projectName, start, outcome)
 	}
 
 	private async readProvisionResult(
 		projectName: string,
 		startMs: number,
+		outcome: VpsResourceOutcome,
 	): Promise<VpsProvisionResult> {
 		const finalState = await readState(this.r2, projectName)
 		if (!finalState || finalState.state.phase === 'created') {
@@ -95,6 +105,7 @@ export class HetznerVpsTarget implements DeployTarget {
 
 		return {
 			kind: 'vps',
+			outcome,
 			serverId: finalState.state.serverId,
 			serverType: this.config.hetzner.serverType,
 			location: this.config.hetzner.location,
@@ -194,5 +205,34 @@ export class HetznerVpsTarget implements DeployTarget {
 		} finally {
 			session.close()
 		}
+	}
+
+	async teardown(
+		projectName: string,
+		domain: string | undefined,
+	): Promise<TeardownResult> {
+		const start = Date.now()
+		const token = this.config.credentials.hcloudToken
+
+		const outcome = await executeHandlers(VPS_MANAGED_RESOURCES, {
+			server: () => teardownServer(token, this.r2, projectName),
+			firewall: () => teardownFirewall(token, projectName),
+			tailscale: () =>
+				teardownTailscale(
+					this.config.credentials.tailscaleAuthKey,
+					projectName,
+				),
+			dns: () =>
+				teardownVpsDns(
+					domain,
+					this.config.environment,
+					this.config.cloudflareApiToken,
+				),
+			state: () => teardownVpsState(this.r2, projectName),
+		})
+
+		logger.info(`Teardown complete for "${projectName}"`)
+
+		return { kind: 'vps', outcome, durationMs: Date.now() - start }
 	}
 }
