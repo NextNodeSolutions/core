@@ -1,4 +1,4 @@
-import type { ResourceOutcome } from './target.ts'
+import type { ResourceOutcome } from './resource-outcome.ts'
 
 type HandlerMap<R extends string> = Readonly<
 	Record<R, () => ResourceOutcome | Promise<ResourceOutcome>>

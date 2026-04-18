@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
-import type { TeardownResult } from './target.ts'
+import type { TeardownResult } from './teardown-result.ts'
 import { buildTeardownSummary } from './teardown-summary.ts'
 
 describe('buildTeardownSummary', () => {
 	it('renders a VPS teardown summary with resource outcomes', () => {
 		const result: TeardownResult = {
 			kind: 'vps',
+			scope: 'vps',
 			outcome: {
 				server: { handled: true, detail: 'deleted #42' },
 				firewall: { handled: true, detail: 'deleted' },
@@ -32,6 +33,7 @@ describe('buildTeardownSummary', () => {
 	it('renders a VPS teardown with server already gone', () => {
 		const result: TeardownResult = {
 			kind: 'vps',
+			scope: 'vps',
 			outcome: {
 				server: { handled: false, detail: 'already gone' },
 				firewall: { handled: false, detail: 'not found' },
@@ -52,6 +54,7 @@ describe('buildTeardownSummary', () => {
 	it('renders a static teardown summary', () => {
 		const result: TeardownResult = {
 			kind: 'static',
+			scope: 'project',
 			pagesProjectName: 'my-site-dev',
 			outcome: {
 				'pages-project': { handled: true, detail: 'deleted' },
@@ -78,6 +81,7 @@ describe('buildTeardownSummary', () => {
 	it('renders a static teardown with project already gone', () => {
 		const result: TeardownResult = {
 			kind: 'static',
+			scope: 'project',
 			pagesProjectName: 'my-site-dev',
 			outcome: {
 				'pages-project': { handled: false, detail: 'already gone' },

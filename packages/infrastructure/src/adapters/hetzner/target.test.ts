@@ -2,16 +2,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type {
 	TeardownResult,
-	VpsTeardownResult,
-} from '../../domain/deploy/target.ts'
+	VpsFullTeardownResult,
+} from '../../domain/deploy/teardown-result.ts'
 
 import type { SshSession } from './ssh/session.types.ts'
 import type { HcloudProjectState } from './state/types.ts'
 import { HetznerVpsTarget } from './target.ts'
 
-function requireVps(result: TeardownResult): VpsTeardownResult {
-	if (result.kind !== 'vps') {
-		throw new Error(`Expected kind=vps, got ${result.kind}`)
+function requireVpsScope(result: TeardownResult): VpsFullTeardownResult {
+	if (result.kind !== 'vps' || result.scope !== 'vps') {
+		throw new Error(
+			`Expected kind=vps/scope=vps, got kind=${result.kind} scope=${result.scope}`,
+		)
 	}
 	return result
 }
@@ -116,6 +118,7 @@ vi.mock('../r2/client.ts', () => ({
 			fakeR2State.delete(key)
 		}),
 		exists: vi.fn(async (key: string) => fakeR2State.has(key)),
+		deleteByPrefix: vi.fn(async () => 0),
 	})),
 }))
 
@@ -893,8 +896,9 @@ describe('HetznerVpsTarget', () => {
 			const raw = await target.teardown(
 				'acme-web',
 				'acme-web.example.com',
+				'vps',
 			)
-			const result = requireVps(raw)
+			const result = requireVpsScope(raw)
 
 			expect(result.outcome.server.handled).toBe(true)
 			expect(result.outcome.server.detail).toContain('#42')
@@ -907,8 +911,12 @@ describe('HetznerVpsTarget', () => {
 
 		it('reports server as already gone when no state and no orphans', async () => {
 			const target = new HetznerVpsTarget(TARGET_CONFIG)
-			const result = requireVps(
-				await target.teardown('acme-web', 'acme-web.example.com'),
+			const result = requireVpsScope(
+				await target.teardown(
+					'acme-web',
+					'acme-web.example.com',
+					'vps',
+				),
 			)
 
 			expect(result.outcome.server.handled).toBe(false)
@@ -930,8 +938,12 @@ describe('HetznerVpsTarget', () => {
 			])
 
 			const target = new HetznerVpsTarget(TARGET_CONFIG)
-			const result = requireVps(
-				await target.teardown('acme-web', 'acme-web.example.com'),
+			const result = requireVpsScope(
+				await target.teardown(
+					'acme-web',
+					'acme-web.example.com',
+					'vps',
+				),
 			)
 
 			expect(result.outcome.server.handled).toBe(true)
@@ -943,8 +955,12 @@ describe('HetznerVpsTarget', () => {
 			seedState()
 
 			const target = new HetznerVpsTarget(TARGET_CONFIG)
-			const result = requireVps(
-				await target.teardown('acme-web', 'acme-web.example.com'),
+			const result = requireVpsScope(
+				await target.teardown(
+					'acme-web',
+					'acme-web.example.com',
+					'vps',
+				),
 			)
 
 			expect(result.outcome.firewall.handled).toBe(false)
@@ -958,8 +974,8 @@ describe('HetznerVpsTarget', () => {
 				...TARGET_CONFIG,
 				domain: 'acme-web.example.com',
 			})
-			const result = requireVps(
-				await target.teardown('acme-web', undefined),
+			const result = requireVpsScope(
+				await target.teardown('acme-web', undefined, 'vps'),
 			)
 
 			expect(result.outcome.dns.handled).toBe(false)
@@ -971,7 +987,7 @@ describe('HetznerVpsTarget', () => {
 			seedState()
 
 			const target = new HetznerVpsTarget(TARGET_CONFIG)
-			await target.teardown('acme-web', 'acme-web.example.com')
+			await target.teardown('acme-web', 'acme-web.example.com', 'vps')
 
 			expect(fakeR2State.has('hetzner/acme-web.json')).toBe(false)
 		})
@@ -980,8 +996,12 @@ describe('HetznerVpsTarget', () => {
 			seedState()
 
 			const target = new HetznerVpsTarget(TARGET_CONFIG)
-			const result = requireVps(
-				await target.teardown('acme-web', 'acme-web.example.com'),
+			const result = requireVpsScope(
+				await target.teardown(
+					'acme-web',
+					'acme-web.example.com',
+					'vps',
+				),
 			)
 
 			expect(result.durationMs).toBeGreaterThanOrEqual(0)

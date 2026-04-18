@@ -5,6 +5,7 @@ import { deployCommand } from './cli/deploy/deploy.command.ts'
 import { dnsCommand } from './cli/deploy/dns.command.ts'
 import { provisionCommand } from './cli/deploy/provision.command.ts'
 import { seoGuardCommand } from './cli/deploy/seo-guard.command.ts'
+import { teardownGuardCommand } from './cli/deploy/teardown-guard.command.ts'
 import { teardownCommand } from './cli/deploy/teardown.command.ts'
 import { requireEnv } from './cli/env.ts'
 import { buildBaseImageCommand } from './cli/hetzner/build-base-image.command.ts'
@@ -23,6 +24,7 @@ type StandaloneCommand = () => void | Promise<void>
 
 const PLAN_COMMANDS: Record<string, ConfigCommand> = {
 	plan: planCommand,
+	'teardown-guard': teardownGuardCommand,
 }
 
 const DEPLOY_COMMANDS: Record<string, DeployCommand> = {
