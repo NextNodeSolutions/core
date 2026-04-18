@@ -878,6 +878,12 @@ describe('HetznerVpsTarget', () => {
 	})
 
 	describe('teardown', () => {
+		beforeEach(async () => {
+			const { findServerById: mockedFind } =
+				await import('./api/client.ts')
+			vi.mocked(mockedFind).mockResolvedValue(null)
+		})
+
 		it('deletes all resources when state exists', async () => {
 			seedState()
 			const { deleteServer: mockedDelete } =

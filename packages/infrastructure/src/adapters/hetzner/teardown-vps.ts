@@ -14,6 +14,7 @@ import {
 	findServersByLabels,
 } from './api/client.ts'
 import { deleteState, readState } from './state/read-write.ts'
+import { waitForServerDeleted } from './wait-for-server-deleted.ts'
 
 const logger = createLogger()
 
@@ -25,11 +26,13 @@ export async function teardownServer(
 	const existing = await readState(r2, projectName)
 
 	if (existing) {
-		await deleteServer(hcloudToken, existing.state.serverId)
-		logger.info(`Server #${String(existing.state.serverId)} deleted`)
+		const { serverId } = existing.state
+		await deleteServer(hcloudToken, serverId)
+		await waitForServerDeleted(hcloudToken, serverId)
+		logger.info(`Server #${String(serverId)} deleted`)
 		return {
 			handled: true,
-			detail: `deleted #${String(existing.state.serverId)}`,
+			detail: `deleted #${String(serverId)}`,
 		}
 	}
 
@@ -42,6 +45,7 @@ export async function teardownServer(
 	}
 
 	await Promise.all(orphans.map(s => deleteServer(hcloudToken, s.id)))
+	await Promise.all(orphans.map(s => waitForServerDeleted(hcloudToken, s.id)))
 	const ids = orphans.map(s => String(s.id)).join(', ')
 	logger.info(`Orphan server(s) deleted: ${ids}`)
 	return { handled: true, detail: `deleted orphan(s) #${ids}` }
