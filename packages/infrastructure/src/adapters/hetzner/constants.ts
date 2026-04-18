@@ -10,3 +10,6 @@ export const TAILSCALE_AUTHKEY_TTL_SECONDS = 600
 export const TAILSCALE_TAG = 'tag:server'
 
 export const CADDY_CONFIG_PATH = '/etc/caddy/config.json'
+
+export const PACKER_MANAGED_BY_LABEL = 'nextnode-packer'
+export const MAX_GOLDEN_IMAGE_SNAPSHOTS = 2

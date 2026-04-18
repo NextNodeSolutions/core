@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 
 import type { CloudInitConfig } from './cloud-init.ts'
-import { isCloudInitConfig, renderCloudInit } from './cloud-init.ts'
+import {
+	isCloudInitConfig,
+	renderCloudInit,
+	renderProjectCloudInit,
+} from './cloud-init.ts'
 
 const INPUT = {
 	tailscaleAuthKey: 'tskey-auth-abc123',
@@ -227,5 +231,120 @@ describe('renderCloudInit', () => {
 				)
 			})
 		})
+	})
+})
+
+const PROJECT_INPUT = {
+	tailscaleAuthKey: 'tskey-auth-proj456',
+	tailscaleHostname: 'my-project',
+	deployPublicKey: 'ssh-ed25519 AAAAC3Nz... deploy@ci',
+	internal: false,
+} as const
+
+const INTERNAL_PROJECT_INPUT = { ...PROJECT_INPUT, internal: true } as const
+
+interface ProjectCloudInitConfig {
+	readonly ssh_pwauth: boolean
+	readonly disable_root: boolean
+	readonly users: ReadonlyArray<{
+		readonly name: string
+		readonly ssh_authorized_keys: ReadonlyArray<string>
+	}>
+	readonly runcmd: ReadonlyArray<string>
+	readonly write_files?: unknown
+	readonly packages?: unknown
+	readonly package_update?: unknown
+}
+
+function isProjectCloudInitConfig(
+	value: unknown,
+): value is ProjectCloudInitConfig {
+	if (typeof value !== 'object' || value === null) return false
+	return (
+		'ssh_pwauth' in value &&
+		'disable_root' in value &&
+		'users' in value &&
+		Array.isArray(value.users) &&
+		'runcmd' in value &&
+		Array.isArray(value.runcmd)
+	)
+}
+
+function parseProjectCloudInit(
+	input: typeof PROJECT_INPUT | typeof INTERNAL_PROJECT_INPUT = PROJECT_INPUT,
+): ProjectCloudInitConfig {
+	const yamlBody = renderProjectCloudInit(input).replace(
+		/^#cloud-config\n/,
+		'',
+	)
+	const parsed: unknown = parse(yamlBody)
+	if (!isProjectCloudInitConfig(parsed)) {
+		throw new Error('Parsed YAML is not a valid project cloud-init config')
+	}
+	return parsed
+}
+
+describe('renderProjectCloudInit', () => {
+	it('starts with #cloud-config header', () => {
+		expect(
+			renderProjectCloudInit(PROJECT_INPUT).startsWith('#cloud-config\n'),
+		).toBe(true)
+	})
+
+	it('does not include package_update or packages (pre-installed in golden image)', () => {
+		const config = parseProjectCloudInit()
+		expect(config.package_update).toBeUndefined()
+		expect(config.packages).toBeUndefined()
+	})
+
+	it('does not include write_files (systemd units baked in golden image)', () => {
+		expect(parseProjectCloudInit().write_files).toBeUndefined()
+	})
+
+	it('injects the deploy SSH public key', () => {
+		const config = parseProjectCloudInit()
+		expect(config.users).toHaveLength(1)
+		const deploy = config.users[0]!
+		expect(deploy.name).toBe('deploy')
+		expect(deploy.ssh_authorized_keys).toContain(
+			'ssh-ed25519 AAAAC3Nz... deploy@ci',
+		)
+	})
+
+	it('runs tailscale up with authkey and hostname', () => {
+		const config = parseProjectCloudInit()
+		expect(config.runcmd).toContain(
+			'tailscale up --authkey=tskey-auth-proj456 --hostname=my-project',
+		)
+	})
+
+	it('does not install Docker, Caddy, or Vector (pre-installed)', () => {
+		const joined = parseProjectCloudInit().runcmd.join('\n')
+		expect(joined).not.toContain('get.docker.com')
+		expect(joined).not.toContain('caddyserver.com')
+		expect(joined).not.toContain('sh.vector.dev')
+		expect(joined).not.toContain('tailscale.com/install.sh')
+	})
+
+	it('configures UFW rules for public mode', () => {
+		const cmds = parseProjectCloudInit().runcmd
+		expect(cmds).toContain('ufw allow 80/tcp')
+		expect(cmds).toContain('ufw allow 443/tcp')
+		expect(cmds).toContain(
+			'ufw allow in on tailscale0 to any port 22 proto tcp',
+		)
+		expect(cmds).toContain('ufw --force enable')
+	})
+
+	it('configures internal-only UFW rules when internal', () => {
+		const cmds = parseProjectCloudInit(INTERNAL_PROJECT_INPUT).runcmd
+		expect(cmds).toContain(
+			'ufw allow in on tailscale0 to any port 80 proto tcp',
+		)
+		expect(cmds).toContain(
+			'ufw allow in on tailscale0 to any port 443 proto tcp',
+		)
+		expect(cmds).not.toContain('ufw allow 80/tcp')
+		expect(cmds).not.toContain('ufw allow 443/tcp')
 	})
 })

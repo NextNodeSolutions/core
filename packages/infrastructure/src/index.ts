@@ -6,6 +6,7 @@ import { dnsCommand } from './cli/deploy/dns.command.ts'
 import { provisionCommand } from './cli/deploy/provision.command.ts'
 import { seoGuardCommand } from './cli/deploy/seo-guard.command.ts'
 import { requireEnv } from './cli/env.ts'
+import { buildBaseImageCommand } from './cli/hetzner/build-base-image.command.ts'
 import { planCommand } from './cli/pipeline/plan.command.ts'
 import { prodGateCommand } from './cli/pipeline/prod-gate.command.ts'
 import { publishResultCommand } from './cli/pipeline/publish-result.command.ts'
@@ -34,6 +35,7 @@ const STANDALONE_COMMANDS: Record<string, StandaloneCommand> = {
 	'prod-gate': prodGateCommand,
 	'publish-result': publishResultCommand,
 	'compute-image-ref': computeImageRefCommand,
+	'build-base-image': buildBaseImageCommand,
 }
 
 const ALL_COMMAND_NAMES = [

@@ -15,11 +15,11 @@ import type {
 } from '../../domain/deploy/target.ts'
 import type { AppEnvironment } from '../../domain/environment.ts'
 
-import { reconcileDomains } from './pages-domains.ts'
-import { updatePagesEnvVars } from './pages-env.ts'
-import { provisionProject } from './pages-project.ts'
-import { getPagesProject } from './pages.ts'
-import { reconcileDnsRecords } from './reconcile-dns.ts'
+import { reconcileDnsRecords } from './dns/reconcile.ts'
+import { getPagesProject } from './pages/api.ts'
+import { reconcileDomains } from './pages/domains.ts'
+import { updatePagesEnvVars } from './pages/env.ts'
+import { provisionProject } from './pages/project.ts'
 
 export interface CloudflarePagesTargetConfig {
 	readonly environment: AppEnvironment

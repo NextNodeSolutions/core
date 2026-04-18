@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { updatePagesEnvVars } from './pages-env.ts'
+import { updatePagesEnvVars } from './env.ts'
 
 const TOKEN = 'cf-token-123'
 const ACCOUNT = 'acct-abc'

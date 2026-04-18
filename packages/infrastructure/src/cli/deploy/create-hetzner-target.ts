@@ -1,4 +1,4 @@
-import { derivePublicKey } from '../../adapters/hetzner/derive-public-key.ts'
+import { derivePublicKey } from '../../adapters/hetzner/ssh/derive-public-key.ts'
 import { HetznerVpsTarget } from '../../adapters/hetzner/target.ts'
 import type { HetznerDeployableConfig } from '../../config/types.ts'
 import type { R2RuntimeConfig } from '../../domain/cloudflare/r2/runtime-config.ts'

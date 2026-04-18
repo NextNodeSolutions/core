@@ -1,10 +1,11 @@
-import { isRecord } from '../../config/types.ts'
-import type { FirewallRule } from '../../domain/hetzner/firewall-rules.ts'
-import { HTTP_NOT_FOUND } from '../http.ts'
+import { isRecord } from '../../../config/types.ts'
+import type { FirewallRule } from '../../../domain/hetzner/firewall-rules.ts'
+import { HTTP_NOT_FOUND } from '../../http.ts'
 
-import { HCLOUD_API_BASE, authHeaders, requireOk } from './hcloud-api.ts'
-import type { HcloudFirewallResponse } from './hcloud-firewall.ts'
-import type { HcloudServerResponse } from './hcloud-server.ts'
+import { HCLOUD_API_BASE, authHeaders, requireOk } from './base.ts'
+import type { HcloudFirewallResponse } from './firewall.ts'
+import type { HcloudImageResponse } from './image.ts'
+import type { HcloudServerResponse } from './server.ts'
 
 export interface CreateServerInput {
 	readonly name: string
@@ -53,7 +54,8 @@ export async function assertServerTypeAvailable(
 	token: string,
 	serverTypeName: string,
 ): Promise<void> {
-	const url = `${HCLOUD_API_BASE}/server_types?name=${encodeURIComponent(serverTypeName)}`
+	const url = new URL(`${HCLOUD_API_BASE}/server_types`)
+	url.searchParams.set('name', serverTypeName)
 	const response = await fetch(url, { headers: authHeaders(token) })
 	await requireOk(response, `list server_types name="${serverTypeName}"`)
 	const data: unknown = await response.json()
@@ -141,10 +143,12 @@ export async function findServersByLabels(
 	token: string,
 	labels: Readonly<Record<string, string>>,
 ): Promise<ReadonlyArray<HcloudServerResponse>> {
+	// Build Hetzner label_selector: "key1=value1,key2=value2"
 	const selector = Object.entries(labels)
 		.map(([k, v]) => `${k}=${v}`)
 		.join(',')
-	const url = `${HCLOUD_API_BASE}/servers?label_selector=${encodeURIComponent(selector)}`
+	const url = new URL(`${HCLOUD_API_BASE}/servers`)
+	url.searchParams.set('label_selector', selector)
 	const response = await fetch(url, { headers: authHeaders(token) })
 	await requireOk(response, `list servers label_selector="${selector}"`)
 	const data: unknown = await response.json()
@@ -202,4 +206,63 @@ export async function applyFirewall(
 		response,
 		`apply firewall ${firewallId} to server ${serverId}`,
 	)
+}
+
+function parseImageObject(img: unknown, context: string): HcloudImageResponse {
+	if (
+		!isRecord(img) ||
+		typeof img.id !== 'number' ||
+		typeof img.description !== 'string' ||
+		typeof img.created !== 'string'
+	) {
+		throw new Error(`${context}: invalid image shape`)
+	}
+	// Manual runtime narrowing — img.labels is untyped (unknown).
+	// TODO: replace with schema validation (e.g. Zod) when we add one.
+	const labels: Record<string, string> = {}
+	if (isRecord(img.labels)) {
+		for (const [k, v] of Object.entries(img.labels)) {
+			if (typeof v === 'string') labels[k] = v
+		}
+	}
+	return {
+		id: img.id,
+		description: img.description,
+		created: img.created,
+		labels,
+	}
+}
+
+export async function findImagesByLabels(
+	token: string,
+	labels: Readonly<Record<string, string>>,
+): Promise<ReadonlyArray<HcloudImageResponse>> {
+	// Build Hetzner label_selector: "key1=value1,key2=value2"
+	const selector = Object.entries(labels)
+		.map(([k, v]) => `${k}=${v}`)
+		.join(',')
+	const url = new URL(`${HCLOUD_API_BASE}/images`)
+	url.searchParams.set('type', 'snapshot')
+	url.searchParams.set('label_selector', selector)
+	const response = await fetch(url, { headers: authHeaders(token) })
+	await requireOk(response, `list images label_selector="${selector}"`)
+	const data: unknown = await response.json()
+	if (!isRecord(data) || !Array.isArray(data.images)) {
+		throw new Error(
+			`list images label_selector="${selector}": missing \`images\` array`,
+		)
+	}
+	const images: ReadonlyArray<unknown> = data.images
+	return images.map((img, i) => parseImageObject(img, `images[${i}]`))
+}
+
+export async function deleteImage(
+	token: string,
+	imageId: number,
+): Promise<void> {
+	const response = await fetch(`${HCLOUD_API_BASE}/images/${imageId}`, {
+		method: 'DELETE',
+		headers: authHeaders(token),
+	})
+	await requireOk(response, `delete image ${imageId}`)
 }

@@ -3,8 +3,8 @@ import { EventEmitter } from 'node:events'
 import { Client } from 'ssh2'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { createSshSession } from './ssh-session.ts'
-import type { SshSession } from './ssh-session.types.ts'
+import { createSshSession } from './session.ts'
+import type { SshSession } from './session.types.ts'
 
 const SESSION_CONFIG = {
 	host: '10.0.0.1',

@@ -4,9 +4,11 @@ import {
 	applyFirewall,
 	createFirewall,
 	createServer,
+	deleteImage,
 	deleteServer,
 	describeServer,
-} from './hcloud-client.ts'
+	findImagesByLabels,
+} from './client.ts'
 
 const TOKEN = 'hcloud-test-token'
 
@@ -45,9 +47,9 @@ function httpError(status: number, body: string): MockResponse {
 }
 
 function lastCall(mock: ReturnType<typeof vi.fn>): [string, RequestInit] {
-	const call = mock.mock.lastCall
-	if (!call) throw new Error('No calls recorded')
-	return [call[0], call[1]]
+	const [url, init] = mock.mock.lastCall ?? []
+	if (!url) throw new Error('No calls recorded')
+	return [String(url), init]
 }
 
 function lastBody(mock: ReturnType<typeof vi.fn>): Record<string, unknown> {
@@ -228,6 +230,109 @@ describe('applyFirewall', () => {
 
 		await expect(applyFirewall(TOKEN, 99, 123)).rejects.toThrow(
 			/apply firewall 99 to server 123.*404/,
+		)
+	})
+})
+
+const imagePayload = {
+	images: [
+		{
+			id: 501,
+			description: 'nextnode-base-abc123',
+			created: '2026-04-15T10:00:00+00:00',
+			labels: {
+				managed_by: 'nextnode-packer',
+				infra_fingerprint: 'abc123',
+			},
+		},
+		{
+			id: 502,
+			description: 'nextnode-base-def456',
+			created: '2026-04-10T10:00:00+00:00',
+			labels: {
+				managed_by: 'nextnode-packer',
+				infra_fingerprint: 'def456',
+			},
+		},
+	],
+}
+
+describe('findImagesByLabels', () => {
+	it('sends label_selector query and returns parsed images', async () => {
+		const mock = vi.fn().mockResolvedValue(okJson(imagePayload))
+		vi.stubGlobal('fetch', mock)
+
+		const result = await findImagesByLabels(TOKEN, {
+			managed_by: 'nextnode-packer',
+		})
+
+		expect(result).toHaveLength(2)
+		expect(result[0]!.id).toBe(501)
+		expect(result[0]!.description).toBe('nextnode-base-abc123')
+		expect(result[0]!.labels.managed_by).toBe('nextnode-packer')
+		expect(result[1]!.id).toBe(502)
+
+		const [url] = lastCall(mock)
+		expect(url).toContain('/images?type=snapshot&label_selector=')
+		expect(url).toContain('managed_by%3Dnextnode-packer')
+	})
+
+	it('returns empty array when no images match', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue(okJson({ images: [] })),
+		)
+
+		const result = await findImagesByLabels(TOKEN, {
+			managed_by: 'nonexistent',
+		})
+
+		expect(result).toHaveLength(0)
+	})
+
+	it('throws on HTTP error', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue(httpError(401, 'unauthorized')),
+		)
+
+		await expect(
+			findImagesByLabels(TOKEN, { managed_by: 'x' }),
+		).rejects.toThrow(/list images.*401.*unauthorized/)
+	})
+
+	it('throws on missing images array in response', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue(okJson({ unexpected: true })),
+		)
+
+		await expect(
+			findImagesByLabels(TOKEN, { managed_by: 'x' }),
+		).rejects.toThrow(/missing `images` array/)
+	})
+})
+
+describe('deleteImage', () => {
+	it('sends DELETE request to correct URL', async () => {
+		const mock = vi.fn().mockResolvedValue(noContent())
+		vi.stubGlobal('fetch', mock)
+
+		await deleteImage(TOKEN, 501)
+
+		const [url, init] = lastCall(mock)
+		expect(url).toBe('https://api.hetzner.cloud/v1/images/501')
+		expect(init.method).toBe('DELETE')
+	})
+
+	it('throws on error', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue(httpError(403, 'forbidden')),
+		)
+
+		await expect(deleteImage(TOKEN, 501)).rejects.toThrow(
+			/delete image 501.*403/,
 		)
 	})
 })

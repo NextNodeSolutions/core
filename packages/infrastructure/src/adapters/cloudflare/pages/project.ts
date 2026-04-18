@@ -1,6 +1,6 @@
 import { createLogger } from '@nextnode-solutions/logger'
 
-import { createPagesProject, getPagesProject } from './pages.ts'
+import { createPagesProject, getPagesProject } from './api.ts'
 
 const logger = createLogger()
 

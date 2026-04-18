@@ -4,7 +4,7 @@ import {
 	formatErrors,
 	parseEnvelope,
 	requireOk,
-} from './api.ts'
+} from '../api.ts'
 
 interface PlainEnvVar {
 	readonly type: 'plain_text'

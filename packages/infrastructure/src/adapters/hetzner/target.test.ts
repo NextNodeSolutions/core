@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { HcloudProjectState } from './hcloud-state.types.ts'
-import type { SshSession } from './ssh-session.types.ts'
+import type { SshSession } from './ssh/session.types.ts'
+import type { HcloudProjectState } from './state/types.ts'
 import { HetznerVpsTarget } from './target.ts'
 
 // Mock hcloud-client (network boundary)
-vi.mock(import('./hcloud-client.ts'), async importOriginal => {
+vi.mock(import('./api/client.ts'), async importOriginal => {
 	const actual = await importOriginal()
 	return {
 		...actual,
@@ -28,6 +28,7 @@ vi.mock(import('./hcloud-client.ts'), async importOriginal => {
 			public_net: { ipv4: { ip: '1.2.3.4' } },
 		})),
 		findServersByLabels: vi.fn(async () => []),
+		findImagesByLabels: vi.fn(async () => []),
 		createFirewall: vi.fn(async () => ({
 			id: 99,
 			name: 'acme-web-fw',
@@ -38,7 +39,7 @@ vi.mock(import('./hcloud-client.ts'), async importOriginal => {
 })
 
 // Mock ssh-session (network boundary)
-vi.mock(import('./ssh-session.ts'), async importOriginal => {
+vi.mock(import('./ssh/session.ts'), async importOriginal => {
 	const actual = await importOriginal()
 	return {
 		...actual,
@@ -70,7 +71,7 @@ vi.mock('node:timers/promises', () => ({
 const { mockReconcileDnsRecords } = vi.hoisted(() => ({
 	mockReconcileDnsRecords: vi.fn(async () => undefined),
 }))
-vi.mock('../cloudflare/reconcile-dns.ts', () => ({
+vi.mock('../cloudflare/dns/reconcile.ts', () => ({
 	reconcileDnsRecords: mockReconcileDnsRecords,
 }))
 
@@ -200,7 +201,7 @@ describe('HetznerVpsTarget', () => {
 
 			it('passes correct serverType and location to createServer', async () => {
 				const { createServer: mockedCreate } =
-					await import('./hcloud-client.ts')
+					await import('./api/client.ts')
 
 				const target = new HetznerVpsTarget(TARGET_CONFIG)
 				await target.ensureInfra('acme-web')
@@ -216,7 +217,7 @@ describe('HetznerVpsTarget', () => {
 
 			it('uses debian-12 as the server image', async () => {
 				const { createServer: mockedCreate } =
-					await import('./hcloud-client.ts')
+					await import('./api/client.ts')
 
 				const target = new HetznerVpsTarget(TARGET_CONFIG)
 				await target.ensureInfra('acme-web')
@@ -229,7 +230,7 @@ describe('HetznerVpsTarget', () => {
 
 			it('passes project and managed_by labels', async () => {
 				const { createServer: mockedCreate } =
-					await import('./hcloud-client.ts')
+					await import('./api/client.ts')
 
 				const target = new HetznerVpsTarget(TARGET_CONFIG)
 				await target.ensureInfra('acme-web')
@@ -244,7 +245,7 @@ describe('HetznerVpsTarget', () => {
 
 			it('checks for orphan servers before creating', async () => {
 				const { findServersByLabels: mockedFind } =
-					await import('./hcloud-client.ts')
+					await import('./api/client.ts')
 
 				const target = new HetznerVpsTarget(TARGET_CONFIG)
 				await target.ensureInfra('acme-web')
@@ -257,7 +258,7 @@ describe('HetznerVpsTarget', () => {
 
 			it('throws on orphan server detection', async () => {
 				const { findServersByLabels: mockedFind } =
-					await import('./hcloud-client.ts')
+					await import('./api/client.ts')
 				vi.mocked(mockedFind).mockResolvedValueOnce([
 					{
 						id: 99,
@@ -276,7 +277,7 @@ describe('HetznerVpsTarget', () => {
 
 			it('propagates errors from server creation', async () => {
 				const { createServer: mockedCreate } =
-					await import('./hcloud-client.ts')
+					await import('./api/client.ts')
 				vi.mocked(mockedCreate).mockRejectedValueOnce(
 					new Error('Hetzner API create server: 422'),
 				)
@@ -290,7 +291,7 @@ describe('HetznerVpsTarget', () => {
 
 			it('propagates errors from firewall creation', async () => {
 				const { createFirewall: mockedFw } =
-					await import('./hcloud-client.ts')
+					await import('./api/client.ts')
 				vi.mocked(mockedFw).mockRejectedValueOnce(
 					new Error('Hetzner API create firewall: 422'),
 				)
@@ -304,7 +305,7 @@ describe('HetznerVpsTarget', () => {
 
 			it('propagates errors from applying firewall', async () => {
 				const { applyFirewall: mockedApply } =
-					await import('./hcloud-client.ts')
+					await import('./api/client.ts')
 				vi.mocked(mockedApply).mockRejectedValueOnce(
 					new Error('Hetzner API apply firewall: 500'),
 				)
@@ -318,10 +319,10 @@ describe('HetznerVpsTarget', () => {
 
 			it('writes created state before completing provisioning', async () => {
 				const { createServer: mockedCreate } =
-					await import('./hcloud-client.ts')
+					await import('./api/client.ts')
 				// Make completeProvisioning fail to observe intermediate state
 				const { createFirewall: mockedFw } =
-					await import('./hcloud-client.ts')
+					await import('./api/client.ts')
 				vi.mocked(mockedFw).mockRejectedValueOnce(
 					new Error('firewall fail'),
 				)
@@ -352,7 +353,7 @@ describe('HetznerVpsTarget', () => {
 		describe('resume from created', () => {
 			it('skips server creation and completes provisioning', async () => {
 				const { createServer: mockedCreate } =
-					await import('./hcloud-client.ts')
+					await import('./api/client.ts')
 				seedState({
 					phase: 'created',
 					serverId: 42,
@@ -367,7 +368,7 @@ describe('HetznerVpsTarget', () => {
 
 			it('reality-checks the server still exists', async () => {
 				const { findServerById: mockedFind } =
-					await import('./hcloud-client.ts')
+					await import('./api/client.ts')
 				seedState({
 					phase: 'created',
 					serverId: 42,
@@ -405,7 +406,7 @@ describe('HetznerVpsTarget', () => {
 		describe('resume from provisioned', () => {
 			it('skips server creation and provisioning, only converges', async () => {
 				const { createServer: mockedCreate } =
-					await import('./hcloud-client.ts')
+					await import('./api/client.ts')
 				const { converge: mockedConverge } =
 					await import('../../cli/hetzner/converge.ts')
 				seedState({
@@ -447,7 +448,7 @@ describe('HetznerVpsTarget', () => {
 		describe('resume from converged', () => {
 			it('skips VPS creation when state is converged', async () => {
 				const { createServer: mockedCreate } =
-					await import('./hcloud-client.ts')
+					await import('./api/client.ts')
 				seedState()
 
 				const target = new HetznerVpsTarget(TARGET_CONFIG)
@@ -469,7 +470,7 @@ describe('HetznerVpsTarget', () => {
 
 			it('uses tailnet IP from state for the convergence SSH session', async () => {
 				const { createSshSession: mockedSsh } =
-					await import('./ssh-session.ts')
+					await import('./ssh/session.ts')
 				seedState({
 					...CONVERGED_STATE,
 					tailnetIp: '100.99.88.77',
@@ -487,9 +488,9 @@ describe('HetznerVpsTarget', () => {
 		describe('stale state recovery', () => {
 			it('wipes state and re-provisions when server is 404', async () => {
 				const { findServerById: mockedFind } =
-					await import('./hcloud-client.ts')
+					await import('./api/client.ts')
 				const { createServer: mockedCreate } =
-					await import('./hcloud-client.ts')
+					await import('./api/client.ts')
 				vi.mocked(mockedFind).mockResolvedValueOnce(null)
 				seedState()
 
@@ -511,7 +512,7 @@ describe('HetznerVpsTarget', () => {
 				const { converge: mockedConverge } =
 					await import('../../cli/hetzner/converge.ts')
 				const { createSshSession: mockedSsh } =
-					await import('./ssh-session.ts')
+					await import('./ssh/session.ts')
 				const mockSession = createMockSession()
 
 				seedState()
@@ -530,7 +531,7 @@ describe('HetznerVpsTarget', () => {
 
 			it('propagates createSshSession errors from convergence', async () => {
 				const { createSshSession: mockedSsh } =
-					await import('./ssh-session.ts')
+					await import('./ssh/session.ts')
 				seedState()
 
 				vi.mocked(mockedSsh).mockRejectedValueOnce(
@@ -546,7 +547,7 @@ describe('HetznerVpsTarget', () => {
 
 			it('passes tailnet IP and credentials to SSH session on re-run', async () => {
 				const { createSshSession: mockedSsh } =
-					await import('./ssh-session.ts')
+					await import('./ssh/session.ts')
 				seedState({
 					...CONVERGED_STATE,
 					tailnetIp: '100.10.0.1',
@@ -607,7 +608,7 @@ describe('HetznerVpsTarget', () => {
 
 		it('SSHs to the tailnet IP from state', async () => {
 			const { createSshSession: mockedSsh } =
-				await import('./ssh-session.ts')
+				await import('./ssh/session.ts')
 			seedState({
 				...CONVERGED_STATE,
 				tailnetIp: '100.10.0.5',
@@ -623,7 +624,7 @@ describe('HetznerVpsTarget', () => {
 
 		it('writes .env with merged envVars and secrets', async () => {
 			const { createSshSession: mockedSsh } =
-				await import('./ssh-session.ts')
+				await import('./ssh/session.ts')
 			const mockSession = createMockSession()
 			seedState()
 			vi.mocked(mockedSsh).mockResolvedValueOnce(mockSession)
@@ -645,7 +646,7 @@ describe('HetznerVpsTarget', () => {
 
 		it('writes compose.yaml with image and port mapping', async () => {
 			const { createSshSession: mockedSsh } =
-				await import('./ssh-session.ts')
+				await import('./ssh/session.ts')
 			const mockSession = createMockSession()
 			seedState()
 			vi.mocked(mockedSsh).mockResolvedValueOnce(mockSession)
@@ -665,7 +666,7 @@ describe('HetznerVpsTarget', () => {
 
 		it('runs docker compose pull and up', async () => {
 			const { createSshSession: mockedSsh } =
-				await import('./ssh-session.ts')
+				await import('./ssh/session.ts')
 			const mockSession = createMockSession()
 			seedState()
 			vi.mocked(mockedSsh).mockResolvedValueOnce(mockSession)
@@ -688,7 +689,7 @@ describe('HetznerVpsTarget', () => {
 
 		it('pushes Caddy config with upstream for deployed environment', async () => {
 			const { createSshSession: mockedSsh } =
-				await import('./ssh-session.ts')
+				await import('./ssh/session.ts')
 			const mockSession = createMockSession()
 			seedState()
 			vi.mocked(mockedSsh).mockResolvedValueOnce(mockSession)
@@ -704,7 +705,7 @@ describe('HetznerVpsTarget', () => {
 
 		it('reloads Caddy after writing config', async () => {
 			const { createSshSession: mockedSsh } =
-				await import('./ssh-session.ts')
+				await import('./ssh/session.ts')
 			const mockSession = createMockSession()
 			seedState()
 			vi.mocked(mockedSsh).mockResolvedValueOnce(mockSession)
@@ -742,7 +743,7 @@ describe('HetznerVpsTarget', () => {
 
 		it('closes SSH session even when deploy throws', async () => {
 			const { createSshSession: mockedSsh } =
-				await import('./ssh-session.ts')
+				await import('./ssh/session.ts')
 			const mockSession = createMockSession()
 			seedState()
 			vi.mocked(mockedSsh).mockResolvedValueOnce(mockSession)

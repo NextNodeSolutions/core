@@ -1,15 +1,36 @@
 import { createLogger } from '@nextnode-solutions/logger'
 
-import type { R2Operations } from '../r2/client.types.ts'
+import type { R2Operations } from '../../r2/client.types.ts'
+import {
+	findImagesByLabels,
+	findServerById,
+	findServersByLabels,
+} from '../api/client.ts'
+import { PACKER_MANAGED_BY_LABEL } from '../constants.ts'
+import { convergeVps } from '../converge-vps.ts'
+import { deleteState, writeState } from '../state/read-write.ts'
+import type { HcloudProjectState } from '../state/types.ts'
+import type { HetznerVpsTargetConfig } from '../target.ts'
 
-import { convergeVps } from './converge-vps.ts'
-import { findServerById, findServersByLabels } from './hcloud-client.ts'
-import { deleteState, writeState } from './hcloud-state.ts'
-import type { HcloudProjectState } from './hcloud-state.types.ts'
-import { completeProvisioning, createVps } from './provision-vps.ts'
-import type { HetznerVpsTargetConfig } from './target.ts'
+import { completeProvisioning, createVps } from './create-vps.ts'
 
 const logger = createLogger()
+
+async function findLatestGoldenImage(
+	token: string,
+): Promise<number | undefined> {
+	const snapshots = await findImagesByLabels(token, {
+		managed_by: PACKER_MANAGED_BY_LABEL,
+	})
+	if (snapshots.length === 0) return undefined
+
+	const sorted = snapshots.toSorted(
+		(a, b) => new Date(b.created).getTime() - new Date(a.created).getTime(),
+	)
+	const latest = sorted[0]
+	if (!latest) return undefined
+	return latest.id
+}
 
 export async function freshProvision(
 	config: HetznerVpsTargetConfig,
@@ -18,10 +39,20 @@ export async function freshProvision(
 ): Promise<void> {
 	await checkForOrphans(config.credentials.hcloudToken, projectName)
 
+	const goldenImageId = await findLatestGoldenImage(
+		config.credentials.hcloudToken,
+	)
+	if (goldenImageId !== undefined) {
+		logger.info(`Found golden image: snapshot ${goldenImageId}`)
+	} else {
+		logger.info('No golden image found, using base debian-12 image')
+	}
+
 	const { serverId, publicIp } = await createVps(config.credentials, {
 		projectName,
 		hetzner: config.hetzner,
 		internal: config.internal,
+		goldenImageId,
 	})
 
 	const createdEtag = await writeState(r2, projectName, {

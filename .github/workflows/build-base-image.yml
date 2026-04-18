@@ -1,0 +1,30 @@
+name: Build Base Image
+
+on:
+    push:
+        branches: [main]
+        paths:
+            - 'packages/infrastructure/packer/**'
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+jobs:
+    build:
+        name: Build golden image
+        runs-on: ubuntu-latest
+        steps:
+            - uses: NextNodeSolutions/core/.github/actions/setup@main
+              with:
+                  infra: 'true'
+                  deps: 'false'
+
+            - name: Install Packer
+              uses: hashicorp/setup-packer@main
+
+            - name: Build base image
+              run: node src/index.ts build-base-image
+              working-directory: .infra/packages/infrastructure
+              env:
+                  HETZNER_API_TOKEN: ${{ secrets.HETZNER_API_TOKEN }}
