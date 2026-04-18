@@ -1,7 +1,7 @@
 import { createLogger } from '@nextnode-solutions/logger'
 
 import { computePagesDnsLookups } from '../../domain/cloudflare/dns-records.ts'
-import type { ResourceOutcome } from '../../domain/deploy/target.ts'
+import type { ResourceOutcome } from '../../domain/deploy/resource-outcome.ts'
 import type { AppEnvironment } from '../../domain/environment.ts'
 
 import { deleteDnsRecordsByName } from './dns/delete-records.ts'

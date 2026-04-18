@@ -1,5 +1,5 @@
 import { formatDuration } from './deploy-summary.ts'
-import type { TeardownResult } from './target.ts'
+import type { TeardownResult } from './teardown-result.ts'
 
 export function buildTeardownSummary(
 	result: TeardownResult,

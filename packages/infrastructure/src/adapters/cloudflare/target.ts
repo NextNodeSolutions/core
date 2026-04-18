@@ -14,8 +14,9 @@ import type {
 	DeployTarget,
 	ProvisionResult,
 	StaticDeployedEnvironment,
-	TeardownResult,
 } from '../../domain/deploy/target.ts'
+import type { TeardownResult } from '../../domain/deploy/teardown-result.ts'
+import type { TeardownTarget } from '../../domain/deploy/teardown-target.ts'
 import type { AppEnvironment } from '../../domain/environment.ts'
 
 import { reconcileDnsRecords } from './dns/reconcile.ts'
@@ -158,7 +159,13 @@ export class CloudflarePagesTarget implements DeployTarget {
 	async teardown(
 		projectName: string,
 		domain: string | undefined,
+		target: TeardownTarget,
 	): Promise<TeardownResult> {
+		if (target !== 'project') {
+			throw new Error(
+				`TEARDOWN_TARGET="${target}" is not supported for Cloudflare Pages projects — only "project" scope exists`,
+			)
+		}
 		const start = Date.now()
 		const pagesProjectName = computePagesProjectName(
 			projectName,
@@ -181,6 +188,7 @@ export class CloudflarePagesTarget implements DeployTarget {
 
 		return {
 			kind: 'static',
+			scope: 'project',
 			pagesProjectName,
 			outcome,
 			durationMs: Date.now() - start,

@@ -1,7 +1,7 @@
 import { createLogger } from '@nextnode-solutions/logger'
 
 import type { HetznerVpsDeploySection } from '../../../config/types.ts'
-import type { ResourceOutcome } from '../../../domain/deploy/target.ts'
+import type { ResourceOutcome } from '../../../domain/deploy/resource-outcome.ts'
 import {
 	renderCloudInit,
 	renderProjectCloudInit,

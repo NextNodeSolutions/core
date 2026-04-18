@@ -4,7 +4,7 @@ import { executeHandlers } from '../../../domain/deploy/execute-handlers.ts'
 import type {
 	ResourceOutcome,
 	VpsResourceOutcome,
-} from '../../../domain/deploy/target.ts'
+} from '../../../domain/deploy/resource-outcome.ts'
 import { VPS_MANAGED_RESOURCES } from '../../../domain/hetzner/managed-resources.ts'
 import type { R2Operations } from '../../r2/client.types.ts'
 import {

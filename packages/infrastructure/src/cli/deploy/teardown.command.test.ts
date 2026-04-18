@@ -91,10 +91,17 @@ describe('teardownCommand - hetzner dispatch', () => {
 	it('dispatches to the Hetzner target with correct arguments', async () => {
 		mockHetznerTeardown.mockResolvedValue({
 			kind: 'vps',
+			scope: 'project',
 			outcome: {
-				server: { handled: true, detail: 'deleted #42' },
-				firewall: { handled: true, detail: 'deleted' },
-				tailscale: { handled: false, detail: '0 device(s) purged' },
+				container: {
+					handled: true,
+					detail: 'stack and bind mount removed',
+				},
+				caddy: {
+					handled: true,
+					detail: 'route removed, Caddy reloaded',
+				},
+				certs: { handled: false, detail: '0 cert object(s) deleted' },
 				dns: { handled: true, detail: '1 record(s) deleted' },
 				state: { handled: true, detail: 'deleted' },
 			},
@@ -111,6 +118,39 @@ describe('teardownCommand - hetzner dispatch', () => {
 		expect(mockHetznerTeardown).toHaveBeenCalledWith(
 			'my-app',
 			'example.com',
+			'project',
+		)
+	})
+
+	it('passes TEARDOWN_TARGET=vps to the Hetzner target when set', async () => {
+		vi.stubEnv('TEARDOWN_TARGET', 'vps')
+		mockHetznerTeardown.mockResolvedValue({
+			kind: 'vps',
+			scope: 'vps',
+			outcome: {
+				server: { handled: true, detail: 'deleted #42' },
+				firewall: { handled: true, detail: 'deleted' },
+				tailscale: { handled: false, detail: '0 device(s) purged' },
+				dns: { handled: true, detail: '1 record(s) deleted' },
+				state: { handled: true, detail: 'deleted' },
+			},
+			durationMs: 1234,
+		})
+
+		await teardownCommand(APP_WITH_DOMAIN)
+
+		expect(mockHetznerTeardown).toHaveBeenCalledWith(
+			'my-app',
+			'example.com',
+			'vps',
+		)
+	})
+
+	it('fails loud on an unknown TEARDOWN_TARGET value', async () => {
+		vi.stubEnv('TEARDOWN_TARGET', 'full')
+
+		await expect(teardownCommand(APP_WITH_DOMAIN)).rejects.toThrow(
+			/Invalid TEARDOWN_TARGET "full"/,
 		)
 	})
 })
@@ -133,6 +173,7 @@ describe('teardownCommand - cloudflare pages dispatch', () => {
 	it('dispatches to the Cloudflare Pages target', async () => {
 		mockPagesTeardown.mockResolvedValue({
 			kind: 'static',
+			scope: 'project',
 			pagesProjectName: 'my-site-prod',
 			outcome: {
 				'pages-project': { handled: true, detail: 'deleted' },
@@ -143,6 +184,10 @@ describe('teardownCommand - cloudflare pages dispatch', () => {
 
 		await teardownCommand(STATIC_WITH_DOMAIN)
 
-		expect(mockPagesTeardown).toHaveBeenCalledWith('my-site', 'example.com')
+		expect(mockPagesTeardown).toHaveBeenCalledWith(
+			'my-site',
+			'example.com',
+			'project',
+		)
 	})
 })
