@@ -21,8 +21,10 @@ export async function waitForServerDeleted(
 		logger.info(
 			`Server ${serverId} still present (status=${server.status}, attempt ${attempt}/${MAX_POLL_ATTEMPTS})`,
 		)
-		// oxlint-disable-next-line no-await-in-loop -- sequential polling by design
-		await sleep(POLL_INTERVAL_MS)
+		if (attempt < MAX_POLL_ATTEMPTS) {
+			// oxlint-disable-next-line no-await-in-loop -- sequential polling by design
+			await sleep(POLL_INTERVAL_MS)
+		}
 	}
 
 	throw new Error(
