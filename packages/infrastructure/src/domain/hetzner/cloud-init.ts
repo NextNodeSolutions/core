@@ -206,3 +206,28 @@ export function renderCloudInit(input: CloudInitInput): string {
 
 	return `#cloud-config\n${stringify(config, { lineWidth: 0, blockQuote: 'literal' })}`
 }
+
+export interface ProjectCloudInitInput {
+	readonly tailscaleAuthKey: string
+	readonly tailscaleHostname: string
+	readonly deployPublicKey: string
+	readonly internal: boolean
+}
+
+export function renderProjectCloudInit(input: ProjectCloudInitInput): string {
+	const config = {
+		// The golden image already has the deploy user. cloud-init still
+		// injects the SSH key into the existing user's authorized_keys.
+		ssh_pwauth: false,
+		disable_root: true,
+		users: buildUsers(input.deployPublicKey),
+		runcmd: [
+			// Tailscale is pre-installed in the golden image; just authenticate.
+			`tailscale up --authkey=${input.tailscaleAuthKey} --hostname=${input.tailscaleHostname}`,
+			// UFW rules are per-project (internal vs public).
+			...buildUfwRules(input.internal),
+		],
+	}
+
+	return `#cloud-config\n${stringify(config, { lineWidth: 0, blockQuote: 'literal' })}`
+}

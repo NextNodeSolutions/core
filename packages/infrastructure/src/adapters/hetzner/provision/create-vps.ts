@@ -1,26 +1,29 @@
 import { createLogger } from '@nextnode-solutions/logger'
 
-import type { HetznerVpsDeploySection } from '../../config/types.ts'
-import { renderCloudInit } from '../../domain/hetzner/cloud-init.ts'
-import { computeFirewallRules } from '../../domain/hetzner/firewall-rules.ts'
+import type { HetznerVpsDeploySection } from '../../../config/types.ts'
+import {
+	renderCloudInit,
+	renderProjectCloudInit,
+} from '../../../domain/hetzner/cloud-init.ts'
+import { computeFirewallRules } from '../../../domain/hetzner/firewall-rules.ts'
 import {
 	deleteTailnetDevicesByHostname,
 	getTailnetIpByHostname,
 	mintAuthkey,
-} from '../tailscale/oauth.ts'
-
-import {
-	HCLOUD_IMAGE,
-	TAILSCALE_AUTHKEY_TTL_SECONDS,
-	TAILSCALE_TAG,
-} from './constants.ts'
-import type { CreateServerInput } from './hcloud-client.ts'
+} from '../../tailscale/oauth.ts'
+import type { CreateServerInput } from '../api/client.ts'
 import {
 	applyFirewall,
 	assertServerTypeAvailable,
 	createFirewall,
 	createServer,
-} from './hcloud-client.ts'
+} from '../api/client.ts'
+import {
+	HCLOUD_IMAGE,
+	TAILSCALE_AUTHKEY_TTL_SECONDS,
+	TAILSCALE_TAG,
+} from '../constants.ts'
+
 import { waitForServerRunning } from './wait-for-server-running.ts'
 import { waitForSsh } from './wait-for-ssh.ts'
 
@@ -37,6 +40,7 @@ export interface CreateVpsInput {
 	readonly projectName: string
 	readonly hetzner: HetznerVpsDeploySection['hetzner']
 	readonly internal: boolean
+	readonly goldenImageId: number | undefined
 }
 
 export interface CreateVpsResult {
@@ -86,18 +90,30 @@ export async function createVps(
 		`Minted ephemeral Tailscale authkey for "${input.projectName}" (expires ${minted.expires})`,
 	)
 
-	const cloudInit = renderCloudInit({
+	const cloudInitInput = {
 		tailscaleAuthKey: minted.key,
 		tailscaleHostname: input.projectName,
 		deployPublicKey: credentials.deployPublicKey,
 		internal: input.internal,
-	})
+	}
+
+	const useGoldenImage = input.goldenImageId !== undefined
+	const cloudInit = useGoldenImage
+		? renderProjectCloudInit(cloudInitInput)
+		: renderCloudInit(cloudInitInput)
+	const image = useGoldenImage ? input.goldenImageId.toString() : HCLOUD_IMAGE
+
+	if (useGoldenImage) {
+		logger.info(
+			`Using golden image ${input.goldenImageId} for "${input.projectName}"`,
+		)
+	}
 
 	const serverInput: CreateServerInput = {
 		name: input.projectName,
 		serverType: input.hetzner.serverType,
 		location: input.hetzner.location,
-		image: HCLOUD_IMAGE,
+		image,
 		userData: cloudInit,
 		labels: { project: input.projectName, managed_by: 'nextnode' },
 	}

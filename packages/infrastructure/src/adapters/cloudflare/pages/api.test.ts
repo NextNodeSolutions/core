@@ -5,7 +5,7 @@ import {
 	createPagesProject,
 	getPagesProject,
 	listPagesDomains,
-} from './pages.ts'
+} from './api.ts'
 
 const TOKEN = 'cf-token-123'
 const ACCOUNT = 'acct-abc'

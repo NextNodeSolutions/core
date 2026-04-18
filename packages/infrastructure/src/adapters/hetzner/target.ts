@@ -13,14 +13,14 @@ import type {
 import type { AppEnvironment } from '../../domain/environment.ts'
 import { buildCaddyForProject } from '../../domain/hetzner/caddy-for-project.ts'
 import { computeVpsDnsRecords } from '../../domain/hetzner/dns-records.ts'
-import { reconcileDnsRecords } from '../cloudflare/reconcile-dns.ts'
+import { reconcileDnsRecords } from '../cloudflare/dns/reconcile.ts'
 import { R2Client } from '../r2/client.ts'
 
 import { CADDY_CONFIG_PATH } from './constants.ts'
 import { deployContainer } from './deploy-container.ts'
-import { freshProvision, resumeFromState } from './ensure-infra.ts'
-import { readState } from './hcloud-state.ts'
-import { createSshSession } from './ssh-session.ts'
+import { freshProvision, resumeFromState } from './provision/ensure-infra.ts'
+import { createSshSession } from './ssh/session.ts'
+import { readState } from './state/read-write.ts'
 
 const logger = createLogger()
 

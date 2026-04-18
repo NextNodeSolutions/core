@@ -1,14 +1,14 @@
 import { createLogger } from '@nextnode-solutions/logger'
 
-import { isRecord } from '../../config/types.ts'
-import type { R2Operations } from '../r2/client.types.ts'
+import { isRecord } from '../../../config/types.ts'
+import type { R2Operations } from '../../r2/client.types.ts'
 
 import type {
 	HcloudConvergedState,
 	HcloudCreatedState,
 	HcloudProjectState,
 	HcloudProvisionedState,
-} from './hcloud-state.types.ts'
+} from './types.ts'
 
 const logger = createLogger()
 

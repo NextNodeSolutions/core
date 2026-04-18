@@ -1,15 +1,15 @@
 import { createLogger } from '@nextnode-solutions/logger'
 
-import type { DesiredPagesDomain } from '../../domain/cloudflare/pages-domains.ts'
+import type { DesiredPagesDomain } from '../../../domain/cloudflare/pages-domains.ts'
 import {
 	computePagesDomains,
 	findStalePagesDomains,
 	reconcilePagesDomain,
-} from '../../domain/cloudflare/pages-domains.ts'
-import type { AppEnvironment } from '../../domain/environment.ts'
+} from '../../../domain/cloudflare/pages-domains.ts'
+import type { AppEnvironment } from '../../../domain/environment.ts'
 
-import type { CloudflarePagesDomain } from './pages.ts'
-import { attachPagesDomain, listPagesDomains } from './pages.ts'
+import type { CloudflarePagesDomain } from './api.ts'
+import { attachPagesDomain, listPagesDomains } from './api.ts'
 
 const logger = createLogger()
 

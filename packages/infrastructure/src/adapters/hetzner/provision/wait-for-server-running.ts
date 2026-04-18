@@ -2,8 +2,8 @@ import { setTimeout as sleep } from 'node:timers/promises'
 
 import { createLogger } from '@nextnode-solutions/logger'
 
-import { MAX_POLL_ATTEMPTS, POLL_INTERVAL_MS } from './constants.ts'
-import { describeServer } from './hcloud-client.ts'
+import { describeServer } from '../api/client.ts'
+import { MAX_POLL_ATTEMPTS, POLL_INTERVAL_MS } from '../constants.ts'
 
 const logger = createLogger()
 

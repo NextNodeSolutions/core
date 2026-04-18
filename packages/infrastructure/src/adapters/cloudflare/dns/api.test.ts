@@ -6,7 +6,7 @@ import {
 	listDnsRecords,
 	lookupZoneId,
 	updateDnsRecord,
-} from './dns.ts'
+} from './api.ts'
 
 const TOKEN = 'cf-token-123'
 

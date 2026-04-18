@@ -7,7 +7,7 @@ import { buildCaddyForProject } from '../../domain/hetzner/caddy-for-project.ts'
 import { selectVectorConfig } from '../../domain/hetzner/vector-config.ts'
 
 import { CADDY_CONFIG_PATH } from './constants.ts'
-import { createSshSession } from './ssh-session.ts'
+import { createSshSession } from './ssh/session.ts'
 
 const logger = createLogger()
 

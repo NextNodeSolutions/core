@@ -1,5 +1,4 @@
-import { HTTP_NOT_FOUND } from '../http.ts'
-
+import { HTTP_NOT_FOUND } from '../../http.ts'
 import {
 	CLOUDFLARE_API_BASE,
 	authHeaders,
@@ -8,7 +7,7 @@ import {
 	requireArrayResult,
 	requireObjectResult,
 	requireOk,
-} from './api.ts'
+} from '../api.ts'
 
 export interface CloudflarePagesProject {
 	readonly name: string

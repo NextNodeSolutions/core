@@ -15,7 +15,7 @@ import {
 } from '../../domain/hetzner/compose-file.ts'
 import { computeSilo } from '../../domain/hetzner/env-silo.ts'
 
-import type { SshSession } from './ssh-session.types.ts'
+import type { SshSession } from './ssh/session.types.ts'
 
 const logger = createLogger()
 
