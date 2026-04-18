@@ -85,6 +85,84 @@ describe('delete', () => {
 	})
 })
 
+describe('deleteByPrefix', () => {
+	it('returns 0 when the prefix is empty', async () => {
+		send.mockResolvedValue({
+			Contents: [],
+			NextContinuationToken: undefined,
+		})
+
+		const count = await client.deleteByPrefix('my-project/')
+
+		expect(count).toBe(0)
+	})
+
+	it('lists and deletes all objects under the prefix in one page', async () => {
+		send.mockImplementation(async command => {
+			const name: unknown = command.constructor.name
+			if (name === 'ListObjectsV2Command') {
+				return {
+					Contents: [
+						{ Key: 'my-project/a.json' },
+						{ Key: 'my-project/b.json' },
+					],
+					NextContinuationToken: undefined,
+				}
+			}
+			return {}
+		})
+
+		const count = await client.deleteByPrefix('my-project/')
+
+		expect(count).toBe(2)
+		const calls = send.mock.calls.map(c => c[0].constructor.name)
+		expect(calls).toContain('ListObjectsV2Command')
+		expect(calls).toContain('DeleteObjectsCommand')
+	})
+
+	it('paginates through multiple list pages', async () => {
+		let callIndex = 0
+		send.mockImplementation(async command => {
+			const name: unknown = command.constructor.name
+			if (name === 'ListObjectsV2Command') {
+				callIndex += 1
+				if (callIndex === 1) {
+					return {
+						Contents: [{ Key: 'p/a.json' }],
+						NextContinuationToken: 'token-2',
+					}
+				}
+				return {
+					Contents: [{ Key: 'p/b.json' }, { Key: 'p/c.json' }],
+					NextContinuationToken: undefined,
+				}
+			}
+			return {}
+		})
+
+		const count = await client.deleteByPrefix('p/')
+
+		expect(count).toBe(3)
+	})
+
+	it('skips objects without a Key', async () => {
+		send.mockImplementation(async command => {
+			const name: unknown = command.constructor.name
+			if (name === 'ListObjectsV2Command') {
+				return {
+					Contents: [{ Key: 'p/a.json' }, { Key: undefined }],
+					NextContinuationToken: undefined,
+				}
+			}
+			return {}
+		})
+
+		const count = await client.deleteByPrefix('p/')
+
+		expect(count).toBe(1)
+	})
+})
+
 describe('exists', () => {
 	it('returns true when object exists', async () => {
 		send.mockResolvedValue({})
