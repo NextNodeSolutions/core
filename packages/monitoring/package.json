@@ -31,6 +31,7 @@
   },
   "dependencies": {
     "@astrojs/node": "^9.5.5",
+    "@nextnode-solutions/brand-assets": "workspace:*",
     "@nextnode-solutions/logger": "workspace:*",
     "astro": "^5.18.1"
   },
