@@ -1,0 +1,51 @@
+{
+  "name": "@nextnode-solutions/monitoring",
+  "version": "0.0.0-development",
+  "description": "NextNode internal monitoring dashboard — interactive Astro UI to manage GitHub projects, VPS, and Cloudflare deployments",
+  "keywords": [
+    "astro",
+    "dashboard",
+    "monitoring",
+    "nextnode"
+  ],
+  "homepage": "https://github.com/NextNodeSolutions/core#readme",
+  "license": "MIT",
+  "author": "NextNode Solutions",
+  "repository": {
+    "directory": "packages/monitoring",
+    "type": "git",
+    "url": "https://github.com/NextNodeSolutions/core.git"
+  },
+  "scripts": {
+    "astro": "astro",
+    "build": "astro build",
+    "check": "astro check",
+    "dev": "astro dev",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "lint": "oxlint",
+    "start": "node ./dist/server/entry.mjs",
+    "test": "vitest run",
+    "type-check": "astro check",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@astrojs/node": "^9.5.5",
+    "@nextnode-solutions/logger": "workspace:*",
+    "astro": "^5.18.1"
+  },
+  "devDependencies": {
+    "@nextnode-solutions/standards": "workspace:*",
+    "@typescript/native-preview": "7.0.0-dev.20260407.1",
+    "oxfmt": "^0.43.0",
+    "oxlint": "^1.58.0",
+    "typescript": "^5.6.3",
+    "vitest": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "private": true,
+  "packageManager": "pnpm@10.11.0",
+  "type": "module"
+}
