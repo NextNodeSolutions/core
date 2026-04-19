@@ -158,6 +158,9 @@ importers:
       '@astrojs/node':
         specifier: ^9.5.5
         version: 9.5.5(astro@5.18.1(@types/node@25.5.0)(jiti@2.6.1)(lightningcss@1.32.0)(rollup@4.60.1)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.3))
+      '@nextnode-solutions/brand-assets':
+        specifier: workspace:*
+        version: link:../brand-assets
       '@nextnode-solutions/logger':
         specifier: workspace:*
         version: link:../logger

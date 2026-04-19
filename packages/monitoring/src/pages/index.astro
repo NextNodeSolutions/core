@@ -1,0 +1,64 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro'
+import ProjectCard from '../components/ProjectCard.astro'
+import type { ProjectSummary } from '../lib/domain/project.ts'
+
+export const prerender = false
+
+const projects: ProjectSummary[] = [
+	{
+		slug: 'example-app',
+		name: 'Example App',
+		repo: 'NextNodeSolutions/example-app',
+		target: 'hetzner',
+		environment: 'production',
+		status: 'healthy',
+		lastDeployAt: '2026-04-18 14:32',
+	},
+	{
+		slug: 'example-site',
+		name: 'Example Site',
+		repo: 'NextNodeSolutions/example-site',
+		target: 'cloudflare-pages',
+		environment: 'production',
+		status: 'unknown',
+		lastDeployAt: null,
+	},
+]
+---
+
+<BaseLayout title="Dashboard">
+	<section class="intro">
+		<h1>Projects</h1>
+		<p>
+			Manage deployments, validate prod releases, and destroy VPS across every NextNode project.
+		</p>
+	</section>
+
+	<section class="grid">
+		{projects.map((project) => <ProjectCard project={project} />)}
+	</section>
+</BaseLayout>
+
+<style>
+	.intro {
+		margin-bottom: var(--space-6);
+	}
+
+	.intro h1 {
+		font-size: 2rem;
+		margin-bottom: var(--space-2);
+	}
+
+	.intro p {
+		margin: 0;
+		color: var(--color-text-muted);
+		max-width: 60ch;
+	}
+
+	.grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+		gap: var(--space-4);
+	}
+</style>

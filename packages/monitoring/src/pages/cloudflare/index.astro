@@ -1,0 +1,31 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro'
+
+export const prerender = false
+---
+
+<BaseLayout title="Cloudflare">
+	<h1>Cloudflare projects</h1>
+	<p class="hint">Pages + Workers stats via wrangler.</p>
+	<p class="empty">Wrangler bridge pending.</p>
+
+	<style>
+		h1 {
+			font-size: 1.8rem;
+			margin-bottom: var(--space-2);
+		}
+
+		.hint {
+			color: var(--color-text-muted);
+			margin-bottom: var(--space-6);
+		}
+
+		.empty {
+			padding: var(--space-6);
+			border: 1px dashed var(--color-border);
+			border-radius: var(--radius-md);
+			color: var(--color-text-muted);
+			font-family: var(--font-mono);
+		}
+	</style>
+</BaseLayout>
