@@ -15,7 +15,7 @@ variable "infra_fingerprint" {
 source "hcloud" "nextnode-base" {
   image       = "debian-12"
   location    = "nbg1"
-  server_type = "cx22"
+  server_type = "cx23"
   ssh_username = "root"
 
   snapshot_name = "nextnode-base-${var.infra_fingerprint}"
