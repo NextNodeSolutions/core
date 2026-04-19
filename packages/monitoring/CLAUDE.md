@@ -98,12 +98,12 @@ src/
 
 ### Layer import rules
 
-| Layer         | May import from                       | STRICTLY FORBIDDEN                                             |
-| ------------- | ------------------------------------- | -------------------------------------------------------------- |
-| `pages/`      | `lib/domain`, `lib/adapters`, `layouts/`, `components/` | direct `fetch`, raw `process.env` outside adapter wrappers     |
-| `components/` | `lib/domain` (types only)             | any IO, env, logger                                            |
-| `lib/domain/` | other `lib/domain/*`                  | `process.env`, `node:fs`, `fetch`, logger, any adapter         |
-| `lib/adapters/` | `lib/domain/*` (types only), stdlib | domain business decisions                                      |
+| Layer           | May import from                                         | STRICTLY FORBIDDEN                                         |
+| --------------- | ------------------------------------------------------- | ---------------------------------------------------------- |
+| `pages/`        | `lib/domain`, `lib/adapters`, `layouts/`, `components/` | direct `fetch`, raw `process.env` outside adapter wrappers |
+| `components/`   | `lib/domain` (types only)                               | any IO, env, logger                                        |
+| `lib/domain/`   | other `lib/domain/*`                                    | `process.env`, `node:fs`, `fetch`, logger, any adapter     |
+| `lib/adapters/` | `lib/domain/*` (types only), stdlib                     | domain business decisions                                  |
 
 ### Hard rules
 
