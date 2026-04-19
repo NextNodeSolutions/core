@@ -1,0 +1,11 @@
+**/node_modules
+**/dist
+**/.astro
+**/.turbo
+**/coverage
+**/.env
+**/.env.local
+**/.git
+**/.vscode
+**/.idea
+**/*.log
