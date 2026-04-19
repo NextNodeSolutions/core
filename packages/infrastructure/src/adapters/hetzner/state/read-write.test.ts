@@ -2,7 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { R2Operations } from '../../r2/client.types.ts'
 
-import { deleteState, readState, writeState } from './read-write.ts'
+import {
+	deleteState,
+	EtagMismatchError,
+	readState,
+	writeState,
+} from './read-write.ts'
 
 function createMockR2(): R2Operations {
 	return {
@@ -215,9 +220,9 @@ describe('writeState', () => {
 		)
 	})
 
-	it('retries on failure and succeeds', async () => {
+	it('retries on transient failure and succeeds', async () => {
 		vi.mocked(r2.put)
-			.mockRejectedValueOnce(new Error('ETag mismatch'))
+			.mockRejectedValueOnce(new Error('network blip'))
 			.mockResolvedValue('"ok"')
 
 		const etag = await writeState(r2, 'acme-web', convergedState, '"stale"')
@@ -226,14 +231,43 @@ describe('writeState', () => {
 		expect(r2.put).toHaveBeenCalledTimes(2)
 	})
 
-	it('throws after 3 failed attempts', async () => {
-		vi.mocked(r2.put).mockRejectedValue(new Error('ETag mismatch'))
+	it('throws after 3 transient retries', async () => {
+		vi.mocked(r2.put).mockRejectedValue(new Error('network blip'))
 
 		await expect(
 			writeState(r2, 'acme-web', createdState, '"stale"'),
-		).rejects.toThrow(/State lock contention.*3 attempts/)
+		).rejects.toThrow(/failed after 3 transient retries/)
 
 		expect(r2.put).toHaveBeenCalledTimes(3)
+	})
+
+	it('throws EtagMismatchError immediately on 412 without retrying', async () => {
+		const preconditionFailed = Object.assign(
+			new Error('precondition failed'),
+			{
+				name: 'PreconditionFailed',
+			},
+		)
+		vi.mocked(r2.put).mockRejectedValue(preconditionFailed)
+
+		await expect(
+			writeState(r2, 'acme-web', provisionedState, '"stale"'),
+		).rejects.toBeInstanceOf(EtagMismatchError)
+
+		expect(r2.put).toHaveBeenCalledTimes(1)
+	})
+
+	it('throws EtagMismatchError when $metadata.httpStatusCode is 412', async () => {
+		const httpErr = Object.assign(new Error('precondition failed'), {
+			$metadata: { httpStatusCode: 412 },
+		})
+		vi.mocked(r2.put).mockRejectedValue(httpErr)
+
+		await expect(
+			writeState(r2, 'acme-web', provisionedState, '"stale"'),
+		).rejects.toBeInstanceOf(EtagMismatchError)
+
+		expect(r2.put).toHaveBeenCalledTimes(1)
 	})
 })
 

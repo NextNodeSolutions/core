@@ -4,7 +4,7 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
 
-export interface PollOptions<T> {
+export interface WaitOptions<T> {
 	readonly subject: string
 	readonly poll: () => Promise<T>
 	readonly isDone: (value: T) => boolean
@@ -14,8 +14,8 @@ export interface PollOptions<T> {
 }
 
 /**
- * Sequentially poll `options.poll` until `options.isDone` returns true, or
- * throw once the attempt budget is exhausted.
+ * Wait for `options.isDone` to return true by sequentially polling
+ * `options.poll`, or throw once the attempt budget is exhausted.
  *
  * Every non-terminal attempt logs a progress line and sleeps
  * `options.intervalMs`. The final attempt does not sleep so the timeout
@@ -27,7 +27,7 @@ export interface PollOptions<T> {
  *             if no `detail` formatter was provided)
  * - timeout:  `<subject>: timed out after <max> attempts` (thrown)
  */
-export async function pollUntil<T>(options: PollOptions<T>): Promise<T> {
+export async function waitUntil<T>(options: WaitOptions<T>): Promise<T> {
 	for (let attempt = 1; attempt <= options.maxAttempts; attempt++) {
 		// oxlint-disable-next-line no-await-in-loop -- sequential polling by design
 		const value = await options.poll()

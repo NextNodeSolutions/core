@@ -18,14 +18,17 @@ import {
 	assertServerTypeAvailable,
 	createFirewall,
 	createServer,
+	describeServer,
 } from '../api/client.ts'
 import {
 	HCLOUD_IMAGE,
+	MAX_POLL_ATTEMPTS,
+	POLL_INTERVAL_MS,
 	TAILSCALE_AUTHKEY_TTL_SECONDS,
 	TAILSCALE_TAG,
 } from '../constants.ts'
+import { waitUntil } from '../wait.ts'
 
-import { waitForServerRunning } from './wait-for-server-running.ts'
 import { waitForSsh } from './wait-for-ssh.ts'
 
 const logger = createLogger()
@@ -139,7 +142,14 @@ export async function completeProvisioning(
 	credentials: ProvisionVpsCredentials,
 	input: CompleteProvisioningInput,
 ): Promise<CompleteProvisioningResult> {
-	await waitForServerRunning(credentials.hcloudToken, input.serverId)
+	await waitUntil({
+		subject: `Server ${String(input.serverId)} startup`,
+		poll: () => describeServer(credentials.hcloudToken, input.serverId),
+		isDone: server => server.status === 'running',
+		detail: server => `status=${server.status}`,
+		maxAttempts: MAX_POLL_ATTEMPTS,
+		intervalMs: POLL_INTERVAL_MS,
+	})
 
 	const firewallName = `${input.projectName}-fw`
 	logger.info(`Ensuring firewall "${firewallName}"`)

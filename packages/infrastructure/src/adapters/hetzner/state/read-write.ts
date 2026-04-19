@@ -1,6 +1,7 @@
 import { createLogger } from '@nextnode-solutions/logger'
 
 import { isRecord } from '../../../config/types.ts'
+import { HTTP_PRECONDITION_FAILED } from '../../http.ts'
 import type { R2Operations } from '../../r2/client.types.ts'
 
 import type {
@@ -12,7 +13,42 @@ import type {
 
 const logger = createLogger()
 
-const MAX_RETRIES = 3
+const MAX_TRANSIENT_RETRIES = 3
+
+/**
+ * Signals that an R2 conditional PUT failed because the stored object's
+ * ETag has moved on from the one the caller passed in `ifMatch`.
+ *
+ * Thrown instead of silently re-trying: another process has advanced the
+ * state concurrently, so whatever the caller computed from the stale read
+ * is already invalid. The correct recovery is to let the caller (or the
+ * user re-running the pipeline) observe the fresh state and re-plan from
+ * there — not to retry with the same outdated precondition.
+ */
+export class EtagMismatchError extends Error {
+	constructor(projectName: string, cause: unknown) {
+		super(
+			`State ETag mismatch for "${projectName}" — another process advanced state concurrently; re-run the pipeline to observe the latest state`,
+			{ cause },
+		)
+		this.name = 'EtagMismatchError'
+	}
+}
+
+function isEtagMismatch(error: unknown): boolean {
+	if (typeof error !== 'object' || error === null) return false
+	if ('name' in error && error.name === 'PreconditionFailed') return true
+	if (
+		'$metadata' in error &&
+		typeof error.$metadata === 'object' &&
+		error.$metadata !== null &&
+		'httpStatusCode' in error.$metadata &&
+		error.$metadata.httpStatusCode === HTTP_PRECONDITION_FAILED
+	) {
+		return true
+	}
+	return false
+}
 
 function stateKey(projectName: string): string {
 	return `hetzner/${projectName}.json`
@@ -107,19 +143,22 @@ export async function writeState(
 	const body = JSON.stringify(state)
 	let lastError: unknown
 
-	for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+	for (let attempt = 1; attempt <= MAX_TRANSIENT_RETRIES; attempt++) {
 		try {
 			return await r2.put(key, body, ifMatch) // eslint-disable-line no-await-in-loop -- sequential retries by design
 		} catch (error) {
+			if (isEtagMismatch(error)) {
+				throw new EtagMismatchError(projectName, error)
+			}
 			logger.warn(
-				`writeState attempt ${attempt}/${MAX_RETRIES} failed for "${projectName}": ${String(error)}`,
+				`writeState attempt ${attempt}/${MAX_TRANSIENT_RETRIES} failed for "${projectName}" (transient): ${String(error)}`,
 			)
 			lastError = error
 		}
 	}
 
 	throw new Error(
-		`State lock contention for "${projectName}" after ${MAX_RETRIES} attempts`,
+		`writeState for "${projectName}" failed after ${MAX_TRANSIENT_RETRIES} transient retries`,
 		{ cause: lastError },
 	)
 }

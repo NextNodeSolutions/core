@@ -10,12 +10,14 @@ import { deleteTailnetDevicesByHostname } from '../tailscale/oauth.ts'
 import {
 	deleteFirewall,
 	deleteServer,
+	findFirewallById,
 	findFirewallsByName,
+	findServerById,
 	findServersByLabels,
 } from './api/client.ts'
+import { MAX_POLL_ATTEMPTS, POLL_INTERVAL_MS } from './constants.ts'
 import { deleteState, readState } from './state/read-write.ts'
-import { waitForFirewallDetached } from './wait-for-firewall-detached.ts'
-import { waitForServerDeleted } from './wait-for-server-deleted.ts'
+import { waitUntil } from './wait.ts'
 
 const logger = createLogger()
 
@@ -29,7 +31,14 @@ export async function teardownServer(
 	if (existing) {
 		const { serverId } = existing.state
 		await deleteServer(hcloudToken, serverId)
-		await waitForServerDeleted(hcloudToken, serverId)
+		await waitUntil({
+			subject: `Server ${String(serverId)} deletion`,
+			poll: () => findServerById(hcloudToken, serverId),
+			isDone: server => server === null,
+			detail: server => `status=${server?.status ?? 'unknown'}`,
+			maxAttempts: MAX_POLL_ATTEMPTS,
+			intervalMs: POLL_INTERVAL_MS,
+		})
 		return {
 			handled: true,
 			detail: `deleted #${String(serverId)}`,
@@ -47,7 +56,14 @@ export async function teardownServer(
 	await Promise.all(
 		orphans.map(async s => {
 			await deleteServer(hcloudToken, s.id)
-			await waitForServerDeleted(hcloudToken, s.id)
+			await waitUntil({
+				subject: `Server ${String(s.id)} deletion`,
+				poll: () => findServerById(hcloudToken, s.id),
+				isDone: server => server === null,
+				detail: server => `status=${server?.status ?? 'unknown'}`,
+				maxAttempts: MAX_POLL_ATTEMPTS,
+				intervalMs: POLL_INTERVAL_MS,
+			})
 		}),
 	)
 	const ids = orphans.map(s => String(s.id)).join(', ')
@@ -67,7 +83,18 @@ export async function teardownFirewall(
 
 	await Promise.all(
 		firewalls.map(async fw => {
-			await waitForFirewallDetached(hcloudToken, fw.id)
+			await waitUntil({
+				subject: `Firewall ${String(fw.id)} detachment`,
+				poll: () => findFirewallById(hcloudToken, fw.id),
+				isDone: firewall =>
+					firewall === null || firewall.appliedToCount === 0,
+				detail: firewall =>
+					firewall === null
+						? 'already gone'
+						: `applied to ${String(firewall.appliedToCount)} resource(s)`,
+				maxAttempts: MAX_POLL_ATTEMPTS,
+				intervalMs: POLL_INTERVAL_MS,
+			})
 			await deleteFirewall(hcloudToken, fw.id)
 		}),
 	)

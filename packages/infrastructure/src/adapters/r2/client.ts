@@ -46,15 +46,13 @@ export class R2Client {
 	}
 
 	async put(key: string, body: string, ifMatch?: string): Promise<string> {
-		const metadata = ifMatch ? { 'if-match': ifMatch } : undefined
-
 		const response = await this.s3.send(
 			new PutObjectCommand({
 				Bucket: this.bucket,
 				Key: key,
 				Body: body,
 				ContentType: 'application/json',
-				Metadata: metadata,
+				IfMatch: ifMatch,
 			}),
 		)
 		return response.ETag ?? ''

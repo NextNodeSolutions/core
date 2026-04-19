@@ -72,6 +72,25 @@ describe('put', () => {
 		expect(command.input.Key).toBe('hetzner/acme.json')
 		expect(command.input.Body).toBe('{"id":1}')
 	})
+
+	it('forwards ifMatch as the S3 IfMatch precondition header (not user metadata)', async () => {
+		send.mockResolvedValue({ ETag: '"e"' })
+
+		await client.put('state.json', '{}', '"old-etag"')
+
+		const command = send.mock.lastCall?.[0]
+		expect(command.input.IfMatch).toBe('"old-etag"')
+		expect(command.input.Metadata).toBeUndefined()
+	})
+
+	it('omits IfMatch entirely when ifMatch is not provided', async () => {
+		send.mockResolvedValue({ ETag: '"e"' })
+
+		await client.put('state.json', '{}')
+
+		const command = send.mock.lastCall?.[0]
+		expect(command.input.IfMatch).toBeUndefined()
+	})
 })
 
 describe('delete', () => {

@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
@@ -86,17 +86,25 @@ export async function buildBaseImageCommand(): Promise<void> {
 
 	logger.info('No matching golden image found, building with Packer...')
 
-	execSync('packer init .', {
+	// Array form (execFileSync) bypasses the shell entirely, so the
+	// fingerprint — even though it is a SHA256 hex string today — cannot
+	// reach a shell interpreter. Defense in depth against a future change
+	// that might let a non-hex value slip into computeInfraFingerprint.
+	execFileSync('packer', ['init', '.'], {
 		cwd: packerDir,
 		stdio: 'inherit',
 		env: { ...process.env, HCLOUD_TOKEN: token },
 	})
 
-	execSync(`packer build -var "infra_fingerprint=${fingerprint}" .`, {
-		cwd: packerDir,
-		stdio: 'inherit',
-		env: { ...process.env, HCLOUD_TOKEN: token },
-	})
+	execFileSync(
+		'packer',
+		['build', '-var', `infra_fingerprint=${fingerprint}`, '.'],
+		{
+			cwd: packerDir,
+			stdio: 'inherit',
+			env: { ...process.env, HCLOUD_TOKEN: token },
+		},
+	)
 
 	logger.info(
 		`Golden image built: snapshot nextnode-base-${fingerprint} (fingerprint ${fingerprint})`,

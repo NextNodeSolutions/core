@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { pollUntil } from './polling.ts'
+import { waitUntil } from './wait.ts'
 
 vi.mock('node:timers/promises', () => ({
 	setTimeout: vi.fn(async () => undefined),
@@ -15,10 +15,10 @@ afterEach(() => {
 	vi.unstubAllEnvs()
 })
 
-describe('pollUntil', () => {
+describe('waitUntil', () => {
 	it('resolves on the first attempt when the predicate holds', async () => {
 		const poll = vi.fn(async () => 'ready')
-		const result = await pollUntil({
+		const result = await waitUntil({
 			subject: 'task',
 			poll,
 			isDone: value => value === 'ready',
@@ -35,7 +35,7 @@ describe('pollUntil', () => {
 			tick += 1
 			return tick === 3 ? 'ready' : 'starting'
 		})
-		const result = await pollUntil({
+		const result = await waitUntil({
 			subject: 'task',
 			poll,
 			isDone: value => value === 'ready',
@@ -49,7 +49,7 @@ describe('pollUntil', () => {
 	it('throws the timeout message when attempts are exhausted', async () => {
 		const poll = vi.fn(async () => 'never-ready')
 		await expect(
-			pollUntil({
+			waitUntil({
 				subject: 'task',
 				poll,
 				isDone: value => value === 'ready',
