@@ -1,5 +1,7 @@
 import { stringify } from 'yaml'
 
+import { CADDY_SYSTEMD_UNIT, VECTOR_SYSTEMD_UNIT } from './systemd-units.ts'
+
 export interface CloudInitInput {
 	readonly tailscaleAuthKey: string
 	readonly tailscaleHostname: string
@@ -60,37 +62,6 @@ const PACKAGES = [
 	'ufw',
 ]
 
-const VECTOR_UNIT = `[Unit]
-Description=Vector log agent
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-ExecStart=/usr/bin/vector --config /etc/vector/vector.toml
-EnvironmentFile=/etc/vector/vector.env
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-`
-
-const CADDY_UNIT = `[Unit]
-Description=Caddy web server
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-EnvironmentFile=-/etc/caddy/env
-ExecStart=/usr/bin/caddy run --config /etc/caddy/config.json
-ExecReload=/usr/bin/caddy reload --config /etc/caddy/config.json
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-`
-
 function buildUsers(deployPublicKey: string): ReadonlyArray<CloudInitUser> {
 	// Declarative user creation runs BEFORE runcmd, so the SSH key is
 	// installed early. lock_passwd removes any password hash entirely — no
@@ -122,8 +93,14 @@ function buildTailscaleAuthKeyFile(authKey: string): CloudInitWriteFile {
 
 function buildWriteFiles(authKey: string): ReadonlyArray<CloudInitWriteFile> {
 	return [
-		{ path: '/etc/systemd/system/vector.service', content: VECTOR_UNIT },
-		{ path: '/etc/systemd/system/caddy.service', content: CADDY_UNIT },
+		{
+			path: '/etc/systemd/system/vector.service',
+			content: VECTOR_SYSTEMD_UNIT,
+		},
+		{
+			path: '/etc/systemd/system/caddy.service',
+			content: CADDY_SYSTEMD_UNIT,
+		},
 		{ path: '/etc/caddy/config.json', content: '{}\n' },
 		buildTailscaleAuthKeyFile(authKey),
 	]

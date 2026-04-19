@@ -36,6 +36,7 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
+EnvironmentFile=-/etc/caddy/env
 ExecStart=/usr/bin/caddy run --config /etc/caddy/config.json
 ExecReload=/usr/bin/caddy reload --config /etc/caddy/config.json
 Restart=always
