@@ -26,27 +26,8 @@ import {
 } from '../fixtures.ts'
 
 import { deployCommand } from './deploy.command.ts'
-
-interface MockResponse {
-	ok: boolean
-	status: number
-	json: () => Promise<unknown>
-	text: () => Promise<string>
-}
-
-type FetchImpl = (
-	input: string | URL,
-	init?: RequestInit,
-) => Promise<MockResponse>
-
-function okJson(body: unknown): MockResponse {
-	return {
-		ok: true,
-		status: 200,
-		json: () => Promise.resolve(body),
-		text: () => Promise.resolve(JSON.stringify(body)),
-	}
-}
+import type { FetchImpl } from './test-utils.ts'
+import { okJson } from './test-utils.ts'
 
 function stubFetch(): ReturnType<typeof vi.fn<FetchImpl>> {
 	const fetchMock = vi

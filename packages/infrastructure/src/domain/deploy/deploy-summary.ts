@@ -1,8 +1,8 @@
+import type { SummaryRow } from './summary-renderer.ts'
+import { formatDuration, renderKeyValueTable } from './summary-renderer.ts'
 import type { DeployedEnvironment, DeployResult } from './target.ts'
 
-const MS_PER_SECOND = 1000
-const SECONDS_PER_MINUTE = 60
-const TENTHS_DIVISOR = 100
+export { formatDuration } from './summary-renderer.ts'
 
 export function buildDeploySummary(
 	result: DeployResult,
@@ -24,8 +24,8 @@ function buildSummaryRows(
 	env: DeployedEnvironment,
 	targetName: string,
 	durationMs: number,
-): ReadonlyArray<readonly [string, string]> {
-	const rows: Array<readonly [string, string]> = [['**URL**', env.url]]
+): ReadonlyArray<SummaryRow> {
+	const rows: Array<SummaryRow> = [['**URL**', env.url]]
 
 	if (env.kind === 'container') {
 		const ref = env.imageRef
@@ -39,29 +39,4 @@ function buildSummaryRows(
 	rows.push(['**Duration**', formatDuration(durationMs)])
 
 	return rows
-}
-
-function renderKeyValueTable(
-	rows: ReadonlyArray<readonly [string, string]>,
-): string {
-	const header = '| | |'
-	const separator = '|---|---|'
-	const body = rows.map(([key, value]) => `| ${key} | ${value} |`).join('\n')
-
-	return `${header}\n${separator}\n${body}`
-}
-
-export function formatDuration(ms: number): string {
-	if (ms < MS_PER_SECOND) return `${String(ms)}ms`
-
-	const totalSeconds = Math.floor(ms / MS_PER_SECOND)
-	if (totalSeconds < SECONDS_PER_MINUTE) {
-		const tenths = Math.floor((ms % MS_PER_SECOND) / TENTHS_DIVISOR)
-		return `${String(totalSeconds)}.${String(tenths)}s`
-	}
-
-	const minutes = Math.floor(totalSeconds / SECONDS_PER_MINUTE)
-	const seconds = totalSeconds % SECONDS_PER_MINUTE
-	if (seconds === 0) return `${String(minutes)}m`
-	return `${String(minutes)}m ${String(seconds)}s`
 }

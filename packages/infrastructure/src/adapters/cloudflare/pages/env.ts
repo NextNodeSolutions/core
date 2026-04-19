@@ -1,10 +1,4 @@
-import {
-	CLOUDFLARE_API_BASE,
-	authHeaders,
-	formatErrors,
-	parseEnvelope,
-	requireOk,
-} from '../api.ts'
+import { CLOUDFLARE_API_BASE, cfFetchJson } from '../api.ts'
 
 interface PlainEnvVar {
 	readonly type: 'plain_text'
@@ -53,11 +47,12 @@ export async function updatePagesEnvVars(
 ): Promise<void> {
 	const envVars = buildPayload(computed, secrets)
 
-	const response = await fetch(
+	await cfFetchJson(
 		`${CLOUDFLARE_API_BASE}/accounts/${accountId}/pages/projects/${encodeURIComponent(projectName)}`,
+		token,
+		`Cloudflare Pages env vars update for "${projectName}"`,
 		{
 			method: 'PATCH',
-			headers: authHeaders(token),
 			body: JSON.stringify({
 				deployment_configs: {
 					production: { env_vars: envVars },
@@ -65,12 +60,4 @@ export async function updatePagesEnvVars(
 			}),
 		},
 	)
-	await requireOk(response)
-
-	const data: unknown = await response.json()
-	const context = `Cloudflare Pages env vars update for "${projectName}"`
-	const envelope = parseEnvelope(data, context)
-	if (!envelope.success) {
-		throw new Error(`${context} failed: ${formatErrors(envelope.errors)}`)
-	}
 }

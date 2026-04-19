@@ -62,7 +62,7 @@ describe('waitForServerRunning', () => {
 		})
 
 		await expect(waitForServerRunning('t', 42)).rejects.toThrow(
-			'did not reach "running" after 24 attempts',
+			'Server 42 startup: timed out after 24 attempts',
 		)
 	})
 

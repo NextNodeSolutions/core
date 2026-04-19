@@ -1,13 +1,6 @@
 import type { R2PermissionGroupIds } from '../../domain/cloudflare/r2/token-policy.ts'
 
-import {
-	CLOUDFLARE_API_BASE,
-	authHeaders,
-	formatErrors,
-	parseEnvelope,
-	requireArrayResult,
-	requireOk,
-} from './api.ts'
+import { CLOUDFLARE_API_BASE, cfFetchJson, requireArrayResult } from './api.ts'
 
 const READ_GROUP_NAME = 'Workers R2 Storage Bucket Item Read'
 const WRITE_GROUP_NAME = 'Workers R2 Storage Bucket Item Write'
@@ -27,18 +20,12 @@ function parseGroup(item: unknown): NamedGroup | null {
 export async function resolveR2PermissionGroupIds(
 	token: string,
 ): Promise<R2PermissionGroupIds> {
-	const response = await fetch(
-		`${CLOUDFLARE_API_BASE}/user/tokens/permission_groups`,
-		{ headers: authHeaders(token) },
-	)
-	await requireOk(response)
-
-	const data: unknown = await response.json()
 	const context = 'Cloudflare permission groups list'
-	const envelope = parseEnvelope(data, context)
-	if (!envelope.success) {
-		throw new Error(`${context} failed: ${formatErrors(envelope.errors)}`)
-	}
+	const data = await cfFetchJson(
+		`${CLOUDFLARE_API_BASE}/user/tokens/permission_groups`,
+		token,
+		context,
+	)
 
 	const groups = requireArrayResult(data, context)
 		.map(parseGroup)

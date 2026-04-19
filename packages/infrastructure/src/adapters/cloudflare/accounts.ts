@@ -1,11 +1,4 @@
-import {
-	CLOUDFLARE_API_BASE,
-	authHeaders,
-	formatErrors,
-	parseEnvelope,
-	requireArrayResult,
-	requireOk,
-} from './api.ts'
+import { CLOUDFLARE_API_BASE, cfFetchJson, requireArrayResult } from './api.ts'
 
 function parseAccountId(item: unknown): string {
 	if (typeof item !== 'object' || item === null) {
@@ -25,17 +18,12 @@ function parseAccountId(item: unknown): string {
  * one, so the caller must set `CLOUDFLARE_ACCOUNT_ID` explicitly upstream.
  */
 export async function resolveAccountId(token: string): Promise<string> {
-	const response = await fetch(`${CLOUDFLARE_API_BASE}/accounts`, {
-		headers: authHeaders(token),
-	})
-	await requireOk(response)
-
-	const data: unknown = await response.json()
 	const context = 'Cloudflare accounts list'
-	const envelope = parseEnvelope(data, context)
-	if (!envelope.success) {
-		throw new Error(`${context} failed: ${formatErrors(envelope.errors)}`)
-	}
+	const data = await cfFetchJson(
+		`${CLOUDFLARE_API_BASE}/accounts`,
+		token,
+		context,
+	)
 
 	const result = requireArrayResult(data, context)
 	if (result.length === 0) {

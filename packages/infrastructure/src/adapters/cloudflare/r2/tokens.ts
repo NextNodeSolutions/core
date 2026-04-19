@@ -3,12 +3,9 @@ import type { R2PermissionGroupIds } from '../../../domain/cloudflare/r2/token-p
 import { buildR2TokenPolicy } from '../../../domain/cloudflare/r2/token-policy.ts'
 import {
 	CLOUDFLARE_API_BASE,
-	authHeaders,
-	formatErrors,
-	parseEnvelope,
+	cfFetchJson,
 	requireArrayResult,
 	requireObjectResult,
-	requireOk,
 } from '../api.ts'
 
 export interface CreateR2TokenInput {
@@ -49,19 +46,13 @@ export async function createR2Token(
 		permissions: input.permissions,
 	})
 
-	const response = await fetch(`${CLOUDFLARE_API_BASE}/user/tokens`, {
-		method: 'POST',
-		headers: authHeaders(input.token),
-		body: JSON.stringify(body),
-	})
-	await requireOk(response)
-
-	const data: unknown = await response.json()
 	const context = `Cloudflare R2 token create "${input.tokenName}"`
-	const envelope = parseEnvelope(data, context)
-	if (!envelope.success) {
-		throw new Error(`${context} failed: ${formatErrors(envelope.errors)}`)
-	}
+	const data = await cfFetchJson(
+		`${CLOUDFLARE_API_BASE}/user/tokens`,
+		input.token,
+		context,
+		{ method: 'POST', body: JSON.stringify(body) },
+	)
 
 	return parseTokenResult(requireObjectResult(data, context))
 }
@@ -95,18 +86,12 @@ function parseListedToken(item: unknown): ListedToken {
 export async function listUserTokens(
 	cfToken: string,
 ): Promise<ReadonlyArray<ListedToken>> {
-	const response = await fetch(`${CLOUDFLARE_API_BASE}/user/tokens`, {
-		headers: authHeaders(cfToken),
-	})
-	await requireOk(response)
-
-	const data: unknown = await response.json()
 	const context = 'Cloudflare list user tokens'
-	const envelope = parseEnvelope(data, context)
-	if (!envelope.success) {
-		throw new Error(`${context} failed: ${formatErrors(envelope.errors)}`)
-	}
-
+	const data = await cfFetchJson(
+		`${CLOUDFLARE_API_BASE}/user/tokens`,
+		cfToken,
+		context,
+	)
 	return requireArrayResult(data, context).map(parseListedToken)
 }
 
@@ -118,19 +103,10 @@ export async function deleteUserToken(
 	cfToken: string,
 	tokenId: string,
 ): Promise<void> {
-	const response = await fetch(
+	await cfFetchJson(
 		`${CLOUDFLARE_API_BASE}/user/tokens/${encodeURIComponent(tokenId)}`,
-		{
-			method: 'DELETE',
-			headers: authHeaders(cfToken),
-		},
+		cfToken,
+		`Cloudflare delete token "${tokenId}"`,
+		{ method: 'DELETE' },
 	)
-	await requireOk(response)
-
-	const data: unknown = await response.json()
-	const context = `Cloudflare delete token "${tokenId}"`
-	const envelope = parseEnvelope(data, context)
-	if (!envelope.success) {
-		throw new Error(`${context} failed: ${formatErrors(envelope.errors)}`)
-	}
 }

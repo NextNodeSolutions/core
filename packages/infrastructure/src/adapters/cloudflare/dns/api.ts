@@ -1,8 +1,7 @@
 import {
 	CLOUDFLARE_API_BASE,
 	authHeaders,
-	formatErrors,
-	parseEnvelope,
+	cfFetchJson,
 	requireArrayResult,
 	requireObjectResult,
 	requireOk,
@@ -71,18 +70,12 @@ export async function lookupZoneId(
 	zoneName: string,
 	token: string,
 ): Promise<string> {
-	const response = await fetch(
-		`${CLOUDFLARE_API_BASE}/zones?name=${encodeURIComponent(zoneName)}`,
-		{ headers: authHeaders(token) },
-	)
-	await requireOk(response)
-
-	const data: unknown = await response.json()
 	const context = `Cloudflare zone lookup for "${zoneName}"`
-	const envelope = parseEnvelope(data, context)
-	if (!envelope.success) {
-		throw new Error(`${context} failed: ${formatErrors(envelope.errors)}`)
-	}
+	const data = await cfFetchJson(
+		`${CLOUDFLARE_API_BASE}/zones?name=${encodeURIComponent(zoneName)}`,
+		token,
+		context,
+	)
 
 	const result = requireArrayResult(data, context)
 	if (result.length === 0) {
@@ -99,21 +92,13 @@ export async function listDnsRecords(
 	token: string,
 ): Promise<ReadonlyArray<CloudflareDnsRecord>> {
 	const params = new URLSearchParams({ name })
-	const response = await fetch(
-		`${CLOUDFLARE_API_BASE}/zones/${zoneId}/dns_records?${params.toString()}`,
-		{ headers: authHeaders(token) },
-	)
-	await requireOk(response)
-
-	const data: unknown = await response.json()
 	const context = `Cloudflare DNS list for ${name}`
-	const envelope = parseEnvelope(data, context)
-	if (!envelope.success) {
-		throw new Error(`${context} failed: ${formatErrors(envelope.errors)}`)
-	}
-
-	const result = requireArrayResult(data, context)
-	return result.map(parseDnsRecord)
+	const data = await cfFetchJson(
+		`${CLOUDFLARE_API_BASE}/zones/${zoneId}/dns_records?${params.toString()}`,
+		token,
+		context,
+	)
+	return requireArrayResult(data, context).map(parseDnsRecord)
 }
 
 export async function createDnsRecord(
@@ -121,23 +106,13 @@ export async function createDnsRecord(
 	payload: DnsRecordPayload,
 	token: string,
 ): Promise<CloudflareDnsRecord> {
-	const response = await fetch(
-		`${CLOUDFLARE_API_BASE}/zones/${zoneId}/dns_records`,
-		{
-			method: 'POST',
-			headers: authHeaders(token),
-			body: JSON.stringify(payload),
-		},
-	)
-	await requireOk(response)
-
-	const data: unknown = await response.json()
 	const context = `Cloudflare DNS create for ${payload.name}`
-	const envelope = parseEnvelope(data, context)
-	if (!envelope.success) {
-		throw new Error(`${context} failed: ${formatErrors(envelope.errors)}`)
-	}
-
+	const data = await cfFetchJson(
+		`${CLOUDFLARE_API_BASE}/zones/${zoneId}/dns_records`,
+		token,
+		context,
+		{ method: 'POST', body: JSON.stringify(payload) },
+	)
 	return parseDnsRecord(requireObjectResult(data, context))
 }
 
@@ -147,23 +122,13 @@ export async function updateDnsRecord(
 	payload: DnsRecordPayload,
 	token: string,
 ): Promise<CloudflareDnsRecord> {
-	const response = await fetch(
-		`${CLOUDFLARE_API_BASE}/zones/${zoneId}/dns_records/${recordId}`,
-		{
-			method: 'PUT',
-			headers: authHeaders(token),
-			body: JSON.stringify(payload),
-		},
-	)
-	await requireOk(response)
-
-	const data: unknown = await response.json()
 	const context = `Cloudflare DNS update for ${payload.name}`
-	const envelope = parseEnvelope(data, context)
-	if (!envelope.success) {
-		throw new Error(`${context} failed: ${formatErrors(envelope.errors)}`)
-	}
-
+	const data = await cfFetchJson(
+		`${CLOUDFLARE_API_BASE}/zones/${zoneId}/dns_records/${recordId}`,
+		token,
+		context,
+		{ method: 'PUT', body: JSON.stringify(payload) },
+	)
 	return parseDnsRecord(requireObjectResult(data, context))
 }
 
@@ -171,18 +136,12 @@ export async function getZoneSslMode(
 	zoneId: string,
 	token: string,
 ): Promise<string> {
-	const response = await fetch(
-		`${CLOUDFLARE_API_BASE}/zones/${zoneId}/settings/ssl`,
-		{ headers: authHeaders(token) },
-	)
-	await requireOk(response)
-
-	const data: unknown = await response.json()
 	const context = `Cloudflare SSL mode for zone ${zoneId}`
-	const envelope = parseEnvelope(data, context)
-	if (!envelope.success) {
-		throw new Error(`${context} failed: ${formatErrors(envelope.errors)}`)
-	}
+	const data = await cfFetchJson(
+		`${CLOUDFLARE_API_BASE}/zones/${zoneId}/settings/ssl`,
+		token,
+		context,
+	)
 
 	const result = requireObjectResult(data, context)
 	if (!('value' in result) || typeof result.value !== 'string') {
@@ -196,22 +155,12 @@ export async function setZoneSslMode(
 	mode: string,
 	token: string,
 ): Promise<void> {
-	const response = await fetch(
+	await cfFetchJson(
 		`${CLOUDFLARE_API_BASE}/zones/${zoneId}/settings/ssl`,
-		{
-			method: 'PATCH',
-			headers: authHeaders(token),
-			body: JSON.stringify({ value: mode }),
-		},
+		token,
+		`Cloudflare set SSL mode for zone ${zoneId}`,
+		{ method: 'PATCH', body: JSON.stringify({ value: mode }) },
 	)
-	await requireOk(response)
-
-	const data: unknown = await response.json()
-	const context = `Cloudflare set SSL mode for zone ${zoneId}`
-	const envelope = parseEnvelope(data, context)
-	if (!envelope.success) {
-		throw new Error(`${context} failed: ${formatErrors(envelope.errors)}`)
-	}
 }
 
 export async function deleteDnsRecord(

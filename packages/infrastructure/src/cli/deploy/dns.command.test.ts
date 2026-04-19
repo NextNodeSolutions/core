@@ -45,35 +45,8 @@ vi.mock('../../adapters/hetzner/target.ts', () => ({
 	})),
 }))
 
-interface MockResponse {
-	ok: boolean
-	status: number
-	json: () => Promise<unknown>
-	text: () => Promise<string>
-}
-
-type FetchInput = string | URL
-type FetchImpl = (
-	input: FetchInput,
-	init?: RequestInit,
-) => Promise<MockResponse>
-
-function okJson(body: unknown): MockResponse {
-	return {
-		ok: true,
-		status: 200,
-		json: () => Promise.resolve(body),
-		text: () => Promise.resolve(JSON.stringify(body)),
-	}
-}
-
-function urlOf(input: FetchInput): string {
-	return typeof input === 'string' ? input : input.toString()
-}
-
-function methodOf(init: RequestInit | undefined): string {
-	return init?.method ?? 'GET'
-}
+import type { FetchImpl } from './test-utils.ts'
+import { methodOf, okJson, urlOf } from './test-utils.ts'
 
 function stubCloudflareApi(): ReturnType<typeof vi.fn<FetchImpl>> {
 	const impl: FetchImpl = (input, init) => {

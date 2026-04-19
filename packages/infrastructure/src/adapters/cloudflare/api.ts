@@ -81,3 +81,31 @@ export function requireObjectResult(data: unknown, context: string): object {
 	}
 	return data.result
 }
+
+/**
+ * Call a Cloudflare API endpoint and return the parsed JSON body once the
+ * response envelope has been validated (HTTP ok + `success: true`).
+ *
+ * Consolidates the five-line dance repeated at every call site:
+ * fetch → requireOk → json() → parseEnvelope → throw on failure.
+ *
+ * The caller still picks the result shape via `requireArrayResult` /
+ * `requireObjectResult` — those extractions stay explicit at the call site
+ * because they document what shape the endpoint returns.
+ */
+export async function cfFetchJson(
+	url: string,
+	token: string,
+	context: string,
+	init?: Omit<RequestInit, 'headers'>,
+): Promise<unknown> {
+	const response = await fetch(url, { ...init, headers: authHeaders(token) })
+	await requireOk(response)
+
+	const data: unknown = await response.json()
+	const envelope = parseEnvelope(data, context)
+	if (!envelope.success) {
+		throw new Error(`${context} failed: ${formatErrors(envelope.errors)}`)
+	}
+	return data
+}

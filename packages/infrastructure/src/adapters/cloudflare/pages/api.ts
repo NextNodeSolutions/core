@@ -2,6 +2,7 @@ import { HTTP_NOT_FOUND } from '../../http.ts'
 import {
 	CLOUDFLARE_API_BASE,
 	authHeaders,
+	cfFetchJson,
 	formatErrors,
 	parseEnvelope,
 	requireArrayResult,
@@ -53,6 +54,9 @@ export async function getPagesProject(
 	projectName: string,
 	token: string,
 ): Promise<CloudflarePagesProject | null> {
+	// 404 is a valid "not found" state here, so we can't go through
+	// cfFetchJson (which would route 404 into requireOk's throw). Inline
+	// the envelope dance with the pre-fetched response.
 	const response = await fetch(
 		`${CLOUDFLARE_API_BASE}/accounts/${accountId}/pages/projects/${encodeURIComponent(projectName)}`,
 		{ headers: authHeaders(token) },
@@ -93,21 +97,13 @@ export async function listPagesDomains(
 	projectName: string,
 	token: string,
 ): Promise<ReadonlyArray<CloudflarePagesDomain>> {
-	const response = await fetch(
-		`${CLOUDFLARE_API_BASE}/accounts/${accountId}/pages/projects/${encodeURIComponent(projectName)}/domains`,
-		{ headers: authHeaders(token) },
-	)
-	await requireOk(response)
-
-	const data: unknown = await response.json()
 	const context = `Cloudflare Pages domains list for "${projectName}"`
-	const envelope = parseEnvelope(data, context)
-	if (!envelope.success) {
-		throw new Error(`${context} failed: ${formatErrors(envelope.errors)}`)
-	}
-
-	const result = requireArrayResult(data, context)
-	return result.map(parsePagesDomain)
+	const data = await cfFetchJson(
+		`${CLOUDFLARE_API_BASE}/accounts/${accountId}/pages/projects/${encodeURIComponent(projectName)}/domains`,
+		token,
+		context,
+	)
+	return requireArrayResult(data, context).map(parsePagesDomain)
 }
 
 /**
@@ -123,23 +119,13 @@ export async function attachPagesDomain(
 	domainName: string,
 	token: string,
 ): Promise<CloudflarePagesDomain> {
-	const response = await fetch(
-		`${CLOUDFLARE_API_BASE}/accounts/${accountId}/pages/projects/${encodeURIComponent(projectName)}/domains`,
-		{
-			method: 'POST',
-			headers: authHeaders(token),
-			body: JSON.stringify({ name: domainName }),
-		},
-	)
-	await requireOk(response)
-
-	const data: unknown = await response.json()
 	const context = `Cloudflare Pages domain attach "${domainName}" to "${projectName}"`
-	const envelope = parseEnvelope(data, context)
-	if (!envelope.success) {
-		throw new Error(`${context} failed: ${formatErrors(envelope.errors)}`)
-	}
-
+	const data = await cfFetchJson(
+		`${CLOUDFLARE_API_BASE}/accounts/${accountId}/pages/projects/${encodeURIComponent(projectName)}/domains`,
+		token,
+		context,
+		{ method: 'POST', body: JSON.stringify({ name: domainName }) },
+	)
 	return parsePagesDomain(requireObjectResult(data, context))
 }
 
@@ -153,26 +139,19 @@ export async function createPagesProject(
 	productionBranch: string,
 	token: string,
 ): Promise<CloudflarePagesProject> {
-	const response = await fetch(
+	const context = `Cloudflare Pages project create for "${projectName}"`
+	const data = await cfFetchJson(
 		`${CLOUDFLARE_API_BASE}/accounts/${accountId}/pages/projects`,
+		token,
+		context,
 		{
 			method: 'POST',
-			headers: authHeaders(token),
 			body: JSON.stringify({
 				name: projectName,
 				production_branch: productionBranch,
 			}),
 		},
 	)
-	await requireOk(response)
-
-	const data: unknown = await response.json()
-	const context = `Cloudflare Pages project create for "${projectName}"`
-	const envelope = parseEnvelope(data, context)
-	if (!envelope.success) {
-		throw new Error(`${context} failed: ${formatErrors(envelope.errors)}`)
-	}
-
 	return parsePagesProject(requireObjectResult(data, context))
 }
 

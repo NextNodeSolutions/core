@@ -53,7 +53,7 @@ describe('waitForServerDeleted', () => {
 		vi.mocked(mocked).mockResolvedValue(serverFixture('running'))
 
 		await expect(waitForServerDeleted('t', 42)).rejects.toThrow(
-			'still present after 24 attempts',
+			'Server 42 deletion: timed out after 24 attempts',
 		)
 	})
 
