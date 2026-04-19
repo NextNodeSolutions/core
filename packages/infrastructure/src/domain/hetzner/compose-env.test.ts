@@ -36,4 +36,37 @@ describe('formatComposeEnv', () => {
 	it('returns an empty string when the record is empty', () => {
 		expect(formatComposeEnv({})).toBe('')
 	})
+
+	it('rejects values containing a newline (prevents .env injection)', () => {
+		expect(() => formatComposeEnv({ SECRET: 'ok\nINJECTED=evil' })).toThrow(
+			/contains a newline/,
+		)
+	})
+
+	it('rejects values containing a carriage return', () => {
+		expect(() => formatComposeEnv({ SECRET: 'ok\rINJECTED=evil' })).toThrow(
+			/contains a newline/,
+		)
+	})
+
+	it.each([
+		'lower_case',
+		'Mixed_Case',
+		'1LEADING_DIGIT',
+		'HAS-DASH',
+		'HAS SPACE',
+		'HAS$DOLLAR',
+		'',
+	])('rejects invalid env var name: %s', key => {
+		expect(() => formatComposeEnv({ [key]: 'value' })).toThrow(
+			/invalid env var name/,
+		)
+	})
+
+	it.each(['PORT', 'SITE_URL', 'A', '_PRIVATE', 'VAR_1', 'LONG_NAME_2'])(
+		'accepts valid env var name: %s',
+		key => {
+			expect(() => formatComposeEnv({ [key]: 'value' })).not.toThrow()
+		},
+	)
 })

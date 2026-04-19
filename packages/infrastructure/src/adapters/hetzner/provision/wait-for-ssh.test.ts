@@ -7,6 +7,7 @@ import { waitForSsh } from './wait-for-ssh.ts'
 function createMockSession(): SshSession {
 	return {
 		exec: vi.fn(async () => ''),
+		execWithStdin: vi.fn(async () => ''),
 		writeFile: vi.fn(async () => undefined),
 		readFile: vi.fn(async () => null),
 		close: vi.fn(),

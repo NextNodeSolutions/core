@@ -12,6 +12,7 @@ import {
 function createMockSession(): SshSession {
 	return {
 		exec: vi.fn(async () => ''),
+		execWithStdin: vi.fn(async () => ''),
 		writeFile: vi.fn(async () => undefined),
 		readFile: vi.fn(async () => null),
 		close: vi.fn(),
@@ -59,11 +60,11 @@ describe('teardownProjectContainer', () => {
 		expect(outcome.handled).toBe(true)
 		expect(session.exec).toHaveBeenCalledWith(
 			expect.stringContaining(
-				'docker compose -p acme-web-production -f /opt/apps/acme-web/production/compose.yaml down -v --remove-orphans',
+				"docker compose -p 'acme-web-production' -f '/opt/apps/acme-web/production/compose.yaml' down -v --remove-orphans",
 			),
 		)
 		expect(session.exec).toHaveBeenCalledWith(
-			'rm -rf /opt/apps/acme-web/production',
+			"rm -rf '/opt/apps/acme-web/production'",
 		)
 	})
 })

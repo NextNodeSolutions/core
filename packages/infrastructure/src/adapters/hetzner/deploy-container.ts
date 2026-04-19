@@ -16,6 +16,7 @@ import {
 import { computeSilo } from '../../domain/hetzner/env-silo.ts'
 
 import type { SshSession } from './ssh/session.types.ts'
+import { shellEscape } from './ssh/shell-escape.ts'
 
 const logger = createLogger()
 
@@ -43,31 +44,27 @@ export async function deployContainer(
 	const silo = computeSilo(input.projectName, input.environment)
 	const hostPort = computeHostPort(input.environment)
 	const envDir = `/opt/apps/${input.projectName}/${input.environment}`
+	const envDirQ = shellEscape(envDir)
+	const siloIdQ = shellEscape(silo.id)
+	const composeFileQ = shellEscape(`${envDir}/compose.yaml`)
 
 	const allEnv = {
 		PORT: String(CONTAINER_PORT),
 		...input.env,
 		...input.secrets,
 	}
-	await session.exec(`mkdir -p ${envDir}`)
+	await session.exec(`mkdir -p ${envDirQ}`)
 	await session.writeFile(`${envDir}/.env`, formatComposeEnv(allEnv))
 	await session.writeFile(
 		`${envDir}/compose.yaml`,
 		renderComposeFile({ image: input.image, hostPort }),
 	)
 
-	await loginToRegistry(
-		session,
-		input.image.registry,
-		input.registryToken,
-		envDir,
-	)
+	await loginToRegistry(session, input.image.registry, input.registryToken)
 
+	await session.exec(`docker compose -p ${siloIdQ} -f ${composeFileQ} pull`)
 	await session.exec(
-		`docker compose -p ${silo.id} -f ${envDir}/compose.yaml pull`,
-	)
-	await session.exec(
-		`docker compose -p ${silo.id} -f ${envDir}/compose.yaml up -d --remove-orphans`,
+		`docker compose -p ${siloIdQ} -f ${composeFileQ} up -d --remove-orphans`,
 	)
 
 	logger.info(`Deployed ${silo.id} on port ${hostPort}`)
@@ -91,12 +88,10 @@ async function loginToRegistry(
 	session: SshSession,
 	registry: string,
 	token: string,
-	envDir: string,
 ): Promise<void> {
-	const tokenPath = `${envDir}/.registry-token`
-	await session.writeFile(tokenPath, token)
-	await session.exec(
-		`cat ${tokenPath} | docker login ${registry} -u ${REGISTRY_TOKEN_USER} --password-stdin; code=$?; rm -f ${tokenPath}; exit $code`,
+	await session.execWithStdin(
+		`docker login ${shellEscape(registry)} -u ${shellEscape(REGISTRY_TOKEN_USER)} --password-stdin`,
+		token,
 	)
 	logger.info(`Authenticated to ${registry}`)
 }

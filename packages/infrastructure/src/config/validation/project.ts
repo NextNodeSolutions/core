@@ -8,6 +8,29 @@ import {
 
 import type { ValidationResult } from './result.ts'
 
+const PROJECT_NAME_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/
+
+function validateProjectName(value: unknown): {
+	errors: string[]
+	name: string | undefined
+} {
+	if (!value || typeof value !== 'string') {
+		return {
+			errors: ['project.name is required and must be a string'],
+			name: undefined,
+		}
+	}
+	if (!PROJECT_NAME_PATTERN.test(value)) {
+		return {
+			errors: [
+				'project.name must be lowercase alphanumeric with dashes only (pattern: ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$)',
+			],
+			name: undefined,
+		}
+	}
+	return { errors: [], name: value }
+}
+
 function validateDomainFields(raw: Record<string, unknown>): {
 	errors: string[]
 	domain: string | undefined
@@ -55,10 +78,8 @@ export function validateProjectSection(
 
 	const errors: string[] = []
 
-	const name = raw['name']
-	if (!name || typeof name !== 'string') {
-		errors.push('project.name is required and must be a string')
-	}
+	const nameResult = validateProjectName(raw['name'])
+	errors.push(...nameResult.errors)
 
 	const type = raw['type']
 	if (!type || !isProjectType(type)) {
@@ -80,14 +101,18 @@ export function validateProjectSection(
 		errors.push('project.internal must be a boolean')
 	}
 
-	if (errors.length > 0 || typeof name !== 'string' || !isProjectType(type)) {
+	if (
+		errors.length > 0 ||
+		nameResult.name === undefined ||
+		!isProjectType(type)
+	) {
 		return { ok: false, errors }
 	}
 
 	return {
 		ok: true,
 		section: {
-			name,
+			name: nameResult.name,
 			type,
 			filter: isScriptValue(filter) ? filter : false,
 			domain: domainResult.domain,

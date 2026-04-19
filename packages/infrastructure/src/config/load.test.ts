@@ -238,6 +238,42 @@ describe('parseConfig', () => {
 				'project.name is required and must be a string',
 			)
 		})
+
+		it.each([
+			'x$(whoami)',
+			'x;rm -rf /',
+			'../evil',
+			'a b',
+			'UPPER',
+			'snake_case',
+			'-leading-dash',
+			'trailing-dash-',
+			'dot.in.name',
+		])('rejects unsafe project.name: %s', name => {
+			const result = parseConfig({ project: { name, type: 'app' } })
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'project.name must be lowercase alphanumeric with dashes only (pattern: ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$)',
+			)
+		})
+
+		it.each([
+			'a',
+			'my-app',
+			'my-app-2',
+			'logger',
+			'brand-assets',
+			'api-v1',
+		])('accepts safe project.name: %s', name => {
+			const result = parseConfig({
+				project: { name, type: 'package' },
+			})
+
+			expect(result.ok).toBe(true)
+		})
 	})
 
 	describe('project.filter', () => {

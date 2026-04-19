@@ -1,6 +1,7 @@
 import { createLogger } from '@nextnode-solutions/logger'
 
 import type { SshSession } from '../../adapters/hetzner/ssh/session.types.ts'
+import { shellEscape } from '../../adapters/hetzner/ssh/shell-escape.ts'
 
 const logger = createLogger()
 
@@ -69,7 +70,9 @@ export async function converge(
 	// Project directories — deploy is the SSH user, so mkdir creates dirs
 	// owned by deploy. No chown needed.
 	const basePath = `/opt/apps/${input.projectName}`
-	await session.exec(`mkdir -p ${basePath}/dev ${basePath}/production`)
+	await session.exec(
+		`mkdir -p ${shellEscape(`${basePath}/dev`)} ${shellEscape(`${basePath}/production`)}`,
+	)
 
 	logger.info(`Convergence complete for "${input.projectName}"`)
 }

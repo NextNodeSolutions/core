@@ -126,6 +126,43 @@ describe('exec', () => {
 	})
 })
 
+describe('execWithStdin', () => {
+	it('writes stdin to the remote stream and returns stdout', async () => {
+		const session = await connectedSession()
+		let streamEnded: string | undefined
+		mockExec.mockImplementation(
+			(
+				_cmd: string,
+				cb: (err: undefined, stream: EventEmitter) => void,
+			) => {
+				const stream = new EventEmitter()
+				const stderrEmitter = new EventEmitter()
+				Object.defineProperty(stream, 'stderr', {
+					value: stderrEmitter,
+				})
+				Object.assign(stream, {
+					end(data: string) {
+						streamEnded = data
+						process.nextTick(() => {
+							stream.emit('data', Buffer.from('logged in\n'))
+							stream.emit('close', 0)
+						})
+					},
+				})
+				cb(undefined, stream)
+			},
+		)
+
+		const result = await session.execWithStdin(
+			'docker login ghcr.io -u __token__ --password-stdin',
+			'secret-token',
+		)
+
+		expect(streamEnded).toBe('secret-token')
+		expect(result).toBe('logged in\n')
+	})
+})
+
 describe('writeFile', () => {
 	it('writes content via sftp stream', async () => {
 		const session = await connectedSession()

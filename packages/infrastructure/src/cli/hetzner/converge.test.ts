@@ -30,6 +30,10 @@ function createFakeSession(
 			execCalls.push(cmd)
 			return ''
 		}),
+		execWithStdin: vi.fn(async (cmd: string) => {
+			execCalls.push(cmd)
+			return ''
+		}),
 		writeFile: vi.fn(async (path: string, content: string) => {
 			files.set(path, content)
 		}),
@@ -125,7 +129,7 @@ describe('converge', () => {
 		await converge(session, makeInput())
 
 		expect(session.execCalls).toContain(
-			'mkdir -p /opt/apps/acme-web/dev /opt/apps/acme-web/production',
+			"mkdir -p '/opt/apps/acme-web/dev' '/opt/apps/acme-web/production'",
 		)
 	})
 

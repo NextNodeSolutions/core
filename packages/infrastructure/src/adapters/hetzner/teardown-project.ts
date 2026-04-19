@@ -8,6 +8,7 @@ import type { R2Operations } from '../r2/client.types.ts'
 
 import { CADDY_CONFIG_PATH } from './constants.ts'
 import type { SshSession } from './ssh/session.types.ts'
+import { shellEscape } from './ssh/shell-escape.ts'
 
 const logger = createLogger()
 
@@ -37,9 +38,9 @@ export async function teardownProjectContainer(
 	}
 
 	await session.exec(
-		`docker compose -p ${silo.id} -f ${composeFile} down -v --remove-orphans`,
+		`docker compose -p ${shellEscape(silo.id)} -f ${shellEscape(composeFile)} down -v --remove-orphans`,
 	)
-	await session.exec(`rm -rf ${envDir}`)
+	await session.exec(`rm -rf ${shellEscape(envDir)}`)
 	logger.info(`Container stack ${silo.id} removed`)
 	return { handled: true, detail: 'stack and bind mount removed' }
 }

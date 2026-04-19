@@ -56,39 +56,53 @@ export async function createSshSession(
 		})
 	})
 
+	function runCommand(
+		command: string,
+		stdin: string | null,
+	): Promise<string> {
+		return new Promise((resolve, reject) => {
+			conn.exec(command, (err, stream) => {
+				if (err) {
+					reject(
+						new Error(`SSH exec failed: ${err.message}`, {
+							cause: err,
+						}),
+					)
+					return
+				}
+				let stdout = ''
+				let stderr = ''
+				stream.on('data', (data: Buffer) => {
+					stdout += String(data)
+				})
+				stream.stderr.on('data', (data: Buffer) => {
+					stderr += String(data)
+				})
+				stream.on('close', (code: number | null) => {
+					if (code !== 0) {
+						reject(
+							new Error(
+								`SSH command exited with code ${String(code)}: ${command}\n${stderr}`,
+							),
+						)
+					} else {
+						resolve(stdout)
+					}
+				})
+				if (stdin !== null) {
+					stream.end(stdin)
+				}
+			})
+		})
+	}
+
 	return {
 		exec(command: string): Promise<string> {
-			return new Promise((resolve, reject) => {
-				conn.exec(command, (err, stream) => {
-					if (err) {
-						reject(
-							new Error(`SSH exec failed: ${err.message}`, {
-								cause: err,
-							}),
-						)
-						return
-					}
-					let stdout = ''
-					let stderr = ''
-					stream.on('data', (data: Buffer) => {
-						stdout += String(data)
-					})
-					stream.stderr.on('data', (data: Buffer) => {
-						stderr += String(data)
-					})
-					stream.on('close', (code: number | null) => {
-						if (code !== 0) {
-							reject(
-								new Error(
-									`SSH command exited with code ${String(code)}: ${command}\n${stderr}`,
-								),
-							)
-						} else {
-							resolve(stdout)
-						}
-					})
-				})
-			})
+			return runCommand(command, null)
+		},
+
+		execWithStdin(command: string, stdin: string): Promise<string> {
+			return runCommand(command, stdin)
 		},
 
 		async writeFile(remotePath: string, content: string): Promise<void> {

@@ -170,6 +170,7 @@ function seedState(state: HcloudProjectState = CONVERGED_STATE): void {
 function createMockSession(): SshSession {
 	return {
 		exec: vi.fn(async () => ''),
+		execWithStdin: vi.fn(async () => ''),
 		writeFile: vi.fn(async () => undefined),
 		readFile: vi.fn(async () => null),
 		close: vi.fn(),
@@ -702,7 +703,7 @@ describe('HetznerVpsTarget', () => {
 
 			expect(mockSession.exec).toHaveBeenCalledWith(
 				expect.stringContaining(
-					'docker compose -p acme-web-production',
+					"docker compose -p 'acme-web-production'",
 				),
 			)
 			expect(mockSession.exec).toHaveBeenCalledWith(
