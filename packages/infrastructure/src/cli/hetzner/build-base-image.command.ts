@@ -13,6 +13,7 @@ import {
 	MAX_GOLDEN_IMAGE_SNAPSHOTS,
 	PACKER_MANAGED_BY_LABEL,
 } from '../../adapters/hetzner/constants.ts'
+import { formatGoldenImageSummary } from '../../domain/hetzner/golden-image-summary.ts'
 import { computeInfraFingerprint } from '../../domain/hetzner/infra-fingerprint.ts'
 import { requireEnv } from '../env.ts'
 
@@ -74,7 +75,11 @@ export async function buildBaseImageCommand(): Promise<void> {
 			`Golden image already up to date (snapshot ${cached.id}, fingerprint ${fingerprint})`,
 		)
 		writeSummary(
-			`### Golden Image\n\nUp to date - snapshot \`${cached.id}\` matches fingerprint \`${fingerprint}\``,
+			formatGoldenImageSummary({
+				kind: 'cached',
+				fingerprint,
+				snapshotId: cached.id,
+			}),
 		)
 		return
 	}
@@ -93,17 +98,32 @@ export async function buildBaseImageCommand(): Promise<void> {
 		env: { ...process.env, HCLOUD_TOKEN: token },
 	})
 
-	logger.info('Packer build complete, cleaning up old snapshots...')
-	await cleanupOldSnapshots(token, MAX_GOLDEN_IMAGE_SNAPSHOTS)
-
-	const newSnapshots = await findImagesByLabels(token, {
-		managed_by: PACKER_MANAGED_BY_LABEL,
-		infra_fingerprint: fingerprint,
-	})
-	const snapshotId = newSnapshots[0]?.id ?? 'unknown'
-
-	logger.info(`Golden image built: snapshot ${snapshotId}`)
-	writeSummary(
-		`### Golden Image\n\nBuilt new snapshot \`${snapshotId}\` with fingerprint \`${fingerprint}\``,
+	logger.info(
+		`Golden image built: snapshot nextnode-base-${fingerprint} (fingerprint ${fingerprint})`,
 	)
+
+	const cleanupError = await pruneOldSnapshotsBestEffort(
+		token,
+		MAX_GOLDEN_IMAGE_SNAPSHOTS,
+	)
+
+	writeSummary(
+		formatGoldenImageSummary({ kind: 'built', fingerprint, cleanupError }),
+	)
+}
+
+// Business rule: pruning is maintenance — failures are logged + surfaced in the summary, never fatal.
+async function pruneOldSnapshotsBestEffort(
+	token: string,
+	keepCount: number,
+): Promise<string | null> {
+	try {
+		logger.info('Pruning old snapshots...')
+		await cleanupOldSnapshots(token, keepCount)
+		return null
+	} catch (err) {
+		const message = err instanceof Error ? err.message : String(err)
+		logger.warn(`Pruning of old snapshots failed (non-fatal): ${message}`)
+		return message
+	}
 }
