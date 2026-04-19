@@ -117,4 +117,34 @@ describe('parseImageRef', () => {
 			'Invalid image ref "": missing tag separator ":"',
 		)
 	})
+
+	it.each([
+		'ghcr.io; rm -rf /',
+		'ghcr.io$(whoami)',
+		'ghcr.io`id`',
+		'ghcr.io|cat',
+		'ghcr.io with space',
+	])('rejects registry with shell metacharacters: %s', raw => {
+		expect(() => parseImageRef(`${raw}/acme/web:latest`)).toThrow(
+			/registry .* must be a hostname/,
+		)
+	})
+
+	it.each(['acme/web$(id)', 'acme/web;rm', 'acme/UPPER', 'acme//web'])(
+		'rejects repository with invalid characters: %s',
+		repo => {
+			expect(() => parseImageRef(`ghcr.io/${repo}:latest`)).toThrow(
+				/repository .* contains invalid characters/,
+			)
+		},
+	)
+
+	it.each(['tag with space', 'tag;rm', 'tag$(id)', 'tag`cmd`', '-leading'])(
+		'rejects tag with invalid characters: %s',
+		tag => {
+			expect(() => parseImageRef(`ghcr.io/acme/web:${tag}`)).toThrow(
+				/tag .* contains invalid characters/,
+			)
+		},
+	)
 })

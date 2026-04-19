@@ -15,18 +15,24 @@ export interface CloudInitUser {
 	readonly ssh_authorized_keys: ReadonlyArray<string>
 }
 
+export interface CloudInitWriteFile {
+	readonly path: string
+	readonly content: string
+	readonly permissions?: string
+	readonly owner?: string
+}
+
 export interface CloudInitConfig {
 	readonly package_update: boolean
 	readonly packages: ReadonlyArray<string>
 	readonly ssh_pwauth: boolean
 	readonly disable_root: boolean
 	readonly users: ReadonlyArray<CloudInitUser>
-	readonly write_files: ReadonlyArray<{
-		readonly path: string
-		readonly content: string
-	}>
+	readonly write_files: ReadonlyArray<CloudInitWriteFile>
 	readonly runcmd: ReadonlyArray<string>
 }
+
+const TAILSCALE_AUTHKEY_PATH = '/root/.tailscale-authkey'
 
 export function isCloudInitConfig(value: unknown): value is CloudInitConfig {
 	if (typeof value !== 'object' || value === null) return false
@@ -75,6 +81,7 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
+EnvironmentFile=-/etc/caddy/env
 ExecStart=/usr/bin/caddy run --config /etc/caddy/config.json
 ExecReload=/usr/bin/caddy reload --config /etc/caddy/config.json
 Restart=always
@@ -101,14 +108,24 @@ function buildUsers(deployPublicKey: string): ReadonlyArray<CloudInitUser> {
 	]
 }
 
-function buildWriteFiles(): ReadonlyArray<{
-	readonly path: string
-	readonly content: string
-}> {
+function buildTailscaleAuthKeyFile(authKey: string): CloudInitWriteFile {
+	// Owner/perms lock the key to root so only the runcmd (which runs as root)
+	// can read it. The file is shredded in runcmd right after `tailscale up`,
+	// closing the exposure window to a few seconds.
+	return {
+		path: TAILSCALE_AUTHKEY_PATH,
+		content: authKey,
+		permissions: '0600',
+		owner: 'root:root',
+	}
+}
+
+function buildWriteFiles(authKey: string): ReadonlyArray<CloudInitWriteFile> {
 	return [
 		{ path: '/etc/systemd/system/vector.service', content: VECTOR_UNIT },
 		{ path: '/etc/systemd/system/caddy.service', content: CADDY_UNIT },
 		{ path: '/etc/caddy/config.json', content: '{}\n' },
+		buildTailscaleAuthKeyFile(authKey),
 	]
 }
 
@@ -139,8 +156,21 @@ function buildUfwRules(internal: boolean): ReadonlyArray<string> {
 	]
 }
 
+function buildTailscaleUpCmds(
+	tailscaleHostname: string,
+): ReadonlyArray<string> {
+	// The auth key is not embedded in the command text: it lives in a
+	// root-only 0600 file and is read via command substitution at exec time.
+	// cloud-init's output log only echoes the command string (with the literal
+	// $(cat ...)), never the expanded value. The file is shredded right after
+	// `tailscale up` so a later VPS compromise cannot replay the key.
+	return [
+		`tailscale up --authkey="$(cat ${TAILSCALE_AUTHKEY_PATH})" --hostname=${tailscaleHostname}`,
+		`shred -u ${TAILSCALE_AUTHKEY_PATH}`,
+	]
+}
+
 function buildRuncmd(
-	tailscaleAuthKey: string,
 	tailscaleHostname: string,
 	internal: boolean,
 ): ReadonlyArray<string> {
@@ -150,7 +180,7 @@ function buildRuncmd(
 		// Caddy, Vector) keeps installing. convergeVps gates on `cloud-init
 		// status --wait` before touching those.
 		'curl -fsSL https://tailscale.com/install.sh | sh',
-		`tailscale up --authkey=${tailscaleAuthKey} --hostname=${tailscaleHostname}`,
+		...buildTailscaleUpCmds(tailscaleHostname),
 
 		// Docker CE
 		'curl -fsSL https://get.docker.com | sh',
@@ -196,12 +226,8 @@ export function renderCloudInit(input: CloudInitInput): string {
 		ssh_pwauth: false,
 		disable_root: true,
 		users: buildUsers(input.deployPublicKey),
-		write_files: buildWriteFiles(),
-		runcmd: buildRuncmd(
-			input.tailscaleAuthKey,
-			input.tailscaleHostname,
-			input.internal,
-		),
+		write_files: buildWriteFiles(input.tailscaleAuthKey),
+		runcmd: buildRuncmd(input.tailscaleHostname, input.internal),
 	} satisfies CloudInitConfig
 
 	return `#cloud-config\n${stringify(config, { lineWidth: 0, blockQuote: 'literal' })}`
@@ -221,9 +247,10 @@ export function renderProjectCloudInit(input: ProjectCloudInitInput): string {
 		ssh_pwauth: false,
 		disable_root: true,
 		users: buildUsers(input.deployPublicKey),
+		write_files: [buildTailscaleAuthKeyFile(input.tailscaleAuthKey)],
 		runcmd: [
 			// Tailscale is pre-installed in the golden image; just authenticate.
-			`tailscale up --authkey=${input.tailscaleAuthKey} --hostname=${input.tailscaleHostname}`,
+			...buildTailscaleUpCmds(input.tailscaleHostname),
 			// UFW rules are per-project (internal vs public).
 			...buildUfwRules(input.internal),
 		],

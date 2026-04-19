@@ -39,6 +39,7 @@ function createFakeSession(
 		}),
 		readFile: vi.fn(async (path: string) => files.get(path) ?? null),
 		close: vi.fn(),
+		hostKeyFingerprint: 'test-fingerprint',
 	}
 }
 

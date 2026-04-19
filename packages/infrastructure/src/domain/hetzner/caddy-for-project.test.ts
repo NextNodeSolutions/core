@@ -14,14 +14,13 @@ const R2: R2RuntimeConfig = {
 }
 
 describe('buildCaddyForProject', () => {
-	it('binds the R2 storage block to the project prefix', () => {
+	it('binds the R2 storage block to the project prefix and uses env placeholder for secret_key', () => {
 		const config = buildCaddyForProject({
 			internal: false,
 			projectName: 'acme-web',
 			r2: R2,
 			upstreams: [],
 			acmeEmail: 'test@example.com',
-			cloudflareApiToken: 'unused',
 		})
 
 		const storage = config.apps.tls.automation.policies[0]?.storage
@@ -30,9 +29,21 @@ describe('buildCaddyForProject', () => {
 			host: 'acct.r2.cloudflarestorage.com',
 			bucket: 'certs',
 			access_id: 'key',
-			secret_key: 'secret',
+			secret_key: '{env.CADDY_R2_SECRET_KEY}',
 			prefix: 'acme-web/',
 		})
+	})
+
+	it('never embeds the raw R2 secret access key in the JSON config', () => {
+		const config = buildCaddyForProject({
+			internal: false,
+			projectName: 'acme-web',
+			r2: { ...R2, secretAccessKey: 'VERY_SECRET_VALUE' },
+			upstreams: [],
+			acmeEmail: 'test@example.com',
+		})
+
+		expect(JSON.stringify(config)).not.toContain('VERY_SECRET_VALUE')
 	})
 
 	it('threads acmeEmail into issuers', () => {
@@ -44,7 +55,6 @@ describe('buildCaddyForProject', () => {
 				{ hostname: 'acme.example.com', dial: 'localhost:8080' },
 			],
 			acmeEmail: 'infra@nextnode.fr',
-			cloudflareApiToken: 'unused',
 		})
 
 		const issuers = config.apps.tls.automation.policies[0]?.issuers
@@ -62,7 +72,6 @@ describe('buildCaddyForProject', () => {
 				{ hostname: 'acme.example.com', dial: 'localhost:8080' },
 			],
 			acmeEmail: 'test@example.com',
-			cloudflareApiToken: 'unused',
 		})
 
 		expect(config.apps.http.servers.https.routes).toHaveLength(1)
@@ -71,7 +80,7 @@ describe('buildCaddyForProject', () => {
 		])
 	})
 
-	it('uses DNS-01 challenge for internal projects', () => {
+	it('uses DNS-01 challenge for internal projects with env placeholder for CF token', () => {
 		const config = buildCaddyForProject({
 			internal: true,
 			projectName: 'monitor',
@@ -80,7 +89,6 @@ describe('buildCaddyForProject', () => {
 				{ hostname: 'monitor.nextnode.fr', dial: 'localhost:8080' },
 			],
 			acmeEmail: 'infra@nextnode.fr',
-			cloudflareApiToken: 'cf-token-abc',
 		})
 
 		const issuer = config.apps.tls.automation.policies[0]?.issuers[0]
@@ -88,9 +96,23 @@ describe('buildCaddyForProject', () => {
 			throw new Error('Expected ACME issuer')
 		expect(issuer.challenges?.dns?.provider).toStrictEqual({
 			name: 'cloudflare',
-			api_token: 'cf-token-abc',
+			api_token: '{env.CF_DNS_API_TOKEN}',
 		})
 		expect(issuer.challenges?.http).toStrictEqual({ disabled: true })
+	})
+
+	it('never embeds the raw Cloudflare API token in the internal JSON config', () => {
+		const config = buildCaddyForProject({
+			internal: true,
+			projectName: 'monitor',
+			r2: R2,
+			upstreams: [],
+			acmeEmail: 'infra@nextnode.fr',
+		})
+
+		const serialized = JSON.stringify(config)
+		expect(serialized).toContain('{env.CF_DNS_API_TOKEN}')
+		expect(serialized).toContain('{env.CADDY_R2_SECRET_KEY}')
 	})
 
 	it('stores certs in R2 for internal projects', () => {
@@ -100,7 +122,6 @@ describe('buildCaddyForProject', () => {
 			r2: R2,
 			upstreams: [],
 			acmeEmail: 'infra@nextnode.fr',
-			cloudflareApiToken: 'cf-token-abc',
 		})
 
 		const storage = config.apps.tls.automation.policies[0]?.storage

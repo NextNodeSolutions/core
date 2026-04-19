@@ -14,7 +14,6 @@ export interface CaddyForProjectInput {
 	readonly upstreams: ReadonlyArray<CaddyUpstream>
 	readonly acmeEmail: string
 	readonly internal: boolean
-	readonly cloudflareApiToken: string
 }
 
 function buildR2Storage(
@@ -25,7 +24,6 @@ function buildR2Storage(
 		host: computeR2Host(r2.accountId),
 		bucket: r2.certsBucket,
 		accessId: r2.accessKeyId,
-		secretKey: r2.secretAccessKey,
 		prefix: `${projectName}/`,
 	}
 }
@@ -40,7 +38,6 @@ export function buildCaddyForProject(
 			upstreams: input.upstreams,
 			r2Storage,
 			acmeEmail: input.acmeEmail,
-			cloudflareApiToken: input.cloudflareApiToken,
 		})
 	}
 

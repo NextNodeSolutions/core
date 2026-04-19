@@ -1,3 +1,5 @@
+import { Buffer } from 'node:buffer'
+import { createHash } from 'node:crypto'
 import { EventEmitter } from 'node:events'
 
 import { Client } from 'ssh2'
@@ -5,6 +7,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createSshSession } from './session.ts'
 import type { SshSession } from './session.types.ts'
+
+const FAKE_HOST_KEY = Buffer.from('fake-host-public-key-bytes')
+const FAKE_FINGERPRINT = createHash('sha256')
+	.update(FAKE_HOST_KEY)
+	.digest('hex')
 
 const SESSION_CONFIG = {
 	host: '10.0.0.1',
@@ -24,9 +31,14 @@ beforeEach(() => {
 	mockEnd.mockReset()
 
 	client = new Client()
-	client.connect = vi.fn().mockImplementation(() => {
-		process.nextTick(() => client.emit('ready'))
-	})
+	client.connect = vi
+		.fn()
+		.mockImplementation(
+			(opts: { hostVerifier?: (k: Buffer) => boolean }) => {
+				opts.hostVerifier?.(FAKE_HOST_KEY)
+				process.nextTick(() => client.emit('ready'))
+			},
+		)
 	client.exec = mockExec
 	client.sftp = mockSftp
 	client.end = mockEnd
@@ -314,5 +326,57 @@ describe('close', () => {
 		session.close()
 
 		expect(mockEnd).toHaveBeenCalledOnce()
+	})
+})
+
+describe('host key verification', () => {
+	it('exposes the sha256 fingerprint of the observed host key', async () => {
+		const session = await connectedSession()
+
+		expect(session.hostKeyFingerprint).toBe(FAKE_FINGERPRINT)
+	})
+
+	it('accepts the first host key when no expected fingerprint is set (TOFU)', async () => {
+		await expect(connectedSession()).resolves.toBeDefined()
+	})
+
+	it('accepts when the presented host key matches the expected fingerprint', async () => {
+		await expect(
+			createSshSession(
+				{
+					...SESSION_CONFIG,
+					expectedHostKeyFingerprint: FAKE_FINGERPRINT,
+				},
+				client,
+			),
+		).resolves.toBeDefined()
+	})
+
+	it('rejects when the presented host key does not match the expected fingerprint', async () => {
+		const wrong = createHash('sha256').update('other-key').digest('hex')
+		client.connect = vi
+			.fn()
+			.mockImplementation(
+				(opts: { hostVerifier?: (k: Buffer) => boolean }) => {
+					const accepted = opts.hostVerifier?.(FAKE_HOST_KEY) ?? true
+					if (!accepted) {
+						process.nextTick(() =>
+							client.emit(
+								'error',
+								new Error('Host key verification failed'),
+							),
+						)
+						return
+					}
+					process.nextTick(() => client.emit('ready'))
+				},
+			)
+
+		await expect(
+			createSshSession(
+				{ ...SESSION_CONFIG, expectedHostKeyFingerprint: wrong },
+				client,
+			),
+		).rejects.toThrow(/Host key verification failed/)
 	})
 })

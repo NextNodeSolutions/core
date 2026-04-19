@@ -3,6 +3,10 @@ import { createLogger } from '@nextnode-solutions/logger'
 import { converge } from '../../cli/hetzner/converge.ts'
 import type { R2RuntimeConfig } from '../../domain/cloudflare/r2/runtime-config.ts'
 import { extractUpstreams } from '../../domain/hetzner/caddy-config.ts'
+import {
+	CADDY_ENV_PATH,
+	renderCaddyEnv,
+} from '../../domain/hetzner/caddy-env.ts'
 import { buildCaddyForProject } from '../../domain/hetzner/caddy-for-project.ts'
 import { selectVectorConfig } from '../../domain/hetzner/vector-config.ts'
 
@@ -23,6 +27,7 @@ export interface ConvergeVpsInput {
 	readonly r2: R2RuntimeConfig
 	readonly vector: ConvergeVpsVector | null
 	readonly deployPrivateKey: string
+	readonly expectedHostKeyFingerprint?: string | undefined
 	readonly acmeEmail: string
 	readonly cloudflareApiToken: string
 }
@@ -32,6 +37,7 @@ export async function convergeVps(input: ConvergeVpsInput): Promise<void> {
 		host: input.host,
 		username: 'deploy',
 		privateKey: input.deployPrivateKey,
+		expectedHostKeyFingerprint: input.expectedHostKeyFingerprint,
 	})
 
 	try {
@@ -42,6 +48,16 @@ export async function convergeVps(input: ConvergeVpsInput): Promise<void> {
 		const existingConfig = await session.readFile(CADDY_CONFIG_PATH)
 		const existingUpstreams = extractUpstreams(existingConfig ?? '')
 
+		// Write the Caddy env file BEFORE the JSON config so secrets referenced
+		// via {env.X} placeholders resolve cleanly on the next (re)load.
+		await session.writeFile(
+			CADDY_ENV_PATH,
+			renderCaddyEnv({
+				r2: input.r2,
+				cloudflareApiToken: input.cloudflareApiToken,
+			}),
+		)
+
 		const caddyConfig = JSON.stringify(
 			buildCaddyForProject({
 				projectName: input.projectName,
@@ -49,7 +65,6 @@ export async function convergeVps(input: ConvergeVpsInput): Promise<void> {
 				upstreams: existingUpstreams,
 				acmeEmail: input.acmeEmail,
 				internal: input.internal,
-				cloudflareApiToken: input.cloudflareApiToken,
 			}),
 		)
 

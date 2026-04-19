@@ -14,6 +14,10 @@ import type {
 import type { TeardownResult } from '../../domain/deploy/teardown-result.ts'
 import type { TeardownTarget } from '../../domain/deploy/teardown-target.ts'
 import type { AppEnvironment } from '../../domain/environment.ts'
+import {
+	CADDY_ENV_PATH,
+	renderCaddyEnv,
+} from '../../domain/hetzner/caddy-env.ts'
 import { buildCaddyForProject } from '../../domain/hetzner/caddy-for-project.ts'
 import { computeVpsDnsRecords } from '../../domain/hetzner/dns-records.ts'
 import { reconcileDnsRecords } from '../cloudflare/dns/reconcile.ts'
@@ -169,6 +173,7 @@ export class HetznerVpsTarget implements DeployTarget {
 			host: existing.state.tailnetIp,
 			username: 'deploy',
 			privateKey: this.config.credentials.deployPrivateKey,
+			expectedHostKeyFingerprint: existing.state.sshHostKeyFingerprint,
 		})
 
 		try {
@@ -189,10 +194,21 @@ export class HetznerVpsTarget implements DeployTarget {
 					upstreams: [upstream],
 					acmeEmail: this.config.acmeEmail,
 					internal: this.config.internal,
-					cloudflareApiToken: this.config.cloudflareApiToken,
 				}),
 			)
 
+			// Refresh the env file so Caddy resolves the latest R2 + CF
+			// secrets via {env.X} placeholders. Caddy re-reads EnvironmentFile
+			// on systemctl restart only, so a rotation needs a restart — but
+			// for normal deploys the values are unchanged and `caddy reload`
+			// suffices.
+			await session.writeFile(
+				CADDY_ENV_PATH,
+				renderCaddyEnv({
+					r2: this.config.r2,
+					cloudflareApiToken: this.config.cloudflareApiToken,
+				}),
+			)
 			await session.writeFile(CADDY_CONFIG_PATH, caddyConfig)
 			await session.exec(`caddy reload --config ${CADDY_CONFIG_PATH}`)
 			logger.info('Caddy config reloaded')

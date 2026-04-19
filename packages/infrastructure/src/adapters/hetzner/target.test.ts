@@ -174,6 +174,7 @@ function createMockSession(): SshSession {
 		writeFile: vi.fn(async () => undefined),
 		readFile: vi.fn(async () => null),
 		close: vi.fn(),
+		hostKeyFingerprint: 'test-fingerprint',
 	}
 }
 

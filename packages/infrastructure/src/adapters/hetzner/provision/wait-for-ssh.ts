@@ -12,7 +12,13 @@ export interface WaitForSshInput {
 	readonly privateKey: string
 }
 
-export async function waitForSsh(input: WaitForSshInput): Promise<void> {
+export interface WaitForSshResult {
+	readonly hostKeyFingerprint: string
+}
+
+export async function waitForSsh(
+	input: WaitForSshInput,
+): Promise<WaitForSshResult> {
 	let lastError: unknown
 	for (let attempt = 1; attempt <= MAX_SSH_ATTEMPTS; attempt++) {
 		try {
@@ -22,9 +28,10 @@ export async function waitForSsh(input: WaitForSshInput): Promise<void> {
 				username: 'deploy',
 				privateKey: input.privateKey,
 			})
+			const { hostKeyFingerprint } = session
 			session.close()
 			logger.info(`SSH reachable at ${input.host}`)
-			return
+			return { hostKeyFingerprint }
 		} catch (err) {
 			lastError = err
 			const message = err instanceof Error ? err.message : String(err)

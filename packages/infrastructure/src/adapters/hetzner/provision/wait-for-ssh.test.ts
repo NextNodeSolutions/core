@@ -11,6 +11,7 @@ function createMockSession(): SshSession {
 		writeFile: vi.fn(async () => undefined),
 		readFile: vi.fn(async () => null),
 		close: vi.fn(),
+		hostKeyFingerprint: 'test-fingerprint',
 	}
 }
 
@@ -39,7 +40,7 @@ describe('waitForSsh', () => {
 	it('resolves on the first attempt', async () => {
 		await expect(
 			waitForSsh({ host: 'h', privateKey: 'k' }),
-		).resolves.toBeUndefined()
+		).resolves.toEqual({ hostKeyFingerprint: 'test-fingerprint' })
 	})
 
 	it('retries on transient failures', async () => {
@@ -51,7 +52,7 @@ describe('waitForSsh', () => {
 
 		await expect(
 			waitForSsh({ host: 'h', privateKey: 'k' }),
-		).resolves.toBeUndefined()
+		).resolves.toEqual({ hostKeyFingerprint: 'test-fingerprint' })
 	})
 
 	it('throws after max attempts', async () => {

@@ -1,3 +1,6 @@
+import { Buffer } from 'node:buffer'
+import { createHash, timingSafeEqual } from 'node:crypto'
+
 import type { Client, SFTPWrapper } from 'ssh2'
 import { Client as Ssh2Client } from 'ssh2'
 
@@ -14,6 +17,17 @@ interface SftpError extends Error {
 
 function isNotFoundError(err: SftpError): boolean {
 	return err.code === SFTP_STATUS_NO_SUCH_FILE || err.code === 'ENOENT'
+}
+
+function computeHostKeyFingerprint(key: Buffer): string {
+	return createHash('sha256').update(key).digest('hex')
+}
+
+function fingerprintsMatch(observed: string, expected: string): boolean {
+	const a = Buffer.from(observed, 'hex')
+	const b = Buffer.from(expected, 'hex')
+	if (a.length !== b.length || a.length === 0) return false
+	return timingSafeEqual(a, b)
 }
 
 function openSftp(conn: Client): Promise<SFTPWrapper> {
@@ -37,6 +51,7 @@ export async function createSshSession(
 	injectedClient?: Client,
 ): Promise<SshSession> {
 	const conn = injectedClient ?? new Ssh2Client()
+	let observedFingerprint: string | undefined
 
 	await new Promise<void>((resolve, reject) => {
 		conn.on('ready', () => resolve())
@@ -53,8 +68,30 @@ export async function createSshSession(
 			port: config.port ?? DEFAULT_PORT,
 			username: config.username,
 			privateKey: config.privateKey,
+			hostVerifier: (key: Buffer): boolean => {
+				const fingerprint = computeHostKeyFingerprint(key)
+				observedFingerprint = fingerprint
+				if (config.expectedHostKeyFingerprint === undefined) {
+					// TOFU: first-time connect. Caller will persist the
+					// fingerprint after this session is returned.
+					return true
+				}
+				return fingerprintsMatch(
+					fingerprint,
+					config.expectedHostKeyFingerprint,
+				)
+			},
 		})
 	})
+
+	if (observedFingerprint === undefined) {
+		// hostVerifier is always invoked during a real handshake; missing
+		// means the injected client skipped verification (test-only path).
+		throw new Error(
+			`SSH connection to ${config.host} completed without observing a host key`,
+		)
+	}
+	const hostKeyFingerprint = observedFingerprint
 
 	function runCommand(
 		command: string,
@@ -151,5 +188,7 @@ export async function createSshSession(
 		close(): void {
 			conn.end()
 		},
+
+		hostKeyFingerprint,
 	}
 }

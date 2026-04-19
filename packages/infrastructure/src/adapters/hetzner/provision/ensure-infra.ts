@@ -83,17 +83,27 @@ export async function freshProvision(
 		`State written: phase=created for "${projectName}" (server ${serverId})`,
 	)
 
-	const { tailnetIp, firewallOutcome, tailscaleOutcome } =
-		await completeProvisioning(config.credentials, {
-			serverId,
-			projectName,
-			internal: config.internal,
-		})
+	const {
+		tailnetIp,
+		sshHostKeyFingerprint,
+		firewallOutcome,
+		tailscaleOutcome,
+	} = await completeProvisioning(config.credentials, {
+		serverId,
+		projectName,
+		internal: config.internal,
+	})
 
 	const provisionedEtag = await writeState(
 		r2,
 		projectName,
-		{ phase: 'provisioned', serverId, publicIp, tailnetIp },
+		{
+			phase: 'provisioned',
+			serverId,
+			publicIp,
+			tailnetIp,
+			sshHostKeyFingerprint,
+		},
 		createdEtag,
 	)
 	logger.info(
@@ -114,6 +124,7 @@ export async function freshProvision(
 					serverId,
 					publicIp,
 					tailnetIp,
+					sshHostKeyFingerprint,
 				},
 				provisionedEtag,
 			),
@@ -160,7 +171,18 @@ export async function resumeFromState(
 		}),
 		dns: () => DNS_PROVISION_OUTCOME,
 		state: () =>
-			convergeAndWriteState(config, r2, projectName, state, etag),
+			convergeAndWriteState(
+				config,
+				r2,
+				projectName,
+				{
+					serverId: state.serverId,
+					publicIp: state.publicIp,
+					tailnetIp: state.tailnetIp,
+					sshHostKeyFingerprint: state.sshHostKeyFingerprint,
+				},
+				etag,
+			),
 	})
 }
 
@@ -175,12 +197,16 @@ async function resumeFromCreated(
 		`Resuming from phase=created for "${projectName}" (server ${state.serverId})`,
 	)
 
-	const { tailnetIp, firewallOutcome, tailscaleOutcome } =
-		await completeProvisioning(config.credentials, {
-			serverId: state.serverId,
-			projectName,
-			internal: config.internal,
-		})
+	const {
+		tailnetIp,
+		sshHostKeyFingerprint,
+		firewallOutcome,
+		tailscaleOutcome,
+	} = await completeProvisioning(config.credentials, {
+		serverId: state.serverId,
+		projectName,
+		internal: config.internal,
+	})
 
 	const provisionedEtag = await writeState(
 		r2,
@@ -190,6 +216,7 @@ async function resumeFromCreated(
 			serverId: state.serverId,
 			publicIp: state.publicIp,
 			tailnetIp,
+			sshHostKeyFingerprint,
 		},
 		etag,
 	)
@@ -214,6 +241,7 @@ async function resumeFromCreated(
 					serverId: state.serverId,
 					publicIp: state.publicIp,
 					tailnetIp,
+					sshHostKeyFingerprint,
 				},
 				provisionedEtag,
 			),
@@ -224,7 +252,12 @@ async function convergeAndWriteState(
 	config: HetznerVpsTargetConfig,
 	r2: R2Operations,
 	projectName: string,
-	state: { serverId: number; publicIp: string; tailnetIp: string },
+	state: {
+		serverId: number
+		publicIp: string
+		tailnetIp: string
+		sshHostKeyFingerprint?: string | undefined
+	},
 	etag: string,
 ): Promise<ResourceOutcome> {
 	await convergeVps({
@@ -234,6 +267,7 @@ async function convergeAndWriteState(
 		r2: config.r2,
 		vector: config.vector,
 		deployPrivateKey: config.credentials.deployPrivateKey,
+		expectedHostKeyFingerprint: state.sshHostKeyFingerprint,
 		acmeEmail: config.acmeEmail,
 		cloudflareApiToken: config.cloudflareApiToken,
 	})
@@ -247,6 +281,7 @@ async function convergeAndWriteState(
 			publicIp: state.publicIp,
 			tailnetIp: state.tailnetIp,
 			convergedAt: new Date().toISOString(),
+			sshHostKeyFingerprint: state.sshHostKeyFingerprint,
 		},
 		etag,
 	)

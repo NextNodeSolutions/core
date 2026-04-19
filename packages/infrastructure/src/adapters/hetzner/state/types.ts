@@ -9,6 +9,7 @@ export interface HcloudProvisionedState {
 	readonly serverId: number
 	readonly publicIp: string
 	readonly tailnetIp: string
+	readonly sshHostKeyFingerprint?: string | undefined
 }
 
 export interface HcloudConvergedState {
@@ -17,6 +18,7 @@ export interface HcloudConvergedState {
 	readonly publicIp: string
 	readonly tailnetIp: string
 	readonly convergedAt: string
+	readonly sshHostKeyFingerprint?: string | undefined
 }
 
 export type HcloudProjectState =

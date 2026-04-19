@@ -7,9 +7,14 @@ export interface R2StorageConfig {
 	readonly host: string
 	readonly bucket: string
 	readonly accessId: string
-	readonly secretKey: string
 	readonly prefix: string
 }
+
+/** Caddy reads env vars from /etc/caddy/env at startup via EnvironmentFile. */
+export const CADDY_ENV_R2_SECRET_KEY = 'CADDY_R2_SECRET_KEY'
+export const CADDY_ENV_CF_API_TOKEN = 'CF_DNS_API_TOKEN'
+const CADDY_R2_SECRET_PLACEHOLDER = `{env.${CADDY_ENV_R2_SECRET_KEY}}`
+const CADDY_CF_TOKEN_PLACEHOLDER = `{env.${CADDY_ENV_CF_API_TOKEN}}`
 
 export interface AcmeIssuer {
 	readonly module: 'acme'
@@ -172,7 +177,7 @@ export function buildCaddyConfig(input: CaddyConfigInput): CaddyJsonConfig {
 								host: input.r2Storage.host,
 								bucket: input.r2Storage.bucket,
 								access_id: input.r2Storage.accessId,
-								secret_key: input.r2Storage.secretKey,
+								secret_key: CADDY_R2_SECRET_PLACEHOLDER,
 								prefix: input.r2Storage.prefix,
 							},
 						},
@@ -187,7 +192,6 @@ export interface InternalCaddyConfigInput {
 	readonly upstreams: ReadonlyArray<CaddyUpstream>
 	readonly r2Storage: R2StorageConfig
 	readonly acmeEmail: string
-	readonly cloudflareApiToken: string
 }
 
 /**
@@ -228,7 +232,7 @@ export function buildInternalCaddyConfig(
 											provider: {
 												name: 'cloudflare',
 												api_token:
-													input.cloudflareApiToken,
+													CADDY_CF_TOKEN_PLACEHOLDER,
 											},
 										},
 									},
@@ -239,7 +243,7 @@ export function buildInternalCaddyConfig(
 								host: input.r2Storage.host,
 								bucket: input.r2Storage.bucket,
 								access_id: input.r2Storage.accessId,
-								secret_key: input.r2Storage.secretKey,
+								secret_key: CADDY_R2_SECRET_PLACEHOLDER,
 								prefix: input.r2Storage.prefix,
 							},
 						},

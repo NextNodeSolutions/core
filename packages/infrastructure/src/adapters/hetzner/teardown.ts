@@ -91,6 +91,7 @@ async function teardownProject(
 		host: existing.state.tailnetIp,
 		username: 'deploy',
 		privateKey: ctx.deployPrivateKey,
+		expectedHostKeyFingerprint: existing.state.sshHostKeyFingerprint,
 	})
 
 	try {

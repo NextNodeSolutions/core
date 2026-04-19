@@ -119,6 +119,14 @@ describe('renderCloudInit', () => {
 			expect(file).toBeDefined()
 			expect(file!.content).toContain('{}')
 		})
+
+		it('writes the Tailscale auth key to a root-only 0600 file', () => {
+			const file = findFile('/root/.tailscale-authkey')
+			expect(file).toBeDefined()
+			expect(file!.content).toBe('tskey-auth-abc123')
+			expect(file!.permissions).toBe('0600')
+			expect(file!.owner).toBe('root:root')
+		})
 	})
 
 	describe('runcmd', () => {
@@ -132,16 +140,32 @@ describe('renderCloudInit', () => {
 			)
 		})
 
-		it('joins Tailscale with auth key and hostname', () => {
+		it('joins Tailscale reading the auth key from the write_files path', () => {
 			expect(commands()).toContain(
-				'tailscale up --authkey=tskey-auth-abc123 --hostname=acme-web',
+				'tailscale up --authkey="$(cat /root/.tailscale-authkey)" --hostname=acme-web',
 			)
+		})
+
+		it('shreds the Tailscale auth key file right after tailscale up', () => {
+			const cmds = commands()
+			const upIdx = cmds.indexOf(
+				'tailscale up --authkey="$(cat /root/.tailscale-authkey)" --hostname=acme-web',
+			)
+			const shredIdx = cmds.indexOf('shred -u /root/.tailscale-authkey')
+			expect(upIdx).toBeGreaterThanOrEqual(0)
+			expect(shredIdx).toBe(upIdx + 1)
+		})
+
+		it('does not embed the raw auth key value in any runcmd line', () => {
+			for (const cmd of commands()) {
+				expect(cmd).not.toContain('tskey-auth-abc123')
+			}
 		})
 
 		it('installs and joins Tailscale before Docker so SSH unlocks early', () => {
 			const cmds = commands()
 			const tailscaleUpIdx = cmds.indexOf(
-				'tailscale up --authkey=tskey-auth-abc123 --hostname=acme-web',
+				'tailscale up --authkey="$(cat /root/.tailscale-authkey)" --hostname=acme-web',
 			)
 			const dockerIdx = cmds.indexOf(
 				'curl -fsSL https://get.docker.com | sh',
@@ -243,6 +267,13 @@ const PROJECT_INPUT = {
 
 const INTERNAL_PROJECT_INPUT = { ...PROJECT_INPUT, internal: true } as const
 
+interface ProjectWriteFile {
+	readonly path: string
+	readonly content: string
+	readonly permissions?: string
+	readonly owner?: string
+}
+
 interface ProjectCloudInitConfig {
 	readonly ssh_pwauth: boolean
 	readonly disable_root: boolean
@@ -251,9 +282,24 @@ interface ProjectCloudInitConfig {
 		readonly ssh_authorized_keys: ReadonlyArray<string>
 	}>
 	readonly runcmd: ReadonlyArray<string>
-	readonly write_files?: unknown
+	readonly write_files?: ReadonlyArray<ProjectWriteFile>
 	readonly packages?: unknown
 	readonly package_update?: unknown
+}
+
+function isProjectWriteFileArray(
+	value: unknown,
+): value is ReadonlyArray<ProjectWriteFile> {
+	if (!Array.isArray(value)) return false
+	return value.every(
+		entry =>
+			typeof entry === 'object' &&
+			entry !== null &&
+			'path' in entry &&
+			typeof entry.path === 'string' &&
+			'content' in entry &&
+			typeof entry.content === 'string',
+	)
 }
 
 function isProjectCloudInitConfig(
@@ -297,8 +343,16 @@ describe('renderProjectCloudInit', () => {
 		expect(config.packages).toBeUndefined()
 	})
 
-	it('does not include write_files (systemd units baked in golden image)', () => {
-		expect(parseProjectCloudInit().write_files).toBeUndefined()
+	it('writes the Tailscale auth key as the only write_files entry', () => {
+		const writeFiles = parseProjectCloudInit().write_files
+		if (!isProjectWriteFileArray(writeFiles)) {
+			throw new Error('Expected write_files to be an array of files')
+		}
+		expect(writeFiles).toHaveLength(1)
+		const first = writeFiles[0]!
+		expect(first.path).toBe('/root/.tailscale-authkey')
+		expect(first.content).toBe('tskey-auth-proj456')
+		expect(first.permissions).toBe('0600')
 	})
 
 	it('injects the deploy SSH public key', () => {
@@ -311,11 +365,22 @@ describe('renderProjectCloudInit', () => {
 		)
 	})
 
-	it('runs tailscale up with authkey and hostname', () => {
+	it('runs tailscale up reading the auth key from the write_files path', () => {
 		const config = parseProjectCloudInit()
 		expect(config.runcmd).toContain(
-			'tailscale up --authkey=tskey-auth-proj456 --hostname=my-project',
+			'tailscale up --authkey="$(cat /root/.tailscale-authkey)" --hostname=my-project',
 		)
+	})
+
+	it('shreds the Tailscale auth key file after joining', () => {
+		const cmds = parseProjectCloudInit().runcmd
+		expect(cmds).toContain('shred -u /root/.tailscale-authkey')
+	})
+
+	it('does not embed the raw auth key in any runcmd line', () => {
+		for (const cmd of parseProjectCloudInit().runcmd) {
+			expect(cmd).not.toContain('tskey-auth-proj456')
+		}
 	})
 
 	it('does not install Docker, Caddy, or Vector (pre-installed)', () => {

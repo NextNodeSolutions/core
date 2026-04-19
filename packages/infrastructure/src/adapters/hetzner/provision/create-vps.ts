@@ -58,6 +58,7 @@ export interface CompleteProvisioningInput {
 
 export interface CompleteProvisioningResult {
 	readonly tailnetIp: string
+	readonly sshHostKeyFingerprint: string
 	readonly firewallOutcome: ResourceOutcome
 	readonly tailscaleOutcome: ResourceOutcome
 }
@@ -155,13 +156,14 @@ export async function completeProvisioning(
 	)
 	logger.info(`Tailnet IP for "${input.projectName}": ${tailnetIp}`)
 
-	await waitForSsh({
+	const { hostKeyFingerprint } = await waitForSsh({
 		host: tailnetIp,
 		privateKey: credentials.deployPrivateKey,
 	})
 
 	return {
 		tailnetIp,
+		sshHostKeyFingerprint: hostKeyFingerprint,
 		firewallOutcome: { handled: true, detail: `created "${firewallName}"` },
 		tailscaleOutcome: {
 			handled: true,

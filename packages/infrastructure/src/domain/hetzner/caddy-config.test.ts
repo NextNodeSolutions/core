@@ -14,7 +14,6 @@ const r2Storage = {
 	host: 'abc123.r2.cloudflarestorage.com',
 	bucket: 'nextnode-certs',
 	accessId: 'R2_ACCESS_KEY',
-	secretKey: 'R2_SECRET_KEY',
 	prefix: 'certs',
 } as const
 
@@ -110,7 +109,7 @@ describe('buildCaddyConfig', () => {
 			host: 'abc123.r2.cloudflarestorage.com',
 			bucket: 'nextnode-certs',
 			access_id: 'R2_ACCESS_KEY',
-			secret_key: 'R2_SECRET_KEY',
+			secret_key: '{env.CADDY_R2_SECRET_KEY}',
 			prefix: 'certs',
 		})
 	})
@@ -176,7 +175,6 @@ describe('buildInternalCaddyConfig', () => {
 			upstreams,
 			r2Storage,
 			acmeEmail: 'test@example.com',
-			cloudflareApiToken: 'cf-token-123',
 		}
 	}
 
@@ -197,7 +195,7 @@ describe('buildInternalCaddyConfig', () => {
 				dns: {
 					provider: {
 						name: 'cloudflare',
-						api_token: 'cf-token-123',
+						api_token: '{env.CF_DNS_API_TOKEN}',
 					},
 				},
 			},
@@ -232,7 +230,7 @@ describe('buildInternalCaddyConfig', () => {
 			host: 'abc123.r2.cloudflarestorage.com',
 			bucket: 'nextnode-certs',
 			access_id: 'R2_ACCESS_KEY',
-			secret_key: 'R2_SECRET_KEY',
+			secret_key: '{env.CADDY_R2_SECRET_KEY}',
 			prefix: 'certs',
 		})
 	})
