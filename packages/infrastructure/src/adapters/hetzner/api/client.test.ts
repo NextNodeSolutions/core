@@ -8,6 +8,7 @@ import {
 	deleteImage,
 	deleteServer,
 	describeServer,
+	findFirewallById,
 	findFirewallsByName,
 	findImagesByLabels,
 } from './client.ts'
@@ -236,6 +237,42 @@ describe('findFirewallsByName', () => {
 		await expect(findFirewallsByName(TOKEN, 'acme-web-fw')).rejects.toThrow(
 			/missing `firewalls` array/,
 		)
+	})
+})
+
+describe('findFirewallById', () => {
+	it('reports the number of resources the firewall is applied to', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue(
+				okJson({
+					firewall: {
+						id: 42,
+						name: 'acme-web-fw',
+						applied_to: [
+							{ type: 'server', server: { id: 1001 } },
+							{ type: 'server', server: { id: 1002 } },
+						],
+					},
+				}),
+			),
+		)
+
+		const firewall = await findFirewallById(TOKEN, 42)
+
+		expect(firewall).not.toBeNull()
+		expect(firewall?.appliedToCount).toBe(2)
+	})
+
+	it('returns null when the firewall does not exist', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue(httpError(404, 'not found')),
+		)
+
+		const firewall = await findFirewallById(TOKEN, 42)
+
+		expect(firewall).toBeNull()
 	})
 })
 

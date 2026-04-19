@@ -46,11 +46,13 @@ vi.mock(import('./api/client.ts'), async importOriginal => {
 		createFirewall: vi.fn(async () => ({
 			id: 99,
 			name: 'acme-web-fw',
+			appliedToCount: 0,
 		})),
 		applyFirewall: vi.fn(async () => undefined),
 		assertServerTypeAvailable: vi.fn(async () => undefined),
 		deleteServer: vi.fn(async () => undefined),
 		findFirewallsByName: vi.fn(async () => []),
+		findFirewallById: vi.fn(async () => null),
 		deleteFirewall: vi.fn(async () => undefined),
 	}
 })
@@ -895,7 +897,7 @@ describe('HetznerVpsTarget', () => {
 			const { deleteTailnetDevicesByHostname: mockedTailscale } =
 				await import('../tailscale/oauth.ts')
 			vi.mocked(mockedFindFw).mockResolvedValueOnce([
-				{ id: 99, name: 'acme-web-fw' },
+				{ id: 99, name: 'acme-web-fw', appliedToCount: 0 },
 			])
 			vi.mocked(mockedTailscale).mockResolvedValueOnce(1)
 			mockDeleteDnsRecordsByName.mockResolvedValueOnce(1)

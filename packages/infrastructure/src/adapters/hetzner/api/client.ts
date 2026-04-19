@@ -85,11 +85,33 @@ function parseFirewall(data: unknown, context: string): HcloudFirewallResponse {
 	if (!isRecord(data) || !isRecord(data.firewall)) {
 		throw new Error(`${context}: missing \`firewall\` in response`)
 	}
-	const fw = data.firewall
+	return parseFirewallObject(data.firewall, context)
+}
+
+function parseFirewallObject(
+	fw: Record<string, unknown>,
+	context: string,
+): HcloudFirewallResponse {
 	if (typeof fw.id !== 'number' || typeof fw.name !== 'string') {
 		throw new Error(`${context}: invalid firewall shape`)
 	}
-	return { id: fw.id, name: fw.name }
+	const appliedToCount = Array.isArray(fw.applied_to)
+		? fw.applied_to.length
+		: 0
+	return { id: fw.id, name: fw.name, appliedToCount }
+}
+
+export async function findFirewallById(
+	token: string,
+	firewallId: number,
+): Promise<HcloudFirewallResponse | null> {
+	const response = await fetch(`${HCLOUD_API_BASE}/firewalls/${firewallId}`, {
+		headers: authHeaders(token),
+	})
+	if (response.status === HTTP_NOT_FOUND) return null
+	await requireOk(response, `find firewall ${firewallId}`)
+	const data: unknown = await response.json()
+	return parseFirewall(data, `find firewall ${firewallId}`)
 }
 
 export async function createServer(
@@ -193,14 +215,10 @@ export async function findFirewallsByName(
 	}
 	const firewalls: ReadonlyArray<unknown> = data.firewalls
 	return firewalls.map((fw, i) => {
-		if (
-			!isRecord(fw) ||
-			typeof fw.id !== 'number' ||
-			typeof fw.name !== 'string'
-		) {
+		if (!isRecord(fw)) {
 			throw new Error(`firewalls[${i}]: invalid firewall shape`)
 		}
-		return { id: fw.id, name: fw.name }
+		return parseFirewallObject(fw, `firewalls[${i}]`)
 	})
 }
 

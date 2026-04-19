@@ -14,6 +14,7 @@ import {
 	findServersByLabels,
 } from './api/client.ts'
 import { deleteState, readState } from './state/read-write.ts'
+import { waitForFirewallDetached } from './wait-for-firewall-detached.ts'
 import { waitForServerDeleted } from './wait-for-server-deleted.ts'
 
 const logger = createLogger()
@@ -64,7 +65,12 @@ export async function teardownFirewall(
 		return { handled: false, detail: 'not found' }
 	}
 
-	await Promise.all(firewalls.map(fw => deleteFirewall(hcloudToken, fw.id)))
+	await Promise.all(
+		firewalls.map(async fw => {
+			await waitForFirewallDetached(hcloudToken, fw.id)
+			await deleteFirewall(hcloudToken, fw.id)
+		}),
+	)
 	logger.info(`Firewall "${firewallName}" deleted`)
 	return { handled: true, detail: 'deleted' }
 }
