@@ -1,0 +1,64 @@
+---
+type Tag =
+	| 'a'
+	| 'p'
+	| 'em'
+	| 'span'
+	| 'small'
+	| 'strong'
+	| 'blockquote'
+	| 'h1'
+	| 'h2'
+	| 'h3'
+	| 'h4'
+	| 'h5'
+	| 'h6'
+
+type Variant =
+	| 'displayXL'
+	| 'displayLG'
+	| 'displayMD'
+	| 'displaySM'
+	| 'displayXS'
+	| 'textLG'
+	| 'textBase'
+	| 'textSM'
+	| 'textXS'
+
+interface Props {
+	tag?: Tag
+	variant?: Variant
+	id?: string
+	class?: string
+	href?: string
+	rel?: string
+	target?: string
+	title?: string
+	ariaLabel?: string
+}
+
+const textStyles: Record<Variant, string> = {
+	displayXL: 'text-4xl sm:text-4xl md:text-5xl lg:text-6xl',
+	displayLG: 'text-3xl sm:text-3xl md:text-4xl lg:text-5xl',
+	displayMD: 'text-2xl sm:text-2xl md:text-3xl lg:text-4xl',
+	displaySM: 'text-lg sm:text-xl md:text-2xl lg:text-3xl',
+	displayXS: 'text-base sm:text-lg md:text-xl lg:text-2xl',
+	textLG: 'text-base sm:text-lg md:text-xl',
+	textBase: 'text-base',
+	textSM: 'text-sm',
+	textXS: 'text-xs',
+}
+
+const {
+	tag: Tag = 'p',
+	class: className,
+	variant = 'textBase',
+	...rest
+} = Astro.props
+---
+
+<Tag class:list={[textStyles[variant], className]} {...rest}>
+	<slot name="left-icon" />
+	<slot />
+	<slot name="right-icon" />
+</Tag>

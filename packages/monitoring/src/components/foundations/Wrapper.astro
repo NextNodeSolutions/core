@@ -1,0 +1,19 @@
+---
+interface Props {
+	variant?: 'standard' | 'wide' | 'full'
+	class?: string
+	id?: string
+}
+
+const { variant = 'standard', class: className, id } = Astro.props
+
+const variantClasses: Record<NonNullable<Props['variant']>, string> = {
+	standard: 'max-w-5xl mx-auto px-8',
+	wide: 'max-w-7xl mx-auto px-8',
+	full: 'w-full px-8',
+}
+---
+
+<div id={id} class:list={[variantClasses[variant], className]}>
+	<slot />
+</div>
