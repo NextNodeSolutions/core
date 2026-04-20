@@ -93,7 +93,13 @@ src/
       json-response.ts — Response construction for API routes
       http-status.ts  — Named HTTP status constants
   styles/
-    tokens.css        — Brand tokens (teal primary, orange accent, dark navy bg)
+    tokens.css        — Tailwind v4 @theme block (Navy OKLCH palette)
+    patterns.css      — .bg-dots + .bg-burst-left|right backgrounds
+    global.css        — imports tailwind + tokens + patterns, base styles
+  components/
+    foundations/      — Wrapper, Text, Button, Kicker, Dots (Navy ports)
+    layout/           — Sidebar, Topbar (dashboard shell)
+    dashboard/        — ProjectCard, StatusBadge, StatCard, SectionHeader
 ```
 
 ### Layer import rules
@@ -139,6 +145,47 @@ src/
 2. Add or extend an adapter in `lib/adapters/` if new IO is needed.
 3. Wire them together in the page or API route.
 4. No layer skips.
+
+## Visual language — Lexington Navy template
+
+This dashboard adopts the **Lexington Themes "Navy"** template as its
+stylistic baseline. Source of truth:
+<https://github.com/Lexington-Themes/navy>.
+
+Rules when adding or editing UI:
+
+- **Tailwind CSS v4** is the styling engine. No inline CSS modules, no
+  `<style>` blocks with hand-rolled tokens. Design tokens live in
+  `src/styles/tokens.css` as a `@theme { … }` block (OKLCH colors,
+  shadows, typography) — copied and adapted from Navy's `global.css`.
+- **Palette** comes from Navy: `--color-accent-*` (teal/mint) for
+  primary actions and highlights, `--color-base-*` (off-white to deep
+  slate) for surfaces, text, and borders. **Background is white**
+  (`bg-white`) — the dashboard is a **light theme**, not dark. Do not
+  reintroduce the previous dark-navy surfaces.
+- **Typography**: Inter (`--font-sans`) for body, InterDisplay
+  (`--font-display`) for display headings, JetBrains Mono
+  (`--font-mono`) for code, slugs, metric values. Fonts are loaded from
+  `rsms.me/inter` and `fontshare.com`.
+- **Buttons are rounded pills** (`rounded-full`) with the three Navy
+  variants: `default` (gradient `base-900 → base-800`), `accent`
+  (`accent-600`), `muted` (`base-50`). Use the `Button.astro`
+  foundation component, do not hand-roll `<button>` classes.
+- **Section rhythm**: every content block is introduced by a `Kicker`
+  (uppercase mono label with a `size-3 bg-base-900` square), followed
+  by a display heading via `Text variant="displaySM|displayMD"`.
+- **Backgrounds**: use `.bg-dots` (radial dot pattern) and the
+  `.bg-burst-left|right` gradients from `src/styles/patterns.css` for
+  atmosphere — never gratuitous. The dashboard content area itself
+  stays mostly flat white.
+- **Containers**: pages use the `Wrapper` foundation component
+  (`standard` variant = `max-w-5xl mx-auto px-8`). Dashboard shell
+  uses a wider sidebar layout; Navy-style landing sections use
+  `Wrapper`.
+
+Foundation components live in `components/foundations/` (exact ports
+from Navy: `Wrapper`, `Text`, `Button`, `Kicker`, `Dots`). Do NOT
+duplicate their responsibilities in feature components — compose them.
 
 ## Astro specifics
 
@@ -201,4 +248,7 @@ Follow the global CLAUDE.md rules verbatim:
   contract.
 - `/astro` skill — Astro 5 rules (especially rendering mode, env vars,
   api-routes, and styling).
+- **Stylistic template**: <https://github.com/Lexington-Themes/navy> —
+  read `src/styles/global.css` and `src/components/fundations/elements/
+{Button,Text}.astro` before touching UI primitives.
 - Previous attempt: branch `feat/monitoring-package` in this repo.
