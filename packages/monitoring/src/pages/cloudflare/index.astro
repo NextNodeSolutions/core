@@ -1,31 +1,21 @@
 ---
-import BaseLayout from '@/layouts/BaseLayout.astro'
+import DashboardLayout from '@/layouts/DashboardLayout.astro'
+import SectionHeader from '@/components/dashboard/SectionHeader.astro'
 
 export const prerender = false
 ---
 
-<BaseLayout title="Cloudflare">
-	<h1>Cloudflare projects</h1>
-	<p class="hint">Pages + Workers stats via wrangler.</p>
-	<p class="empty">Wrangler bridge pending.</p>
+<DashboardLayout
+	title="Cloudflare"
+	breadcrumbs={[{ label: 'Infrastructure' }, { label: 'Cloudflare' }]}
+>
+	<SectionHeader
+		kicker="Cloudflare"
+		title="Cloudflare projects"
+		description="Pages deployments and Workers stats surfaced via wrangler."
+	/>
 
-	<style>
-		h1 {
-			font-size: 1.8rem;
-			margin-bottom: var(--space-2);
-		}
-
-		.hint {
-			color: var(--color-text-muted);
-			margin-bottom: var(--space-6);
-		}
-
-		.empty {
-			padding: var(--space-6);
-			border: 1px dashed var(--color-border);
-			border-radius: var(--radius-md);
-			color: var(--color-text-muted);
-			font-family: var(--font-mono);
-		}
-	</style>
-</BaseLayout>
+	<div class="mt-8 rounded-2xl border border-dashed border-base-200 bg-white p-10 text-center">
+		<p class="font-mono text-xs text-base-500">Wrangler bridge pending.</p>
+	</div>
+</DashboardLayout>
