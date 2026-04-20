@@ -1,0 +1,17 @@
+---
+import logoSrc from '@nextnode-solutions/brand-assets/logos-landscape/logo-landscape-teal-short.svg?url'
+
+interface Props {
+	class?: string
+}
+
+const { class: className = 'h-6' } = Astro.props
+---
+
+<img
+	src={logoSrc}
+	alt="NextNode"
+	class:list={['w-auto', className]}
+	width="320"
+	height="100"
+/>
