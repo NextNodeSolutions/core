@@ -1,0 +1,81 @@
+---
+import Logo from '@/components/foundations/Logo.astro'
+
+type NavItem =
+	| { kind: 'section'; label: string }
+	| { kind: 'link'; label: string; href: string }
+
+interface Props {
+	current?: string
+}
+
+const { current = '/' } = Astro.props
+
+const items: NavItem[] = [
+	{ kind: 'section', label: 'Overview' },
+	{ kind: 'link', label: 'Dashboard', href: '/' },
+	{ kind: 'link', label: 'Projects', href: '/projects' },
+	{ kind: 'section', label: 'Infrastructure' },
+	{ kind: 'link', label: 'VPS fleet', href: '/vps' },
+	{ kind: 'link', label: 'Cloudflare', href: '/cloudflare' },
+	{ kind: 'section', label: 'System' },
+	{ kind: 'link', label: 'Logs', href: '/system/logs' },
+	{ kind: 'link', label: 'Settings', href: '/system/settings' },
+]
+
+function isActive(href: string): boolean {
+	if (href === '/') return current === '/'
+	return current.startsWith(href)
+}
+---
+
+<aside
+	class="sticky top-0 flex h-svh w-64 shrink-0 flex-col border-r border-base-100 bg-white"
+>
+	<div class="flex h-16 items-center border-b border-base-100 px-6">
+		<a href="/" class="flex items-center gap-2">
+			<span class="sr-only">NextNode Monitoring home</span>
+			<Logo />
+		</a>
+	</div>
+
+	<nav class="flex-1 overflow-y-auto px-3 py-6" aria-label="Primary">
+		<ul class="space-y-1">
+			{
+				items.map((item) =>
+					item.kind === 'section' ? (
+						<li class="px-3 pt-4 pb-1 first:pt-0">
+							<p class="font-mono text-[10px] uppercase tracking-wider text-base-500">
+								{item.label}
+							</p>
+						</li>
+					) : (
+						<li>
+							<a
+								href={item.href}
+								class:list={[
+									'flex items-center rounded-md px-3 py-2 text-sm transition-colors',
+									isActive(item.href)
+										? 'bg-base-50 text-base-950 font-medium'
+										: 'text-base-600 hover:bg-base-50 hover:text-base-900',
+								]}
+							>
+								{item.label}
+							</a>
+						</li>
+					),
+				)
+			}
+		</ul>
+	</nav>
+
+	<div class="border-t border-base-100 px-6 py-4 text-[11px] text-base-500">
+		<div class="flex items-center gap-2">
+			<span class="inline-block size-1.5 rounded-full bg-accent-700"></span>
+			<span>Tailscale-only</span>
+		</div>
+		<code class="mt-1 block font-mono text-[10px] text-base-500">
+			monitoring.nextnode.fr
+		</code>
+	</div>
+</aside>
