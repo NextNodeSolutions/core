@@ -168,4 +168,4 @@ Follow the global CLAUDE.md rules without exception:
 
 ## Origin
 
-Rewrite of the old `NextNodeSolutions/infrastructure` repo (local: `/Users/walid-mos/Development/nextnode/infrastructure/`). See `docs/audit-merged.md` for the full old-infra audit. When porting features, rewrite from spec — never copy old error handling patterns.
+Rewrite of the old `NextNodeSolutions/infrastructure` repo (local: `/Users/walid-mos/Development/nextnode/infrastructure/`). See `docs/archive/` for the old-infra audits and specs (most recent: `docs/archive/audit-2026-04-01.md`). When porting features, rewrite from spec — never copy old error handling patterns.
