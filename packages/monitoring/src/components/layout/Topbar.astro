@@ -1,0 +1,70 @@
+---
+import Button from '@/components/foundations/Button.astro'
+
+interface Breadcrumb {
+	label: string
+	href?: string
+}
+
+interface Props {
+	breadcrumbs?: Breadcrumb[]
+}
+
+const { breadcrumbs = [] } = Astro.props
+---
+
+<header
+	class="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-base-100 bg-white/80 px-8 backdrop-blur"
+>
+	<nav aria-label="Breadcrumb" class="min-w-0">
+		<ol class="flex items-center gap-2 text-sm text-base-500">
+			{
+				breadcrumbs.length === 0 ? (
+					<li class="text-base-900 font-medium">Dashboard</li>
+				) : (
+					breadcrumbs.map((crumb, index) => (
+						<>
+							{index > 0 && (
+								<li aria-hidden="true" class="text-base-300">
+									/
+								</li>
+							)}
+							<li
+								class:list={[
+									'truncate',
+									index === breadcrumbs.length - 1
+										? 'text-base-900 font-medium'
+										: '',
+								]}
+							>
+								{crumb.href ? (
+									<a
+										href={crumb.href}
+										class="hover:text-base-900 transition-colors"
+									>
+										{crumb.label}
+									</a>
+								) : (
+									crumb.label
+								)}
+							</li>
+						</>
+					))
+				)
+			}
+		</ol>
+	</nav>
+
+	<div class="flex items-center gap-2">
+		<div
+			class="hidden md:flex items-center gap-2 rounded-full bg-base-50 px-3 py-1.5 text-xs text-base-500"
+		>
+			<span class="inline-block size-1.5 rounded-full bg-accent-700"></span>
+			<span>Operator</span>
+			<code class="font-mono text-[11px] text-base-700">walid</code>
+		</div>
+		<Button size="xs" variant="muted">
+			<span>Refresh</span>
+		</Button>
+	</div>
+</header>
