@@ -1,4 +1,5 @@
 import node from '@astrojs/node'
+import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'astro/config'
 
 export default defineConfig({
@@ -9,4 +10,7 @@ export default defineConfig({
 		port: Number(process.env.PORT ?? 4321),
 	},
 	site: process.env.SITE_URL,
+	vite: {
+		plugins: [tailwindcss()],
+	},
 })

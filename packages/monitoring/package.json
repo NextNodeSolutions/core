@@ -33,7 +33,9 @@
     "@astrojs/node": "^9.5.5",
     "@nextnode-solutions/brand-assets": "workspace:*",
     "@nextnode-solutions/logger": "workspace:*",
-    "astro": "^5.18.1"
+    "@tailwindcss/vite": "^4.2.2",
+    "astro": "^5.18.1",
+    "tailwindcss": "^4.2.2"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.4",
