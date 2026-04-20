@@ -1,0 +1,47 @@
+---
+type Status = 'healthy' | 'degraded' | 'down' | 'unknown'
+
+interface Props {
+	status: Status
+	label?: string
+	class?: string
+}
+
+const { status, label, class: className = '' } = Astro.props
+
+const STATUS_LABELS: Record<Status, string> = {
+	healthy: 'Healthy',
+	degraded: 'Degraded',
+	down: 'Down',
+	unknown: 'Unknown',
+}
+
+const dotByStatus: Record<Status, string> = {
+	healthy: 'bg-accent-700 shadow-[0_0_0_3px_rgba(6,78,59,0.12)]',
+	degraded: 'bg-amber-500 shadow-[0_0_0_3px_rgba(245,158,11,0.15)]',
+	down: 'bg-red-500 shadow-[0_0_0_3px_rgba(239,68,68,0.15)]',
+	unknown: 'bg-base-400 shadow-[0_0_0_3px_rgba(148,163,184,0.15)]',
+}
+
+const textByStatus: Record<Status, string> = {
+	healthy: 'text-accent-900',
+	degraded: 'text-amber-900',
+	down: 'text-red-900',
+	unknown: 'text-base-600',
+}
+---
+
+<span
+	class:list={[
+		'inline-flex items-center gap-2 rounded-full border border-base-100 bg-white px-2.5 py-1 text-xs font-medium',
+		textByStatus[status],
+		className,
+	]}
+	data-status={status}
+>
+	<span
+		aria-hidden="true"
+		class:list={['size-1.5 rounded-full', dotByStatus[status]]}
+	></span>
+	{label ?? STATUS_LABELS[status]}
+</span>
