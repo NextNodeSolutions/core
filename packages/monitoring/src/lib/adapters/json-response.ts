@@ -1,8 +1,8 @@
 import type { HttpStatus } from '@/lib/adapters/http-status.ts'
-import type { NotImplementedResult } from '@/lib/domain/api-result.ts'
+import type { ApiResult } from '@/lib/domain/api-result.ts'
 
-export const jsonResponse = (
-	body: NotImplementedResult,
+export const jsonResponse = <T>(
+	body: ApiResult<T>,
 	status: HttpStatus,
 ): Response =>
 	new Response(JSON.stringify(body), {

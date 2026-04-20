@@ -1,0 +1,32 @@
+---
+import type { LoadState } from '@/lib/domain/load-state.ts'
+
+interface Props {
+	state: LoadState<unknown>
+	upstreamLabel: string
+}
+
+const { state, upstreamLabel } = Astro.props
+---
+
+{
+	state.kind === 'missing_config' && (
+		<div class="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-6 text-amber-900">
+			<p class="font-display text-base font-semibold">Missing configuration</p>
+			<p class="mt-1 font-mono text-xs">
+				Env var <code>{state.varName}</code> is not set.
+			</p>
+		</div>
+	)
+}
+
+{
+	(state.kind === 'upstream_error' || state.kind === 'internal_error') && (
+		<div class="mt-8 rounded-2xl border border-red-200 bg-red-50 p-6 text-red-900">
+			<p class="font-display text-base font-semibold">
+				{state.kind === 'upstream_error' ? upstreamLabel : 'Internal error'}
+			</p>
+			<p class="mt-1 font-mono text-xs">{state.message}</p>
+		</div>
+	)
+}
