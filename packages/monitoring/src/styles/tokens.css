@@ -1,76 +1,45 @@
-:root {
-	--color-primary: #0d9488;
-	--color-primary-hover: #0f766e;
-	--color-accent: #f97316;
-	--color-bg: #0b1020;
-	--color-surface: #141a30;
-	--color-surface-2: #1c2440;
-	--color-border: #2a3456;
-	--color-text: #e5e7eb;
-	--color-text-muted: #94a3b8;
-	--color-success: #10b981;
-	--color-danger: #ef4444;
-	--color-warning: #f59e0b;
+@theme {
+	--font-sans: 'Inter', sans-serif;
+	--font-display: 'InterDisplay', sans-serif;
+	--font-mono: 'JetBrains Mono', monospace;
 
-	--font-display: 'Plus Jakarta Sans', system-ui, sans-serif;
-	--font-body: 'DM Sans', system-ui, sans-serif;
-	--font-mono: 'JetBrains Mono', ui-monospace, monospace;
+	--color-accent-50: oklch(98.21% 0.02 173.97);
+	--color-accent-100: oklch(95.93% 0.045 173.67);
+	--color-accent-200: oklch(92.64% 0.081 172.51);
+	--color-accent-300: oklch(89.57% 0.117 170.84);
+	--color-accent-400: oklch(86.76% 0.147 168.56);
+	--color-accent-500: oklch(84.83% 0.168 165.66);
+	--color-accent-600: oklch(77.33% 0.165 163.25);
+	--color-accent-700: oklch(62.84% 0.133 163.56);
+	--color-accent-800: oklch(47.46% 0.099 164.12);
+	--color-accent-900: oklch(28.98% 0.057 166.58);
+	--color-accent-950: oklch(20.29% 0.037 169.89);
 
-	--radius-sm: 6px;
-	--radius-md: 10px;
-	--radius-lg: 16px;
+	--color-base-50: oklch(96.74% 0.001 286.38);
+	--color-base-100: oklch(93.73% 0.001 286.37);
+	--color-base-200: oklch(87.31% 0.004 271.36);
+	--color-base-300: oklch(80.82% 0.006 274.95);
+	--color-base-400: oklch(74.22% 0.009 278.59);
+	--color-base-500: oklch(67.48% 0.012 280.37);
+	--color-base-600: oklch(56.83% 0.015 281.34);
+	--color-base-700: oklch(46.56% 0.011 279.46);
+	--color-base-800: oklch(35.42% 0.009 285.95);
+	--color-base-900: oklch(23.48% 0.004 264.49);
+	--color-base-950: oklch(16.89% 0.002 286.18);
 
-	--space-1: 0.25rem;
-	--space-2: 0.5rem;
-	--space-3: 0.75rem;
-	--space-4: 1rem;
-	--space-6: 1.5rem;
-	--space-8: 2rem;
-}
+	--color-success: oklch(72.18% 0.163 160.3);
+	--color-warning: oklch(79.27% 0.17 70.67);
+	--color-danger: oklch(62.95% 0.219 28.43);
 
-*,
-*::before,
-*::after {
-	box-sizing: border-box;
-}
-
-html,
-body {
-	margin: 0;
-	padding: 0;
-	background: var(--color-bg);
-	color: var(--color-text);
-	font-family: var(--font-body);
-	font-size: 16px;
-	line-height: 1.55;
-	-webkit-font-smoothing: antialiased;
-}
-
-h1,
-h2,
-h3 {
-	font-family: var(--font-display);
-	font-weight: 700;
-	letter-spacing: -0.01em;
-	margin: 0;
-}
-
-code,
-pre,
-kbd,
-samp {
-	font-family: var(--font-mono);
-}
-
-a {
-	color: var(--color-primary);
-	text-decoration: none;
-}
-
-a:hover {
-	color: var(--color-primary-hover);
-}
-
-button {
-	font-family: inherit;
+	--shadow-subtle:
+		0px 0px 0px 1px rgba(30, 31, 37, 0.09),
+		0px 1px 2px 0px rgba(30, 31, 37, 0.02),
+		0px 1px 0px 0px rgba(30, 31, 37, 0.08);
+	--shadow-navy:
+		rgba(14, 63, 126, 0.04) 0px 0px 0px 1px,
+		rgba(42, 51, 69, 0.04) 0px 1px 1px -0.5px,
+		rgba(42, 51, 70, 0.04) 0px 3px 3px -1.5px,
+		rgba(42, 51, 70, 0.04) 0px 6px 6px -3px,
+		rgba(14, 63, 126, 0.04) 0px 12px 12px -6px,
+		rgba(14, 63, 126, 0.04) 0px 24px 24px -12px;
 }
