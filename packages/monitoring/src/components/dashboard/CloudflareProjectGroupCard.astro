@@ -1,0 +1,112 @@
+---
+import type { CloudflarePagesProject } from '@/lib/domain/cloudflare/pages-project.ts'
+import type { CloudflarePagesProjectGroup } from '@/lib/domain/cloudflare/project-group.ts'
+
+interface Props {
+	group: CloudflarePagesProjectGroup
+}
+
+const { group } = Astro.props
+
+interface EnvironmentRow {
+	readonly key: 'production' | 'development'
+	readonly label: string
+	readonly project: CloudflarePagesProject | null
+	readonly badgeClasses: string
+}
+
+const rows: ReadonlyArray<EnvironmentRow> = [
+	{
+		key: 'production',
+		label: 'Prod',
+		project: group.production,
+		badgeClasses: 'border-accent-200 bg-accent-50 text-accent-900',
+	},
+	{
+		key: 'development',
+		label: 'Dev',
+		project: group.development,
+		badgeClasses: 'border-base-100 bg-base-50 text-base-700',
+	},
+]
+
+const primaryDomain = (project: CloudflarePagesProject): string =>
+	project.domains.find((domain) => domain !== project.subdomain) ??
+	project.subdomain
+---
+
+<article
+	class="flex flex-col rounded-2xl border border-base-100 bg-white shadow-subtle"
+>
+	<header
+		class="flex items-center justify-between gap-4 border-b border-base-100 px-6 py-4"
+	>
+		<h3 class="font-display text-lg font-semibold text-base-900 truncate">
+			{group.baseName}
+		</h3>
+		<span class="font-mono text-[10px] uppercase tracking-wider text-base-500">
+			Cloudflare Pages
+		</span>
+	</header>
+
+	<ul class="divide-y divide-base-100">
+		{
+			rows.map((row) =>
+				row.project ? (
+					<li>
+						<a
+							href={`/cloudflare/${row.project.name}`}
+							class="group flex items-center gap-4 px-6 py-3.5 transition-colors hover:bg-base-50"
+						>
+							<span
+								class:list={[
+									'inline-flex w-14 shrink-0 items-center justify-center rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider',
+									row.badgeClasses,
+								]}
+							>
+								{row.label}
+							</span>
+
+							<span class="min-w-0 flex-1 truncate font-mono text-sm font-medium text-accent-800">
+								{primaryDomain(row.project)}
+							</span>
+
+							<span class="hidden font-mono text-xs text-base-500 sm:inline truncate max-w-[14rem]">
+								{row.project.subdomain}
+							</span>
+
+							<span class="hidden font-mono text-xs text-base-500 md:inline">
+								{row.project.productionBranch}
+							</span>
+
+							<span class="hidden font-mono text-xs text-base-400 md:inline">
+								{row.project.createdAt.slice(0, 10)}
+							</span>
+
+							<span
+								aria-hidden="true"
+								class="text-base-400 transition-all group-hover:text-accent-700 group-hover:translate-x-0.5"
+							>
+								→
+							</span>
+						</a>
+					</li>
+				) : (
+					<li class="flex items-center gap-4 px-6 py-3.5">
+						<span
+							class:list={[
+								'inline-flex w-14 shrink-0 items-center justify-center rounded-full border border-dashed px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider',
+								row.badgeClasses,
+							]}
+						>
+							{row.label}
+						</span>
+						<span class="text-xs text-base-500 italic">
+							No {row.label.toLowerCase()} project deployed.
+						</span>
+					</li>
+				),
+			)
+		}
+	</ul>
+</article>

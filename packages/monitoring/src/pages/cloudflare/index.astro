@@ -1,4 +1,5 @@
 ---
+import CloudflareProjectGroupCard from '@/components/dashboard/CloudflareProjectGroupCard.astro'
 import EmptyListMessage from '@/components/dashboard/EmptyListMessage.astro'
 import LoadStateBanner from '@/components/dashboard/LoadStateBanner.astro'
 import SectionHeader from '@/components/dashboard/SectionHeader.astro'
@@ -7,6 +8,7 @@ import { resolveAccountId } from '@/lib/adapters/cloudflare/accounts.ts'
 import { listPagesProjects } from '@/lib/adapters/cloudflare/pages-projects.ts'
 import { ENV_KEYS, getEnv, requireEnv } from '@/lib/adapters/env.ts'
 import { loadPageState } from '@/lib/adapters/load-page-state.ts'
+import { groupPagesProjects } from '@/lib/domain/cloudflare/project-group.ts'
 
 export const prerender = false
 
@@ -16,6 +18,8 @@ const state = await loadPageState('cloudflare.projects.page', async () => {
 		getEnv(ENV_KEYS.CLOUDFLARE_ACCOUNT_ID) ?? (await resolveAccountId(token))
 	return listPagesProjects(accountId, token)
 })
+
+const groups = state.kind === 'ok' ? groupPagesProjects(state.data) : []
 ---
 
 <DashboardLayout
@@ -25,57 +29,21 @@ const state = await loadPageState('cloudflare.projects.page', async () => {
 	<SectionHeader
 		kicker="Cloudflare"
 		title="Cloudflare Pages projects"
-		description="Every Pages project reachable with the current API token."
+		description="Logical projects grouped by base name. Each card shows the production project (`name`) and its development counterpart (`name-dev`) when both exist."
 	/>
 
 	{
-		state.kind === 'ok' && state.data.length > 0 && (
-			<ul class="mt-8 divide-y divide-base-100 overflow-hidden rounded-2xl border border-base-100 bg-white shadow-subtle">
-				{state.data.map((project) => (
-					<li class="flex flex-wrap items-center gap-4 px-6 py-5">
-						<div class="min-w-0 flex-1">
-							<h3 class="font-display text-base font-semibold text-base-900">
-								{project.name}
-							</h3>
-							<p class="mt-1 font-mono text-xs text-base-500 truncate">
-								{project.subdomain}
-							</p>
-						</div>
-
-						<dl class="flex items-center gap-6 text-xs">
-							<div>
-								<dt class="font-mono text-[10px] uppercase tracking-wider text-base-500">
-									Prod branch
-								</dt>
-								<dd class="mt-1 font-mono text-base-900">
-									{project.productionBranch}
-								</dd>
-							</div>
-							<div>
-								<dt class="font-mono text-[10px] uppercase tracking-wider text-base-500">
-									Domains
-								</dt>
-								<dd class="mt-1 font-mono text-base-900">
-									{project.domains.length}
-								</dd>
-							</div>
-							<div>
-								<dt class="font-mono text-[10px] uppercase tracking-wider text-base-500">
-									Created
-								</dt>
-								<dd class="mt-1 font-mono text-base-900">
-									{project.createdAt.slice(0, 10)}
-								</dd>
-							</div>
-						</dl>
-					</li>
+		state.kind === 'ok' && groups.length > 0 && (
+			<div class="mt-8 flex flex-col gap-4">
+				{groups.map((group) => (
+					<CloudflareProjectGroupCard group={group} />
 				))}
-			</ul>
+			</div>
 		)
 	}
 
 	{
-		state.kind === 'ok' && state.data.length === 0 && (
+		state.kind === 'ok' && groups.length === 0 && (
 			<EmptyListMessage message="No Pages project found in this account." />
 		)
 	}
