@@ -1,0 +1,24 @@
+---
+import Kicker from '@/components/foundations/Kicker.astro'
+
+interface Props {
+	kicker: string
+	title: string
+	description?: string
+	class?: string
+}
+
+const { kicker, title, description, class: className = '' } = Astro.props
+---
+
+<header class:list={['flex flex-col gap-3', className]}>
+	<Kicker>{kicker}</Kicker>
+	<h2 class="font-display text-2xl font-semibold tracking-tight text-base-900">
+		{title}
+	</h2>
+	{
+		description && (
+			<p class="max-w-2xl text-sm text-base-600">{description}</p>
+		)
+	}
+</header>

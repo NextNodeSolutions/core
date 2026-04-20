@@ -1,0 +1,43 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro'
+import Sidebar from '@/components/layout/Sidebar.astro'
+import Topbar from '@/components/layout/Topbar.astro'
+
+interface Breadcrumb {
+	label: string
+	href?: string
+}
+
+interface Props {
+	title: string
+	description?: string
+	breadcrumbs?: Breadcrumb[]
+}
+
+const { title, description, breadcrumbs = [] } = Astro.props
+const currentPath = Astro.url.pathname
+---
+
+<BaseLayout title={title} description={description}>
+	<div class="flex min-h-svh">
+		<Sidebar current={currentPath} />
+
+		<div class="flex min-w-0 flex-1 flex-col">
+			<Topbar breadcrumbs={breadcrumbs} />
+
+			<main class="flex-1 bg-base-50/40">
+				<div class="mx-auto max-w-6xl px-8 py-10">
+					<slot />
+				</div>
+			</main>
+
+			<footer
+				class="flex items-center justify-center gap-3 border-t border-base-100 bg-white px-8 py-4 text-xs text-base-500"
+			>
+				<span>Internal — Tailscale only</span>
+				<span class="text-base-300">·</span>
+				<code class="font-mono">monitoring.nextnode.fr</code>
+			</footer>
+		</div>
+	</div>
+</BaseLayout>

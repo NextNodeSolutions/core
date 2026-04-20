@@ -1,0 +1,119 @@
+---
+type Variant = 'default' | 'accent' | 'muted' | 'danger' | 'ghost'
+type Size = 'xs' | 'sm' | 'base' | 'md' | 'lg'
+
+interface Props {
+	variant?: Variant
+	size?: Size
+	iconOnly?: boolean
+	isLink?: boolean
+	href?: string
+	type?: 'button' | 'submit' | 'reset'
+	name?: string
+	value?: string
+	form?: string
+	formaction?: string
+	formmethod?: 'get' | 'post'
+	id?: string
+	disabled?: boolean
+	class?: string
+}
+
+const {
+	variant = 'default',
+	size = 'sm',
+	iconOnly = false,
+	isLink = false,
+	class: className,
+	...rest
+} = Astro.props
+
+const variantClass: Record<Variant, string[]> = {
+	default: [
+		'text-white',
+		'bg-linear-to-t',
+		'from-base-900',
+		'to-base-800',
+		'hover:from-base-800',
+		'hover:to-base-900',
+		'focus:outline-base-300',
+	],
+	accent: [
+		'text-white',
+		'bg-accent-700',
+		'hover:bg-accent-600',
+		'focus:outline-accent-600',
+	],
+	muted: [
+		'text-base-950',
+		'bg-base-50',
+		'hover:bg-base-100',
+		'focus:outline-base-300',
+	],
+	danger: [
+		'text-white',
+		'bg-red-600',
+		'hover:bg-red-500',
+		'focus:outline-red-600',
+	],
+	ghost: [
+		'text-base-700',
+		'bg-transparent',
+		'hover:bg-base-50',
+		'focus:outline-base-300',
+	],
+}
+
+const sizes: Record<Size, string[]> = {
+	xs: ['h-8', 'px-4', 'text-xs'],
+	sm: ['h-9', 'px-5', 'text-sm'],
+	base: ['h-10', 'px-6', 'text-base'],
+	md: ['h-11', 'px-7', 'text-base'],
+	lg: ['h-12', 'px-8', 'text-lg'],
+}
+
+const iconSizes: Record<Size, string[]> = {
+	xs: ['size-8', 'text-xs'],
+	sm: ['size-9', 'text-sm'],
+	base: ['size-10', 'text-base'],
+	md: ['size-11', 'text-base'],
+	lg: ['size-12', 'text-lg'],
+}
+
+const sizeClass = iconOnly ? iconSizes[size] : sizes[size]
+
+const baseClass = [
+	'inline-flex',
+	'justify-center',
+	'items-center',
+	'gap-2',
+	'rounded-full',
+	'font-medium',
+	'duration-300',
+	'ease-in-out',
+	'transition-colors',
+	'focus:outline-2',
+	'focus:outline-offset-2',
+	'disabled:opacity-50',
+	'disabled:pointer-events-none',
+]
+
+const Tag = isLink ? 'a' : 'button'
+---
+
+<Tag
+	class:list={[...baseClass, ...variantClass[variant], ...sizeClass, className]}
+	{...rest}
+>
+	{
+		iconOnly ? (
+			<slot name="icon" />
+		) : (
+			<>
+				<slot name="left-icon" />
+				<slot />
+				<slot name="right-icon" />
+			</>
+		)
+	}
+</Tag>

@@ -1,0 +1,37 @@
+---
+import '@/styles/global.css'
+
+interface Props {
+	title: string
+	description?: string
+}
+
+const {
+	title,
+	description = 'NextNode internal monitoring dashboard',
+} = Astro.props
+---
+
+<!doctype html>
+<html
+	lang="en"
+	class="scroll-smooth selection:bg-base-900 selection:text-white"
+>
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="robots" content="noindex,nofollow" />
+		<meta name="description" content={description} />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<link rel="preconnect" href="https://rsms.me/" />
+		<link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
+		<link
+			href="https://api.fontshare.com/v2/css?f[]=jet-brains-mono@1,2&display=swap"
+			rel="stylesheet"
+		/>
+		<title>{title} · NextNode Monitoring</title>
+	</head>
+	<body class="bg-white text-base-900 antialiased min-h-svh">
+		<slot />
+	</body>
+</html>

@@ -1,0 +1,83 @@
+---
+import DashboardLayout from '@/layouts/DashboardLayout.astro'
+import ProjectCard from '@/components/dashboard/ProjectCard.astro'
+import SectionHeader from '@/components/dashboard/SectionHeader.astro'
+import StatCard from '@/components/dashboard/StatCard.astro'
+import type { ProjectSummary } from '@/lib/domain/project.ts'
+
+export const prerender = false
+
+const projects: ProjectSummary[] = [
+	{
+		slug: 'example-app',
+		name: 'Example App',
+		repo: 'NextNodeSolutions/example-app',
+		target: 'hetzner',
+		environment: 'production',
+		status: 'healthy',
+		lastDeployAt: '2026-04-18 14:32',
+	},
+	{
+		slug: 'example-site',
+		name: 'Example Site',
+		repo: 'NextNodeSolutions/example-site',
+		target: 'cloudflare-pages',
+		environment: 'production',
+		status: 'unknown',
+		lastDeployAt: null,
+	},
+]
+
+const stats = [
+	{ label: 'Projects', value: projects.length, hint: 'All environments' },
+	{
+		label: 'Healthy',
+		value: projects.filter((p) => p.status === 'healthy').length,
+		hint: 'Last probe OK',
+		tone: 'positive' as const,
+	},
+	{
+		label: 'Hetzner VPS',
+		value: projects.filter((p) => p.target === 'hetzner').length,
+		hint: 'Tailscale fleet',
+	},
+	{
+		label: 'Cloudflare',
+		value: projects.filter((p) => p.target === 'cloudflare-pages').length,
+		hint: 'Pages + Workers',
+	},
+]
+---
+
+<DashboardLayout
+	title="Dashboard"
+	breadcrumbs={[{ label: 'Overview' }]}
+>
+	<section class="space-y-8">
+		<SectionHeader
+			kicker="Control plane"
+			title="NextNode control plane"
+			description="Trigger deploys, approve prod releases, and watch every VPS and Cloudflare project in one place."
+		/>
+
+		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+			{
+				stats.map((stat) => (
+					<StatCard
+						label={stat.label}
+						value={stat.value}
+						hint={stat.hint}
+						tone={stat.tone}
+					/>
+				))
+			}
+		</div>
+	</section>
+
+	<section class="mt-14 space-y-6">
+		<SectionHeader kicker="Projects" title="All projects" />
+		<div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+			{projects.map((project) => <ProjectCard project={project} />)}
+		</div>
+	</section>
+</DashboardLayout>

@@ -1,0 +1,23 @@
+---
+import DashboardLayout from '@/layouts/DashboardLayout.astro'
+import SectionHeader from '@/components/dashboard/SectionHeader.astro'
+
+export const prerender = false
+---
+
+<DashboardLayout
+	title="VPS"
+	breadcrumbs={[{ label: 'Infrastructure' }, { label: 'VPS fleet' }]}
+>
+	<SectionHeader
+		kicker="Infrastructure"
+		title="VPS fleet"
+		description="Hetzner servers provisioned by @nextnode-solutions/infrastructure. All traffic reaches these hosts through Tailscale."
+	/>
+
+	<div class="mt-8 rounded-2xl border border-dashed border-base-200 bg-white p-10 text-center">
+		<p class="font-mono text-xs text-base-500">
+			Hetzner inventory wiring pending.
+		</p>
+	</div>
+</DashboardLayout>

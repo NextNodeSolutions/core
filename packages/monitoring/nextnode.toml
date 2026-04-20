@@ -1,0 +1,5 @@
+[project]
+name = "monitoring"
+type = "app"
+internal = true
+filter = "@nextnode-solutions/monitoring"

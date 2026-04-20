@@ -1,0 +1,10 @@
+{
+	"extends": "@nextnode-solutions/standards/typescript/astro",
+	"compilerOptions": {
+		"paths": {
+			"@/*": ["./src/*"]
+		}
+	},
+	"include": [".astro/types.d.ts", "src", "astro.config.ts"],
+	"exclude": ["node_modules", "dist", ".astro"]
+}
