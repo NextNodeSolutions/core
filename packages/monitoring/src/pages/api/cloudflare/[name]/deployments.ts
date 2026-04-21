@@ -6,8 +6,8 @@ import { notImplemented } from '@/lib/domain/api-result.ts'
 
 export const prerender = false
 
-export const GET: APIRoute = ({ params }) =>
+export const POST: APIRoute = ({ params }) =>
 	jsonResponse(
-		notImplemented(`cloudflare.${params.slug}.stats`),
+		notImplemented(`cloudflare.${params.name}.deployments.create`),
 		HTTP_STATUS.NOT_IMPLEMENTED,
 	)

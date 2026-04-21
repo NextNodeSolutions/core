@@ -24,6 +24,7 @@
   },
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --clean",
+    "build:setup-script": "node scripts/build-setup-script.ts",
     "dev": "node src/index.ts",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",

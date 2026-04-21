@@ -1,6 +1,7 @@
 import {
 	cloudflareGet,
 	extractArrayResult,
+	extractObjectResult,
 } from '@/lib/adapters/cloudflare/client.ts'
 import type { CloudflarePagesProject } from '@/lib/domain/cloudflare/pages-project.ts'
 import { isRecord } from '@/lib/domain/is-record.ts'
@@ -12,9 +13,8 @@ const parseDomains = (value: unknown): ReadonlyArray<string> => {
 
 const parsePagesProject = (
 	raw: unknown,
-	index: number,
+	context: string,
 ): CloudflarePagesProject => {
-	const context = `Cloudflare Pages project[${String(index)}]`
 	if (!isRecord(raw)) throw new Error(`${context}: not an object`)
 	if (typeof raw.name !== 'string') {
 		throw new Error(`${context}: missing \`name\``)
@@ -54,5 +54,22 @@ export const listPagesProjects = async (
 		context,
 	)
 	const result = extractArrayResult(data, context)
-	return result.map(parsePagesProject)
+	return result.map((raw, index) =>
+		parsePagesProject(raw, `Cloudflare Pages project[${String(index)}]`),
+	)
+}
+
+export const getPagesProject = async (
+	accountId: string,
+	token: string,
+	projectName: string,
+): Promise<CloudflarePagesProject> => {
+	const context = `Cloudflare Pages project "${projectName}"`
+	const data = await cloudflareGet(
+		`/accounts/${accountId}/pages/projects/${encodeURIComponent(projectName)}`,
+		token,
+		context,
+	)
+	const result = extractObjectResult(data, context)
+	return parsePagesProject(result, context)
 }

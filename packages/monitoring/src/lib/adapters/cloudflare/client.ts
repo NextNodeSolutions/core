@@ -77,3 +77,13 @@ export const extractArrayResult = (
 	}
 	return data.result
 }
+
+export const extractObjectResult = (
+	data: unknown,
+	context: string,
+): Record<string, unknown> => {
+	if (!isRecord(data) || !isRecord(data.result)) {
+		throw new Error(`${context}: \`result\` must be an object`)
+	}
+	return data.result
+}

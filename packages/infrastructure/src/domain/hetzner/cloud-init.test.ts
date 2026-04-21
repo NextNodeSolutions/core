@@ -7,6 +7,8 @@ import {
 	renderCloudInit,
 	renderProjectCloudInit,
 } from './cloud-init.ts'
+import { DOCKER_DAEMON_CONFIG } from './docker-daemon-config.ts'
+import { CADDY_UNIT, VECTOR_UNIT } from './systemd-units.ts'
 
 const INPUT = {
 	tailscaleAuthKey: 'tskey-auth-abc123',
@@ -90,23 +92,21 @@ describe('renderCloudInit', () => {
 			return parseCloudInit().write_files.find(f => f.path === path)
 		}
 
-		it('writes the Vector systemd unit', () => {
-			const file = findFile('/etc/systemd/system/vector.service')
+		it.each([
+			{ name: 'Vector', unit: VECTOR_UNIT },
+			{ name: 'Caddy', unit: CADDY_UNIT },
+		])('writes the $name systemd unit byte-identically', ({ unit }) => {
+			const file = findFile(unit.path)
 			expect(file).toBeDefined()
-			expect(file!.content).toContain(
-				'ExecStart=/usr/bin/vector --config /etc/vector/vector.toml',
-			)
-			expect(file!.content).toContain(
-				'EnvironmentFile=/etc/vector/vector.env',
-			)
+			expect(file!.content).toBe(unit.content)
 		})
 
-		it('writes the Caddy systemd unit', () => {
-			const file = findFile('/etc/systemd/system/caddy.service')
+		it('writes Docker daemon.json byte-identically, root-owned', () => {
+			const file = findFile(DOCKER_DAEMON_CONFIG.path)
 			expect(file).toBeDefined()
-			expect(file!.content).toContain(
-				'ExecStart=/usr/bin/caddy run --config /etc/caddy/config.json',
-			)
+			expect(file!.content).toBe(DOCKER_DAEMON_CONFIG.content)
+			expect(file!.permissions).toBe('0644')
+			expect(file!.owner).toBe('root:root')
 		})
 
 		it('does not write any root SSH keys (root login disabled)', () => {
@@ -182,10 +182,8 @@ describe('renderCloudInit', () => {
 			expect(caddyCmd).toContain('caddy-dns/cloudflare')
 		})
 
-		it('enables Caddy and Vector systemd units', () => {
-			const cmds = commands()
-			expect(cmds).toContain('systemctl enable caddy')
-			expect(cmds).toContain('systemctl enable vector')
+		it.each(['caddy', 'vector'])('enables the %s systemd unit', unit => {
+			expect(commands()).toContain(`systemctl enable ${unit}`)
 		})
 
 		it('adds deploy to docker group after Docker install', () => {

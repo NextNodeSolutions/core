@@ -1,6 +1,7 @@
 import { stringify } from 'yaml'
 
-import { CADDY_SYSTEMD_UNIT, VECTOR_SYSTEMD_UNIT } from './systemd-units.ts'
+import { DOCKER_DAEMON_CONFIG } from './docker-daemon-config.ts'
+import { CADDY_UNIT, VECTOR_UNIT } from './systemd-units.ts'
 
 export interface CloudInitInput {
 	readonly tailscaleAuthKey: string
@@ -93,14 +94,9 @@ function buildTailscaleAuthKeyFile(authKey: string): CloudInitWriteFile {
 
 function buildWriteFiles(authKey: string): ReadonlyArray<CloudInitWriteFile> {
 	return [
-		{
-			path: '/etc/systemd/system/vector.service',
-			content: VECTOR_SYSTEMD_UNIT,
-		},
-		{
-			path: '/etc/systemd/system/caddy.service',
-			content: CADDY_SYSTEMD_UNIT,
-		},
+		{ ...VECTOR_UNIT },
+		{ ...CADDY_UNIT },
+		{ ...DOCKER_DAEMON_CONFIG, permissions: '0644', owner: 'root:root' },
 		{ path: '/etc/caddy/config.json', content: '{}\n' },
 		buildTailscaleAuthKeyFile(authKey),
 	]

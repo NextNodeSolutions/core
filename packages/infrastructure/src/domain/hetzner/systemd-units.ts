@@ -14,10 +14,22 @@
  * asserts the shell script embeds them verbatim.
  */
 
-export const CADDY_SYSTEMD_UNIT = `[Unit]
+export interface SystemdUnit {
+	readonly path: string
+	readonly content: string
+}
+
+// Caddy MUST start after dockerd: once upstreams become container IPs,
+// reloading Caddy before Docker is ready would leave routes pointing at
+// nothing. `Requires=docker.service` also propagates dockerd failures so
+// Caddy doesn't sit serving 502s on top of a broken container plane.
+export const CADDY_UNIT: SystemdUnit = {
+	path: '/etc/systemd/system/caddy.service',
+	content: `[Unit]
 Description=Caddy web server
-After=network-online.target
+After=network-online.target docker.service
 Wants=network-online.target
+Requires=docker.service
 
 [Service]
 EnvironmentFile=-/etc/caddy/env
@@ -28,9 +40,12 @@ RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
-`
+`,
+}
 
-export const VECTOR_SYSTEMD_UNIT = `[Unit]
+export const VECTOR_UNIT: SystemdUnit = {
+	path: '/etc/systemd/system/vector.service',
+	content: `[Unit]
 Description=Vector log agent
 After=network-online.target
 Wants=network-online.target
@@ -43,4 +58,5 @@ RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
-`
+`,
+}

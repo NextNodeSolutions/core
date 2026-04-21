@@ -1,0 +1,520 @@
+---
+import Button from '@/components/foundations/Button.astro'
+import EmptyListMessage from '@/components/dashboard/EmptyListMessage.astro'
+import LoadStateBanner from '@/components/dashboard/LoadStateBanner.astro'
+import SectionHeader from '@/components/dashboard/SectionHeader.astro'
+import StatCard from '@/components/dashboard/StatCard.astro'
+import StatusBadge from '@/components/dashboard/StatusBadge.astro'
+import DashboardLayout from '@/layouts/DashboardLayout.astro'
+import { resolveAccountId } from '@/lib/adapters/cloudflare/accounts.ts'
+import { listPagesDeployments } from '@/lib/adapters/cloudflare/pages-deployments.ts'
+import { listPagesDomains } from '@/lib/adapters/cloudflare/pages-domains.ts'
+import { getPagesProject } from '@/lib/adapters/cloudflare/pages-projects.ts'
+import { ENV_KEYS, getEnv, requireEnv } from '@/lib/adapters/env.ts'
+import { loadPageState } from '@/lib/adapters/load-page-state.ts'
+import type { CloudflarePagesDeployment } from '@/lib/domain/cloudflare/pages-deployment.ts'
+import type { CloudflarePagesDomain } from '@/lib/domain/cloudflare/pages-domain.ts'
+import { resolveProjectIdentity } from '@/lib/domain/cloudflare/pages-environment.ts'
+import {
+	formatIsoDate,
+	formatRelativeTime,
+} from '@/lib/domain/relative-time.ts'
+
+export const prerender = false
+
+const { name } = Astro.params
+
+if (!name) {
+	return Astro.redirect('/cloudflare')
+}
+
+const identity = resolveProjectIdentity(name)
+const encodedName = encodeURIComponent(name)
+
+const state = await loadPageState(`cloudflare.projects.${name}.page`, async () => {
+	const token = requireEnv(ENV_KEYS.CLOUDFLARE_API_TOKEN)
+	const accountId =
+		getEnv(ENV_KEYS.CLOUDFLARE_ACCOUNT_ID) ?? (await resolveAccountId(token))
+	const [project, deployments, domains] = await Promise.all([
+		getPagesProject(accountId, token, name),
+		listPagesDeployments(accountId, token, name),
+		listPagesDomains(accountId, token, name),
+	])
+	return { accountId, project, deployments, domains }
+})
+
+const project = state.kind === 'ok' ? state.data.project : null
+const accountId = state.kind === 'ok' ? state.data.accountId : null
+const deployments: ReadonlyArray<CloudflarePagesDeployment> =
+	state.kind === 'ok' ? state.data.deployments : []
+const domains: ReadonlyArray<CloudflarePagesDomain> =
+	state.kind === 'ok' ? state.data.domains : []
+
+const envBadgeClass =
+	identity.environment === 'production'
+		? 'border-accent-200 bg-accent-50 text-accent-900'
+		: 'border-base-200 bg-base-50 text-base-700'
+
+const envLabel = identity.environment === 'production' ? 'Production' : 'Development'
+
+const primaryDomain = project
+	? (project.domains.find((domain) => domain !== project.subdomain) ??
+		project.subdomain)
+	: null
+
+const dashboardUrl = accountId
+	? `https://dash.cloudflare.com/${accountId}/pages/view/${encodedName}`
+	: null
+
+const deploymentStatusToBadge: Record<
+	CloudflarePagesDeployment['status'],
+	'healthy' | 'degraded' | 'down' | 'unknown'
+> = {
+	success: 'healthy',
+	active: 'degraded',
+	idle: 'unknown',
+	skipped: 'unknown',
+	canceled: 'unknown',
+	failure: 'down',
+	unknown: 'unknown',
+}
+
+const domainStatusToBadge: Record<
+	CloudflarePagesDomain['status'],
+	'healthy' | 'degraded' | 'down' | 'unknown'
+> = {
+	active: 'healthy',
+	pending: 'degraded',
+	canceled: 'unknown',
+	error: 'down',
+	unknown: 'unknown',
+}
+
+const canonicalDeployment = deployments.find(
+	(deployment) =>
+		deployment.environment === 'production' && deployment.status === 'success',
+)
+const rollbackCandidate = deployments.find(
+	(deployment) =>
+		deployment.environment === 'production' &&
+		deployment.status === 'success' &&
+		canonicalDeployment !== undefined &&
+		deployment.id !== canonicalDeployment.id,
+)
+
+const nowMs = Date.now()
+---
+
+<DashboardLayout
+	title={`Cloudflare · ${name}`}
+	breadcrumbs={[
+		{ label: 'Infrastructure' },
+		{ label: 'Cloudflare', href: '/cloudflare' },
+		{ label: name },
+	]}
+>
+	<header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+		<div class="min-w-0">
+			<p class="font-mono text-[10px] uppercase tracking-wider text-base-500">
+				Cloudflare Pages
+			</p>
+			<h1 class="mt-2 flex items-center gap-3 font-display text-3xl font-semibold tracking-tight text-base-900">
+				<span class="truncate">{name}</span>
+				<span
+					class:list={[
+						'inline-flex shrink-0 items-center rounded-full border px-3 py-0.5 font-mono text-[10px] uppercase tracking-wider',
+						envBadgeClass,
+					]}
+				>
+					{envLabel}
+				</span>
+			</h1>
+			{
+				primaryDomain && (
+					<p class="mt-2 font-mono text-sm text-accent-800">{primaryDomain}</p>
+				)
+			}
+		</div>
+		<div class="flex shrink-0 items-center gap-3">
+			{canonicalDeployment ? (
+				<StatusBadge status="healthy" label="Live" />
+			) : (
+				<StatusBadge status="unknown" />
+			)}
+			{dashboardUrl && (
+				<a
+					class="inline-flex h-9 items-center justify-center rounded-full bg-base-50 px-5 text-sm font-medium text-base-950 transition-colors hover:bg-base-100"
+					href={dashboardUrl}
+					target="_blank"
+					rel="noreferrer"
+				>
+					Open in Cloudflare ↗
+				</a>
+			)}
+		</div>
+	</header>
+
+	{
+		project && (
+			<section class="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+				<StatCard label="Subdomain" value={project.subdomain} />
+				<StatCard
+					label="Production branch"
+					value={project.productionBranch}
+				/>
+				<StatCard
+					label="Custom domains"
+					value={String(domains.length)}
+					hint={domains.length === 0 ? 'None attached' : undefined}
+				/>
+				<StatCard
+					label="Created"
+					value={formatIsoDate(project.createdAt)}
+					hint="Project age"
+				/>
+			</section>
+		)
+	}
+
+	<section class="mt-10 space-y-6">
+		<SectionHeader
+			kicker="Actions"
+			title="Project controls"
+			description="Trigger a deployment, purge the edge cache, or delete the project. Destructive actions require confirmation."
+		/>
+		<div class="rounded-2xl border border-base-100 bg-white p-6 shadow-subtle">
+			<div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+				<form
+					method="post"
+					action={`/api/cloudflare/${encodedName}/deployments`}
+					class="flex flex-col gap-3"
+				>
+					<div>
+						<p class="font-display text-sm font-semibold text-base-900">
+							Trigger deployment
+						</p>
+						<p class="mt-1 text-xs text-base-500">
+							Start a new build of {identity.environment === 'production'
+								? project?.productionBranch ?? 'the production branch'
+								: 'the development branch'}.
+						</p>
+					</div>
+					<input
+						type="hidden"
+						name="environment"
+						value={identity.environment}
+					/>
+					<Button size="sm" variant="default" type="submit">
+						Trigger deployment
+					</Button>
+				</form>
+
+				<form
+					method="post"
+					action={`/api/cloudflare/${encodedName}/purge-cache`}
+					class="flex flex-col gap-3"
+				>
+					<div>
+						<p class="font-display text-sm font-semibold text-base-900">
+							Purge edge cache
+						</p>
+						<p class="mt-1 text-xs text-base-500">
+							Invalidate cached assets on every Cloudflare PoP.
+						</p>
+					</div>
+					<Button size="sm" variant="accent" type="submit">
+						Purge cache
+					</Button>
+				</form>
+
+				<form
+					method="post"
+					action={`/api/cloudflare/${encodedName}`}
+					onsubmit={`return confirm('Delete Cloudflare Pages project "${name}"? This removes every deployment and custom domain attached to it.')`}
+					class="flex flex-col gap-3"
+				>
+					<input type="hidden" name="_method" value="delete" />
+					<div>
+						<p class="font-display text-sm font-semibold text-base-900">
+							Delete project
+						</p>
+						<p class="mt-1 text-xs text-base-500">
+							Permanent. Removes all deployments, domains, and env vars.
+						</p>
+					</div>
+					<Button size="sm" variant="danger" type="submit">
+						Delete project
+					</Button>
+				</form>
+			</div>
+		</div>
+	</section>
+
+	<section class="mt-10 space-y-6">
+		<SectionHeader
+			kicker="Deployments"
+			title="Recent deployments"
+			description="Retry a failed build, roll back to the last healthy production deployment, or open the deployment preview."
+		/>
+		{deployments.length === 0 ? (
+			<EmptyListMessage message="No deployment recorded for this project yet." />
+		) : (
+			<div class="overflow-hidden rounded-2xl border border-base-100 bg-white shadow-subtle">
+				<ul class="divide-y divide-base-100">
+					{deployments.map((deployment) => (
+						<li class="flex flex-col gap-3 px-6 py-4 sm:flex-row sm:items-center sm:gap-4">
+							<div class="flex min-w-0 flex-1 items-center gap-4">
+								<StatusBadge
+									status={deploymentStatusToBadge[deployment.status]}
+									label={deployment.status}
+								/>
+								<div class="min-w-0">
+									<div class="flex flex-wrap items-center gap-2">
+										<span class="font-mono text-xs text-base-900">
+											{deployment.shortId}
+										</span>
+										<span class="font-mono text-[10px] uppercase tracking-wider text-base-500">
+											{deployment.environment}
+										</span>
+										{deployment.branch && (
+											<span class="font-mono text-[10px] uppercase tracking-wider text-base-500">
+												· {deployment.branch}
+											</span>
+										)}
+										{deployment.trigger && (
+											<span class="font-mono text-[10px] uppercase tracking-wider text-base-400">
+												· {deployment.trigger}
+											</span>
+										)}
+									</div>
+									{deployment.commitMessage && (
+										<p class="mt-1 truncate text-sm text-base-700">
+											{deployment.commitMessage}
+										</p>
+									)}
+									<p class="mt-1 font-mono text-[10px] text-base-500">
+										{formatRelativeTime(deployment.createdAt, nowMs)}
+										{deployment.author ? ` · ${deployment.author}` : ''}
+										{deployment.commitHash
+											? ` · ${deployment.commitHash.slice(0, 7)}`
+											: ''}
+									</p>
+								</div>
+							</div>
+
+							<div class="flex shrink-0 flex-wrap items-center gap-2">
+								{deployment.url && (
+									<a
+										class="inline-flex h-8 items-center justify-center rounded-full bg-base-50 px-4 text-xs font-medium text-base-950 transition-colors hover:bg-base-100"
+										href={deployment.url}
+										target="_blank"
+										rel="noreferrer"
+									>
+										Open ↗
+									</a>
+								)}
+								{deployment.status === 'failure' && (
+									<form
+										method="post"
+										action={`/api/cloudflare/${encodedName}/deployments/${deployment.id}/retry`}
+									>
+										<Button size="xs" variant="default" type="submit">
+											Retry
+										</Button>
+									</form>
+								)}
+								{rollbackCandidate?.id === deployment.id && (
+									<form
+										method="post"
+										action={`/api/cloudflare/${encodedName}/deployments/${deployment.id}/rollback`}
+										onsubmit={`return confirm('Roll production back to ${deployment.shortId}?')`}
+									>
+										<Button size="xs" variant="accent" type="submit">
+											Rollback here
+										</Button>
+									</form>
+								)}
+								<form
+									method="post"
+									action={`/api/cloudflare/${encodedName}/deployments/${deployment.id}`}
+									onsubmit={`return confirm('Delete deployment ${deployment.shortId}?')`}
+								>
+									<input type="hidden" name="_method" value="delete" />
+									<Button size="xs" variant="ghost" type="submit">
+										Delete
+									</Button>
+								</form>
+							</div>
+						</li>
+					))}
+				</ul>
+			</div>
+		)}
+	</section>
+
+	<section class="mt-10 space-y-6">
+		<SectionHeader
+			kicker="Domains"
+			title="Custom domains"
+			description="Attach a custom domain to this Pages project and manage its verification status."
+		/>
+		<div class="rounded-2xl border border-base-100 bg-white p-6 shadow-subtle">
+			<form
+				method="post"
+				action={`/api/cloudflare/${encodedName}/domains`}
+				class="flex flex-col gap-3 border-b border-base-100 pb-6 sm:flex-row sm:items-end"
+			>
+				<label class="flex min-w-0 flex-1 flex-col gap-1 text-xs text-base-600">
+					<span class="font-mono uppercase tracking-wider text-[10px] text-base-500">
+						Add domain
+					</span>
+					<input
+						name="domain"
+						type="text"
+						placeholder="www.example.com"
+						required
+						class="h-9 rounded-md border border-base-200 bg-white px-3 font-mono text-xs text-base-900 focus:border-base-900 focus:outline-2 focus:outline-offset-2 focus:outline-base-900"
+					/>
+				</label>
+				<Button size="sm" variant="default" type="submit">
+					Attach domain
+				</Button>
+			</form>
+
+			{domains.length === 0 ? (
+				<p class="mt-6 font-mono text-xs text-base-500 italic">
+					No custom domain attached yet.
+				</p>
+			) : (
+				<ul class="mt-4 divide-y divide-base-100">
+					{domains.map((domain) => (
+						<li class="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:gap-4">
+							<div class="flex min-w-0 flex-1 items-center gap-3">
+								<StatusBadge
+									status={domainStatusToBadge[domain.status]}
+									label={domain.status}
+								/>
+								<div class="min-w-0">
+									<p class="truncate font-mono text-sm text-accent-800">
+										{domain.name}
+									</p>
+									<p class="mt-0.5 font-mono text-[10px] text-base-500">
+										{domain.certificateAuthority ?? 'no certificate'}
+										{' · '}
+										{formatIsoDate(domain.createdAt)}
+									</p>
+									{domain.verificationData && (
+										<p class="mt-1 text-xs text-red-700">
+											{domain.verificationData}
+										</p>
+									)}
+								</div>
+							</div>
+							<div class="flex shrink-0 items-center gap-2">
+								<form
+									method="post"
+									action={`/api/cloudflare/${encodedName}/domains/${encodeURIComponent(domain.name)}/verify`}
+								>
+									<Button size="xs" variant="muted" type="submit">
+										Re-check DNS
+									</Button>
+								</form>
+								<form
+									method="post"
+									action={`/api/cloudflare/${encodedName}/domains/${encodeURIComponent(domain.name)}`}
+									onsubmit={`return confirm('Remove ${domain.name} from this project?')`}
+								>
+									<input type="hidden" name="_method" value="delete" />
+									<Button size="xs" variant="danger" type="submit">
+										Remove
+									</Button>
+								</form>
+							</div>
+						</li>
+					))}
+				</ul>
+			)}
+		</div>
+	</section>
+
+	<section class="mt-10 space-y-6">
+		<SectionHeader
+			kicker="Environment variables"
+			title="Build-time secrets"
+			description="Update a single environment variable for this project. Encrypted values can be rotated without exposing the current value."
+		/>
+		<div class="rounded-2xl border border-base-100 bg-white p-6 shadow-subtle">
+			<form
+				method="post"
+				action={`/api/cloudflare/${encodedName}/env`}
+				class="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-end"
+			>
+				<label class="flex flex-col gap-1 text-xs text-base-600">
+					<span class="font-mono uppercase tracking-wider text-[10px] text-base-500">
+						Name
+					</span>
+					<input
+						name="key"
+						type="text"
+						placeholder="API_URL"
+						required
+						pattern="[A-Za-z_][A-Za-z0-9_]*"
+						class="h-9 rounded-md border border-base-200 bg-white px-3 font-mono text-xs text-base-900 focus:border-base-900 focus:outline-2 focus:outline-offset-2 focus:outline-base-900"
+					/>
+				</label>
+				<label class="flex flex-col gap-1 text-xs text-base-600">
+					<span class="font-mono uppercase tracking-wider text-[10px] text-base-500">
+						Value
+					</span>
+					<input
+						name="value"
+						type="text"
+						placeholder="https://api.example.com"
+						required
+						class="h-9 rounded-md border border-base-200 bg-white px-3 font-mono text-xs text-base-900 focus:border-base-900 focus:outline-2 focus:outline-offset-2 focus:outline-base-900"
+					/>
+				</label>
+				<label class="flex flex-col gap-1 text-xs text-base-600">
+					<span class="font-mono uppercase tracking-wider text-[10px] text-base-500">
+						Scope
+					</span>
+					<select
+						name="environment"
+						class="h-9 rounded-md border border-base-200 bg-white px-3 font-mono text-xs text-base-900 focus:border-base-900 focus:outline-2 focus:outline-offset-2 focus:outline-base-900"
+					>
+						<option value="production" selected={identity.environment === 'production'}>
+							production
+						</option>
+						<option value="preview" selected={identity.environment !== 'production'}>
+							preview
+						</option>
+					</select>
+				</label>
+				<div class="flex items-center gap-2 text-xs text-base-600">
+					<input
+						id={`${name}-encrypt`}
+						name="encrypted"
+						type="checkbox"
+						value="1"
+						checked
+						class="size-4 rounded border-base-300"
+					/>
+					<label for={`${name}-encrypt`} class="font-mono uppercase tracking-wider text-[10px] text-base-500">
+						Encrypted
+					</label>
+				</div>
+				<div class="sm:col-span-4">
+					<Button size="sm" variant="default" type="submit">
+						Save variable
+					</Button>
+				</div>
+			</form>
+			<p class="mt-4 font-mono text-[10px] text-base-500">
+				Cloudflare does not expose decrypted values through the API; existing
+				secrets are managed in the Cloudflare dashboard.
+			</p>
+		</div>
+	</section>
+
+	<LoadStateBanner state={state} upstreamLabel="Cloudflare API error" />
+</DashboardLayout>

@@ -1,6 +1,5 @@
+import { resolveProjectIdentity } from '@/lib/domain/cloudflare/pages-environment.ts'
 import type { CloudflarePagesProject } from '@/lib/domain/cloudflare/pages-project.ts'
-
-const DEV_SUFFIX = '-dev'
 
 export interface CloudflarePagesProjectGroup {
 	readonly baseName: string
@@ -12,11 +11,6 @@ interface GroupAccumulator {
 	production: CloudflarePagesProject | null
 	development: CloudflarePagesProject | null
 }
-
-const isDevProjectName = (name: string): boolean => name.endsWith(DEV_SUFFIX)
-
-const stripDevSuffix = (name: string): string =>
-	name.slice(0, -DEV_SUFFIX.length)
 
 const emptyAccumulator = (): GroupAccumulator => ({
 	production: null,
@@ -40,10 +34,9 @@ export const groupPagesProjects = (
 	const groups = new Map<string, GroupAccumulator>()
 
 	for (const project of projects) {
-		const isDev = isDevProjectName(project.name)
-		const baseName = isDev ? stripDevSuffix(project.name) : project.name
+		const { baseName, environment } = resolveProjectIdentity(project.name)
 		const accumulator = groups.get(baseName) ?? emptyAccumulator()
-		if (isDev) accumulator.development = project
+		if (environment === 'development') accumulator.development = project
 		else accumulator.production = project
 		groups.set(baseName, accumulator)
 	}
