@@ -1,15 +1,12 @@
-import { defineConfig } from 'tsup'
+import baseConfig from '@nextnode-solutions/standards/tsdown'
+import { defineConfig } from 'tsdown'
 
 export default defineConfig({
+	...baseConfig,
 	entry: {
 		logger: 'src/logger.ts',
 		testing: 'src/testing/test-utils.ts',
 		'transports/http': 'src/transports/http.ts',
 	},
-	format: ['esm'],
 	dts: true,
-	treeshake: true,
-	clean: true,
-	target: 'es2023',
-	splitting: true,
 })

@@ -1,76 +1,76 @@
 {
-	"name": "@nextnode-solutions/logger",
-	"version": "2.0.0",
-	"description": "A lightweight, zero-dependency TypeScript logging library for NextNode projects with scope-based organization, environment-aware formatting, and pluggable transports",
-	"keywords": [
-		"browser",
-		"development",
-		"json",
-		"log-level",
-		"logger",
-		"logging",
-		"nextnode",
-		"nodejs",
-		"production",
-		"scope",
-		"structured-logging",
-		"transport",
-		"typescript",
-		"zero-dependency"
-	],
-	"license": "MIT",
-	"author": "NextNode Solutions",
-	"repository": {
-		"type": "git",
-		"url": "https://github.com/NextNodeSolutions/core.git",
-		"directory": "packages/logger"
-	},
-	"files": [
-		"CHANGELOG.md",
-		"README.md",
-		"dist"
-	],
-	"type": "module",
-	"sideEffects": false,
-	"exports": {
-		".": {
-			"types": "./dist/logger.d.ts",
-			"import": "./dist/logger.js"
-		},
-		"./testing": {
-			"types": "./dist/testing.d.ts",
-			"import": "./dist/testing.js"
-		},
-		"./transports/http": {
-			"types": "./dist/transports/http.d.ts",
-			"import": "./dist/transports/http.js"
-		}
-	},
-	"publishConfig": {
-		"access": "public"
-	},
-	"scripts": {
-		"build": "tsup",
-		"format": "oxfmt --write .",
-		"format:check": "oxfmt --check .",
-		"lint": "oxlint",
-		"test": "vitest run",
-		"test:coverage": "vitest run --coverage",
-		"test:watch": "vitest",
-		"type-check": "tsgo --noEmit"
-	},
-	"devDependencies": {
-		"@nextnode-solutions/standards": "workspace:*",
-		"@types/node": "^22",
-		"@typescript/native-preview": "7.0.0-dev.20260407.1",
-		"@vitest/coverage-v8": "^3",
-		"oxfmt": "^0.43.0",
-		"oxlint": "^1.58.0",
-		"tsup": "^8.5.1",
-		"vitest": "^3"
-	},
-	"engines": {
-		"node": ">=24.0.0"
-	},
-	"packageManager": "pnpm@10.11.0"
+  "name": "@nextnode-solutions/logger",
+  "version": "2.0.0",
+  "description": "A lightweight, zero-dependency TypeScript logging library for NextNode projects with scope-based organization, environment-aware formatting, and pluggable transports",
+  "keywords": [
+    "browser",
+    "development",
+    "json",
+    "log-level",
+    "logger",
+    "logging",
+    "nextnode",
+    "nodejs",
+    "production",
+    "scope",
+    "structured-logging",
+    "transport",
+    "typescript",
+    "zero-dependency"
+  ],
+  "license": "MIT",
+  "author": "NextNode Solutions",
+  "files": [
+    "CHANGELOG.md",
+    "README.md",
+    "dist"
+  ],
+  "repository": {
+    "directory": "packages/logger",
+    "type": "git",
+    "url": "https://github.com/NextNodeSolutions/core.git"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "lint": "oxlint",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "type-check": "tsgo --noEmit"
+  },
+  "devDependencies": {
+    "@nextnode-solutions/standards": "workspace:*",
+    "@types/node": "^22",
+    "@typescript/native-preview": "7.0.0-dev.20260407.1",
+    "@vitest/coverage-v8": "^3",
+    "oxfmt": "^0.43.0",
+    "oxlint": "^1.58.0",
+    "tsdown": "^0.21.9",
+    "vitest": "^3"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "packageManager": "pnpm@10.11.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/logger.d.ts",
+      "import": "./dist/logger.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js"
+    },
+    "./transports/http": {
+      "types": "./dist/transports/http.d.ts",
+      "import": "./dist/transports/http.js"
+    }
+  },
+  "sideEffects": false
 }
