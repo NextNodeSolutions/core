@@ -23,7 +23,7 @@
     "url": "https://github.com/NextNodeSolutions/core.git"
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --clean",
+    "build": "tsdown",
     "build:setup-script": "node scripts/build-setup-script.ts",
     "dev": "node src/index.ts",
     "format": "oxfmt --write .",
@@ -46,7 +46,7 @@
     "@typescript/native-preview": "7.0.0-dev.20260407.1",
     "oxfmt": "^0.43.0",
     "oxlint": "^1.58.0",
-    "tsup": "^8.0.0",
+    "tsdown": "^0.21.9",
     "vitest": "^3.0.0"
   },
   "engines": {
