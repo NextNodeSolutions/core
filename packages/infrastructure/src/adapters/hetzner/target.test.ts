@@ -4,10 +4,29 @@ import type {
 	TeardownResult,
 	VpsFullTeardownResult,
 } from '../../domain/deploy/teardown-result.ts'
+import { goldenImageFingerprint } from '../../domain/hetzner/golden-image.ts'
 
 import type { SshSession } from './ssh/session.types.ts'
 import type { HcloudProjectState } from './state/types.ts'
 import { HetznerVpsTarget } from './target.ts'
+
+const GOLDEN_IMAGE_ID = 7777
+const goldenImageFixture = (): {
+	readonly id: number
+	readonly description: string
+	readonly created: string
+	readonly status: string
+	readonly labels: Readonly<Record<string, string>>
+} => ({
+	id: GOLDEN_IMAGE_ID,
+	description: 'nextnode-base',
+	created: new Date().toISOString(),
+	status: 'available',
+	labels: {
+		managed_by: 'nextnode-golden-image',
+		infra_fingerprint: goldenImageFingerprint(),
+	},
+})
 
 function requireVpsScope(result: TeardownResult): VpsFullTeardownResult {
 	if (result.kind !== 'vps' || result.scope !== 'vps') {
@@ -18,8 +37,8 @@ function requireVpsScope(result: TeardownResult): VpsFullTeardownResult {
 	return result
 }
 
-// Mock hcloud-client (network boundary)
-vi.mock(import('./api/client.ts'), async importOriginal => {
+// Mock hcloud API (network boundary) - split per resource
+vi.mock(import('./api/server.ts'), async importOriginal => {
 	const actual = await importOriginal()
 	return {
 		...actual,
@@ -42,18 +61,32 @@ vi.mock(import('./api/client.ts'), async importOriginal => {
 			public_net: { ipv4: { ip: '1.2.3.4' } },
 		})),
 		findServersByLabels: vi.fn(async () => []),
-		findImagesByLabels: vi.fn(async () => []),
+		assertServerTypeAvailable: vi.fn(async () => undefined),
+		deleteServer: vi.fn(async () => undefined),
+	}
+})
+
+vi.mock(import('./api/firewall.ts'), async importOriginal => {
+	const actual = await importOriginal()
+	return {
+		...actual,
 		createFirewall: vi.fn(async () => ({
 			id: 99,
 			name: 'acme-web-fw',
 			appliedToCount: 0,
 		})),
 		applyFirewall: vi.fn(async () => undefined),
-		assertServerTypeAvailable: vi.fn(async () => undefined),
-		deleteServer: vi.fn(async () => undefined),
 		findFirewallsByName: vi.fn(async () => []),
 		findFirewallById: vi.fn(async () => null),
 		deleteFirewall: vi.fn(async () => undefined),
+	}
+})
+
+vi.mock(import('./api/image.ts'), async importOriginal => {
+	const actual = await importOriginal()
+	return {
+		...actual,
+		findImagesByLabels: vi.fn(async () => [goldenImageFixture()]),
 	}
 })
 
@@ -231,7 +264,7 @@ describe('HetznerVpsTarget', () => {
 
 			it('passes correct serverType and location to createServer', async () => {
 				const { createServer: mockedCreate } =
-					await import('./api/client.ts')
+					await import('./api/server.ts')
 
 				const target = new HetznerVpsTarget(TARGET_CONFIG)
 				await target.ensureInfra('acme-web')
@@ -245,22 +278,24 @@ describe('HetznerVpsTarget', () => {
 				)
 			})
 
-			it('uses debian-12 as the server image', async () => {
+			it('uses the latest golden image snapshot ID as the server image', async () => {
 				const { createServer: mockedCreate } =
-					await import('./api/client.ts')
+					await import('./api/server.ts')
 
 				const target = new HetznerVpsTarget(TARGET_CONFIG)
 				await target.ensureInfra('acme-web')
 
 				expect(mockedCreate).toHaveBeenCalledWith(
 					'hcloud-token',
-					expect.objectContaining({ image: 'debian-12' }),
+					expect.objectContaining({
+						image: String(GOLDEN_IMAGE_ID),
+					}),
 				)
 			})
 
 			it('passes project and managed_by labels', async () => {
 				const { createServer: mockedCreate } =
-					await import('./api/client.ts')
+					await import('./api/server.ts')
 
 				const target = new HetznerVpsTarget(TARGET_CONFIG)
 				await target.ensureInfra('acme-web')
@@ -275,7 +310,7 @@ describe('HetznerVpsTarget', () => {
 
 			it('checks for orphan servers before creating', async () => {
 				const { findServersByLabels: mockedFind } =
-					await import('./api/client.ts')
+					await import('./api/server.ts')
 
 				const target = new HetznerVpsTarget(TARGET_CONFIG)
 				await target.ensureInfra('acme-web')
@@ -288,7 +323,7 @@ describe('HetznerVpsTarget', () => {
 
 			it('throws on orphan server detection', async () => {
 				const { findServersByLabels: mockedFind } =
-					await import('./api/client.ts')
+					await import('./api/server.ts')
 				vi.mocked(mockedFind).mockResolvedValueOnce([
 					{
 						id: 99,
@@ -307,7 +342,7 @@ describe('HetznerVpsTarget', () => {
 
 			it('propagates errors from server creation', async () => {
 				const { createServer: mockedCreate } =
-					await import('./api/client.ts')
+					await import('./api/server.ts')
 				vi.mocked(mockedCreate).mockRejectedValueOnce(
 					new Error('Hetzner API create server: 422'),
 				)
@@ -321,7 +356,7 @@ describe('HetznerVpsTarget', () => {
 
 			it('propagates errors from firewall creation', async () => {
 				const { createFirewall: mockedFw } =
-					await import('./api/client.ts')
+					await import('./api/firewall.ts')
 				vi.mocked(mockedFw).mockRejectedValueOnce(
 					new Error('Hetzner API create firewall: 422'),
 				)
@@ -335,7 +370,7 @@ describe('HetznerVpsTarget', () => {
 
 			it('propagates errors from applying firewall', async () => {
 				const { applyFirewall: mockedApply } =
-					await import('./api/client.ts')
+					await import('./api/firewall.ts')
 				vi.mocked(mockedApply).mockRejectedValueOnce(
 					new Error('Hetzner API apply firewall: 500'),
 				)
@@ -349,10 +384,10 @@ describe('HetznerVpsTarget', () => {
 
 			it('writes created state before completing provisioning', async () => {
 				const { createServer: mockedCreate } =
-					await import('./api/client.ts')
+					await import('./api/server.ts')
 				// Make completeProvisioning fail to observe intermediate state
 				const { createFirewall: mockedFw } =
-					await import('./api/client.ts')
+					await import('./api/firewall.ts')
 				vi.mocked(mockedFw).mockRejectedValueOnce(
 					new Error('firewall fail'),
 				)
@@ -383,7 +418,7 @@ describe('HetznerVpsTarget', () => {
 		describe('resume from created', () => {
 			it('skips server creation and completes provisioning', async () => {
 				const { createServer: mockedCreate } =
-					await import('./api/client.ts')
+					await import('./api/server.ts')
 				seedState({
 					phase: 'created',
 					serverId: 42,
@@ -398,7 +433,7 @@ describe('HetznerVpsTarget', () => {
 
 			it('reality-checks the server still exists', async () => {
 				const { findServerById: mockedFind } =
-					await import('./api/client.ts')
+					await import('./api/server.ts')
 				seedState({
 					phase: 'created',
 					serverId: 42,
@@ -436,7 +471,7 @@ describe('HetznerVpsTarget', () => {
 		describe('resume from provisioned', () => {
 			it('skips server creation and provisioning, only converges', async () => {
 				const { createServer: mockedCreate } =
-					await import('./api/client.ts')
+					await import('./api/server.ts')
 				const { converge: mockedConverge } =
 					await import('../../cli/hetzner/converge.ts')
 				seedState({
@@ -478,7 +513,7 @@ describe('HetznerVpsTarget', () => {
 		describe('resume from converged', () => {
 			it('skips VPS creation when state is converged', async () => {
 				const { createServer: mockedCreate } =
-					await import('./api/client.ts')
+					await import('./api/server.ts')
 				seedState()
 
 				const target = new HetznerVpsTarget(TARGET_CONFIG)
@@ -518,9 +553,9 @@ describe('HetznerVpsTarget', () => {
 		describe('stale state recovery', () => {
 			it('wipes state and re-provisions when server is 404', async () => {
 				const { findServerById: mockedFind } =
-					await import('./api/client.ts')
+					await import('./api/server.ts')
 				const { createServer: mockedCreate } =
-					await import('./api/client.ts')
+					await import('./api/server.ts')
 				vi.mocked(mockedFind).mockResolvedValueOnce(null)
 				seedState()
 
@@ -884,16 +919,16 @@ describe('HetznerVpsTarget', () => {
 	describe('teardown', () => {
 		beforeEach(async () => {
 			const { findServerById: mockedFind } =
-				await import('./api/client.ts')
+				await import('./api/server.ts')
 			vi.mocked(mockedFind).mockResolvedValue(null)
 		})
 
 		it('deletes all resources when state exists', async () => {
 			seedState()
 			const { deleteServer: mockedDelete } =
-				await import('./api/client.ts')
+				await import('./api/server.ts')
 			const { findFirewallsByName: mockedFindFw } =
-				await import('./api/client.ts')
+				await import('./api/firewall.ts')
 			const { deleteTailnetDevicesByHostname: mockedTailscale } =
 				await import('../tailscale/oauth.ts')
 			vi.mocked(mockedFindFw).mockResolvedValueOnce([
@@ -935,9 +970,9 @@ describe('HetznerVpsTarget', () => {
 
 		it('deletes orphan servers found by labels when no state exists', async () => {
 			const { findServersByLabels: mockedFind } =
-				await import('./api/client.ts')
+				await import('./api/server.ts')
 			const { deleteServer: mockedDelete } =
-				await import('./api/client.ts')
+				await import('./api/server.ts')
 			vi.mocked(mockedFind).mockResolvedValueOnce([
 				{
 					id: 99,

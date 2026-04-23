@@ -5,19 +5,19 @@ import type {
 	ResourceOutcome,
 	VpsResourceOutcome,
 } from '../../../domain/deploy/resource-outcome.ts'
+import { goldenImageFingerprint } from '../../../domain/hetzner/golden-image.ts'
 import { VPS_MANAGED_RESOURCES } from '../../../domain/hetzner/managed-resources.ts'
+import { selectGoldenImage } from '../../../domain/hetzner/select-golden-image.ts'
 import type { R2Operations } from '../../r2/client.types.ts'
-import {
-	findImagesByLabels,
-	findServerById,
-	findServersByLabels,
-} from '../api/client.ts'
-import { PACKER_MANAGED_BY_LABEL } from '../constants.ts'
+import { findImagesByLabels } from '../api/image.ts'
+import { findServerById, findServersByLabels } from '../api/server.ts'
+import { GOLDEN_IMAGE_LABEL, GOLDEN_IMAGE_MAX_AGE_MS } from '../constants.ts'
 import { convergeVps } from '../converge-vps.ts'
 import { deleteState, writeState } from '../state/read-write.ts'
 import type { HcloudProjectState } from '../state/types.ts'
 import type { HetznerVpsTargetConfig } from '../target.ts'
 
+import { buildGoldenImage } from './build-golden-image.ts'
 import { completeProvisioning, createVps } from './create-vps.ts'
 
 /**
@@ -31,20 +31,30 @@ const DNS_PROVISION_OUTCOME: ResourceOutcome = {
 
 const logger = createLogger()
 
-async function findLatestGoldenImage(
-	token: string,
-): Promise<number | undefined> {
+async function ensureGoldenImage(token: string): Promise<number> {
+	const currentFingerprint = goldenImageFingerprint()
 	const snapshots = await findImagesByLabels(token, {
-		managed_by: PACKER_MANAGED_BY_LABEL,
+		managed_by: GOLDEN_IMAGE_LABEL,
 	})
-	if (snapshots.length === 0) return undefined
 
-	const sorted = snapshots.toSorted(
-		(a, b) => new Date(b.created).getTime() - new Date(a.created).getTime(),
+	const decision = selectGoldenImage({
+		images: snapshots,
+		currentFingerprint,
+		nowMs: Date.now(),
+		maxAgeMs: GOLDEN_IMAGE_MAX_AGE_MS,
+	})
+
+	if (decision.action === 'use') {
+		logger.info(`Using golden image: ${decision.reason}`)
+		return decision.imageId
+	}
+
+	logger.info(`Rebuilding golden image: ${decision.reason}`)
+	const built = await buildGoldenImage(token)
+	logger.info(
+		`Golden image built: snapshot ${built.snapshotId} (fingerprint ${built.fingerprint})`,
 	)
-	const latest = sorted[0]
-	if (!latest) return undefined
-	return latest.id
+	return built.snapshotId
 }
 
 export async function freshProvision(
@@ -54,14 +64,9 @@ export async function freshProvision(
 ): Promise<VpsResourceOutcome> {
 	await checkForOrphans(config.credentials.hcloudToken, projectName)
 
-	const goldenImageId = await findLatestGoldenImage(
+	const goldenImageId = await ensureGoldenImage(
 		config.credentials.hcloudToken,
 	)
-	if (goldenImageId !== undefined) {
-		logger.info(`Found golden image: snapshot ${goldenImageId}`)
-	} else {
-		logger.info('No golden image found, using base debian-12 image')
-	}
 
 	const {
 		serverId,

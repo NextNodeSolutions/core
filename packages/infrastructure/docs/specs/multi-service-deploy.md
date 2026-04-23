@@ -50,36 +50,36 @@ re-implement YAML merging.
 
 ## 4. Source-of-truth matrix
 
-| Concept                              | Owned by              | Notes                                                |
-| ------------------------------------ | --------------------- | ---------------------------------------------------- |
-| Services, images, volumes            | `compose.yaml`        | App-repo topology, portable, runnable locally        |
-| `depends_on`, healthchecks, networks | `compose.yaml`        | App-repo implementation detail                       |
-| Which service is public              | `compose.yaml` labels | Lives next to the service definition                 |
-| Public subdomain per service         | `compose.yaml` labels | Idem                                                 |
+| Concept                              | Owned by              | Notes                                                         |
+| ------------------------------------ | --------------------- | ------------------------------------------------------------- |
+| Services, images, volumes            | `compose.yaml`        | App-repo topology, portable, runnable locally                 |
+| `depends_on`, healthchecks, networks | `compose.yaml`        | App-repo implementation detail                                |
+| Which service is public              | `compose.yaml` labels | Lives next to the service definition                          |
+| Public subdomain per service         | `compose.yaml` labels | Idem                                                          |
 | Container listen port                | **auto-detected**     | Read from `image.Config.ExposedPorts`; label is override only |
-| Host ports                           | **none**              | Alt A: Caddy dials container IPs                     |
-| Project base domain                  | `nextnode.toml`       | DNS zone                                             |
-| Env / secrets                        | `nextnode.toml`       | Deploy-environment concern                           |
-| Silo / compose project name         | Infra (computed)      | `computeSilo(project, env)` — unchanged              |
-| DNS records, TLS, Caddy routes       | Infra                 | Unchanged ownership                                  |
+| Host ports                           | **none**              | Alt A: Caddy dials container IPs                              |
+| Project base domain                  | `nextnode.toml`       | DNS zone                                                      |
+| Env / secrets                        | `nextnode.toml`       | Deploy-environment concern                                    |
+| Silo / compose project name          | Infra (computed)      | `computeSilo(project, env)` — unchanged                       |
+| DNS records, TLS, Caddy routes       | Infra                 | Unchanged ownership                                           |
 
 ## 5. Expose labels — public contract
 
 ```yaml
 services:
-  grafana:
-    image: grafana/grafana
-    labels:
-      nextnode.expose: "true"
-      nextnode.expose.subdomain: "grafana"   # optional
-      nextnode.expose.port: "3000"           # optional escape hatch
+    grafana:
+        image: grafana/grafana
+        labels:
+            nextnode.expose: 'true'
+            nextnode.expose.subdomain: 'grafana' # optional
+            nextnode.expose.port: '3000' # optional escape hatch
 ```
 
-| Label                         | Required        | Default                              | Purpose                                   |
-| ----------------------------- | --------------- | ------------------------------------ | ----------------------------------------- |
-| `nextnode.expose`             | ✅ if public     | —                                    | Opt-in to public routing                  |
-| `nextnode.expose.subdomain`   | ❌               | (bare domain claim)                  | Hostname prefix                           |
-| `nextnode.expose.port`        | ❌               | auto-detected via `docker image inspect` | Override if image declares 0 or ≥2 ports |
+| Label                       | Required     | Default                                  | Purpose                                  |
+| --------------------------- | ------------ | ---------------------------------------- | ---------------------------------------- |
+| `nextnode.expose`           | ✅ if public | —                                        | Opt-in to public routing                 |
+| `nextnode.expose.subdomain` | ❌           | (bare domain claim)                      | Hostname prefix                          |
+| `nextnode.expose.port`      | ❌           | auto-detected via `docker image inspect` | Override if image declares 0 or ≥2 ports |
 
 ### 5.1 Hostname resolution
 
@@ -106,16 +106,16 @@ Rationale for `grafana.dev.<base>` over `dev.grafana.<base>`:
 
 ### 5.2 Validation rules (domain layer, fail loud)
 
-| Case                                            | Behavior                                                                 |
-| ----------------------------------------------- | ------------------------------------------------------------------------ |
-| 0 exposed services                              | OK — internal-only project (worker, cron). No DNS, no Caddy.            |
-| 1 exposed, no `subdomain`                       | Claims bare `domain`. ✅                                                  |
-| N exposed, ≤1 omits `subdomain`                 | That one wins bare; others prefixed. ✅                                   |
+| Case                                            | Behavior                                                                                           |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| 0 exposed services                              | OK — internal-only project (worker, cron). No DNS, no Caddy.                                       |
+| 1 exposed, no `subdomain`                       | Claims bare `domain`. ✅                                                                           |
+| N exposed, ≤1 omits `subdomain`                 | That one wins bare; others prefixed. ✅                                                            |
 | N exposed, ≥2 omit `subdomain`                  | ❌ Error: `services "x" and "y" both claim the bare domain; add nextnode.expose.subdomain to one.` |
-| Image declares 0 ports, no `expose.port` label | ❌ Error: `image "x" declares no EXPOSE ports, add nextnode.expose.port`   |
-| Image declares ≥2 ports, no `expose.port` label | ❌ Error: `image "x" exposes multiple ports (3000, 8443), specify nextnode.expose.port` |
-| Unknown `nextnode.*` label key                  | ⚠️ Warn (e.g. typo `nextnode.exposse`)                                    |
-| Service scaled > 1 (replicas)                   | ❌ Error: v1 supports 1 replica per exposed service                       |
+| Image declares 0 ports, no `expose.port` label  | ❌ Error: `image "x" declares no EXPOSE ports, add nextnode.expose.port`                           |
+| Image declares ≥2 ports, no `expose.port` label | ❌ Error: `image "x" exposes multiple ports (3000, 8443), specify nextnode.expose.port`            |
+| Unknown `nextnode.*` label key                  | ⚠️ Warn (e.g. typo `nextnode.exposse`)                                                             |
+| Service scaled > 1 (replicas)                   | ❌ Error: v1 supports 1 replica per exposed service                                                |
 
 ## 6. Port resolution (Alt A — dial container IPs)
 
@@ -154,8 +154,8 @@ config.
 
 ```ts
 export interface CaddyUpstream {
-  readonly hostname: string       // "grafana.monitoring.nextnode.fr"
-  readonly dial: string           // "172.22.0.5:3000"  (was "localhost:8080")
+	readonly hostname: string // "grafana.monitoring.nextnode.fr"
+	readonly dial: string // "172.22.0.5:3000"  (was "localhost:8080")
 }
 ```
 
@@ -207,35 +207,35 @@ infra CLI                        VPS (ssh)                         Caddy (system
 
 ### 8.1 New files
 
-| Path                                              | Layer   | Responsibility                                                  |
-| ------------------------------------------------- | ------- | --------------------------------------------------------------- |
-| `src/domain/hetzner/compose-labels.ts`            | domain  | Parse `nextnode.expose.*` from a compose.yaml tree              |
-| `src/domain/hetzner/expose-plan.ts`               | domain  | `ExposePlan = Array<{ service, subdomain, containerPort, hostname }>` + validation rules |
-| `src/domain/hetzner/compose-deploy-overlay.ts`    | domain  | Render overlay YAML (env_file + restart, NO ports)              |
-| `src/domain/hetzner/caddy-config-merge.ts`        | domain  | Merge N new routes for a silo into existing config.json, preserving other silos' routes |
-| `src/adapters/hetzner/image-inspect.ts`           | adapter | `inspectExposedPort(session, imageRef)` via `docker image inspect .Config.ExposedPorts` |
-| `src/adapters/hetzner/container-ip.ts`            | adapter | `inspectContainerIp(session, containerName, networkName)` with retry-until-healthy |
-| `src/adapters/hetzner/caddy-reload.ts`            | adapter | validate → backup → write → reload → healthcheck → rollback on failure |
+| Path                                           | Layer   | Responsibility                                                                           |
+| ---------------------------------------------- | ------- | ---------------------------------------------------------------------------------------- |
+| `src/domain/hetzner/compose-labels.ts`         | domain  | Parse `nextnode.expose.*` from a compose.yaml tree                                       |
+| `src/domain/hetzner/expose-plan.ts`            | domain  | `ExposePlan = Array<{ service, subdomain, containerPort, hostname }>` + validation rules |
+| `src/domain/hetzner/compose-deploy-overlay.ts` | domain  | Render overlay YAML (env_file + restart, NO ports)                                       |
+| `src/domain/hetzner/caddy-config-merge.ts`     | domain  | Merge N new routes for a silo into existing config.json, preserving other silos' routes  |
+| `src/adapters/hetzner/image-inspect.ts`        | adapter | `inspectExposedPort(session, imageRef)` via `docker image inspect .Config.ExposedPorts`  |
+| `src/adapters/hetzner/container-ip.ts`         | adapter | `inspectContainerIp(session, containerName, networkName)` with retry-until-healthy       |
+| `src/adapters/hetzner/caddy-reload.ts`         | adapter | validate → backup → write → reload → healthcheck → rollback on failure                   |
 
 ### 8.2 Modified files
 
-| Path                                         | Change                                                          |
-| -------------------------------------------- | --------------------------------------------------------------- |
-| `src/adapters/hetzner/deploy-container.ts`   | Pull → inspect image ports → render overlay → up → inspect IPs → update Caddy |
-| `src/domain/hetzner/caddy-config.ts`         | `CaddyUpstream.dial` doc update (IP:port, not localhost:port)  |
-| `src/domain/cloudflare/dns-records.ts`       | Support N records per project (one per exposed hostname)        |
-| `src/adapters/cloudflare/pages-dns.ts`       | Iterate over N records                                          |
-| `src/adapters/hetzner/teardown-project.ts`   | Remove Caddy routes **before** `docker compose down`            |
-| `src/domain/hetzner/cloud-init.ts`           | Add `/etc/docker/daemon.json` with enlarged `default-address-pools` |
-| `src/domain/hetzner/systemd-units.ts`        | Add `After=docker.service` + `Requires=docker.service` to Caddy unit |
-| `src/config/schema.ts`                       | (no change to `project.domain`; may add optional `[deploy]` block later) |
+| Path                                       | Change                                                                        |
+| ------------------------------------------ | ----------------------------------------------------------------------------- |
+| `src/adapters/hetzner/deploy-container.ts` | Pull → inspect image ports → render overlay → up → inspect IPs → update Caddy |
+| `src/domain/hetzner/caddy-config.ts`       | `CaddyUpstream.dial` doc update (IP:port, not localhost:port)                 |
+| `src/domain/cloudflare/dns-records.ts`     | Support N records per project (one per exposed hostname)                      |
+| `src/adapters/cloudflare/pages-dns.ts`     | Iterate over N records                                                        |
+| `src/adapters/hetzner/teardown-project.ts` | Remove Caddy routes **before** `docker compose down`                          |
+| `src/domain/hetzner/cloud-init.ts`         | Add `/etc/docker/daemon.json` with enlarged `default-address-pools`           |
+| `src/domain/hetzner/systemd-units.ts`      | Add `After=docker.service` + `Requires=docker.service` to Caddy unit          |
+| `src/config/schema.ts`                     | (no change to `project.domain`; may add optional `[deploy]` block later)      |
 
 ### 8.3 Deleted files
 
-| Path                                        | Reason                                                                   |
-| ------------------------------------------- | ------------------------------------------------------------------------ |
-| `src/domain/hetzner/compose-file.ts`        | Replaced by `compose-deploy-overlay.ts` — no more full compose generation |
-| `src/domain/hetzner/compose-file.test.ts`   | Tests move to the new overlay module                                     |
+| Path                                      | Reason                                                                    |
+| ----------------------------------------- | ------------------------------------------------------------------------- |
+| `src/domain/hetzner/compose-file.ts`      | Replaced by `compose-deploy-overlay.ts` — no more full compose generation |
+| `src/domain/hetzner/compose-file.test.ts` | Tests move to the new overlay module                                      |
 
 All port allocation code (`CONTAINER_PORT`, `HOST_PORT_BASE`, `ENV_PORT_OFFSET`,
 `computeHostPort`) is removed.
@@ -267,31 +267,31 @@ into the design:
 
 ### Critical (must fix before merge)
 
-| ID  | Scenario                                   | Mitigation                                                          |
-| --- | ------------------------------------------ | ------------------------------------------------------------------- |
-| E1  | Container IP changes after `up -d`         | Order: `up --wait` → `inspect` → `caddy reload`. Skip reload if IPs match. |
-| E2  | Caddy starts before Docker at boot         | `After=docker.service` + `Requires=docker.service` + boot-reconcile service |
-| E3  | Container healthy but service not ready    | Enforce `healthcheck` in compose for exposed services; post-reload `curl` probe |
-| E4  | Concurrent deploys on same project         | ETag lock in R2 state per project                                   |
+| ID  | Scenario                                | Mitigation                                                                      |
+| --- | --------------------------------------- | ------------------------------------------------------------------------------- |
+| E1  | Container IP changes after `up -d`      | Order: `up --wait` → `inspect` → `caddy reload`. Skip reload if IPs match.      |
+| E2  | Caddy starts before Docker at boot      | `After=docker.service` + `Requires=docker.service` + boot-reconcile service     |
+| E3  | Container healthy but service not ready | Enforce `healthcheck` in compose for exposed services; post-reload `curl` probe |
+| E4  | Concurrent deploys on same project      | ETag lock in R2 state per project                                               |
 
 ### Important
 
-| ID  | Scenario                                   | Mitigation                                                          |
-| --- | ------------------------------------------ | ------------------------------------------------------------------- |
-| E5  | Subnet collision > 30 projects             | `default-address-pools`: `172.17.0.0/12` with `size: 24` (4096 nets)|
-| E6  | Teardown leaves dangling Caddy entries     | Remove routes **before** `docker compose down`; weekly reconcile cron |
-| E7  | Label typos silently ignored               | Warn on unknown `nextnode.*`; fail on unknown `nextnode.expose.*` suffix |
-| E8  | Service scaled > 1 (replicas)              | Fail loud at parse; v1 = 1 replica per exposed service              |
-| E9  | Malformed Caddy config crashes reload      | `caddy validate` before write; `config.json.bak` rollback           |
+| ID  | Scenario                               | Mitigation                                                               |
+| --- | -------------------------------------- | ------------------------------------------------------------------------ |
+| E5  | Subnet collision > 30 projects         | `default-address-pools`: `172.17.0.0/12` with `size: 24` (4096 nets)     |
+| E6  | Teardown leaves dangling Caddy entries | Remove routes **before** `docker compose down`; weekly reconcile cron    |
+| E7  | Label typos silently ignored           | Warn on unknown `nextnode.*`; fail on unknown `nextnode.expose.*` suffix |
+| E8  | Service scaled > 1 (replicas)          | Fail loud at parse; v1 = 1 replica per exposed service                   |
+| E9  | Malformed Caddy config crashes reload  | `caddy validate` before write; `config.json.bak` rollback                |
 
 ### Minor (acceptable in v1)
 
-| ID  | Scenario                                   | Mitigation                                                          |
-| --- | ------------------------------------------ | ------------------------------------------------------------------- |
-| E10 | IP changes on Docker daemon restart        | Covered by boot-reconcile service (E2)                              |
-| E11 | In-flight requests during Caddy reload     | Accept — Caddy reload is atomic for new conns; in-flight finish with old upstream |
-| E12 | Container exposes 0 or ≥2 ports ambiguous  | Covered by `image-inspect.ts` fail-loud rules                       |
-| E13 | Service on multiple networks (custom+ext)  | Always pick `<silo>_default`; fail loud if missing                  |
+| ID  | Scenario                                  | Mitigation                                                                        |
+| --- | ----------------------------------------- | --------------------------------------------------------------------------------- |
+| E10 | IP changes on Docker daemon restart       | Covered by boot-reconcile service (E2)                                            |
+| E11 | In-flight requests during Caddy reload    | Accept — Caddy reload is atomic for new conns; in-flight finish with old upstream |
+| E12 | Container exposes 0 or ≥2 ports ambiguous | Covered by `image-inspect.ts` fail-loud rules                                     |
+| E13 | Service on multiple networks (custom+ext) | Always pick `<silo>_default`; fail loud if missing                                |
 
 ## 11. Rollout plan
 
@@ -344,36 +344,50 @@ Criteria for done: monitoring stack (grafana + alertmanager + prometheus + victo
 
 ```yaml
 services:
-  grafana:
-    image: grafana/grafana:latest
-    depends_on: [victorialogs, prometheus]
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/health"]
-      interval: 10s
-      retries: 5
-    labels:
-      nextnode.expose: "true"
-      nextnode.expose.subdomain: "grafana"
+    grafana:
+        image: grafana/grafana:latest
+        depends_on: [victorialogs, prometheus]
+        healthcheck:
+            test:
+                [
+                    'CMD',
+                    'wget',
+                    '-q',
+                    '--spider',
+                    'http://localhost:3000/api/health',
+                ]
+            interval: 10s
+            retries: 5
+        labels:
+            nextnode.expose: 'true'
+            nextnode.expose.subdomain: 'grafana'
 
-  alertmanager:
-    image: prom/alertmanager:latest
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9093/-/ready"]
-    labels:
-      nextnode.expose: "true"
-      nextnode.expose.subdomain: "alerts"
+    alertmanager:
+        image: prom/alertmanager:latest
+        healthcheck:
+            test:
+                [
+                    'CMD',
+                    'wget',
+                    '-q',
+                    '--spider',
+                    'http://localhost:9093/-/ready',
+                ]
+        labels:
+            nextnode.expose: 'true'
+            nextnode.expose.subdomain: 'alerts'
 
-  prometheus:
-    image: prom/prometheus:latest
-    volumes: ["prometheus-data:/prometheus"]
+    prometheus:
+        image: prom/prometheus:latest
+        volumes: ['prometheus-data:/prometheus']
 
-  victorialogs:
-    image: victoriametrics/victoria-logs:latest
-    volumes: ["vl-data:/victoria-logs-data"]
+    victorialogs:
+        image: victoriametrics/victoria-logs:latest
+        volumes: ['vl-data:/victoria-logs-data']
 
 volumes:
-  prometheus-data:
-  vl-data:
+    prometheus-data:
+    vl-data:
 ```
 
 ### `nextnode.toml` (app repo)
@@ -393,12 +407,12 @@ LOG_LEVEL = "info"
 
 ### Result in production
 
-| Hostname                         | Container            | Container IP  | Container port |
-| -------------------------------- | -------------------- | ------------- | -------------- |
-| `grafana.monitoring.nextnode.fr` | `monitoring-prod-grafana-1`      | 172.22.0.5    | 3000           |
-| `alerts.monitoring.nextnode.fr`  | `monitoring-prod-alertmanager-1` | 172.22.0.6    | 9093           |
-| — (internal)                     | `monitoring-prod-prometheus-1`   | 172.22.0.7    | 9090           |
-| — (internal)                     | `monitoring-prod-victorialogs-1` | 172.22.0.8    | 9428           |
+| Hostname                         | Container                        | Container IP | Container port |
+| -------------------------------- | -------------------------------- | ------------ | -------------- |
+| `grafana.monitoring.nextnode.fr` | `monitoring-prod-grafana-1`      | 172.22.0.5   | 3000           |
+| `alerts.monitoring.nextnode.fr`  | `monitoring-prod-alertmanager-1` | 172.22.0.6   | 9093           |
+| — (internal)                     | `monitoring-prod-prometheus-1`   | 172.22.0.7   | 9090           |
+| — (internal)                     | `monitoring-prod-victorialogs-1` | 172.22.0.8   | 9428           |
 
 Grafana talks to Prometheus via the compose network using the service name:
 `http://prometheus:9090`. No public exposure.

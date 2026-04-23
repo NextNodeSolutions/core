@@ -9,12 +9,14 @@ import { deleteTailnetDevicesByHostname } from '../tailscale/oauth.ts'
 
 import {
 	deleteFirewall,
-	deleteServer,
 	findFirewallById,
 	findFirewallsByName,
+} from './api/firewall.ts'
+import {
+	deleteServer,
 	findServerById,
 	findServersByLabels,
-} from './api/client.ts'
+} from './api/server.ts'
 import { MAX_POLL_ATTEMPTS, POLL_INTERVAL_MS } from './constants.ts'
 import { deleteState, readState } from './state/read-write.ts'
 import { waitUntil } from './wait.ts'

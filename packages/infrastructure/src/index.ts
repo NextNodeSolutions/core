@@ -8,7 +8,7 @@ import { seoGuardCommand } from './cli/deploy/seo-guard.command.ts'
 import { teardownGuardCommand } from './cli/deploy/teardown-guard.command.ts'
 import { teardownCommand } from './cli/deploy/teardown.command.ts'
 import { requireEnv } from './cli/env.ts'
-import { buildBaseImageCommand } from './cli/hetzner/build-base-image.command.ts'
+import { buildGoldenImageCommand } from './cli/hetzner/build-golden-image.command.ts'
 import { planCommand } from './cli/pipeline/plan.command.ts'
 import { prodGateCommand } from './cli/pipeline/prod-gate.command.ts'
 import { publishResultCommand } from './cli/pipeline/publish-result.command.ts'
@@ -39,7 +39,7 @@ const STANDALONE_COMMANDS: Record<string, StandaloneCommand> = {
 	'prod-gate': prodGateCommand,
 	'publish-result': publishResultCommand,
 	'compute-image-ref': computeImageRefCommand,
-	'build-base-image': buildBaseImageCommand,
+	'build-golden-image': buildGoldenImageCommand,
 }
 
 const ALL_COMMAND_NAMES = [

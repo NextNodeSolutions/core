@@ -15,3 +15,11 @@ export async function requireOk(
 	const body = await response.text()
 	throw new Error(`Hetzner API ${context}: ${response.status} — ${body}`)
 }
+
+export function formatLabelSelector(
+	labels: Readonly<Record<string, string>>,
+): string {
+	return Object.entries(labels)
+		.map(([k, v]) => `${k}=${v}`)
+		.join(',')
+}

@@ -2,26 +2,21 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 import type { HetznerVpsDeploySection } from '../../../config/types.ts'
 import type { ResourceOutcome } from '../../../domain/deploy/resource-outcome.ts'
-import {
-	renderCloudInit,
-	renderProjectCloudInit,
-} from '../../../domain/hetzner/cloud-init.ts'
+import { renderProjectCloudInit } from '../../../domain/hetzner/cloud-init.ts'
 import { computeFirewallRules } from '../../../domain/hetzner/firewall-rules.ts'
 import {
 	deleteTailnetDevicesByHostname,
 	getTailnetIpByHostname,
 	mintAuthkey,
 } from '../../tailscale/oauth.ts'
-import type { CreateServerInput } from '../api/client.ts'
+import { applyFirewall, createFirewall } from '../api/firewall.ts'
+import type { CreateServerInput } from '../api/server.ts'
 import {
-	applyFirewall,
 	assertServerTypeAvailable,
-	createFirewall,
 	createServer,
 	describeServer,
-} from '../api/client.ts'
+} from '../api/server.ts'
 import {
-	HCLOUD_IMAGE,
 	MAX_POLL_ATTEMPTS,
 	POLL_INTERVAL_MS,
 	TAILSCALE_AUTHKEY_TTL_SECONDS,
@@ -44,7 +39,7 @@ export interface CreateVpsInput {
 	readonly projectName: string
 	readonly hetzner: HetznerVpsDeploySection['hetzner']
 	readonly internal: boolean
-	readonly goldenImageId: number | undefined
+	readonly goldenImageId: number
 }
 
 export interface CreateVpsResult {
@@ -98,30 +93,22 @@ export async function createVps(
 		`Minted ephemeral Tailscale authkey for "${input.projectName}" (expires ${minted.expires})`,
 	)
 
-	const cloudInitInput = {
+	const cloudInit = renderProjectCloudInit({
 		tailscaleAuthKey: minted.key,
 		tailscaleHostname: input.projectName,
 		deployPublicKey: credentials.deployPublicKey,
 		internal: input.internal,
-	}
+	})
 
-	const useGoldenImage = input.goldenImageId !== undefined
-	const cloudInit = useGoldenImage
-		? renderProjectCloudInit(cloudInitInput)
-		: renderCloudInit(cloudInitInput)
-	const image = useGoldenImage ? input.goldenImageId.toString() : HCLOUD_IMAGE
-
-	if (useGoldenImage) {
-		logger.info(
-			`Using golden image ${input.goldenImageId} for "${input.projectName}"`,
-		)
-	}
+	logger.info(
+		`Using golden image ${input.goldenImageId} for "${input.projectName}"`,
+	)
 
 	const serverInput: CreateServerInput = {
 		name: input.projectName,
 		serverType: input.hetzner.serverType,
 		location: input.hetzner.location,
-		image,
+		image: input.goldenImageId.toString(),
 		userData: cloudInit,
 		labels: { project: input.projectName, managed_by: 'nextnode' },
 	}
