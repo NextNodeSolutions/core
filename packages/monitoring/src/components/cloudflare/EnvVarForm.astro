@@ -1,0 +1,103 @@
+---
+import Button from '@/components/foundations/Button.astro'
+import SectionHeader from '@/components/dashboard/SectionHeader.astro'
+import type { CloudflarePagesEnvironment } from '@/lib/domain/cloudflare/pages-environment.ts'
+import { cloudflareApiPath } from '@/lib/domain/cloudflare/pages-routes.ts'
+
+interface Props {
+	projectName: string
+	environment: CloudflarePagesEnvironment
+}
+
+const { projectName, environment } = Astro.props
+const encryptCheckboxId = `${projectName}-encrypt`
+---
+
+<section class="mt-10 space-y-6">
+	<SectionHeader
+		kicker="Environment variables"
+		title="Build-time secrets"
+		description="Update a single environment variable for this project. Encrypted values can be rotated without exposing the current value."
+	/>
+	<div class="rounded-2xl border border-base-100 bg-white p-6 shadow-subtle">
+		<form
+			method="post"
+			action={cloudflareApiPath(projectName, 'env')}
+			class="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-end"
+		>
+			<label class="flex flex-col gap-1 text-xs text-base-600">
+				<span
+					class="font-mono uppercase tracking-wider text-[10px] text-base-500"
+				>
+					Name
+				</span>
+				<input
+					name="key"
+					type="text"
+					placeholder="API_URL"
+					required
+					pattern="[A-Za-z_][A-Za-z0-9_]*"
+					class="h-9 rounded-md border border-base-200 bg-white px-3 font-mono text-xs text-base-900 focus:border-base-900 focus:outline-2 focus:outline-offset-2 focus:outline-base-900"
+				/>
+			</label>
+			<label class="flex flex-col gap-1 text-xs text-base-600">
+				<span
+					class="font-mono uppercase tracking-wider text-[10px] text-base-500"
+				>
+					Value
+				</span>
+				<input
+					name="value"
+					type="text"
+					placeholder="https://api.example.com"
+					required
+					class="h-9 rounded-md border border-base-200 bg-white px-3 font-mono text-xs text-base-900 focus:border-base-900 focus:outline-2 focus:outline-offset-2 focus:outline-base-900"
+				/>
+			</label>
+			<label class="flex flex-col gap-1 text-xs text-base-600">
+				<span
+					class="font-mono uppercase tracking-wider text-[10px] text-base-500"
+				>
+					Scope
+				</span>
+				<select
+					name="environment"
+					class="h-9 rounded-md border border-base-200 bg-white px-3 font-mono text-xs text-base-900 focus:border-base-900 focus:outline-2 focus:outline-offset-2 focus:outline-base-900"
+				>
+					<option
+						value="production"
+						selected={environment === 'production'}>production</option
+					>
+					<option
+						value="preview"
+						selected={environment === 'development'}>preview</option
+					>
+				</select>
+			</label>
+			<div class="flex items-center gap-2 text-xs text-base-600">
+				<input
+					id={encryptCheckboxId}
+					name="encrypted"
+					type="checkbox"
+					value="1"
+					checked
+					class="size-4 rounded border-base-300"
+				/>
+				<label
+					for={encryptCheckboxId}
+					class="font-mono uppercase tracking-wider text-[10px] text-base-500"
+					>Encrypted</label
+				>
+			</div>
+			<div class="sm:col-span-4">
+				<Button size="sm" variant="default" type="submit">
+					Save variable
+				</Button>
+			</div>
+		</form>
+		<p class="mt-4 font-mono text-[10px] text-base-500">
+			Cloudflare does not expose decrypted values through the API; existing
+			secrets are managed in the Cloudflare dashboard.
+		</p>
+	</div>
+</section>

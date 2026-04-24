@@ -1,6 +1,7 @@
 ---
 import type { CloudflarePagesProject } from '@/lib/domain/cloudflare/pages-project.ts'
 import type { CloudflarePagesProjectGroup } from '@/lib/domain/cloudflare/project-group.ts'
+import { formatIsoDate } from '@/lib/domain/relative-time.ts'
 
 interface Props {
 	group: CloudflarePagesProjectGroup
@@ -29,10 +30,6 @@ const rows: ReadonlyArray<EnvironmentRow> = [
 		badgeClasses: 'border-base-100 bg-base-50 text-base-700',
 	},
 ]
-
-const primaryDomain = (project: CloudflarePagesProject): string =>
-	project.domains.find((domain) => domain !== project.subdomain) ??
-	project.subdomain
 ---
 
 <article
@@ -68,10 +65,6 @@ const primaryDomain = (project: CloudflarePagesProject): string =>
 							</span>
 
 							<span class="min-w-0 flex-1 truncate font-mono text-sm font-medium text-accent-800">
-								{primaryDomain(row.project)}
-							</span>
-
-							<span class="hidden font-mono text-xs text-base-500 sm:inline truncate max-w-[14rem]">
 								{row.project.subdomain}
 							</span>
 
@@ -80,7 +73,7 @@ const primaryDomain = (project: CloudflarePagesProject): string =>
 							</span>
 
 							<span class="hidden font-mono text-xs text-base-400 md:inline">
-								{row.project.createdAt.slice(0, 10)}
+								{formatIsoDate(row.project.createdAt)}
 							</span>
 
 							<span

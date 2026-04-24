@@ -1,0 +1,27 @@
+---
+import StatCard from '@/components/dashboard/StatCard.astro'
+import type { CloudflarePagesProject } from '@/lib/domain/cloudflare/pages-project.ts'
+import { formatIsoDate } from '@/lib/domain/relative-time.ts'
+
+interface Props {
+	project: CloudflarePagesProject
+	domainCount: number
+}
+
+const { project, domainCount } = Astro.props
+---
+
+<section class="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+	<StatCard label="Subdomain" value={project.subdomain} />
+	<StatCard label="Production branch" value={project.productionBranch} />
+	<StatCard
+		label="Custom domains"
+		value={String(domainCount)}
+		hint={domainCount === 0 ? 'None attached' : undefined}
+	/>
+	<StatCard
+		label="Created"
+		value={formatIsoDate(project.createdAt)}
+		hint="Project age"
+	/>
+</section>

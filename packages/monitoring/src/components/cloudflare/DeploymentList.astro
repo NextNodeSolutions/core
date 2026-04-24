@@ -1,0 +1,41 @@
+---
+import DeploymentItem from '@/components/cloudflare/DeploymentItem.astro'
+import EmptyListMessage from '@/components/dashboard/EmptyListMessage.astro'
+import SectionHeader from '@/components/dashboard/SectionHeader.astro'
+import type { CloudflarePagesDeployment } from '@/lib/domain/cloudflare/pages-deployment.ts'
+
+interface Props {
+	projectName: string
+	deployments: ReadonlyArray<CloudflarePagesDeployment>
+	rollbackCandidateId: string | null
+	nowMs: number
+}
+
+const { projectName, deployments, rollbackCandidateId, nowMs } = Astro.props
+---
+
+<section class="mt-10 space-y-6">
+	<SectionHeader
+		kicker="Deployments"
+		title="Recent deployments"
+		description="Retry a failed build, roll back to the last healthy production deployment, or open the deployment preview."
+	/>
+	{
+		deployments.length === 0 ? (
+			<EmptyListMessage message="No deployment recorded for this project yet." />
+		) : (
+			<div class="overflow-hidden rounded-2xl border border-base-100 bg-white shadow-subtle">
+				<ul class="divide-y divide-base-100">
+					{deployments.map(deployment => (
+						<DeploymentItem
+							projectName={projectName}
+							deployment={deployment}
+							isRollbackCandidate={deployment.id === rollbackCandidateId}
+							nowMs={nowMs}
+						/>
+					))}
+				</ul>
+			</div>
+		)
+	}
+</section>

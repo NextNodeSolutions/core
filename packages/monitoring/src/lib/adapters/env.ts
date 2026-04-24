@@ -1,3 +1,5 @@
+import { getSecret } from 'astro:env/server'
+
 export const ENV_KEYS = {
 	CLOUDFLARE_API_TOKEN: 'CLOUDFLARE_API_TOKEN',
 	CLOUDFLARE_ACCOUNT_ID: 'CLOUDFLARE_ACCOUNT_ID',
@@ -12,7 +14,7 @@ export class MissingEnvError extends Error {
 }
 
 export const getEnv = (name: string): string | undefined => {
-	const value = process.env[name]
+	const value = getSecret(name)
 	return value && value.length > 0 ? value : undefined
 }
 

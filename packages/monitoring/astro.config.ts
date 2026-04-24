@@ -2,6 +2,8 @@ import node from '@astrojs/node'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'astro/config'
 
+import { envSchema } from './src/config/env.schema.ts'
+
 export default defineConfig({
 	output: 'server',
 	adapter: node({ mode: 'standalone' }),
@@ -10,6 +12,7 @@ export default defineConfig({
 		port: Number(process.env.PORT ?? 4321),
 	},
 	site: process.env.SITE_URL,
+	env: { schema: envSchema },
 	vite: {
 		plugins: [tailwindcss()],
 	},

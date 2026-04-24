@@ -1,0 +1,85 @@
+---
+import Button from '@/components/foundations/Button.astro'
+import SectionHeader from '@/components/dashboard/SectionHeader.astro'
+import type { CloudflarePagesEnvironment } from '@/lib/domain/cloudflare/pages-environment.ts'
+import { cloudflareApiPath } from '@/lib/domain/cloudflare/pages-routes.ts'
+
+interface Props {
+	projectName: string
+	environment: CloudflarePagesEnvironment
+	productionBranch: string | null
+}
+
+const { projectName, environment, productionBranch } = Astro.props
+
+const branchDescription =
+	environment === 'production'
+		? (productionBranch ?? 'the production branch')
+		: 'the development branch'
+
+const deleteConfirmation = `Delete Cloudflare Pages project "${projectName}"? This removes every deployment and custom domain attached to it.`
+---
+
+<section class="mt-10 space-y-6">
+	<SectionHeader
+		kicker="Actions"
+		title="Project controls"
+		description="Trigger a deployment, purge the edge cache, or delete the project. Destructive actions require confirmation."
+	/>
+	<div class="rounded-2xl border border-base-100 bg-white p-6 shadow-subtle">
+		<div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+			<form
+				method="post"
+				action={cloudflareApiPath(projectName, 'deployments')}
+				class="flex flex-col gap-3"
+			>
+				<div>
+					<p class="font-display text-sm font-semibold text-base-900">
+						Trigger deployment
+					</p>
+					<p class="mt-1 text-xs text-base-500">
+						Start a new build of {branchDescription}.
+					</p>
+				</div>
+				<input type="hidden" name="environment" value={environment} />
+				<Button size="sm" variant="default" type="submit">
+					Trigger deployment
+				</Button>
+			</form>
+
+			<form
+				method="post"
+				action={cloudflareApiPath(projectName, 'purge-cache')}
+				class="flex flex-col gap-3"
+			>
+				<div>
+					<p class="font-display text-sm font-semibold text-base-900">
+						Purge edge cache
+					</p>
+					<p class="mt-1 text-xs text-base-500">
+						Invalidate cached assets on every Cloudflare PoP.
+					</p>
+				</div>
+				<Button size="sm" variant="accent" type="submit">Purge cache</Button>
+			</form>
+
+			<form
+				method="post"
+				action={cloudflareApiPath(projectName)}
+				onsubmit={`return confirm(${JSON.stringify(deleteConfirmation)})`}
+				class="flex flex-col gap-3"
+			>
+				<input type="hidden" name="_method" value="delete" />
+				<div>
+					<p class="font-display text-sm font-semibold text-base-900">
+						Delete project
+					</p>
+					<p class="mt-1 text-xs text-base-500">
+						Permanent. Removes all deployments, domains, and env vars.
+					</p>
+				</div>
+				<Button size="sm" variant="danger" type="submit">Delete project</Button>
+			</form>
+		</div>
+	</div>
+</section>

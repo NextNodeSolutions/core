@@ -1,13 +1,18 @@
-export type VpsStatus =
-	| 'initializing'
-	| 'starting'
-	| 'running'
-	| 'stopping'
-	| 'off'
-	| 'deleting'
-	| 'migrating'
-	| 'rebuilding'
-	| 'unknown'
+import { parseStringUnion } from '@/lib/domain/parse-string-union.ts'
+
+export const VPS_STATUSES = [
+	'initializing',
+	'starting',
+	'running',
+	'stopping',
+	'off',
+	'deleting',
+	'migrating',
+	'rebuilding',
+	'unknown',
+] as const
+
+export type VpsStatus = (typeof VPS_STATUSES)[number]
 
 export interface HetznerVps {
 	readonly id: number
@@ -20,17 +25,5 @@ export interface HetznerVps {
 	readonly labels: Readonly<Record<string, string>>
 }
 
-const VPS_STATUS_VALUES: ReadonlyArray<VpsStatus> = [
-	'initializing',
-	'starting',
-	'running',
-	'stopping',
-	'off',
-	'deleting',
-	'migrating',
-	'rebuilding',
-	'unknown',
-]
-
-export const parseVpsStatus = (raw: string): VpsStatus =>
-	VPS_STATUS_VALUES.find(status => status === raw) ?? 'unknown'
+export const parseVpsStatus = (value: unknown): VpsStatus =>
+	parseStringUnion(value, VPS_STATUSES, 'unknown')

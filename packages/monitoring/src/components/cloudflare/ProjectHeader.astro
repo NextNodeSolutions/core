@@ -1,0 +1,65 @@
+---
+import Button from '@/components/foundations/Button.astro'
+import StatusBadge from '@/components/dashboard/StatusBadge.astro'
+import { environmentLabel } from '@/lib/domain/cloudflare/pages-environment.ts'
+import type { CloudflarePagesEnvironment } from '@/lib/domain/cloudflare/pages-environment.ts'
+import type { ProjectHealth } from '@/lib/domain/cloudflare/pages-project-health.ts'
+
+interface Props {
+	name: string
+	environment: CloudflarePagesEnvironment
+	subdomain: string | null
+	dashboardUrl: string | null
+	health: ProjectHealth
+}
+
+const { name, environment, subdomain, dashboardUrl, health } = Astro.props
+
+const envBadgeClass =
+	environment === 'production'
+		? 'border-accent-200 bg-accent-50 text-accent-900'
+		: 'border-base-200 bg-base-50 text-base-700'
+---
+
+<header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+	<div class="min-w-0">
+		<p class="font-mono text-[10px] uppercase tracking-wider text-base-500">
+			Cloudflare Pages
+		</p>
+		<h1
+			class="mt-2 flex items-center gap-3 font-display text-3xl font-semibold tracking-tight text-base-900"
+		>
+			<span class="truncate">{name}</span>
+			<span
+				class:list={[
+					'inline-flex shrink-0 items-center rounded-full border px-3 py-0.5 font-mono text-[10px] uppercase tracking-wider',
+					envBadgeClass,
+				]}
+			>
+				{environmentLabel(environment)}
+			</span>
+		</h1>
+		{
+			subdomain && (
+				<p class="mt-2 font-mono text-sm text-accent-800">{subdomain}</p>
+			)
+		}
+	</div>
+	<div class="flex shrink-0 items-center gap-3">
+		<StatusBadge status={health.status} label={health.label} />
+		{
+			dashboardUrl && (
+				<Button
+					isLink
+					variant="muted"
+					size="sm"
+					href={dashboardUrl}
+					target="_blank"
+					rel="noreferrer"
+				>
+					Open in Cloudflare ↗
+				</Button>
+			)
+		}
+	</div>
+</header>

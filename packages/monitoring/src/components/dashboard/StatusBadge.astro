@@ -1,29 +1,29 @@
 ---
-type Status = 'healthy' | 'degraded' | 'down' | 'unknown'
+import type { BadgeStatus } from '@/lib/domain/badge-status.ts'
 
 interface Props {
-	status: Status
+	status: BadgeStatus
 	label?: string
 	class?: string
 }
 
 const { status, label, class: className = '' } = Astro.props
 
-const STATUS_LABELS: Record<Status, string> = {
+const STATUS_LABELS: Record<BadgeStatus, string> = {
 	healthy: 'Healthy',
 	degraded: 'Degraded',
 	down: 'Down',
 	unknown: 'Unknown',
 }
 
-const dotByStatus: Record<Status, string> = {
+const dotByStatus: Record<BadgeStatus, string> = {
 	healthy: 'bg-accent-700 shadow-[0_0_0_3px_rgba(6,78,59,0.12)]',
 	degraded: 'bg-amber-500 shadow-[0_0_0_3px_rgba(245,158,11,0.15)]',
 	down: 'bg-red-500 shadow-[0_0_0_3px_rgba(239,68,68,0.15)]',
 	unknown: 'bg-base-400 shadow-[0_0_0_3px_rgba(148,163,184,0.15)]',
 }
 
-const textByStatus: Record<Status, string> = {
+const textByStatus: Record<BadgeStatus, string> = {
 	healthy: 'text-accent-900',
 	degraded: 'text-amber-900',
 	down: 'text-red-900',

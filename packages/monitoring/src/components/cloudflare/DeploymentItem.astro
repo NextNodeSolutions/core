@@ -1,0 +1,126 @@
+---
+import Button from '@/components/foundations/Button.astro'
+import StatusBadge from '@/components/dashboard/StatusBadge.astro'
+import {
+	DEPLOYMENT_BADGE_STATUS,
+	GIT_SHORT_HASH_LENGTH,
+} from '@/lib/domain/cloudflare/pages-deployment.ts'
+import type { CloudflarePagesDeployment } from '@/lib/domain/cloudflare/pages-deployment.ts'
+import { cloudflareApiPath } from '@/lib/domain/cloudflare/pages-routes.ts'
+import { formatRelativeTime } from '@/lib/domain/relative-time.ts'
+
+interface Props {
+	projectName: string
+	deployment: CloudflarePagesDeployment
+	isRollbackCandidate: boolean
+	nowMs: number
+}
+
+const { projectName, deployment, isRollbackCandidate, nowMs } = Astro.props
+
+const rollbackConfirmation = `Roll production back to ${deployment.shortId}?`
+const deleteConfirmation = `Delete deployment ${deployment.shortId}?`
+
+const metaParts = [
+	formatRelativeTime(deployment.createdAt, nowMs),
+	deployment.author,
+	deployment.commitHash?.slice(0, GIT_SHORT_HASH_LENGTH) ?? null,
+].filter((part): part is string => part !== null && part !== '')
+---
+
+<li class="flex flex-col gap-3 px-6 py-4 sm:flex-row sm:items-center sm:gap-4">
+	<div class="flex min-w-0 flex-1 items-center gap-4">
+		<StatusBadge
+			status={DEPLOYMENT_BADGE_STATUS[deployment.status]}
+			label={deployment.status}
+		/>
+		<div class="min-w-0">
+			<div class="flex flex-wrap items-center gap-2">
+				<span class="font-mono text-xs text-base-900">
+					{deployment.shortId}
+				</span>
+				<span
+					class="font-mono text-[10px] uppercase tracking-wider text-base-500"
+				>
+					{deployment.environment}
+				</span>
+				{
+					deployment.branch && (
+						<span class="font-mono text-[10px] uppercase tracking-wider text-base-500">
+							· {deployment.branch}
+						</span>
+					)
+				}
+				{
+					deployment.trigger && (
+						<span class="font-mono text-[10px] uppercase tracking-wider text-base-400">
+							· {deployment.trigger}
+						</span>
+					)
+				}
+			</div>
+			{
+				deployment.commitMessage && (
+					<p class="mt-1 truncate text-sm text-base-700">
+						{deployment.commitMessage}
+					</p>
+				)
+			}
+			<p
+				class="mt-1 font-mono text-[10px] text-base-500 [&>span+span]:before:mr-1.5 [&>span+span]:before:content-['·']"
+			>
+				{metaParts.map(part => <span>{part}</span>)}
+			</p>
+		</div>
+	</div>
+
+	<div class="flex shrink-0 flex-wrap items-center gap-2">
+		{
+			deployment.url && (
+				<Button
+					isLink
+					variant="muted"
+					size="xs"
+					href={deployment.url}
+					target="_blank"
+					rel="noreferrer"
+				>
+					Open ↗
+				</Button>
+			)
+		}
+		{
+			deployment.status === 'failure' && (
+				<form
+					method="post"
+					action={cloudflareApiPath(projectName, 'deployments', deployment.id, 'retry')}
+				>
+					<Button size="xs" variant="default" type="submit">
+						Retry
+					</Button>
+				</form>
+			)
+		}
+		{
+			isRollbackCandidate && (
+				<form
+					method="post"
+					action={cloudflareApiPath(projectName, 'deployments', deployment.id, 'rollback')}
+					onsubmit={`return confirm(${JSON.stringify(rollbackConfirmation)})`}
+				>
+					<Button size="xs" variant="accent" type="submit">
+						Rollback here
+					</Button>
+				</form>
+			)
+		}
+		<form
+			method="post"
+			action={cloudflareApiPath(projectName, 'deployments', deployment.id)}
+			onsubmit={`return confirm(${JSON.stringify(deleteConfirmation)})`}
+		>
+			<input type="hidden" name="_method" value="delete" />
+			<Button size="xs" variant="ghost" type="submit">Delete</Button>
+		</form>
+	</div>
+</li>

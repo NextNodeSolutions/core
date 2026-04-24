@@ -4,19 +4,19 @@ import EmptyListMessage from '@/components/dashboard/EmptyListMessage.astro'
 import LoadStateBanner from '@/components/dashboard/LoadStateBanner.astro'
 import SectionHeader from '@/components/dashboard/SectionHeader.astro'
 import DashboardLayout from '@/layouts/DashboardLayout.astro'
-import { resolveAccountId } from '@/lib/adapters/cloudflare/accounts.ts'
-import { listPagesProjects } from '@/lib/adapters/cloudflare/pages-projects.ts'
-import { ENV_KEYS, getEnv, requireEnv } from '@/lib/adapters/env.ts'
+import { resolveCloudflareClient } from '@/lib/adapters/cloudflare/accounts.ts'
+import {
+	listPagesProjects,
+	PAGES_PROJECTS_MAX_PER_PAGE,
+} from '@/lib/adapters/cloudflare/pages-projects.ts'
 import { loadPageState } from '@/lib/adapters/load-page-state.ts'
 import { groupPagesProjects } from '@/lib/domain/cloudflare/project-group.ts'
 
 export const prerender = false
 
 const state = await loadPageState('cloudflare.projects.page', async () => {
-	const token = requireEnv(ENV_KEYS.CLOUDFLARE_API_TOKEN)
-	const accountId =
-		getEnv(ENV_KEYS.CLOUDFLARE_ACCOUNT_ID) ?? (await resolveAccountId(token))
-	return listPagesProjects(accountId, token)
+	const client = await resolveCloudflareClient()
+	return listPagesProjects({ client, perPage: PAGES_PROJECTS_MAX_PER_PAGE })
 })
 
 const groups = state.kind === 'ok' ? groupPagesProjects(state.data) : []
