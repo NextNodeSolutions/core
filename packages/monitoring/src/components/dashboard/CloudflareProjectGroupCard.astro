@@ -1,6 +1,8 @@
 ---
-import type { CloudflarePagesProject } from '@/lib/domain/cloudflare/pages-project.ts'
-import type { CloudflarePagesProjectGroup } from '@/lib/domain/cloudflare/project-group.ts'
+import type {
+	CloudflarePagesProjectEntry,
+	CloudflarePagesProjectGroup,
+} from '@/lib/domain/cloudflare/project-group.ts'
 import { formatIsoDate } from '@/lib/domain/relative-time.ts'
 
 interface Props {
@@ -12,7 +14,7 @@ const { group } = Astro.props
 interface EnvironmentRow {
 	readonly key: 'production' | 'development'
 	readonly label: string
-	readonly project: CloudflarePagesProject | null
+	readonly entry: CloudflarePagesProjectEntry | null
 	readonly badgeClasses: string
 }
 
@@ -20,13 +22,13 @@ const rows: ReadonlyArray<EnvironmentRow> = [
 	{
 		key: 'production',
 		label: 'Prod',
-		project: group.production,
+		entry: group.production,
 		badgeClasses: 'border-accent-200 bg-accent-50 text-accent-900',
 	},
 	{
 		key: 'development',
 		label: 'Dev',
-		project: group.development,
+		entry: group.development,
 		badgeClasses: 'border-base-100 bg-base-50 text-base-700',
 	},
 ]
@@ -49,10 +51,10 @@ const rows: ReadonlyArray<EnvironmentRow> = [
 	<ul class="divide-y divide-base-100">
 		{
 			rows.map((row) =>
-				row.project ? (
+				row.entry ? (
 					<li>
 						<a
-							href={`/cloudflare/${row.project.name}`}
+							href={`/cloudflare/${row.entry.name}`}
 							class="group flex items-center gap-4 px-6 py-3.5 transition-colors hover:bg-base-50"
 						>
 							<span
@@ -65,15 +67,15 @@ const rows: ReadonlyArray<EnvironmentRow> = [
 							</span>
 
 							<span class="min-w-0 flex-1 truncate font-mono text-sm font-medium text-accent-800">
-								{row.project.subdomain}
+								{row.entry.primaryDomain ?? row.entry.subdomain}
 							</span>
 
 							<span class="hidden font-mono text-xs text-base-500 md:inline">
-								{row.project.productionBranch}
+								{row.entry.productionBranch}
 							</span>
 
 							<span class="hidden font-mono text-xs text-base-400 md:inline">
-								{formatIsoDate(row.project.createdAt)}
+								{formatIsoDate(row.entry.createdAt)}
 							</span>
 
 							<span

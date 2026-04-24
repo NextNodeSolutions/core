@@ -1,39 +1,43 @@
 import { describe, expect, it } from 'vitest'
 
-import type { CloudflarePagesProject } from '@/lib/domain/cloudflare/pages-project.ts'
+import type { CloudflarePagesProjectEntry } from '@/lib/domain/cloudflare/project-group.ts'
 import { groupPagesProjects } from '@/lib/domain/cloudflare/project-group.ts'
 
-const project = (name: string): CloudflarePagesProject => ({
+const entry = (
+	name: string,
+	primaryDomain: string | null = null,
+): CloudflarePagesProjectEntry => ({
 	name,
 	subdomain: `${name}.pages.dev`,
 	productionBranch: 'main',
 	createdAt: '2026-01-01T00:00:00Z',
+	primaryDomain,
 })
 
 describe('groupPagesProjects', () => {
-	it('returns an empty list when given no projects', () => {
+	it('returns an empty list when given no entries', () => {
 		expect(groupPagesProjects([])).toEqual([])
 	})
 
-	it('pairs a production project with its matching development project', () => {
-		const prod = project('myapp')
-		const dev = project('myapp-dev')
+	it('pairs a production entry with its matching development entry', () => {
+		const prod = entry('myapp', 'myapp.example.com')
+		const dev = entry('myapp-dev')
 
 		expect(groupPagesProjects([prod, dev])).toEqual([
 			{ baseName: 'myapp', production: prod, development: dev },
 		])
 	})
 
-	it('keeps a production-only project as a single group with no development', () => {
-		const prod = project('myapp')
+	it('keeps a production-only entry as a single group with no development', () => {
+		const prod = entry('myapp')
 
 		expect(groupPagesProjects([prod])).toEqual([
 			{ baseName: 'myapp', production: prod, development: null },
 		])
 	})
 
-	it('keeps an orphan dev project under its stripped base name', () => {
-		const dev = project('myapp-dev')
+	it('keeps an orphan dev entry under its stripped base name', () => {
+		const dev = entry('myapp-dev')
 
 		expect(groupPagesProjects([dev])).toEqual([
 			{ baseName: 'myapp', production: null, development: dev },
@@ -41,9 +45,9 @@ describe('groupPagesProjects', () => {
 	})
 
 	it('sorts groups alphabetically by base name regardless of input order', () => {
-		const zeta = project('zeta')
-		const alpha = project('alpha')
-		const alphaDev = project('alpha-dev')
+		const zeta = entry('zeta')
+		const alpha = entry('alpha')
+		const alphaDev = entry('alpha-dev')
 
 		const groups = groupPagesProjects([zeta, alphaDev, alpha])
 
@@ -51,10 +55,20 @@ describe('groupPagesProjects', () => {
 	})
 
 	it('does not strip a non-suffix substring containing "dev"', () => {
-		const devops = project('devops')
+		const devops = entry('devops')
 
 		expect(groupPagesProjects([devops])).toEqual([
 			{ baseName: 'devops', production: devops, development: null },
 		])
+	})
+
+	it('preserves primaryDomain on each entry', () => {
+		const prod = entry('myapp', 'www.myapp.com')
+		const dev = entry('myapp-dev', null)
+
+		const [group] = groupPagesProjects([prod, dev])
+
+		expect(group?.production?.primaryDomain).toBe('www.myapp.com')
+		expect(group?.development?.primaryDomain).toBeNull()
 	})
 })

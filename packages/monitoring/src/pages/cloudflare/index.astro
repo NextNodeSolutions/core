@@ -5,7 +5,7 @@ import LoadStateBanner from '@/components/dashboard/LoadStateBanner.astro'
 import SectionHeader from '@/components/dashboard/SectionHeader.astro'
 import DashboardLayout from '@/layouts/DashboardLayout.astro'
 import { resolveCloudflareClient } from '@/lib/adapters/cloudflare/accounts.ts'
-import { listPagesProjects } from '@/lib/adapters/cloudflare/pages-projects.ts'
+import { listPagesEntries } from '@/lib/adapters/cloudflare/list-pages-entries.ts'
 import { loadPageState } from '@/lib/adapters/load-page-state.ts'
 import { groupPagesProjects } from '@/lib/domain/cloudflare/project-group.ts'
 
@@ -13,7 +13,7 @@ export const prerender = false
 
 const state = await loadPageState('cloudflare.projects.page', async () => {
 	const client = await resolveCloudflareClient()
-	return listPagesProjects({ client })
+	return listPagesEntries({ client })
 })
 
 const groups = state.kind === 'ok' ? groupPagesProjects(state.data) : []

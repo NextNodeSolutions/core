@@ -1,15 +1,19 @@
 import { resolveProjectIdentity } from '@/lib/domain/cloudflare/pages-environment.ts'
 import type { CloudflarePagesProject } from '@/lib/domain/cloudflare/pages-project.ts'
 
+export interface CloudflarePagesProjectEntry extends CloudflarePagesProject {
+	readonly primaryDomain: string | null
+}
+
 export interface CloudflarePagesProjectGroup {
 	readonly baseName: string
-	readonly production: CloudflarePagesProject | null
-	readonly development: CloudflarePagesProject | null
+	readonly production: CloudflarePagesProjectEntry | null
+	readonly development: CloudflarePagesProjectEntry | null
 }
 
 interface GroupAccumulator {
-	production: CloudflarePagesProject | null
-	development: CloudflarePagesProject | null
+	production: CloudflarePagesProjectEntry | null
+	development: CloudflarePagesProjectEntry | null
 }
 
 const emptyAccumulator = (): GroupAccumulator => ({
@@ -18,7 +22,7 @@ const emptyAccumulator = (): GroupAccumulator => ({
 })
 
 /**
- * Group flat Cloudflare Pages projects by their logical project name.
+ * Group flat Cloudflare Pages entries by their logical project name.
  *
  * NextNode deploys each environment as a distinct Pages project (Cloudflare
  * has no native env split): `{name}` for production and `{name}-dev` for
@@ -29,15 +33,15 @@ const emptyAccumulator = (): GroupAccumulator => ({
  * under their base name with `production = null` so they remain visible.
  */
 export const groupPagesProjects = (
-	projects: ReadonlyArray<CloudflarePagesProject>,
+	entries: ReadonlyArray<CloudflarePagesProjectEntry>,
 ): ReadonlyArray<CloudflarePagesProjectGroup> => {
 	const groups = new Map<string, GroupAccumulator>()
 
-	for (const project of projects) {
-		const { baseName, environment } = resolveProjectIdentity(project.name)
+	for (const entry of entries) {
+		const { baseName, environment } = resolveProjectIdentity(entry.name)
 		const accumulator = groups.get(baseName) ?? emptyAccumulator()
-		if (environment === 'development') accumulator.development = project
-		else accumulator.production = project
+		if (environment === 'development') accumulator.development = entry
+		else accumulator.production = entry
 		groups.set(baseName, accumulator)
 	}
 
