@@ -5,10 +5,7 @@ import LoadStateBanner from '@/components/dashboard/LoadStateBanner.astro'
 import SectionHeader from '@/components/dashboard/SectionHeader.astro'
 import DashboardLayout from '@/layouts/DashboardLayout.astro'
 import { resolveCloudflareClient } from '@/lib/adapters/cloudflare/accounts.ts'
-import {
-	listPagesProjects,
-	PAGES_PROJECTS_MAX_PER_PAGE,
-} from '@/lib/adapters/cloudflare/pages-projects.ts'
+import { listPagesProjects } from '@/lib/adapters/cloudflare/pages-projects.ts'
 import { loadPageState } from '@/lib/adapters/load-page-state.ts'
 import { groupPagesProjects } from '@/lib/domain/cloudflare/project-group.ts'
 
@@ -16,7 +13,7 @@ export const prerender = false
 
 const state = await loadPageState('cloudflare.projects.page', async () => {
 	const client = await resolveCloudflareClient()
-	return listPagesProjects({ client, perPage: PAGES_PROJECTS_MAX_PER_PAGE })
+	return listPagesProjects({ client })
 })
 
 const groups = state.kind === 'ok' ? groupPagesProjects(state.data) : []

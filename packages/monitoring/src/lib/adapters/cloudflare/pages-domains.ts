@@ -1,12 +1,14 @@
-import {
-	cloudflareGet,
-	extractArrayResult,
-} from '@/lib/adapters/cloudflare/client.ts'
+import { listAll } from '@/lib/adapters/cloudflare/client.ts'
 import type { CloudflareClient } from '@/lib/adapters/cloudflare/client.ts'
 import { parseCloudflarePagesDomainStatus } from '@/lib/domain/cloudflare/pages-domain.ts'
 import type { CloudflarePagesDomain } from '@/lib/domain/cloudflare/pages-domain.ts'
 import { isRecord } from '@/lib/domain/is-record.ts'
 import { parseStringOrNull } from '@/lib/domain/parse-string.ts'
+
+// Cloudflare rejects per_page > 25 on /pages/projects/:name/domains with error
+// 8000024 ("Invalid list options provided"). Undocumented cap — used as the
+// chunk size for auto-pagination.
+const PAGES_DOMAINS_MAX_PER_PAGE = 25
 
 const parseVerificationData = (value: unknown): string | null => {
 	if (!isRecord(value)) return null
@@ -37,23 +39,18 @@ const parsePagesDomain = (
 export interface ListPagesDomainsOptions {
 	readonly client: CloudflareClient
 	readonly projectName: string
-	readonly perPage: number
-	readonly page?: number
 }
 
 export const listPagesDomains = async ({
 	client,
 	projectName,
-	perPage,
-	page,
 }: ListPagesDomainsOptions): Promise<ReadonlyArray<CloudflarePagesDomain>> => {
 	const context = `Cloudflare Pages domains for "${projectName}"`
-	const data = await cloudflareGet(
+	const raw = await listAll(
 		`/accounts/${client.accountId}/pages/projects/${encodeURIComponent(projectName)}/domains`,
 		client.token,
 		context,
-		{ per_page: perPage, page },
+		PAGES_DOMAINS_MAX_PER_PAGE,
 	)
-	const result = extractArrayResult(data, context)
-	return result.map(parsePagesDomain)
+	return raw.map(parsePagesDomain)
 }

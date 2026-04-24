@@ -1,7 +1,4 @@
-import {
-	cloudflareGet,
-	extractArrayResult,
-} from '@/lib/adapters/cloudflare/client.ts'
+import { apiGet, extractArrayResult } from '@/lib/adapters/cloudflare/client.ts'
 import type { CloudflareClient } from '@/lib/adapters/cloudflare/client.ts'
 import {
 	parseCloudflarePagesDeploymentEnvironment,
@@ -108,24 +105,25 @@ const parsePagesDeployment = (
 export interface ListPagesDeploymentsOptions {
 	readonly client: CloudflareClient
 	readonly projectName: string
-	readonly perPage: number
-	readonly page?: number
+	readonly limit: number
 }
 
+// Cloudflare returns deployments newest-first; the dashboard only ever needs a
+// bounded "recent deployments" slice, so this fetches page 1 with `per_page =
+// limit` rather than auto-paginating the full history.
 export const listPagesDeployments = async ({
 	client,
 	projectName,
-	perPage,
-	page,
+	limit,
 }: ListPagesDeploymentsOptions): Promise<
 	ReadonlyArray<CloudflarePagesDeployment>
 > => {
 	const context = `Cloudflare Pages deployments for "${projectName}"`
-	const data = await cloudflareGet(
+	const data = await apiGet(
 		`/accounts/${client.accountId}/pages/projects/${encodeURIComponent(projectName)}/deployments`,
 		client.token,
 		context,
-		{ per_page: perPage, page },
+		{ per_page: limit },
 	)
 	const result = extractArrayResult(data, context)
 	return result.map(parsePagesDeployment)

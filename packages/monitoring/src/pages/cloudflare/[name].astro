@@ -17,8 +17,7 @@ import { resolveProjectIdentity } from '@/lib/domain/cloudflare/pages-environmen
 import { computeProjectHealth } from '@/lib/domain/cloudflare/pages-project-health.ts'
 import { buildCloudflareDashboardUrl } from '@/lib/domain/cloudflare/pages-routes.ts'
 
-const RECENT_DEPLOYMENTS_PER_PAGE = 20
-const DOMAINS_PER_PAGE = 25
+const RECENT_DEPLOYMENTS_LIMIT = 20
 
 export const prerender = false
 
@@ -37,13 +36,9 @@ const state = await loadPageState(`cloudflare.projects.${name}.page`, async () =
 		listPagesDeployments({
 			client,
 			projectName: name,
-			perPage: RECENT_DEPLOYMENTS_PER_PAGE,
+			limit: RECENT_DEPLOYMENTS_LIMIT,
 		}),
-		listPagesDomains({
-			client,
-			projectName: name,
-			perPage: DOMAINS_PER_PAGE,
-		}),
+		listPagesDomains({ client, projectName: name }),
 	])
 	return { accountId: client.accountId, project, deployments, domains }
 })

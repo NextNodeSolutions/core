@@ -1,7 +1,4 @@
-import {
-	cloudflareGet,
-	extractArrayResult,
-} from '@/lib/adapters/cloudflare/client.ts'
+import { apiGet, extractArrayResult } from '@/lib/adapters/cloudflare/client.ts'
 import type { CloudflareClient } from '@/lib/adapters/cloudflare/client.ts'
 import { ENV_KEYS, getEnv, requireEnv } from '@/lib/adapters/env.ts'
 import { isRecord } from '@/lib/domain/is-record.ts'
@@ -10,7 +7,7 @@ import { isRecord } from '@/lib/domain/is-record.ts'
 // CLOUDFLARE_ACCOUNT_ID set explicitly to avoid picking the wrong one.
 export const resolveAccountId = async (token: string): Promise<string> => {
 	const context = 'Cloudflare accounts list'
-	const data = await cloudflareGet('/accounts', token, context)
+	const data = await apiGet('/accounts', token, context)
 	const result = extractArrayResult(data, context)
 	if (result.length === 0) {
 		throw new Error(

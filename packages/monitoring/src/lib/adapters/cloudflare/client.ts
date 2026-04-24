@@ -47,7 +47,7 @@ const parseApiError = (item: unknown): CloudflareApiError => {
 const formatErrors = (errors: ReadonlyArray<CloudflareApiError>): string =>
 	errors.map(err => `[${String(err.code)}] ${err.message}`).join('; ')
 
-export const buildCloudflareUrl = (
+const buildUrl = (
 	path: string,
 	query?: Record<string, string | number | undefined>,
 ): string => {
@@ -60,13 +60,13 @@ export const buildCloudflareUrl = (
 	return url.toString()
 }
 
-export const cloudflareGet = async (
+export const apiGet = async (
 	path: string,
 	token: string,
 	context: string,
 	query?: Record<string, string | number | undefined>,
 ): Promise<unknown> => {
-	const response = await fetch(buildCloudflareUrl(path, query), {
+	const response = await fetch(buildUrl(path, query), {
 		headers: authHeaders(token),
 	})
 	const data: unknown = await response.json()
@@ -105,4 +105,56 @@ export const extractObjectResult = (
 		throw new Error(`${context}: \`result\` must be an object`)
 	}
 	return data.result
+}
+
+const extractTotalPages = (data: unknown, context: string): number => {
+	if (!isRecord(data) || !isRecord(data.result_info)) {
+		throw new Error(
+			`${context}: missing \`result_info\` — endpoint did not return pagination metadata`,
+		)
+	}
+	const total = data.result_info.total_pages
+	if (typeof total !== 'number' || total < 1) {
+		throw new Error(
+			`${context}: invalid \`result_info.total_pages\` (got ${String(total)})`,
+		)
+	}
+	return total
+}
+
+/**
+ * Fetch every page of a paginated Cloudflare list endpoint and return the
+ * concatenated array. Callers pass the endpoint's maximum `per_page` as the
+ * chunk size — Cloudflare Pages endpoints enforce undocumented caps (see each
+ * adapter for the measured value), so auto-pagination here is the only way to
+ * surface the full data set without silent truncation.
+ */
+export const listAll = async (
+	path: string,
+	token: string,
+	context: string,
+	perPage: number,
+): Promise<ReadonlyArray<unknown>> => {
+	const fetchPage = async (
+		page: number,
+	): Promise<{ items: ReadonlyArray<unknown>; totalPages: number }> => {
+		const data = await apiGet(path, token, context, {
+			per_page: perPage,
+			page,
+		})
+		return {
+			items: extractArrayResult(data, context),
+			totalPages: extractTotalPages(data, context),
+		}
+	}
+	const first = await fetchPage(1)
+	if (first.totalPages <= 1) return first.items
+	const pending: Array<
+		Promise<{ items: ReadonlyArray<unknown>; totalPages: number }>
+	> = []
+	for (let page = 2; page <= first.totalPages; page++) {
+		pending.push(fetchPage(page))
+	}
+	const rest = await Promise.all(pending)
+	return [...first.items, ...rest.flatMap(page => page.items)]
 }
