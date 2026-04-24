@@ -1,7 +1,6 @@
 ---
 import DeploymentList from '@/components/cloudflare/DeploymentList.astro'
-import DomainList from '@/components/cloudflare/DomainList.astro'
-import EnvVarForm from '@/components/cloudflare/EnvVarForm.astro'
+import DeploymentTail from '@/components/cloudflare/DeploymentTail.astro'
 import ProjectActions from '@/components/cloudflare/ProjectActions.astro'
 import ProjectHeader from '@/components/cloudflare/ProjectHeader.astro'
 import ProjectStatsGrid from '@/components/cloudflare/ProjectStatsGrid.astro'
@@ -9,7 +8,6 @@ import LoadStateBanner from '@/components/dashboard/LoadStateBanner.astro'
 import DashboardLayout from '@/layouts/DashboardLayout.astro'
 import { resolveCloudflareClient } from '@/lib/adapters/cloudflare/accounts.ts'
 import { listPagesDeployments } from '@/lib/adapters/cloudflare/pages-deployments.ts'
-import { listPagesDomains } from '@/lib/adapters/cloudflare/pages-domains.ts'
 import { getPagesProject } from '@/lib/adapters/cloudflare/pages-projects.ts'
 import { loadPageState } from '@/lib/adapters/load-page-state.ts'
 import { findRollbackCandidate } from '@/lib/domain/cloudflare/pages-deployment.ts'
@@ -31,25 +29,24 @@ const identity = resolveProjectIdentity(name)
 
 const state = await loadPageState(`cloudflare.projects.${name}.page`, async () => {
 	const client = await resolveCloudflareClient()
-	const [project, deployments, domains] = await Promise.all([
+	const [project, deployments] = await Promise.all([
 		getPagesProject({ client, projectName: name }),
 		listPagesDeployments({
 			client,
 			projectName: name,
 			limit: RECENT_DEPLOYMENTS_LIMIT,
 		}),
-		listPagesDomains({ client, projectName: name }),
 	])
-	return { accountId: client.accountId, project, deployments, domains }
+	return { accountId: client.accountId, project, deployments }
 })
 
 const data = state.kind === 'ok' ? state.data : null
 const project = data?.project ?? null
 const deployments = data?.deployments ?? []
-const domains = data?.domains ?? []
 
 const health = computeProjectHealth(deployments)
 const rollbackCandidate = findRollbackCandidate(deployments)
+const latestDeployment = deployments[0] ?? null
 
 const dashboardUrl = data
 	? buildCloudflareDashboardUrl(data.accountId, name)
@@ -75,7 +72,12 @@ const nowMs = Date.now()
 
 	{
 		project && (
-			<ProjectStatsGrid project={project} domainCount={domains.length} />
+			<ProjectStatsGrid
+				project={project}
+				health={health}
+				deployments={deployments}
+				nowMs={nowMs}
+			/>
 		)
 	}
 
@@ -85,16 +87,14 @@ const nowMs = Date.now()
 		productionBranch={project?.productionBranch ?? null}
 	/>
 
+	<DeploymentTail projectName={name} deployment={latestDeployment} />
+
 	<DeploymentList
 		projectName={name}
 		deployments={deployments}
 		rollbackCandidateId={rollbackCandidate?.id ?? null}
 		nowMs={nowMs}
 	/>
-
-	<DomainList projectName={name} domains={domains} />
-
-	<EnvVarForm projectName={name} environment={identity.environment} />
 
 	<LoadStateBanner state={state} upstreamLabel="Cloudflare API error" />
 </DashboardLayout>

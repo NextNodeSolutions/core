@@ -1,9 +1,11 @@
 ---
+import type { Tone } from '@/lib/domain/badge-status.ts'
+
 interface Props {
 	label: string
 	value: string | number
 	hint?: string
-	tone?: 'neutral' | 'positive' | 'warning' | 'danger'
+	tone?: Tone
 	class?: string
 }
 
@@ -15,7 +17,7 @@ const {
 	class: className = '',
 } = Astro.props
 
-const toneValueClass: Record<NonNullable<Props['tone']>, string> = {
+const toneValueClass: Record<Tone, string> = {
 	neutral: 'text-base-900',
 	positive: 'text-accent-800',
 	warning: 'text-amber-700',
@@ -34,9 +36,10 @@ const toneValueClass: Record<NonNullable<Props['tone']>, string> = {
 	</p>
 	<p
 		class:list={[
-			'mt-3 font-display text-3xl font-semibold tracking-tight',
+			'mt-3 truncate font-display text-2xl font-semibold tracking-tight',
 			toneValueClass[tone],
 		]}
+		title={String(value)}
 	>
 		{value}
 	</p>

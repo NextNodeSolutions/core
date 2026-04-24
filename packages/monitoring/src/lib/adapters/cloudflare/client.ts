@@ -60,6 +60,21 @@ const buildUrl = (
 	return url.toString()
 }
 
+const parseApiResponse = async (
+	response: Response,
+	context: string,
+): Promise<unknown> => {
+	const data: unknown = await response.json()
+	if (!response.ok || !isRecord(data) || data.success !== true) {
+		const errors =
+			isRecord(data) && Array.isArray(data.errors)
+				? data.errors.map(parseApiError)
+				: []
+		throw new CloudflareApiFailure(context, response.status, errors)
+	}
+	return data
+}
+
 export const apiGet = async (
 	path: string,
 	token: string,
@@ -69,22 +84,33 @@ export const apiGet = async (
 	const response = await fetch(buildUrl(path, query), {
 		headers: authHeaders(token),
 	})
-	const data: unknown = await response.json()
-	if (!response.ok) {
-		const errors =
-			isRecord(data) && Array.isArray(data.errors)
-				? data.errors.map(parseApiError)
-				: []
-		throw new CloudflareApiFailure(context, response.status, errors)
-	}
-	if (!isRecord(data) || data.success !== true) {
-		const errors =
-			isRecord(data) && Array.isArray(data.errors)
-				? data.errors.map(parseApiError)
-				: []
-		throw new CloudflareApiFailure(context, response.status, errors)
-	}
-	return data
+	return parseApiResponse(response, context)
+}
+
+export const apiPost = async (
+	path: string,
+	token: string,
+	context: string,
+	body: Record<string, unknown> = {},
+): Promise<unknown> => {
+	const response = await fetch(buildUrl(path), {
+		method: 'POST',
+		headers: authHeaders(token),
+		body: JSON.stringify(body),
+	})
+	return parseApiResponse(response, context)
+}
+
+export const apiDelete = async (
+	path: string,
+	token: string,
+	context: string,
+): Promise<unknown> => {
+	const response = await fetch(buildUrl(path), {
+		method: 'DELETE',
+		headers: authHeaders(token),
+	})
+	return parseApiResponse(response, context)
 }
 
 export const extractArrayResult = (

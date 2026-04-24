@@ -1,5 +1,6 @@
 ---
 import Button from '@/components/foundations/Button.astro'
+import type { ButtonVariant } from '@/components/foundations/Button.astro'
 import SectionHeader from '@/components/dashboard/SectionHeader.astro'
 import type { CloudflarePagesEnvironment } from '@/lib/domain/cloudflare/pages-environment.ts'
 import { cloudflareApiPath } from '@/lib/domain/cloudflare/pages-routes.ts'
@@ -18,6 +19,44 @@ const branchDescription =
 		: 'the development branch'
 
 const deleteConfirmation = `Delete Cloudflare Pages project "${projectName}"? This removes every deployment and custom domain attached to it.`
+
+interface Action {
+	readonly title: string
+	readonly description: string
+	readonly action: string
+	readonly label: string
+	readonly variant: ButtonVariant
+	readonly confirmation?: string
+	readonly methodOverride?: 'delete'
+	readonly hiddenFields?: ReadonlyArray<{ name: string; value: string }>
+}
+
+const actions: ReadonlyArray<Action> = [
+	{
+		title: 'Trigger deployment',
+		description: `Start a new build of ${branchDescription}.`,
+		action: cloudflareApiPath(projectName, 'deployments'),
+		label: 'Trigger deployment',
+		variant: 'default',
+		hiddenFields: [{ name: 'environment', value: environment }],
+	},
+	{
+		title: 'Purge edge cache',
+		description: 'Invalidate cached assets on every Cloudflare PoP.',
+		action: cloudflareApiPath(projectName, 'purge-cache'),
+		label: 'Purge cache',
+		variant: 'accent',
+	},
+	{
+		title: 'Delete project',
+		description: 'Permanent. Removes all deployments, domains, and env vars.',
+		action: cloudflareApiPath(projectName),
+		label: 'Delete project',
+		variant: 'danger',
+		confirmation: deleteConfirmation,
+		methodOverride: 'delete',
+	},
+]
 ---
 
 <section class="mt-10 space-y-6">
@@ -26,60 +65,45 @@ const deleteConfirmation = `Delete Cloudflare Pages project "${projectName}"? Th
 		title="Project controls"
 		description="Trigger a deployment, purge the edge cache, or delete the project. Destructive actions require confirmation."
 	/>
-	<div class="rounded-2xl border border-base-100 bg-white p-6 shadow-subtle">
-		<div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-			<form
-				method="post"
-				action={cloudflareApiPath(projectName, 'deployments')}
-				class="flex flex-col gap-3"
-			>
-				<div>
-					<p class="font-display text-sm font-semibold text-base-900">
-						Trigger deployment
-					</p>
-					<p class="mt-1 text-xs text-base-500">
-						Start a new build of {branchDescription}.
-					</p>
-				</div>
-				<input type="hidden" name="environment" value={environment} />
-				<Button size="sm" variant="default" type="submit">
-					Trigger deployment
-				</Button>
-			</form>
-
-			<form
-				method="post"
-				action={cloudflareApiPath(projectName, 'purge-cache')}
-				class="flex flex-col gap-3"
-			>
-				<div>
-					<p class="font-display text-sm font-semibold text-base-900">
-						Purge edge cache
-					</p>
-					<p class="mt-1 text-xs text-base-500">
-						Invalidate cached assets on every Cloudflare PoP.
-					</p>
-				</div>
-				<Button size="sm" variant="accent" type="submit">Purge cache</Button>
-			</form>
-
-			<form
-				method="post"
-				action={cloudflareApiPath(projectName)}
-				onsubmit={`return confirm(${JSON.stringify(deleteConfirmation)})`}
-				class="flex flex-col gap-3"
-			>
-				<input type="hidden" name="_method" value="delete" />
-				<div>
-					<p class="font-display text-sm font-semibold text-base-900">
-						Delete project
-					</p>
-					<p class="mt-1 text-xs text-base-500">
-						Permanent. Removes all deployments, domains, and env vars.
-					</p>
-				</div>
-				<Button size="sm" variant="danger" type="submit">Delete project</Button>
-			</form>
-		</div>
+	<div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+		{
+			actions.map(action => (
+				<form
+					method="post"
+					action={action.action}
+					onsubmit={
+						action.confirmation
+							? `return confirm(${JSON.stringify(action.confirmation)})`
+							: undefined
+					}
+					class="flex flex-col gap-4 rounded-2xl border border-base-100 bg-white p-5 shadow-subtle"
+				>
+					{action.methodOverride && (
+						<input
+							type="hidden"
+							name="_method"
+							value={action.methodOverride}
+						/>
+					)}
+					{action.hiddenFields?.map(field => (
+						<input type="hidden" name={field.name} value={field.value} />
+					))}
+					<div class="flex-1">
+						<p class="font-display text-sm font-semibold text-base-900">
+							{action.title}
+						</p>
+						<p class="mt-1 text-xs text-base-500">{action.description}</p>
+					</div>
+					<Button
+						size="sm"
+						variant={action.variant}
+						type="submit"
+						class="w-full"
+					>
+						{action.label}
+					</Button>
+				</form>
+			))
+		}
 	</div>
 </section>

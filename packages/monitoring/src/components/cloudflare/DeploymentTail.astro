@@ -1,0 +1,364 @@
+---
+import Button from '@/components/foundations/Button.astro'
+import EmptyListMessage from '@/components/dashboard/EmptyListMessage.astro'
+import SectionHeader from '@/components/dashboard/SectionHeader.astro'
+import type { CloudflarePagesDeployment } from '@/lib/domain/cloudflare/pages-deployment.ts'
+import { cloudflareApiPath } from '@/lib/domain/cloudflare/pages-routes.ts'
+
+interface Props {
+	projectName: string
+	deployment: CloudflarePagesDeployment | null
+}
+
+const { projectName, deployment } = Astro.props
+
+const streamUrl = deployment
+	? cloudflareApiPath(projectName, 'deployments', deployment.id, 'tail')
+	: null
+---
+
+<section class="mt-10 space-y-6">
+	<SectionHeader
+		kicker="Logs"
+		title="Live Functions tail"
+		description="Streams every Pages Functions invocation in real time via the same tail session wrangler uses. Static-only projects will produce no output."
+	/>
+
+	{
+		!deployment || !streamUrl ? (
+			<EmptyListMessage message="No deployment available yet — trigger a build to open a tail session." />
+		) : (
+			<div
+				class="overflow-hidden rounded-2xl border border-base-100 bg-white shadow-subtle"
+				data-tail-root
+				data-stream-url={streamUrl}
+			>
+				<header class="flex flex-wrap items-center justify-between gap-3 border-b border-base-100 px-6 py-3">
+					<div class="flex items-center gap-3">
+						<span
+							class="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-base-500"
+						>
+							<span
+								aria-hidden="true"
+								class="inline-block size-1.5 rounded-full bg-base-300"
+								data-tail-dot
+							/>
+							<span data-tail-label>Idle</span>
+						</span>
+						<span class="font-mono text-[10px] uppercase tracking-wider text-base-500">
+							{deployment.shortId} · {deployment.environment}
+						</span>
+					</div>
+					<div class="flex items-center gap-2">
+						<Button size="xs" variant="accent" type="button" data-tail-start>
+							Start tail
+						</Button>
+						<Button size="xs" variant="muted" type="button" data-tail-stop>
+							Stop
+						</Button>
+						<Button size="xs" variant="ghost" type="button" data-tail-clear>
+							Clear
+						</Button>
+					</div>
+				</header>
+				<pre
+					class="max-h-[480px] min-h-[160px] overflow-auto bg-base-950 px-6 py-4 font-mono text-xs leading-relaxed text-base-50"
+					data-tail-output
+				>
+					<span class="text-base-400">Press “Start tail” to begin streaming.</span>
+				</pre>
+			</div>
+		)
+	}
+</section>
+
+<script>
+	import { isRecord } from '@/lib/domain/is-record.ts'
+
+	interface InvocationLog {
+		readonly level?: string
+		readonly message?: unknown
+	}
+
+	interface InvocationException {
+		readonly name?: string
+		readonly message?: string
+	}
+
+	interface Invocation {
+		readonly outcome?: string
+		readonly eventTimestamp?: number
+		readonly logs?: ReadonlyArray<InvocationLog>
+		readonly exceptions?: ReadonlyArray<InvocationException>
+		readonly event?: {
+			readonly request?: { readonly method?: string; readonly url?: string }
+		}
+	}
+
+	const CLOCK_START = 11
+	const CLOCK_END = 19
+
+	const OUTCOME_COLORS: Record<string, string> = {
+		ok: 'text-accent-300',
+		exception: 'text-red-400',
+		exceededCpu: 'text-amber-300',
+		canceled: 'text-base-400',
+	}
+
+	const LEVEL_COLORS: Record<string, string> = {
+		error: 'text-red-400',
+		warn: 'text-amber-300',
+	}
+
+	const HTML_ESCAPES: Record<string, string> = {
+		'&': '&amp;',
+		'<': '&lt;',
+		'>': '&gt;',
+		'"': '&quot;',
+		"'": '&#39;',
+	}
+
+	const TONE_CLASSES = {
+		idle: 'bg-base-300',
+		live: 'bg-accent-500 animate-pulse',
+		error: 'bg-red-500',
+	} satisfies Record<string, string>
+
+	type Tone = keyof typeof TONE_CLASSES
+
+	// Hard cap on retained scrollback. A chatty Functions invocation can stream
+	// for hours; without this the DOM grows until the tab OOMs.
+	const MAX_LINES = 1000
+
+	const readString = (value: unknown): string | undefined =>
+		typeof value === 'string' ? value : undefined
+
+	const readNumber = (value: unknown): number | undefined =>
+		typeof value === 'number' ? value : undefined
+
+	const readArray = (value: unknown): ReadonlyArray<unknown> =>
+		Array.isArray(value) ? value : []
+
+	const toInvocation = (entry: Record<string, unknown>): Invocation => {
+		const event = isRecord(entry.event) ? entry.event : undefined
+		const request = event && isRecord(event.request) ? event.request : undefined
+		return {
+			outcome: readString(entry.outcome),
+			eventTimestamp: readNumber(entry.eventTimestamp),
+			logs: readArray(entry.logs).filter(isRecord),
+			exceptions: readArray(entry.exceptions).filter(isRecord),
+			event: request
+				? {
+						request: {
+							method: readString(request.method),
+							url: readString(request.url),
+						},
+					}
+				: undefined,
+		}
+	}
+
+	// Cloudflare wraps tail events in an array per frame (documented example:
+	// `[{ outcome, eventTimestamp, logs, … }]`); singleton object frames have
+	// been observed too, so we accept both shapes.
+	const parseInvocations = (raw: string): ReadonlyArray<Invocation> | null => {
+		try {
+			const parsed: unknown = JSON.parse(raw)
+			if (Array.isArray(parsed)) return parsed.filter(isRecord).map(toInvocation)
+			if (isRecord(parsed)) return [toInvocation(parsed)]
+			return null
+		} catch {
+			return null
+		}
+	}
+
+	const escapeHtml = (value: string): string =>
+		value.replace(/[&<>"']/g, char => HTML_ESCAPES[char] ?? char)
+
+	const formatLogMessage = (message: unknown): string => {
+		if (Array.isArray(message)) {
+			return message.map(part => formatLogMessage(part)).join(' ')
+		}
+		if (typeof message === 'string') return message
+		try {
+			return JSON.stringify(message)
+		} catch {
+			return String(message)
+		}
+	}
+
+	const toClockTime = (ms: number | undefined): string => {
+		if (!ms || !Number.isFinite(ms)) return '--:--:--'
+		return new Date(ms).toISOString().slice(CLOCK_START, CLOCK_END)
+	}
+
+	const renderHeaderLine = (invocation: Invocation): string => {
+		const outcome = invocation.outcome ?? 'unknown'
+		const color = OUTCOME_COLORS[outcome] ?? 'text-base-400'
+		const time = toClockTime(invocation.eventTimestamp)
+		const method = invocation.event?.request?.method
+		const url = invocation.event?.request?.url
+		const req = method && url ? `${method} ${url}` : ''
+		return (
+			`<span class="text-base-400">${time}</span> ` +
+			`<span class="${color}">${escapeHtml(outcome)}</span> ` +
+			`<span class="text-base-200">${escapeHtml(req)}</span>`
+		)
+	}
+
+	const renderLogLine = (log: InvocationLog): string => {
+		const level = log.level ?? 'log'
+		const color = LEVEL_COLORS[level] ?? 'text-base-200'
+		const message = escapeHtml(formatLogMessage(log.message))
+		return (
+			`  <span class="${color}">[${escapeHtml(level)}]</span> ` +
+			`<span class="text-base-100">${message}</span>`
+		)
+	}
+
+	const renderExceptionLine = (exception: InvocationException): string =>
+		`  <span class="text-red-400">[${escapeHtml(exception.name ?? 'Error')}] ${escapeHtml(exception.message ?? '')}</span>`
+
+	const readMessageData = (event: Event): string => {
+		if (event instanceof MessageEvent && typeof event.data === 'string') {
+			return event.data
+		}
+		return ''
+	}
+
+	const bindTailPanel = (root: HTMLElement): void => {
+		const streamUrl = root.dataset.streamUrl
+		if (!streamUrl) return
+		const output = root.querySelector<HTMLElement>('[data-tail-output]')
+		const labelEl = root.querySelector<HTMLElement>('[data-tail-label]')
+		const dot = root.querySelector<HTMLElement>('[data-tail-dot]')
+		const startBtn = root.querySelector<HTMLButtonElement>('[data-tail-start]')
+		const stopBtn = root.querySelector<HTMLButtonElement>('[data-tail-stop]')
+		const clearBtn = root.querySelector<HTMLButtonElement>('[data-tail-clear]')
+		if (!output || !labelEl || !dot || !startBtn || !stopBtn || !clearBtn) return
+
+		let source: EventSource | null = null
+		let lineCount = 0
+
+		const setStatus = (label: string, tone: Tone): void => {
+			dot.className = `inline-block size-1.5 rounded-full ${TONE_CLASSES[tone]}`
+			labelEl.textContent = label
+		}
+
+		const resetOutput = (initialHtml: string): void => {
+			output.innerHTML = initialHtml
+			lineCount = 0
+		}
+
+		const enforceCap = (): void => {
+			while (lineCount > MAX_LINES && output.firstChild) {
+				output.removeChild(output.firstChild)
+				lineCount--
+			}
+		}
+
+		const appendLines = (lines: ReadonlyArray<string>): void => {
+			if (lines.length === 0) return
+			const fragment = document.createDocumentFragment()
+			for (const html of lines) {
+				const div = document.createElement('div')
+				div.innerHTML = html
+				fragment.appendChild(div)
+			}
+			output.appendChild(fragment)
+			lineCount += lines.length
+			enforceCap()
+			output.scrollTop = output.scrollHeight
+		}
+
+		const appendLine = (html: string): void => appendLines([html])
+
+		const renderInvocation = (raw: string): void => {
+			const invocations = parseInvocations(raw)
+			if (!invocations || invocations.length === 0) {
+				appendLine(
+					`<span class="text-red-400">! malformed tail frame: ${escapeHtml(raw)}</span>`,
+				)
+				return
+			}
+			const lines: string[] = []
+			for (const invocation of invocations) {
+				lines.push(renderHeaderLine(invocation))
+				for (const log of invocation.logs ?? []) lines.push(renderLogLine(log))
+				for (const exception of invocation.exceptions ?? [])
+					lines.push(renderExceptionLine(exception))
+			}
+			appendLines(lines)
+		}
+
+		const stop = (): void => {
+			if (!source) return
+			source.close()
+			source = null
+			setStatus('Stopped', 'idle')
+		}
+
+		const extractFatalMessage = (raw: string): string => {
+			if (!raw) return 'connection lost'
+			try {
+				const parsed: unknown = JSON.parse(raw)
+				if (isRecord(parsed) && typeof parsed.message === 'string') {
+					return parsed.message
+				}
+			} catch {
+				/* fall through */
+			}
+			return raw
+		}
+
+		const handleFatal = (event: Event): void => {
+			const message = extractFatalMessage(readMessageData(event))
+			appendLine(`<span class="text-red-400">! ${escapeHtml(message)}</span>`)
+			setStatus('Error', 'error')
+			stop()
+		}
+
+		const handleTransportError = (): void => {
+			if (!source) return
+			appendLine(
+				'<span class="text-red-400">! connection lost</span>',
+			)
+			setStatus('Error', 'error')
+			stop()
+		}
+
+		const start = (): void => {
+			if (source) return
+			resetOutput('')
+			appendLine('<span class="text-base-400">Opening tail session…</span>')
+			setStatus('Connecting…', 'idle')
+			source = new EventSource(streamUrl)
+			source.addEventListener('session', () => {
+				setStatus('Live', 'live')
+				appendLine(
+					'<span class="text-accent-300">Tail session open — waiting for invocations.</span>',
+				)
+			})
+			source.addEventListener('invocation', event => {
+				renderInvocation(readMessageData(event))
+			})
+			source.addEventListener('fatal', handleFatal)
+			source.addEventListener('error', handleTransportError)
+		}
+
+		startBtn.addEventListener('click', start)
+		stopBtn.addEventListener('click', stop)
+		clearBtn.addEventListener('click', () => {
+			resetOutput(
+				'<span class="text-base-400">Cleared. Press “Start tail” to resume.</span>',
+			)
+		})
+		window.addEventListener('beforeunload', stop)
+	}
+
+	for (const root of document.querySelectorAll<HTMLElement>(
+		'[data-tail-root]',
+	)) {
+		bindTailPanel(root)
+	}
+</script>

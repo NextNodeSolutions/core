@@ -1,27 +1,40 @@
 ---
 import StatCard from '@/components/dashboard/StatCard.astro'
+import { badgeStatusToTone } from '@/lib/domain/badge-status.ts'
+import type { CloudflarePagesDeployment } from '@/lib/domain/cloudflare/pages-deployment.ts'
 import type { CloudflarePagesProject } from '@/lib/domain/cloudflare/pages-project.ts'
-import { formatIsoDate } from '@/lib/domain/relative-time.ts'
+import type { ProjectHealth } from '@/lib/domain/cloudflare/pages-project-health.ts'
+import { formatRelativeTime } from '@/lib/domain/relative-time.ts'
 
 interface Props {
 	project: CloudflarePagesProject
-	domainCount: number
+	health: ProjectHealth
+	deployments: ReadonlyArray<CloudflarePagesDeployment>
+	nowMs: number
 }
 
-const { project, domainCount } = Astro.props
+const { project, health, deployments, nowMs } = Astro.props
+
+const lastProductionDeploy =
+	deployments.find(deployment => deployment.environment === 'production') ??
+	null
 ---
 
-<section class="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-	<StatCard label="Subdomain" value={project.subdomain} />
-	<StatCard label="Production branch" value={project.productionBranch} />
+<section class="mt-10 grid grid-cols-2 gap-4 lg:grid-cols-4">
 	<StatCard
-		label="Custom domains"
-		value={String(domainCount)}
-		hint={domainCount === 0 ? 'None attached' : undefined}
+		label="Status"
+		value={health.label}
+		tone={badgeStatusToTone[health.status]}
 	/>
 	<StatCard
-		label="Created"
-		value={formatIsoDate(project.createdAt)}
-		hint="Project age"
+		label="Last prod deploy"
+		value={
+			lastProductionDeploy
+				? formatRelativeTime(lastProductionDeploy.createdAt, nowMs)
+				: '—'
+		}
+		hint={lastProductionDeploy?.shortId}
 	/>
+	<StatCard label="Branch" value={project.productionBranch} />
+	<StatCard label="Age" value={formatRelativeTime(project.createdAt, nowMs)} />
 </section>

@@ -1,9 +1,14 @@
 ---
-type Variant = 'default' | 'accent' | 'muted' | 'danger' | 'ghost'
+export type ButtonVariant =
+	| 'default'
+	| 'accent'
+	| 'muted'
+	| 'danger'
+	| 'ghost'
 type Size = 'xs' | 'sm' | 'base' | 'md' | 'lg'
 
 interface Props {
-	variant?: Variant
+	variant?: ButtonVariant
 	size?: Size
 	iconOnly?: boolean
 	isLink?: boolean
@@ -30,7 +35,7 @@ const {
 	...rest
 } = Astro.props
 
-const variantClass: Record<Variant, string[]> = {
+const variantClass: Record<ButtonVariant, string[]> = {
 	default: [
 		'text-white',
 		'bg-linear-to-t',
