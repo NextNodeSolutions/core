@@ -17,13 +17,23 @@ jobs:
         name: Build golden image
         runs-on: ubuntu-latest
         steps:
-            - uses: NextNodeSolutions/core/.github/actions/setup@main
+            - name: Checkout
+              uses: actions/checkout@v6
+
+            - name: Setup pnpm
+              uses: pnpm/action-setup@v5
+
+            - name: Setup Node
+              uses: actions/setup-node@v6
               with:
-                  infra: 'true'
-                  deps: 'false'
+                  node-version: 24
+                  cache: pnpm
+
+            - name: Install infrastructure deps
+              run: pnpm install --filter @nextnode-solutions/infrastructure... --frozen-lockfile --prefer-offline --prod
 
             - name: Build golden image
               run: node src/index.ts build-golden-image
-              working-directory: .infra/packages/infrastructure
+              working-directory: packages/infrastructure
               env:
                   HETZNER_API_TOKEN: ${{ secrets.HETZNER_API_TOKEN }}
