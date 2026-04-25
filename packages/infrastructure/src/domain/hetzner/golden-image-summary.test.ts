@@ -23,7 +23,7 @@ describe('formatGoldenImageSummary', () => {
 		})
 
 		expect(markdown).toBe(
-			'### Golden Image\n\nBuilt new snapshot `nextnode-base-5d53b5620d8feac1` with fingerprint `5d53b5620d8feac1`',
+			'### Golden Image\n\nBuilt new snapshot `nextnode-golden-5d53b5620d8feac1` with fingerprint `5d53b5620d8feac1`',
 		)
 	})
 
@@ -36,7 +36,7 @@ describe('formatGoldenImageSummary', () => {
 
 		expect(markdown).toBe(
 			'### Golden Image\n\n' +
-				'Built new snapshot `nextnode-base-5d53b5620d8feac1` with fingerprint `5d53b5620d8feac1`\n\n' +
+				'Built new snapshot `nextnode-golden-5d53b5620d8feac1` with fingerprint `5d53b5620d8feac1`\n\n' +
 				'> ⚠️ Pruning of old snapshots failed (non-fatal): fetch failed: SocketError: other side closed',
 		)
 	})
