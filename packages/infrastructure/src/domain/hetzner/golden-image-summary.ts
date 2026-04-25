@@ -16,7 +16,7 @@ export function formatGoldenImageSummary(
 	if (input.kind === 'cached') {
 		return `### Golden Image\n\nUp to date - snapshot \`${input.snapshotId}\` matches fingerprint \`${input.fingerprint}\``
 	}
-	const built = `### Golden Image\n\nBuilt new snapshot \`nextnode-base-${input.fingerprint}\` with fingerprint \`${input.fingerprint}\``
+	const built = `### Golden Image\n\nBuilt new snapshot \`nextnode-golden-${input.fingerprint}\` with fingerprint \`${input.fingerprint}\``
 	if (input.cleanupError === null) return built
 	return `${built}\n\n> ⚠️ Pruning of old snapshots failed (non-fatal): ${input.cleanupError}`
 }
