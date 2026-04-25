@@ -4,6 +4,10 @@ import Button from '@/components/foundations/Button.astro'
 import StatusBadge from '@/components/dashboard/StatusBadge.astro'
 import SectionHeader from '@/components/dashboard/SectionHeader.astro'
 import StatCard from '@/components/dashboard/StatCard.astro'
+import {
+	METHOD_OVERRIDE_DELETE,
+	METHOD_OVERRIDE_FIELD,
+} from '@/lib/adapters/method-override-route.ts'
 
 export const prerender = false
 
@@ -84,16 +88,25 @@ if (!slug) {
 						action={`/api/projects/${slug}`}
 						onsubmit="return confirm('Delete project? This cannot be undone.')"
 					>
-						<input type="hidden" name="_method" value="delete" />
+						<input
+							type="hidden"
+							name={METHOD_OVERRIDE_FIELD}
+							value={METHOD_OVERRIDE_DELETE}
+						/>
 						<Button size="sm" variant="danger" type="submit" class="w-full">
 							Delete project
 						</Button>
 					</form>
 					<form
 						method="post"
-						action={`/api/vps/${slug}/destroy`}
+						action={`/api/vps/${slug}`}
 						onsubmit="return confirm('Destroy VPS? This will delete the Hetzner server.')"
 					>
+						<input
+							type="hidden"
+							name={METHOD_OVERRIDE_FIELD}
+							value={METHOD_OVERRIDE_DELETE}
+						/>
 						<Button size="sm" variant="danger" type="submit" class="w-full">
 							Destroy Hetzner VPS
 						</Button>

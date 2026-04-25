@@ -9,6 +9,10 @@ type ActionBuilder = (params: Record<string, string | undefined>) => string
 // Delete actions are triggered from plain SSR forms (no client JS for
 // fire-and-forget mutations). HTML forms can only submit GET or POST, so we
 // POST with a hidden `_method=delete` field and route it here as a DELETE.
+export const METHOD_OVERRIDE_FIELD = '_method'
+export const METHOD_OVERRIDE_DELETE = 'delete'
+export type MethodOverride = typeof METHOD_OVERRIDE_DELETE
+
 export const deletableRoute = (
 	deleteAction: ActionBuilder,
 	unknownAction: ActionBuilder,
@@ -25,7 +29,9 @@ export const deletableRoute = (
 		DELETE: ({ params }) => deleteResponse(params),
 		POST: async ({ params, request }) => {
 			const body = await request.formData()
-			if (body.get('_method') === 'delete') return deleteResponse(params)
+			if (body.get(METHOD_OVERRIDE_FIELD) === METHOD_OVERRIDE_DELETE) {
+				return deleteResponse(params)
+			}
 			return jsonResponse(
 				notImplemented(unknownAction(params)),
 				HTTP_STATUS.BAD_REQUEST,

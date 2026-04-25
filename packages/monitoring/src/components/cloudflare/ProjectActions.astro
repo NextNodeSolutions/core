@@ -2,6 +2,11 @@
 import Button from '@/components/foundations/Button.astro'
 import type { ButtonVariant } from '@/components/foundations/Button.astro'
 import SectionHeader from '@/components/dashboard/SectionHeader.astro'
+import {
+	METHOD_OVERRIDE_DELETE,
+	METHOD_OVERRIDE_FIELD,
+} from '@/lib/adapters/method-override-route.ts'
+import type { MethodOverride } from '@/lib/adapters/method-override-route.ts'
 import type { CloudflarePagesEnvironment } from '@/lib/domain/cloudflare/pages-environment.ts'
 import { cloudflareApiPath } from '@/lib/domain/cloudflare/pages-routes.ts'
 
@@ -27,7 +32,7 @@ interface Action {
 	readonly label: string
 	readonly variant: ButtonVariant
 	readonly confirmation?: string
-	readonly methodOverride?: 'delete'
+	readonly methodOverride?: MethodOverride
 	readonly hiddenFields?: ReadonlyArray<{ name: string; value: string }>
 }
 
@@ -54,7 +59,7 @@ const actions: ReadonlyArray<Action> = [
 		label: 'Delete project',
 		variant: 'danger',
 		confirmation: deleteConfirmation,
-		methodOverride: 'delete',
+		methodOverride: METHOD_OVERRIDE_DELETE,
 	},
 ]
 ---
@@ -81,7 +86,7 @@ const actions: ReadonlyArray<Action> = [
 					{action.methodOverride && (
 						<input
 							type="hidden"
-							name="_method"
+							name={METHOD_OVERRIDE_FIELD}
 							value={action.methodOverride}
 						/>
 					)}

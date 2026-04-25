@@ -8,6 +8,6 @@ export const prerender = false
 
 export const POST: APIRoute = ({ params }) =>
 	jsonResponse(
-		notImplemented(`vps.${params.slug}.destroy`),
+		notImplemented(`vps.${params.slug}.teardown`),
 		HTTP_STATUS.NOT_IMPLEMENTED,
 	)

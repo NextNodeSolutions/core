@@ -1,17 +1,12 @@
-import type { BadgeStatus } from '@/lib/domain/badge-status.ts'
+import type { Health } from '@/lib/domain/badge-status.ts'
 import type { CloudflarePagesDeployment } from '@/lib/domain/cloudflare/pages-deployment.ts'
-
-export interface ProjectHealth {
-	readonly status: BadgeStatus
-	readonly label: string
-}
 
 // Cloudflare always serves the latest successful production deployment, so a
 // project can be live even when the most recent build failed. Deployments are
 // assumed newest-first (Cloudflare's default order).
 export const computeProjectHealth = (
 	deployments: ReadonlyArray<CloudflarePagesDeployment>,
-): ProjectHealth => {
+): Health => {
 	let latest: CloudflarePagesDeployment | null = null
 	let hasCanonical = false
 	for (const deployment of deployments) {

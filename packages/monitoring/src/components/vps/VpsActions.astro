@@ -1,0 +1,87 @@
+---
+import SectionHeader from '@/components/dashboard/SectionHeader.astro'
+import Button from '@/components/foundations/Button.astro'
+import type { ButtonVariant } from '@/components/foundations/Button.astro'
+import {
+	METHOD_OVERRIDE_DELETE,
+	METHOD_OVERRIDE_FIELD,
+} from '@/lib/adapters/method-override-route.ts'
+import type { MethodOverride } from '@/lib/adapters/method-override-route.ts'
+import { vpsApiPath } from '@/lib/domain/hetzner/vps-routes.ts'
+
+interface Props {
+	serverName: string
+}
+
+const { serverName } = Astro.props
+
+const teardownConfirmation = `Teardown VPS "${serverName}"? This stops services and removes the deployed app from the host. The Hetzner server itself will remain.`
+const destroyConfirmation = `Teardown AND delete VPS "${serverName}"? The Hetzner server will be permanently destroyed. This cannot be undone.`
+
+interface Action {
+	readonly title: string
+	readonly description: string
+	readonly action: string
+	readonly label: string
+	readonly variant: ButtonVariant
+	readonly confirmation: string
+	readonly methodOverride?: MethodOverride
+}
+
+const actions: ReadonlyArray<Action> = [
+	{
+		title: 'Teardown',
+		description: 'Stop and remove the deployed app from this VPS. The host stays online.',
+		action: vpsApiPath(serverName, 'teardown'),
+		label: 'Teardown app',
+		variant: 'accent',
+		confirmation: teardownConfirmation,
+	},
+	{
+		title: 'Teardown + delete VPS',
+		description: 'Permanent. Tears down the app and destroys the Hetzner server.',
+		action: vpsApiPath(serverName),
+		label: 'Destroy VPS',
+		variant: 'danger',
+		confirmation: destroyConfirmation,
+		methodOverride: METHOD_OVERRIDE_DELETE,
+	},
+]
+---
+
+<section class="mt-10 space-y-6">
+	<SectionHeader
+		kicker="Actions"
+		title="Lifecycle controls"
+		description="Tear down the deployed app, or destroy the host entirely. Both actions require confirmation."
+	/>
+	<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+		{
+			actions.map(action => (
+				<form
+					method="post"
+					action={action.action}
+					onsubmit={`return confirm(${JSON.stringify(action.confirmation)})`}
+					class="flex flex-col gap-4 rounded-2xl border border-base-100 bg-white p-5 shadow-subtle"
+				>
+					{action.methodOverride && (
+						<input
+							type="hidden"
+							name={METHOD_OVERRIDE_FIELD}
+							value={action.methodOverride}
+						/>
+					)}
+					<div class="flex-1">
+						<p class="font-display text-sm font-semibold text-base-900">
+							{action.title}
+						</p>
+						<p class="mt-1 text-xs text-base-500">{action.description}</p>
+					</div>
+					<Button size="sm" variant={action.variant} type="submit" class="w-full">
+						{action.label}
+					</Button>
+				</form>
+			))
+		}
+	</div>
+</section>

@@ -1,0 +1,68 @@
+---
+import SectionHeader from '@/components/dashboard/SectionHeader.astro'
+import { formatBytes } from '@/lib/domain/format-bytes.ts'
+import type { HetznerVps } from '@/lib/domain/hetzner/vps.ts'
+
+interface Props {
+	server: HetznerVps
+}
+
+const { server } = Astro.props
+
+interface Row {
+	readonly label: string
+	readonly value: string
+	readonly mono?: boolean
+}
+
+const rows: ReadonlyArray<Row> = [
+	{ label: 'Server ID', value: String(server.id), mono: true },
+	{ label: 'IPv4', value: server.ipv4 ?? '—', mono: true },
+	{ label: 'IPv6', value: server.ipv6 ?? '—', mono: true },
+	{ label: 'Datacenter', value: server.location.datacenter ?? '—', mono: true },
+	{ label: 'Region', value: server.location.country ?? '—' },
+	{ label: 'Traffic in', value: formatBytes(server.traffic.ingoingBytes) },
+	{ label: 'Traffic out', value: formatBytes(server.traffic.outgoingBytes) },
+	{ label: 'Traffic included', value: formatBytes(server.traffic.includedBytes) },
+	{ label: 'Backups', value: server.backupsEnabled ? 'Enabled' : 'Disabled' },
+	{
+		label: 'Delete protection',
+		value: server.protection.delete ? 'On' : 'Off',
+	},
+	{ label: 'Locked', value: server.locked ? 'Yes' : 'No' },
+	{
+		label: 'Volumes',
+		value: server.volumeCount === 0 ? '—' : String(server.volumeCount),
+	},
+]
+---
+
+<section class="mt-10 space-y-6">
+	<SectionHeader
+		kicker="Network & host"
+		title="Server identity"
+		description="Read-only metadata pulled from the Hetzner Cloud API."
+	/>
+	<div
+		class="grid grid-cols-1 gap-px overflow-hidden rounded-2xl border border-base-100 bg-base-100 shadow-subtle sm:grid-cols-2 lg:grid-cols-3"
+	>
+		{
+			rows.map(row => (
+				<div class="bg-white px-5 py-4">
+					<p class="font-mono text-[10px] uppercase tracking-wider text-base-500">
+						{row.label}
+					</p>
+					<p
+						class:list={[
+							'mt-1 truncate text-sm text-base-900',
+							row.mono ? 'font-mono' : 'font-display',
+						]}
+						title={row.value}
+					>
+						{row.value}
+					</p>
+				</div>
+			))
+		}
+	</div>
+</section>

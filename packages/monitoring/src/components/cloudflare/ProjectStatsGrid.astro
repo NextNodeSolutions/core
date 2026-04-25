@@ -1,14 +1,14 @@
 ---
 import StatCard from '@/components/dashboard/StatCard.astro'
 import { badgeStatusToTone } from '@/lib/domain/badge-status.ts'
+import type { Health } from '@/lib/domain/badge-status.ts'
 import type { CloudflarePagesDeployment } from '@/lib/domain/cloudflare/pages-deployment.ts'
 import type { CloudflarePagesProject } from '@/lib/domain/cloudflare/pages-project.ts'
-import type { ProjectHealth } from '@/lib/domain/cloudflare/pages-project-health.ts'
 import { formatRelativeTime } from '@/lib/domain/relative-time.ts'
 
 interface Props {
 	project: CloudflarePagesProject
-	health: ProjectHealth
+	health: Health
 	deployments: ReadonlyArray<CloudflarePagesDeployment>
 	nowMs: number
 }
