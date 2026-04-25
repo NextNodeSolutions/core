@@ -1,4 +1,4 @@
-import type { AppEnvironment } from '../environment.ts'
+import type { AppEnvironment } from '@/domain/environment.ts'
 
 /**
  * Resolve the actual domain for a given environment.

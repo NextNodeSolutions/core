@@ -1,4 +1,4 @@
-import type { AppEnvironment } from '../environment.ts'
+import type { AppEnvironment } from '@/domain/environment.ts'
 
 export interface GuardFile {
 	readonly filename: string

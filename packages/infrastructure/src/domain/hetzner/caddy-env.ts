@@ -1,4 +1,4 @@
-import type { R2RuntimeConfig } from '../cloudflare/r2/runtime-config.ts'
+import type { R2RuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
 
 import {
 	CADDY_ENV_CF_API_TOKEN,

@@ -1,8 +1,8 @@
-import type { PagesManagedResource } from '../cloudflare/managed-resources.ts'
+import type { PagesManagedResource } from '@/domain/cloudflare/managed-resources.ts'
 import type {
 	VpsManagedResource,
 	VpsProjectManagedResource,
-} from '../hetzner/managed-resources.ts'
+} from '@/domain/hetzner/managed-resources.ts'
 
 export interface ResourceOutcome {
 	readonly handled: boolean

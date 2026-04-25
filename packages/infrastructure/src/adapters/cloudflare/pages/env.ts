@@ -1,4 +1,4 @@
-import { CLOUDFLARE_API_BASE, cfFetchJson } from '../api.ts'
+import { CLOUDFLARE_API_BASE, cfFetchJson } from '@/adapters/cloudflare/api.ts'
 
 interface PlainEnvVar {
 	readonly type: 'plain_text'

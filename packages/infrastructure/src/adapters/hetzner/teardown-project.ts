@@ -1,10 +1,10 @@
 import { createLogger } from '@nextnode-solutions/logger'
 
-import type { ResourceOutcome } from '../../domain/deploy/resource-outcome.ts'
-import type { AppEnvironment } from '../../domain/environment.ts'
-import { extractUpstreams } from '../../domain/hetzner/caddy-config.ts'
-import { computeSilo } from '../../domain/hetzner/env-silo.ts'
-import type { R2Operations } from '../r2/client.types.ts'
+import type { R2Operations } from '@/adapters/r2/client.types.ts'
+import type { ResourceOutcome } from '@/domain/deploy/resource-outcome.ts'
+import type { AppEnvironment } from '@/domain/environment.ts'
+import { extractUpstreams } from '@/domain/hetzner/caddy-config.ts'
+import { computeSilo } from '@/domain/hetzner/env-silo.ts'
 
 import { CADDY_CONFIG_PATH } from './constants.ts'
 import type { SshSession } from './ssh/session.types.ts'

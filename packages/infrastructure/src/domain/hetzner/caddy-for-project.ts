@@ -1,5 +1,5 @@
-import { computeR2Host } from '../cloudflare/r2/addressing.ts'
-import type { R2RuntimeConfig } from '../cloudflare/r2/runtime-config.ts'
+import { computeR2Host } from '@/domain/cloudflare/r2/addressing.ts'
+import type { R2RuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
 
 import type {
 	CaddyJsonConfig,

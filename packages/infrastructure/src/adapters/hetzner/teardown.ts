@@ -1,16 +1,16 @@
 import { createLogger } from '@nextnode-solutions/logger'
 
-import { resolveDeployDomain } from '../../domain/deploy/domain.ts'
-import { executeHandlers } from '../../domain/deploy/execute-handlers.ts'
-import type { ResourceOutcome } from '../../domain/deploy/resource-outcome.ts'
-import type { TeardownResult } from '../../domain/deploy/teardown-result.ts'
-import type { TeardownTarget } from '../../domain/deploy/teardown-target.ts'
-import type { AppEnvironment } from '../../domain/environment.ts'
+import type { R2Client } from '@/adapters/r2/client.ts'
+import { resolveDeployDomain } from '@/domain/deploy/domain.ts'
+import { executeHandlers } from '@/domain/deploy/execute-handlers.ts'
+import type { ResourceOutcome } from '@/domain/deploy/resource-outcome.ts'
+import type { TeardownResult } from '@/domain/deploy/teardown-result.ts'
+import type { TeardownTarget } from '@/domain/deploy/teardown-target.ts'
+import type { AppEnvironment } from '@/domain/environment.ts'
 import {
 	VPS_MANAGED_RESOURCES,
 	VPS_PROJECT_MANAGED_RESOURCES,
-} from '../../domain/hetzner/managed-resources.ts'
-import type { R2Client } from '../r2/client.ts'
+} from '@/domain/hetzner/managed-resources.ts'
 
 import { createSshSession } from './ssh/session.ts'
 import type { SshSession } from './ssh/session.types.ts'

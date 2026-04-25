@@ -1,4 +1,4 @@
-import type { PipelineEnvironment } from '../environment.ts'
+import type { PipelineEnvironment } from '@/domain/environment.ts'
 
 /**
  * Compute the Cloudflare Pages project name for a given environment.

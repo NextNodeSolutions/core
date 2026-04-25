@@ -1,4 +1,4 @@
-import type { WorkflowRun } from '../../domain/pipeline/prod-gate.ts'
+import type { WorkflowRun } from '@/domain/pipeline/prod-gate.ts'
 
 export async function fetchWorkflowRuns(
 	repo: string,

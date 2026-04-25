@@ -1,9 +1,9 @@
 import { createLogger } from '@nextnode-solutions/logger'
 
-import { writeOutput } from '../../adapters/github/output.ts'
-import { computeImageRef } from '../../domain/deploy/image-ref.ts'
-import { formatImageRef } from '../../domain/hetzner/compose-file.ts'
-import { requireEnv } from '../env.ts'
+import { writeOutput } from '@/adapters/github/output.ts'
+import { requireEnv } from '@/cli/env.ts'
+import { computeImageRef } from '@/domain/deploy/image-ref.ts'
+import { formatImageRef } from '@/domain/hetzner/compose-file.ts'
 
 const logger = createLogger()
 

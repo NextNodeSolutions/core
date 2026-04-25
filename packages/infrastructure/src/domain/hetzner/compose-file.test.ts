@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 
-import type { ImageRef } from '../deploy/target.ts'
+import type { ImageRef } from '@/domain/deploy/target.ts'
 
 import {
 	CONTAINER_PORT,

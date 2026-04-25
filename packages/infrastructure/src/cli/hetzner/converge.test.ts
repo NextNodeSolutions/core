@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { SshSession } from '../../adapters/hetzner/ssh/session.types.ts'
+import type { SshSession } from '@/adapters/hetzner/ssh/session.types.ts'
 
 import type { ConvergenceInput } from './converge.ts'
 import { converge } from './converge.ts'

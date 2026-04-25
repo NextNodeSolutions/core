@@ -1,8 +1,8 @@
 import { createLogger } from '@nextnode-solutions/logger'
 
-import type { NextNodeConfig } from '../../config/types.ts'
-import { verifyTeardownConfirmation } from '../../domain/deploy/verify-teardown-confirmation.ts'
-import { getEnv } from '../env.ts'
+import { getEnv } from '@/cli/env.ts'
+import type { NextNodeConfig } from '@/config/types.ts'
+import { verifyTeardownConfirmation } from '@/domain/deploy/verify-teardown-confirmation.ts'
 
 const logger = createLogger()
 

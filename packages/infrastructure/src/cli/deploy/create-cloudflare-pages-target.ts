@@ -1,6 +1,6 @@
-import { CloudflarePagesTarget } from '../../adapters/cloudflare/target.ts'
-import type { CloudflarePagesDeployableConfig } from '../../config/types.ts'
-import type { AppEnvironment } from '../../domain/environment.ts'
+import { CloudflarePagesTarget } from '@/adapters/cloudflare/target.ts'
+import type { CloudflarePagesDeployableConfig } from '@/config/types.ts'
+import type { AppEnvironment } from '@/domain/environment.ts'
 
 /**
  * Pure factory for the Cloudflare Pages deploy target. CF Pages reads its

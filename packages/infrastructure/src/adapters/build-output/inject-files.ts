@@ -3,7 +3,7 @@ import { isAbsolute, join, relative } from 'node:path'
 
 import { createLogger } from '@nextnode-solutions/logger'
 
-import type { GuardFile } from '../../domain/deploy/seo-guard.ts'
+import type { GuardFile } from '@/domain/deploy/seo-guard.ts'
 
 const logger = createLogger()
 

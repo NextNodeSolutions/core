@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { DnsRecordLookup } from '../../../domain/cloudflare/dns-records.ts'
+import type { DnsRecordLookup } from '@/domain/cloudflare/dns-records.ts'
 
 import { deleteDnsRecordsByName } from './delete-records.ts'
 

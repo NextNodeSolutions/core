@@ -2,11 +2,11 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
 
-import { computeDnsRecords } from '../../domain/cloudflare/dns-records.ts'
-import { PAGES_MANAGED_RESOURCES } from '../../domain/cloudflare/managed-resources.ts'
-import { computePagesProjectName } from '../../domain/cloudflare/pages-project-name.ts'
-import { resolveDeployDomain } from '../../domain/deploy/domain.ts'
-import { executeHandlers } from '../../domain/deploy/execute-handlers.ts'
+import { computeDnsRecords } from '@/domain/cloudflare/dns-records.ts'
+import { PAGES_MANAGED_RESOURCES } from '@/domain/cloudflare/managed-resources.ts'
+import { computePagesProjectName } from '@/domain/cloudflare/pages-project-name.ts'
+import { resolveDeployDomain } from '@/domain/deploy/domain.ts'
+import { executeHandlers } from '@/domain/deploy/execute-handlers.ts'
 import type {
 	DeployEnv,
 	DeployInput,
@@ -14,10 +14,10 @@ import type {
 	DeployTarget,
 	ProvisionResult,
 	StaticDeployedEnvironment,
-} from '../../domain/deploy/target.ts'
-import type { TeardownResult } from '../../domain/deploy/teardown-result.ts'
-import type { TeardownTarget } from '../../domain/deploy/teardown-target.ts'
-import type { AppEnvironment } from '../../domain/environment.ts'
+} from '@/domain/deploy/target.ts'
+import type { TeardownResult } from '@/domain/deploy/teardown-result.ts'
+import type { TeardownTarget } from '@/domain/deploy/teardown-target.ts'
+import type { AppEnvironment } from '@/domain/environment.ts'
 
 import { reconcileDnsRecords } from './dns/reconcile.ts'
 import { getPagesProject } from './pages/api.ts'

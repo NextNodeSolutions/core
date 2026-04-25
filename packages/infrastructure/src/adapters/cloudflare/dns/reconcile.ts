@@ -3,8 +3,8 @@ import { createLogger } from '@nextnode-solutions/logger'
 import type {
 	DesiredDnsRecord,
 	DnsRecordLookup,
-} from '../../../domain/cloudflare/dns-records.ts'
-import { reconcileDnsRecord } from '../../../domain/cloudflare/dns-records.ts'
+} from '@/domain/cloudflare/dns-records.ts'
+import { reconcileDnsRecord } from '@/domain/cloudflare/dns-records.ts'
 
 import {
 	createDnsRecord,

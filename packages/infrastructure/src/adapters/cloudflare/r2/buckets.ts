@@ -1,11 +1,11 @@
-import { HTTP_NOT_FOUND } from '../../http.ts'
 import {
 	CLOUDFLARE_API_BASE,
 	authHeaders,
 	formatErrors,
 	parseEnvelope,
 	requireOk,
-} from '../api.ts'
+} from '@/adapters/cloudflare/api.ts'
+import { HTTP_NOT_FOUND } from '@/adapters/http.ts'
 
 export interface EnsureR2BucketInput {
 	readonly token: string

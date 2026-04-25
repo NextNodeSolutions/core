@@ -1,6 +1,6 @@
 import { setTimeout as sleep } from 'node:timers/promises'
 
-import { isRecord } from '../../config/types.ts'
+import { isRecord } from '@/config/types.ts'
 
 const TAILSCALE_API_BASE = 'https://api.tailscale.com/api/v2'
 const DEVICE_POLL_INTERVAL_MS = 2_000

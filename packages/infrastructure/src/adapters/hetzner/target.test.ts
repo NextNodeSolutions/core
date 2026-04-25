@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
 	TeardownResult,
 	VpsFullTeardownResult,
-} from '../../domain/deploy/teardown-result.ts'
-import { goldenImageFingerprint } from '../../domain/hetzner/golden-image.ts'
+} from '@/domain/deploy/teardown-result.ts'
+import { goldenImageFingerprint } from '@/domain/hetzner/golden-image.ts'
 
 import type { SshSession } from './ssh/session.types.ts'
 import type { HcloudProjectState } from './state/types.ts'
@@ -473,7 +473,7 @@ describe('HetznerVpsTarget', () => {
 				const { createServer: mockedCreate } =
 					await import('./api/server.ts')
 				const { converge: mockedConverge } =
-					await import('../../cli/hetzner/converge.ts')
+					await import('@/cli/hetzner/converge.ts')
 				seedState({
 					phase: 'provisioned',
 					serverId: 42,
@@ -524,7 +524,7 @@ describe('HetznerVpsTarget', () => {
 
 			it('still runs convergence when state is converged', async () => {
 				const { converge: mockedConverge } =
-					await import('../../cli/hetzner/converge.ts')
+					await import('@/cli/hetzner/converge.ts')
 				seedState()
 
 				const target = new HetznerVpsTarget(TARGET_CONFIG)
@@ -575,7 +575,7 @@ describe('HetznerVpsTarget', () => {
 		describe('convergence', () => {
 			it('closes SSH session even when converge throws', async () => {
 				const { converge: mockedConverge } =
-					await import('../../cli/hetzner/converge.ts')
+					await import('@/cli/hetzner/converge.ts')
 				const { createSshSession: mockedSsh } =
 					await import('./ssh/session.ts')
 				const mockSession = createMockSession()
@@ -930,7 +930,7 @@ describe('HetznerVpsTarget', () => {
 			const { findFirewallsByName: mockedFindFw } =
 				await import('./api/firewall.ts')
 			const { deleteTailnetDevicesByHostname: mockedTailscale } =
-				await import('../tailscale/oauth.ts')
+				await import('@/adapters/tailscale/oauth.ts')
 			vi.mocked(mockedFindFw).mockResolvedValueOnce([
 				{ id: 99, name: 'acme-web-fw', appliedToCount: 0 },
 			])

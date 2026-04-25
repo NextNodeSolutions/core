@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { R2Operations } from '../r2/client.types.ts'
+import type { R2Operations } from '@/adapters/r2/client.types.ts'
 
 import type { SshSession } from './ssh/session.types.ts'
 import {

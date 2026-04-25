@@ -11,12 +11,12 @@ import {
 
 const { utils: sshUtils } = ssh2
 
-import { APP_WITH_DOMAIN, STATIC_WITH_DOMAIN } from '../fixtures.ts'
+import { APP_WITH_DOMAIN, STATIC_WITH_DOMAIN } from '@/cli/fixtures.ts'
 
 import { teardownCommand } from './teardown.command.ts'
 
 // Mock loadR2Runtime (network boundary: Cloudflare accounts API + SigV4 verify)
-vi.mock(import('../r2/load-runtime.ts'), async () => ({
+vi.mock(import('@/cli/r2/load-runtime.ts'), async () => ({
 	loadR2Runtime: vi.fn(async () => ({
 		accountId: 'acct',
 		endpoint: 'https://r2.example.com',
@@ -107,9 +107,9 @@ describe('teardownCommand - hetzner dispatch', () => {
 			},
 			durationMs: 1234,
 		})
-		const { loadR2Runtime } = await import('../r2/load-runtime.ts')
+		const { loadR2Runtime } = await import('@/cli/r2/load-runtime.ts')
 		const { HetznerVpsTarget } =
-			await import('../../adapters/hetzner/target.ts')
+			await import('@/adapters/hetzner/target.ts')
 
 		await teardownCommand(APP_WITH_DOMAIN)
 

@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { STATIC_NO_DOMAIN, STATIC_WITH_DOMAIN } from '../fixtures.ts'
+import { STATIC_NO_DOMAIN, STATIC_WITH_DOMAIN } from '@/cli/fixtures.ts'
 
 import { provisionCommand } from './provision.command.ts'
 import type { FetchImpl } from './test-utils.ts'

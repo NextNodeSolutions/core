@@ -1,7 +1,7 @@
 import { createLogger } from '@nextnode-solutions/logger'
 
-import type { SshSession } from '../../adapters/hetzner/ssh/session.types.ts'
-import { shellEscape } from '../../adapters/hetzner/ssh/shell-escape.ts'
+import type { SshSession } from '@/adapters/hetzner/ssh/session.types.ts'
+import { shellEscape } from '@/adapters/hetzner/ssh/shell-escape.ts'
 
 const logger = createLogger()
 

@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { STATIC_WITH_DOMAIN } from '../fixtures.ts'
+import { STATIC_WITH_DOMAIN } from '@/cli/fixtures.ts'
 
 import { seoGuardCommand } from './seo-guard.command.ts'
 

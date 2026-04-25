@@ -1,8 +1,8 @@
 import { createLogger } from '@nextnode-solutions/logger'
 
-import { isRecord } from '../../../config/types.ts'
-import { HTTP_PRECONDITION_FAILED } from '../../http.ts'
-import type { R2Operations } from '../../r2/client.types.ts'
+import { HTTP_PRECONDITION_FAILED } from '@/adapters/http.ts'
+import type { R2Operations } from '@/adapters/r2/client.types.ts'
+import { isRecord } from '@/config/types.ts'
 
 import type {
 	HcloudConvergedState,

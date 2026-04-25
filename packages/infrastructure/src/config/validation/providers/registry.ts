@@ -1,4 +1,4 @@
-import type { DeploySection, DeployTargetType } from '../../types.ts'
+import type { DeploySection, DeployTargetType } from '@/config/types.ts'
 
 import { cloudflarePages } from './cloudflare-pages.ts'
 import { hetznerVps } from './hetzner.ts'

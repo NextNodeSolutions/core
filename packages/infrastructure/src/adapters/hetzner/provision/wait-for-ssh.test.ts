@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { SshSession } from '../ssh/session.types.ts'
+import type { SshSession } from '@/adapters/hetzner/ssh/session.types.ts'
 
 import { waitForSsh } from './wait-for-ssh.ts'
 
@@ -15,7 +15,7 @@ function createMockSession(): SshSession {
 	}
 }
 
-vi.mock(import('../ssh/session.ts'), async importOriginal => {
+vi.mock(import('@/adapters/hetzner/ssh/session.ts'), async importOriginal => {
 	const actual = await importOriginal()
 	return {
 		...actual,
@@ -44,7 +44,8 @@ describe('waitForSsh', () => {
 	})
 
 	it('retries on transient failures', async () => {
-		const { createSshSession: mocked } = await import('../ssh/session.ts')
+		const { createSshSession: mocked } =
+			await import('@/adapters/hetzner/ssh/session.ts')
 		vi.mocked(mocked)
 			.mockRejectedValueOnce(new Error('Connection refused'))
 			.mockRejectedValueOnce(new Error('Connection refused'))
@@ -56,7 +57,8 @@ describe('waitForSsh', () => {
 	})
 
 	it('throws after max attempts', async () => {
-		const { createSshSession: mocked } = await import('../ssh/session.ts')
+		const { createSshSession: mocked } =
+			await import('@/adapters/hetzner/ssh/session.ts')
 		vi.mocked(mocked).mockRejectedValue(new Error('Connection refused'))
 
 		await expect(
@@ -66,7 +68,8 @@ describe('waitForSsh', () => {
 
 	it('closes the probe session on success', async () => {
 		const session = createMockSession()
-		const { createSshSession: mocked } = await import('../ssh/session.ts')
+		const { createSshSession: mocked } =
+			await import('@/adapters/hetzner/ssh/session.ts')
 		vi.mocked(mocked).mockResolvedValueOnce(session)
 
 		await waitForSsh({ host: 'h', privateKey: 'k' })

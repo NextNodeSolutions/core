@@ -1,28 +1,31 @@
 import { createLogger } from '@nextnode-solutions/logger'
 
-import type { HetznerVpsDeploySection } from '../../../config/types.ts'
-import type { ResourceOutcome } from '../../../domain/deploy/resource-outcome.ts'
-import { renderProjectCloudInit } from '../../../domain/hetzner/cloud-init.ts'
-import { computeFirewallRules } from '../../../domain/hetzner/firewall-rules.ts'
 import {
-	deleteTailnetDevicesByHostname,
-	getTailnetIpByHostname,
-	mintAuthkey,
-} from '../../tailscale/oauth.ts'
-import { applyFirewall, createFirewall } from '../api/firewall.ts'
-import type { CreateServerInput } from '../api/server.ts'
+	applyFirewall,
+	createFirewall,
+} from '@/adapters/hetzner/api/firewall.ts'
+import type { CreateServerInput } from '@/adapters/hetzner/api/server.ts'
 import {
 	assertServerTypeAvailable,
 	createServer,
 	describeServer,
-} from '../api/server.ts'
+} from '@/adapters/hetzner/api/server.ts'
 import {
 	MAX_POLL_ATTEMPTS,
 	POLL_INTERVAL_MS,
 	TAILSCALE_AUTHKEY_TTL_SECONDS,
 	TAILSCALE_TAG,
-} from '../constants.ts'
-import { waitUntil } from '../wait.ts'
+} from '@/adapters/hetzner/constants.ts'
+import { waitUntil } from '@/adapters/hetzner/wait.ts'
+import {
+	deleteTailnetDevicesByHostname,
+	getTailnetIpByHostname,
+	mintAuthkey,
+} from '@/adapters/tailscale/oauth.ts'
+import type { HetznerVpsDeploySection } from '@/config/types.ts'
+import type { ResourceOutcome } from '@/domain/deploy/resource-outcome.ts'
+import { renderProjectCloudInit } from '@/domain/hetzner/cloud-init.ts'
+import { computeFirewallRules } from '@/domain/hetzner/firewall-rules.ts'
 
 import { waitForSsh } from './wait-for-ssh.ts'
 
