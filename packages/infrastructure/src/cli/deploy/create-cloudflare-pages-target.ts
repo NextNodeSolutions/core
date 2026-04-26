@@ -1,19 +1,29 @@
-import { CloudflarePagesTarget } from '../../adapters/cloudflare/target.ts'
-import type { CloudflarePagesDeployableConfig } from '../../config/types.ts'
-import type { AppEnvironment } from '../../domain/environment.ts'
+import { CloudflarePagesTarget } from '#/adapters/cloudflare/target.ts'
+import { requireEnv } from '#/cli/env.ts'
+import type { CloudflarePagesDeployableConfig } from '#/config/types.ts'
+import { isCloudflarePagesDeployableConfig } from '#/config/types.ts'
+import type { AppEnvironment } from '#/domain/environment.ts'
 
-/**
- * Pure factory for the Cloudflare Pages deploy target. CF Pages reads its
- * API token lazily inside the target at IO time, so this factory is fully
- * synchronous and takes no runtime-resolved deps.
- */
+import type { TargetDefinition } from './target.ts'
+
 export function createCloudflarePagesTarget(
 	config: CloudflarePagesDeployableConfig,
 	environment: AppEnvironment,
 ): CloudflarePagesTarget {
 	return new CloudflarePagesTarget({
+		accountId: requireEnv('CLOUDFLARE_ACCOUNT_ID'),
+		token: requireEnv('CLOUDFLARE_API_TOKEN'),
 		environment,
 		domain: config.project.domain,
 		redirectDomains: config.project.redirectDomains,
 	})
 }
+
+export const cloudflarePagesTargetDefinition: TargetDefinition<'cloudflare-pages'> =
+	{
+		name: 'cloudflare-pages',
+		build(config, ctx) {
+			if (!isCloudflarePagesDeployableConfig(config)) return null
+			return createCloudflarePagesTarget(config, ctx.environment)
+		},
+	}

@@ -2,11 +2,11 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
 
-import { computeDnsRecords } from '../../domain/cloudflare/dns-records.ts'
-import { PAGES_MANAGED_RESOURCES } from '../../domain/cloudflare/managed-resources.ts'
-import { computePagesProjectName } from '../../domain/cloudflare/pages-project-name.ts'
-import { resolveDeployDomain } from '../../domain/deploy/domain.ts'
-import { executeHandlers } from '../../domain/deploy/execute-handlers.ts'
+import { computeDnsRecords } from '#/domain/cloudflare/dns-records.ts'
+import { PAGES_MANAGED_RESOURCES } from '#/domain/cloudflare/managed-resources.ts'
+import { computePagesProjectName } from '#/domain/cloudflare/pages-project-name.ts'
+import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
+import { executeHandlers } from '#/domain/deploy/execute-handlers.ts'
 import type {
 	DeployEnv,
 	DeployInput,
@@ -14,10 +14,11 @@ import type {
 	DeployTarget,
 	ProvisionResult,
 	StaticDeployedEnvironment,
-} from '../../domain/deploy/target.ts'
-import type { TeardownResult } from '../../domain/deploy/teardown-result.ts'
-import type { TeardownTarget } from '../../domain/deploy/teardown-target.ts'
-import type { AppEnvironment } from '../../domain/environment.ts'
+	TargetEnv,
+} from '#/domain/deploy/target.ts'
+import type { TeardownResult } from '#/domain/deploy/teardown-result.ts'
+import type { TeardownTarget } from '#/domain/deploy/teardown-target.ts'
+import type { AppEnvironment } from '#/domain/environment.ts'
 
 import { reconcileDnsRecords } from './dns/reconcile.ts'
 import { getPagesProject } from './pages/api.ts'
@@ -27,17 +28,11 @@ import { provisionProject } from './pages/project.ts'
 import { teardownPagesDns, teardownProject } from './teardown-pages.ts'
 
 export interface CloudflarePagesTargetConfig {
+	readonly accountId: string
+	readonly token: string
 	readonly environment: AppEnvironment
 	readonly domain: string | undefined
 	readonly redirectDomains: ReadonlyArray<string>
-}
-
-function requireEnv(name: string): string {
-	const value = process.env[name]
-	if (!value) {
-		throw new Error(`${name} env var is required`)
-	}
-	return value
 }
 
 export class CloudflarePagesTarget implements DeployTarget {
@@ -49,19 +44,22 @@ export class CloudflarePagesTarget implements DeployTarget {
 	private readonly redirectDomains: ReadonlyArray<string>
 
 	constructor(config: CloudflarePagesTargetConfig) {
-		this.accountId = requireEnv('CLOUDFLARE_ACCOUNT_ID')
-		this.token = requireEnv('CLOUDFLARE_API_TOKEN')
+		this.accountId = config.accountId
+		this.token = config.token
 		this.environment = config.environment
 		this.domain = config.domain
 		this.redirectDomains = config.redirectDomains
 	}
 
-	async computeDeployEnv(projectName: string): Promise<DeployEnv> {
+	async contributeEnv(projectName: string): Promise<TargetEnv> {
 		const pagesProjectName = computePagesProjectName(
 			projectName,
 			this.environment,
 		)
-		return { SITE_URL: await this.resolveSiteUrl(pagesProjectName) }
+		return {
+			public: { SITE_URL: await this.resolveSiteUrl(pagesProjectName) },
+			secret: {},
+		}
 	}
 
 	async ensureInfra(projectName: string): Promise<ProvisionResult> {

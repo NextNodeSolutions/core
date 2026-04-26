@@ -1,3 +1,4 @@
+import { httpError, notFound, okJson } from '#/test-fetch.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -11,40 +12,6 @@ import {
 const TOKEN = 'cf-token-123'
 const ACCOUNT = 'acct-abc'
 const PROJECT = 'my-site'
-
-interface MockResponse {
-	ok: boolean
-	status: number
-	json: () => Promise<unknown>
-	text: () => Promise<string>
-}
-
-function okJson(body: unknown): MockResponse {
-	return {
-		ok: true,
-		status: 200,
-		json: () => Promise.resolve(body),
-		text: () => Promise.resolve(JSON.stringify(body)),
-	}
-}
-
-function notFound(): MockResponse {
-	return {
-		ok: false,
-		status: 404,
-		json: () => Promise.resolve({}),
-		text: () => Promise.resolve('Not found'),
-	}
-}
-
-function httpError(status: number, body: string): MockResponse {
-	return {
-		ok: false,
-		status,
-		text: () => Promise.resolve(body),
-		json: () => Promise.resolve({}),
-	}
-}
 
 afterEach(() => {
 	vi.unstubAllGlobals()

@@ -1,6 +1,5 @@
+import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-import type { R2Operations } from '../../r2/client.types.ts'
 
 import {
 	deleteState,
@@ -9,7 +8,7 @@ import {
 	writeState,
 } from './read-write.ts'
 
-function createMockR2(): R2Operations {
+function createMockR2(): ObjectStoreClient {
 	return {
 		get: vi.fn(),
 		put: vi.fn(),
@@ -40,7 +39,7 @@ const convergedState = {
 	convergedAt: '2026-04-17T10:00:00.000Z',
 }
 
-let r2: R2Operations
+let r2: ObjectStoreClient
 
 beforeEach(() => {
 	r2 = createMockR2()

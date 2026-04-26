@@ -1,10 +1,9 @@
+import type { ResourceOutcome } from '#/domain/deploy/resource-outcome.ts'
+import type { AppEnvironment } from '#/domain/environment.ts'
+import { extractUpstreams } from '#/domain/hetzner/caddy-config.ts'
+import { computeSilo } from '#/domain/hetzner/env-silo.ts'
+import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
 import { createLogger } from '@nextnode-solutions/logger'
-
-import type { ResourceOutcome } from '../../domain/deploy/resource-outcome.ts'
-import type { AppEnvironment } from '../../domain/environment.ts'
-import { extractUpstreams } from '../../domain/hetzner/caddy-config.ts'
-import { computeSilo } from '../../domain/hetzner/env-silo.ts'
-import type { R2Operations } from '../r2/client.types.ts'
 
 import { CADDY_CONFIG_PATH } from './constants.ts'
 import type { SshSession } from './ssh/session.types.ts'
@@ -95,7 +94,7 @@ export async function teardownProjectCaddyRoute(
  * project.
  */
 export async function teardownProjectCerts(
-	certsR2: R2Operations,
+	certsR2: ObjectStoreClient,
 	projectName: string,
 ): Promise<ResourceOutcome> {
 	const prefix = `${projectName}/`

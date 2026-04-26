@@ -1,6 +1,5 @@
+import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-import type { R2Operations } from '../r2/client.types.ts'
 
 import type { SshSession } from './ssh/session.types.ts'
 import {
@@ -20,7 +19,7 @@ function createMockSession(): SshSession {
 	}
 }
 
-function createMockR2(): R2Operations {
+function createMockR2(): ObjectStoreClient {
 	return {
 		get: vi.fn(async () => null),
 		put: vi.fn(async () => ''),

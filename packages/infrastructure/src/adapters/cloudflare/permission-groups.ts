@@ -1,4 +1,4 @@
-import type { R2PermissionGroupIds } from '../../domain/cloudflare/r2/token-policy.ts'
+import type { R2PermissionGroupIds } from '#/domain/cloudflare/r2/token-policy.ts'
 
 import { CLOUDFLARE_API_BASE, cfFetchJson, requireArrayResult } from './api.ts'
 

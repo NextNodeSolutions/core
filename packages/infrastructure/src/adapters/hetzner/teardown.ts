@@ -1,16 +1,17 @@
-import { createLogger } from '@nextnode-solutions/logger'
-
-import { resolveDeployDomain } from '../../domain/deploy/domain.ts'
-import { executeHandlers } from '../../domain/deploy/execute-handlers.ts'
-import type { ResourceOutcome } from '../../domain/deploy/resource-outcome.ts'
-import type { TeardownResult } from '../../domain/deploy/teardown-result.ts'
-import type { TeardownTarget } from '../../domain/deploy/teardown-target.ts'
-import type { AppEnvironment } from '../../domain/environment.ts'
+import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
+import { executeHandlers } from '#/domain/deploy/execute-handlers.ts'
+import type { ResourceOutcome } from '#/domain/deploy/resource-outcome.ts'
+import type { TeardownResult } from '#/domain/deploy/teardown-result.ts'
+import type { TeardownTarget } from '#/domain/deploy/teardown-target.ts'
+import type { DnsClient } from '#/domain/dns/client.ts'
+import type { AppEnvironment } from '#/domain/environment.ts'
 import {
 	VPS_MANAGED_RESOURCES,
 	VPS_PROJECT_MANAGED_RESOURCES,
-} from '../../domain/hetzner/managed-resources.ts'
-import type { R2Client } from '../r2/client.ts'
+} from '#/domain/hetzner/managed-resources.ts'
+import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
+import type { TailnetClient } from '#/domain/tailnet/client.ts'
+import { createLogger } from '@nextnode-solutions/logger'
 
 import { createSshSession } from './ssh/session.ts'
 import type { SshSession } from './ssh/session.types.ts'
@@ -36,11 +37,11 @@ export interface HetznerTeardownContext {
 	readonly target: TeardownTarget
 	readonly environment: AppEnvironment
 	readonly hcloudToken: string
-	readonly tailscaleAuthKey: string
+	readonly tailnet: TailnetClient
 	readonly deployPrivateKey: string
-	readonly cloudflareApiToken: string
-	readonly r2: R2Client
-	readonly certsR2: R2Client
+	readonly dns: DnsClient
+	readonly r2: ObjectStoreClient
+	readonly certsR2: ObjectStoreClient
 }
 
 export async function runHetznerTeardown(
@@ -60,10 +61,8 @@ async function teardownVps(
 	const outcome = await executeHandlers(VPS_MANAGED_RESOURCES, {
 		server: () => teardownServer(ctx.hcloudToken, ctx.r2, ctx.projectName),
 		firewall: () => teardownFirewall(ctx.hcloudToken, ctx.projectName),
-		tailscale: () =>
-			teardownTailscale(ctx.tailscaleAuthKey, ctx.projectName),
-		dns: () =>
-			teardownVpsDns(ctx.domain, ctx.environment, ctx.cloudflareApiToken),
+		tailscale: () => teardownTailscale(ctx.tailnet, ctx.projectName),
+		dns: () => teardownVpsDns(ctx.domain, ctx.environment, ctx.dns),
 		state: () => teardownVpsState(ctx.r2, ctx.projectName),
 	})
 
@@ -115,8 +114,7 @@ async function teardownProjectWithSession(
 			teardownProjectContainer(session, ctx.projectName, ctx.environment),
 		caddy: () => teardownProjectCaddyRoute(session, projectHostname),
 		certs: () => teardownProjectCerts(ctx.certsR2, ctx.projectName),
-		dns: () =>
-			teardownVpsDns(ctx.domain, ctx.environment, ctx.cloudflareApiToken),
+		dns: () => teardownVpsDns(ctx.domain, ctx.environment, ctx.dns),
 		state: () => teardownVpsState(ctx.r2, ctx.projectName),
 	})
 
@@ -138,8 +136,7 @@ async function teardownProjectWithoutSession(
 		container: () => skipUnreachable(),
 		caddy: () => skipUnreachable(),
 		certs: () => teardownProjectCerts(ctx.certsR2, ctx.projectName),
-		dns: () =>
-			teardownVpsDns(ctx.domain, ctx.environment, ctx.cloudflareApiToken),
+		dns: () => teardownVpsDns(ctx.domain, ctx.environment, ctx.dns),
 		state: () => teardownVpsState(ctx.r2, ctx.projectName),
 	})
 

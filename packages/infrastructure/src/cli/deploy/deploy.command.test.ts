@@ -15,7 +15,6 @@ import {
 
 const { utils: sshUtils } = ssh2
 
-import type { DeployResult } from '../../domain/deploy/target.ts'
 import {
 	APP_WITH_DOMAIN,
 	APP_WITH_SECRETS,
@@ -23,11 +22,12 @@ import {
 	STATIC_WITH_DOMAIN,
 	STATIC_WITH_MISSING_SECRET,
 	STATIC_WITH_SECRETS,
-} from '../fixtures.ts'
+} from '#/cli/fixtures.ts'
+import type { DeployResult } from '#/domain/deploy/target.ts'
+import type { FetchImpl } from '#/test-fetch.ts'
+import { okJson } from '#/test-fetch.ts'
 
 import { deployCommand } from './deploy.command.ts'
-import type { FetchImpl } from './test-utils.ts'
-import { okJson } from './test-utils.ts'
 
 function stubFetch(): ReturnType<typeof vi.fn<FetchImpl>> {
 	const fetchMock = vi
@@ -83,7 +83,7 @@ const { mockHetznerDeploy } = vi.hoisted(() => ({
 
 // Mock loadR2Runtime (network boundary: Cloudflare accounts API + SigV4 verify).
 // Deploy must NOT call ensureR2Setup — R2 bootstrap is provision's responsibility.
-vi.mock(import('../r2/load-runtime.ts'), async () => ({
+vi.mock(import('#/cli/r2/load-runtime.ts'), async () => ({
 	loadR2Runtime: vi.fn(async () => ({
 		accountId: 'acct',
 		endpoint: 'https://r2.example.com',
@@ -98,7 +98,10 @@ vi.mock(import('../r2/load-runtime.ts'), async () => ({
 vi.mock('../../adapters/hetzner/target.ts', () => ({
 	HetznerVpsTarget: vi.fn(() => ({
 		name: 'hetzner-vps',
-		computeDeployEnv: () => ({ SITE_URL: 'https://example.com' }),
+		contributeEnv: () => ({
+			public: { SITE_URL: 'https://example.com' },
+			secret: {},
+		}),
 		deploy: mockHetznerDeploy,
 		ensureInfra: vi.fn(),
 		reconcileDns: vi.fn(),
@@ -108,6 +111,7 @@ vi.mock('../../adapters/hetzner/target.ts', () => ({
 describe('deployCommand', () => {
 	let envFile: string
 	let summaryFile: string
+	const stdoutWrites: string[] = []
 
 	beforeEach(() => {
 		const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -118,6 +122,15 @@ describe('deployCommand', () => {
 		vi.stubEnv('CLOUDFLARE_API_TOKEN', 'cf-token')
 		vi.stubEnv('GITHUB_ENV', envFile)
 		vi.stubEnv('GITHUB_STEP_SUMMARY', summaryFile)
+		stdoutWrites.length = 0
+		vi.spyOn(process.stdout, 'write').mockImplementation(chunk => {
+			stdoutWrites.push(
+				typeof chunk === 'string'
+					? chunk
+					: Buffer.from(chunk).toString(),
+			)
+			return true
+		})
 	})
 
 	afterEach(() => {
@@ -198,6 +211,21 @@ describe('deployCommand', () => {
 					},
 				},
 			})
+		})
+
+		it('writes declared secrets to GITHUB_ENV with ::add-mask:: so the build step can read them', async () => {
+			vi.stubEnv(
+				'ALL_SECRETS',
+				JSON.stringify({ RESEND_API_KEY: 'resend-123' }),
+			)
+			stubFetch()
+
+			await deployCommand(STATIC_WITH_SECRETS)
+
+			const ghEnv = readFileSync(envFile, 'utf-8')
+			expect(ghEnv).toContain('SITE_URL=https://example.com\n')
+			expect(ghEnv).toContain('RESEND_API_KEY=resend-123\n')
+			expect(stdoutWrites).toContain('::add-mask::resend-123\n')
 		})
 
 		it('throws when a declared secret is missing', async () => {
@@ -302,6 +330,20 @@ describe('deployCommand', () => {
 				}),
 				{ SITE_URL: 'https://example.com' },
 			)
+		})
+
+		it('writes declared secrets to GITHUB_ENV with ::add-mask:: so the build step can read them', async () => {
+			vi.stubEnv(
+				'ALL_SECRETS',
+				JSON.stringify({ DATABASE_URL: 'postgres://db:5432' }),
+			)
+
+			await deployCommand(APP_WITH_SECRETS)
+
+			const ghEnv = readFileSync(envFile, 'utf-8')
+			expect(ghEnv).toContain('SITE_URL=https://example.com\n')
+			expect(ghEnv).toContain('DATABASE_URL=postgres://db:5432\n')
+			expect(stdoutWrites).toContain('::add-mask::postgres://db:5432\n')
 		})
 
 		it('throws when IMAGE_REF is missing', async () => {

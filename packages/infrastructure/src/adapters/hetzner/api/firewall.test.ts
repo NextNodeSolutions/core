@@ -1,3 +1,10 @@
+import {
+	httpError,
+	lastBody,
+	lastCall,
+	noContent,
+	okJson,
+} from '#/test-fetch.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -7,14 +14,8 @@ import {
 	findFirewallById,
 	findFirewallsByName,
 } from './firewall.ts'
-import {
-	TEST_TOKEN,
-	httpError,
-	lastBody,
-	lastCall,
-	noContent,
-	okJson,
-} from './test-helpers.ts'
+
+const TEST_TOKEN = 'hcloud-test-token'
 
 afterEach(() => {
 	vi.unstubAllGlobals()

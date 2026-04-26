@@ -13,18 +13,24 @@ import {
 	validatePackageSection,
 	validateProjectSection,
 } from './validation/project.ts'
+import {
+	hasAnyService,
+	validateServicesSection,
+} from './validation/services.ts'
 
 export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 	const projectResult = validateProjectSection(raw['project'])
 	const scriptsResult = validateScriptsSection(raw['scripts'])
 	const envResult = validateEnvironmentSection(raw['environment'])
 	const pkgResult = validatePackageSection(raw['package'])
+	const servicesResult = validateServicesSection(raw['services'])
 
 	if (
 		!projectResult.ok ||
 		!scriptsResult.ok ||
 		!envResult.ok ||
-		!pkgResult.ok
+		!pkgResult.ok ||
+		!servicesResult.ok
 	) {
 		return {
 			ok: false,
@@ -33,11 +39,21 @@ export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 				scriptsResult,
 				envResult,
 				pkgResult,
+				servicesResult,
 			].flatMap(r => (r.ok ? [] : r.errors)),
 		}
 	}
 
 	const { type } = projectResult.section
+
+	if (type !== 'app' && hasAnyService(servicesResult.section)) {
+		return {
+			ok: false,
+			errors: [
+				`[services] section is forbidden for project type "${type}" — only "app" projects have a runtime that can consume service env vars`,
+			],
+		}
+	}
 
 	if (!isDeployable(type)) {
 		if (raw['deploy'] !== undefined) {
@@ -57,6 +73,7 @@ export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 				environment: envResult.section,
 				package: pkgResult.section,
 				deploy: false,
+				services: servicesResult.section,
 			},
 		}
 	}
@@ -85,6 +102,7 @@ export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 			environment: envResult.section,
 			package: pkgResult.section,
 			deploy: deployResult.section,
+			services: servicesResult.section,
 		},
 	}
 }

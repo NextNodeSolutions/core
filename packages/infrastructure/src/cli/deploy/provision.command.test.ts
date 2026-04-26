@@ -2,13 +2,12 @@ import { readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { STATIC_NO_DOMAIN, STATIC_WITH_DOMAIN } from '#/cli/fixtures.ts'
+import type { FetchImpl } from '#/test-fetch.ts'
+import { methodOf, notFound, okJson, urlOf } from '#/test-fetch.ts'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { STATIC_NO_DOMAIN, STATIC_WITH_DOMAIN } from '../fixtures.ts'
-
 import { provisionCommand } from './provision.command.ts'
-import type { FetchImpl } from './test-utils.ts'
-import { methodOf, notFound, okJson, urlOf } from './test-utils.ts'
 
 function stubCloudflareApi(): ReturnType<typeof vi.fn<FetchImpl>> {
 	const impl: FetchImpl = (input, init) => {

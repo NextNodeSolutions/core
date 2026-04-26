@@ -1,15 +1,11 @@
 import { setTimeout as sleep } from 'node:timers/promises'
 
-import { isRecord } from '../../config/types.ts'
+import { isRecord } from '#/config/types.ts'
+import type { MintedAuthkey, TailnetClient } from '#/domain/tailnet/client.ts'
 
 const TAILSCALE_API_BASE = 'https://api.tailscale.com/api/v2'
 const DEVICE_POLL_INTERVAL_MS = 2_000
 const DEVICE_POLL_MAX_ATTEMPTS = 45
-
-export interface MintedAuthkey {
-	readonly key: string
-	readonly expires: string
-}
 
 async function exchangeClientSecret(clientSecret: string): Promise<string> {
 	const basic = Buffer.from(`${clientSecret}:`).toString('base64')
@@ -205,4 +201,15 @@ export async function getTailnetIpByHostname(
 	throw new Error(
 		`Tailnet device "${hostname}" not found after ${DEVICE_POLL_MAX_ATTEMPTS} attempts`,
 	)
+}
+
+export function createTailnetClient(clientSecret: string): TailnetClient {
+	return {
+		mintAuthkey: (tags, ttlSeconds, description) =>
+			mintAuthkey(clientSecret, tags, ttlSeconds, description),
+		getIpByHostname: hostname =>
+			getTailnetIpByHostname(clientSecret, hostname),
+		deleteByHostname: hostname =>
+			deleteTailnetDevicesByHostname(clientSecret, hostname),
+	}
 }

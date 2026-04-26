@@ -1,13 +1,13 @@
+import { writeSummary } from '#/adapters/github/output.ts'
+import { getEnv } from '#/cli/env.ts'
+import type { DeployableConfig } from '#/config/types.ts'
+import { buildTeardownSummary } from '#/domain/deploy/teardown-summary.ts'
+import { parseTeardownTarget } from '#/domain/deploy/teardown-target.ts'
+import { resolveEnvironment } from '#/domain/environment.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
-import { writeSummary } from '../../adapters/github/output.ts'
-import type { DeployableConfig } from '../../config/types.ts'
-import { buildTeardownSummary } from '../../domain/deploy/teardown-summary.ts'
-import { parseTeardownTarget } from '../../domain/deploy/teardown-target.ts'
-import { resolveEnvironment } from '../../domain/environment.ts'
-import { getEnv } from '../env.ts'
-
 import { buildRuntimeTarget } from './build-runtime-target.ts'
+import { loadInfraStorageForConfig } from './load-infra-storage.ts'
 
 const logger = createLogger()
 
@@ -17,7 +17,8 @@ export async function teardownCommand(config: DeployableConfig): Promise<void> {
 		getEnv('PIPELINE_ENVIRONMENT'),
 	)
 	const teardownTarget = parseTeardownTarget(getEnv('TEARDOWN_TARGET'))
-	const target = await buildRuntimeTarget(config, environment)
+	const infraStorage = await loadInfraStorageForConfig(config)
+	const target = buildRuntimeTarget(config, environment, infraStorage)
 
 	// Audit line — emitted BEFORE any destructive call so CI log readers can
 	// reconstruct the exact scope of the teardown (project, env, target type,
