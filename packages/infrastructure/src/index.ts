@@ -9,6 +9,7 @@ import { teardownGuardCommand } from './cli/deploy/teardown-guard.command.ts'
 import { teardownCommand } from './cli/deploy/teardown.command.ts'
 import { requireEnv } from './cli/env.ts'
 import { buildGoldenImageCommand } from './cli/hetzner/build-golden-image.command.ts'
+import { recoverCommand } from './cli/hetzner/recover.command.ts'
 import { planCommand } from './cli/pipeline/plan.command.ts'
 import { prodGateCommand } from './cli/pipeline/prod-gate.command.ts'
 import { publishResultCommand } from './cli/pipeline/publish-result.command.ts'
@@ -40,6 +41,7 @@ const STANDALONE_COMMANDS: Record<string, StandaloneCommand> = {
 	'publish-result': publishResultCommand,
 	'compute-image-ref': computeImageRefCommand,
 	'build-golden-image': buildGoldenImageCommand,
+	recover: recoverCommand,
 }
 
 const ALL_COMMAND_NAMES = [

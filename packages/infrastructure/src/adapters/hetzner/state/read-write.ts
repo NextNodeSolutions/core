@@ -50,7 +50,7 @@ function isEtagMismatch(error: unknown): boolean {
 	return false
 }
 
-function stateKey(vpsName: string): string {
+export function stateKey(vpsName: string): string {
 	return `hetzner/${vpsName}.json`
 }
 

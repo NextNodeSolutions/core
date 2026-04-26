@@ -11,11 +11,7 @@ import {
 	findFirewallById,
 	findFirewallsByName,
 } from './api/firewall.ts'
-import {
-	deleteServer,
-	findServerById,
-	findServersByLabels,
-} from './api/server.ts'
+import { deleteServer, findServerById } from './api/server.ts'
 import { MAX_POLL_ATTEMPTS, POLL_INTERVAL_MS } from './constants.ts'
 import { deleteState, readState } from './state/read-write.ts'
 import { waitUntil } from './wait.ts'
@@ -28,48 +24,28 @@ export async function teardownServer(
 	vpsName: string,
 ): Promise<ResourceOutcome> {
 	const existing = await readState(r2, vpsName)
-
-	if (existing) {
-		const { serverId } = existing.state
-		await deleteServer(hcloudToken, serverId)
-		await waitUntil({
-			subject: `Server ${String(serverId)} deletion`,
-			poll: () => findServerById(hcloudToken, serverId),
-			isDone: server => server === null,
-			detail: server => `status=${server?.status ?? 'unknown'}`,
-			maxAttempts: MAX_POLL_ATTEMPTS,
-			intervalMs: POLL_INTERVAL_MS,
-		})
-		return {
-			handled: true,
-			detail: `deleted #${String(serverId)}`,
-		}
+	if (!existing) {
+		// Unreachable in normal flow: runHetznerTeardown rejects missing state
+		// before we get here. Stateless cleanup is the recover command's job.
+		throw new Error(
+			`teardownServer for VPS "${vpsName}": no R2 state. Use the recover command for orphan cleanup.`,
+		)
 	}
 
-	const orphans = await findServersByLabels(hcloudToken, {
-		vps: vpsName,
-		managed_by: 'nextnode',
+	const { serverId } = existing.state
+	await deleteServer(hcloudToken, serverId)
+	await waitUntil({
+		subject: `Server ${String(serverId)} deletion`,
+		poll: () => findServerById(hcloudToken, serverId),
+		isDone: server => server === null,
+		detail: server => `status=${server?.status ?? 'unknown'}`,
+		maxAttempts: MAX_POLL_ATTEMPTS,
+		intervalMs: POLL_INTERVAL_MS,
 	})
-	if (orphans.length === 0) {
-		return { handled: false, detail: 'already gone' }
+	return {
+		handled: true,
+		detail: `deleted #${String(serverId)}`,
 	}
-
-	await Promise.all(
-		orphans.map(async s => {
-			await deleteServer(hcloudToken, s.id)
-			await waitUntil({
-				subject: `Server ${String(s.id)} deletion`,
-				poll: () => findServerById(hcloudToken, s.id),
-				isDone: server => server === null,
-				detail: server => `status=${server?.status ?? 'unknown'}`,
-				maxAttempts: MAX_POLL_ATTEMPTS,
-				intervalMs: POLL_INTERVAL_MS,
-			})
-		}),
-	)
-	const ids = orphans.map(s => String(s.id)).join(', ')
-	logger.info(`Orphan server(s) deleted: ${ids}`)
-	return { handled: true, detail: `deleted orphan(s) #${ids}` }
 }
 
 export async function teardownFirewall(
