@@ -2,13 +2,12 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
 
-import { getEnv, requireEnv } from '@/cli/env.ts'
-import { loadR2Runtime } from '@/cli/r2/load-runtime.ts'
+import { getEnv } from '@/cli/env.ts'
 import type { DeployableConfig } from '@/config/types.ts'
-import { isHetznerDeployableConfig } from '@/config/types.ts'
 import { resolveEnvironment } from '@/domain/environment.ts'
 
 import { buildRuntimeTarget } from './build-runtime-target.ts'
+import { loadInfraStorageForConfig } from './load-infra-storage.ts'
 
 export async function dnsCommand(config: DeployableConfig): Promise<void> {
 	if (!config.project.domain) {
@@ -22,9 +21,7 @@ export async function dnsCommand(config: DeployableConfig): Promise<void> {
 		config.project.type,
 		getEnv('PIPELINE_ENVIRONMENT'),
 	)
-	const infraStorage = isHetznerDeployableConfig(config)
-		? await loadR2Runtime(requireEnv('CLOUDFLARE_API_TOKEN'))
-		: null
+	const infraStorage = await loadInfraStorageForConfig(config)
 	const target = buildRuntimeTarget(config, environment, infraStorage)
 	await target.reconcileDns(config.project.name, config.project.domain)
 }

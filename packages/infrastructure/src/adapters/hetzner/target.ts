@@ -1,6 +1,5 @@
 import { createLogger } from '@nextnode-solutions/logger'
 
-import { R2Client } from '@/adapters/r2/client.ts'
 import type { HetznerVpsDeploySection } from '@/config/types.ts'
 import { buildR2CaddyBinding } from '@/domain/cloudflare/r2/caddy-binding.ts'
 import type { InfraStorageRuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
@@ -20,6 +19,8 @@ import type { AppEnvironment } from '@/domain/environment.ts'
 import { CADDY_ENV_PATH, renderCaddyEnv } from '@/domain/hetzner/caddy-env.ts'
 import { buildCaddyForProject } from '@/domain/hetzner/caddy-for-project.ts'
 import { computeVpsDnsRecords } from '@/domain/hetzner/dns-records.ts'
+import type { ObjectStoreClient } from '@/domain/storage/object-store.ts'
+import type { TailnetClient } from '@/domain/tailnet/client.ts'
 
 import { CADDY_CONFIG_PATH } from './constants.ts'
 import { deployContainer } from './deploy-container.ts'
@@ -34,7 +35,7 @@ export interface HetznerCredentials {
 	readonly hcloudToken: string
 	readonly deployPrivateKey: string
 	readonly deployPublicKey: string
-	readonly tailscaleAuthKey: string
+	readonly tailnet: TailnetClient
 }
 
 export interface HetznerVectorConfig {
@@ -45,6 +46,8 @@ export interface HetznerVectorConfig {
 export interface HetznerVpsTargetConfig {
 	readonly hetzner: HetznerVpsDeploySection['hetzner']
 	readonly infraStorage: InfraStorageRuntimeConfig
+	readonly stateStore: ObjectStoreClient
+	readonly certsStore: ObjectStoreClient
 	readonly environment: AppEnvironment
 	readonly domain: string
 	readonly internal: boolean
@@ -58,23 +61,13 @@ export interface HetznerVpsTargetConfig {
 export class HetznerVpsTarget implements DeployTarget {
 	readonly name = 'hetzner-vps'
 	private readonly config: HetznerVpsTargetConfig
-	private readonly r2: R2Client
-	private readonly certsR2: R2Client
+	private readonly r2: ObjectStoreClient
+	private readonly certsR2: ObjectStoreClient
 
 	constructor(config: HetznerVpsTargetConfig) {
 		this.config = config
-		this.r2 = new R2Client({
-			endpoint: config.infraStorage.endpoint,
-			accessKeyId: config.infraStorage.accessKeyId,
-			secretAccessKey: config.infraStorage.secretAccessKey,
-			bucket: config.infraStorage.stateBucket,
-		})
-		this.certsR2 = new R2Client({
-			endpoint: config.infraStorage.endpoint,
-			accessKeyId: config.infraStorage.accessKeyId,
-			secretAccessKey: config.infraStorage.secretAccessKey,
-			bucket: config.infraStorage.certsBucket,
-		})
+		this.r2 = config.stateStore
+		this.certsR2 = config.certsStore
 	}
 
 	async ensureInfra(projectName: string): Promise<VpsProvisionResult> {
@@ -235,7 +228,7 @@ export class HetznerVpsTarget implements DeployTarget {
 			target,
 			environment: this.config.environment,
 			hcloudToken: this.config.credentials.hcloudToken,
-			tailscaleAuthKey: this.config.credentials.tailscaleAuthKey,
+			tailnet: this.config.credentials.tailnet,
 			deployPrivateKey: this.config.credentials.deployPrivateKey,
 			dns: this.config.dns,
 			r2: this.r2,

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import type { R2Operations } from '@/adapters/r2/client.types.ts'
 import type { R2ServiceState } from '@/domain/services/r2.ts'
+import type { ObjectStoreClient } from '@/domain/storage/object-store.ts'
 
 import { readR2ServiceState, writeR2ServiceState } from './r2-state.ts'
 
@@ -14,7 +14,7 @@ const STATE: R2ServiceState = {
 	buckets: [{ alias: 'uploads', name: 'myapp-production-uploads' }],
 }
 
-function fakeR2(state: Map<string, string>): R2Operations {
+function fakeR2(state: Map<string, string>): ObjectStoreClient {
 	return {
 		get: vi.fn(async (key: string) => {
 			const body = state.get(key)

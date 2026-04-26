@@ -1,40 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import type { FetchImpl } from '@/test-fetch.ts'
+import { httpError, okJson } from '@/test-fetch.ts'
+
 import { updatePagesEnvVars } from './env.ts'
 
 const TOKEN = 'cf-token-123'
 const ACCOUNT = 'acct-abc'
 const PROJECT = 'my-site'
-
-interface MockResponse {
-	ok: boolean
-	status: number
-	json: () => Promise<unknown>
-	text: () => Promise<string>
-}
-
-type FetchImpl = (
-	input: string | URL,
-	init?: RequestInit,
-) => Promise<MockResponse>
-
-function okJson(body: unknown): MockResponse {
-	return {
-		ok: true,
-		status: 200,
-		json: () => Promise.resolve(body),
-		text: () => Promise.resolve(JSON.stringify(body)),
-	}
-}
-
-function httpError(status: number, body: string): MockResponse {
-	return {
-		ok: false,
-		status,
-		text: () => Promise.resolve(body),
-		json: () => Promise.resolve({}),
-	}
-}
 
 function extractBody(fetchMock: ReturnType<typeof vi.fn<FetchImpl>>): unknown {
 	const call = fetchMock.mock.calls[0]

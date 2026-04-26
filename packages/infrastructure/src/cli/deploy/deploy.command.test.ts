@@ -24,10 +24,10 @@ import {
 	STATIC_WITH_SECRETS,
 } from '@/cli/fixtures.ts'
 import type { DeployResult } from '@/domain/deploy/target.ts'
+import type { FetchImpl } from '@/test-fetch.ts'
+import { okJson } from '@/test-fetch.ts'
 
 import { deployCommand } from './deploy.command.ts'
-import type { FetchImpl } from './test-utils.ts'
-import { okJson } from './test-utils.ts'
 
 function stubFetch(): ReturnType<typeof vi.fn<FetchImpl>> {
 	const fetchMock = vi

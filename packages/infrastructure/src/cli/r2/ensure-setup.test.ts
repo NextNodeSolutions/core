@@ -6,41 +6,10 @@ vi.mock('node:timers/promises', () => ({
 	setTimeout: vi.fn(() => Promise.resolve()),
 }))
 
+import type { MockResponse } from '@/test-fetch.ts'
+import { notFound, okJson, unauthorized } from '@/test-fetch.ts'
+
 import { ensureR2Setup } from './ensure-setup.ts'
-
-interface MockResponse {
-	ok: boolean
-	status: number
-	json: () => Promise<unknown>
-	text: () => Promise<string>
-}
-
-function okJson(body: unknown): MockResponse {
-	return {
-		ok: true,
-		status: 200,
-		json: () => Promise.resolve(body),
-		text: () => Promise.resolve(JSON.stringify(body)),
-	}
-}
-
-function notFound(): MockResponse {
-	return {
-		ok: false,
-		status: 404,
-		json: () => Promise.resolve({}),
-		text: () => Promise.resolve('not found'),
-	}
-}
-
-function unauthorized(): MockResponse {
-	return {
-		ok: false,
-		status: 401,
-		json: () => Promise.resolve({}),
-		text: () => Promise.resolve('InvalidAccessKeyId'),
-	}
-}
 
 interface ListedTokenFixture {
 	readonly id: string

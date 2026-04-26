@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { httpError, okJson } from '@/test-fetch.ts'
+
 import {
 	createDnsRecord,
 	deleteDnsRecord,
@@ -9,37 +11,6 @@ import {
 } from './api.ts'
 
 const TOKEN = 'cf-token-123'
-
-function okJson(body: unknown): {
-	ok: true
-	status: 200
-	json: () => Promise<unknown>
-	text: () => Promise<string>
-} {
-	return {
-		ok: true,
-		status: 200,
-		json: () => Promise.resolve(body),
-		text: () => Promise.resolve(JSON.stringify(body)),
-	}
-}
-
-function httpError(
-	status: number,
-	body: string,
-): {
-	ok: false
-	status: number
-	text: () => Promise<string>
-	json: () => Promise<unknown>
-} {
-	return {
-		ok: false,
-		status,
-		text: () => Promise.resolve(body),
-		json: () => Promise.resolve({}),
-	}
-}
 
 afterEach(() => {
 	vi.unstubAllGlobals()

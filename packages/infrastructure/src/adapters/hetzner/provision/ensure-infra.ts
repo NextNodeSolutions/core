@@ -13,7 +13,6 @@ import { convergeVps } from '@/adapters/hetzner/converge-vps.ts'
 import { deleteState, writeState } from '@/adapters/hetzner/state/read-write.ts'
 import type { HcloudProjectState } from '@/adapters/hetzner/state/types.ts'
 import type { HetznerVpsTargetConfig } from '@/adapters/hetzner/target.ts'
-import type { R2Operations } from '@/adapters/r2/client.types.ts'
 import { executeHandlers } from '@/domain/deploy/execute-handlers.ts'
 import type {
 	ResourceOutcome,
@@ -22,6 +21,7 @@ import type {
 import { goldenImageFingerprint } from '@/domain/hetzner/golden-image.ts'
 import { VPS_MANAGED_RESOURCES } from '@/domain/hetzner/managed-resources.ts'
 import { selectGoldenImage } from '@/domain/hetzner/select-golden-image.ts'
+import type { ObjectStoreClient } from '@/domain/storage/object-store.ts'
 
 import { buildGoldenImage } from './build-golden-image.ts'
 import { completeProvisioning, createVps } from './create-vps.ts'
@@ -65,7 +65,7 @@ async function ensureGoldenImage(token: string): Promise<number> {
 
 export async function freshProvision(
 	config: HetznerVpsTargetConfig,
-	r2: R2Operations,
+	r2: ObjectStoreClient,
 	projectName: string,
 ): Promise<VpsResourceOutcome> {
 	await checkForOrphans(config.credentials.hcloudToken, projectName)
@@ -144,7 +144,7 @@ export async function freshProvision(
 
 export async function resumeFromState(
 	config: HetznerVpsTargetConfig,
-	r2: R2Operations,
+	r2: ObjectStoreClient,
 	projectName: string,
 	state: HcloudProjectState,
 	etag: string,
@@ -199,7 +199,7 @@ export async function resumeFromState(
 
 async function resumeFromCreated(
 	config: HetznerVpsTargetConfig,
-	r2: R2Operations,
+	r2: ObjectStoreClient,
 	projectName: string,
 	state: HcloudProjectState & { phase: 'created' },
 	etag: string,
@@ -261,7 +261,7 @@ async function resumeFromCreated(
 
 async function convergeAndWriteState(
 	config: HetznerVpsTargetConfig,
-	r2: R2Operations,
+	r2: ObjectStoreClient,
 	projectName: string,
 	state: {
 		serverId: number

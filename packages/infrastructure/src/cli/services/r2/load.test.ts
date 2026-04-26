@@ -21,32 +21,10 @@ vi.mock('@/adapters/r2/client.ts', () => ({
 	})),
 }))
 
+import type { MockResponse } from '@/test-fetch.ts'
+import { okEmpty, unauthorized } from '@/test-fetch.ts'
+
 import { loadR2Service } from './load.ts'
-
-interface MockResponse {
-	ok: boolean
-	status: number
-	json: () => Promise<unknown>
-	text: () => Promise<string>
-}
-
-function okEmpty(): MockResponse {
-	return {
-		ok: true,
-		status: 200,
-		json: () => Promise.resolve({}),
-		text: () => Promise.resolve(''),
-	}
-}
-
-function unauthorized(): MockResponse {
-	return {
-		ok: false,
-		status: 401,
-		json: () => Promise.resolve({}),
-		text: () => Promise.resolve('InvalidAccessKeyId'),
-	}
-}
 
 interface StubOptions {
 	readonly verifyStatus?: 'ok' | '401'

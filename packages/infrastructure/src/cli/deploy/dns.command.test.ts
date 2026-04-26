@@ -45,8 +45,8 @@ vi.mock('../../adapters/hetzner/target.ts', () => ({
 	})),
 }))
 
-import type { FetchImpl } from './test-utils.ts'
-import { methodOf, okJson, urlOf } from './test-utils.ts'
+import type { FetchImpl } from '@/test-fetch.ts'
+import { methodOf, okJson, urlOf } from '@/test-fetch.ts'
 
 function stubCloudflareApi(): ReturnType<typeof vi.fn<FetchImpl>> {
 	const impl: FetchImpl = (input, init) => {

@@ -9,9 +9,14 @@ import {
 	S3Client,
 } from '@aws-sdk/client-s3'
 
-import type { R2ClientConfig, R2Object } from './client.types.ts'
+import type {
+	ObjectStoreClient,
+	ObjectStoreEntry,
+} from '@/domain/storage/object-store.ts'
 
-export class R2Client {
+import type { R2ClientConfig } from './client.types.ts'
+
+export class R2Client implements ObjectStoreClient {
 	private readonly s3: S3Client
 	private readonly bucket: string
 
@@ -29,7 +34,7 @@ export class R2Client {
 			})
 	}
 
-	async get(key: string): Promise<R2Object | null> {
+	async get(key: string): Promise<ObjectStoreEntry | null> {
 		try {
 			const response = await this.s3.send(
 				new GetObjectCommand({ Bucket: this.bucket, Key: key }),

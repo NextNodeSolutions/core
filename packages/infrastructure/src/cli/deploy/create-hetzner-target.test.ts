@@ -91,12 +91,16 @@ describe('createHetznerTarget', () => {
 
 		expect(HetznerVpsTarget).toHaveBeenCalledWith(
 			expect.objectContaining({
-				credentials: {
+				credentials: expect.objectContaining({
 					hcloudToken: 'hcloud',
 					deployPrivateKey: TEST_PRIVATE_KEY,
 					deployPublicKey: TEST_PUBLIC_LINE,
-					tailscaleAuthKey: 'tskey',
-				},
+					tailnet: expect.objectContaining({
+						mintAuthkey: expect.any(Function),
+						deleteByHostname: expect.any(Function),
+						getIpByHostname: expect.any(Function),
+					}),
+				}),
 			}),
 		)
 	})
@@ -122,11 +126,22 @@ describe('createHetznerTarget', () => {
 
 		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_INFRA_STORAGE)
 
-		const call = vi.mocked(HetznerVpsTarget).mock.calls[0]?.[0]
-		expect(call?.credentials.deployPublicKey).toMatch(
-			/^ssh-ed25519 [A-Za-z0-9+/=]+$/,
+		expect(HetznerVpsTarget).toHaveBeenCalledWith(
+			expect.objectContaining({
+				credentials: expect.objectContaining({
+					deployPublicKey: expect.stringMatching(
+						/^ssh-ed25519 [A-Za-z0-9+/=]+$/,
+					),
+				}),
+			}),
 		)
-		expect(call?.credentials.deployPublicKey).toBe(TEST_PUBLIC_LINE)
+		expect(HetznerVpsTarget).toHaveBeenCalledWith(
+			expect.objectContaining({
+				credentials: expect.objectContaining({
+					deployPublicKey: TEST_PUBLIC_LINE,
+				}),
+			}),
+		)
 	})
 
 	it('omits the vector block when NN_VL_URL is unset', async () => {
@@ -236,8 +251,13 @@ describe('createHetznerTarget', () => {
 
 		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_INFRA_STORAGE)
 
-		const call = vi.mocked(HetznerVpsTarget).mock.calls[0]?.[0]
-		expect(typeof call?.dns.reconcile).toBe('function')
-		expect(typeof call?.dns.deleteByName).toBe('function')
+		expect(HetznerVpsTarget).toHaveBeenCalledWith(
+			expect.objectContaining({
+				dns: expect.objectContaining({
+					reconcile: expect.any(Function),
+					deleteByName: expect.any(Function),
+				}),
+			}),
+		)
 	})
 })

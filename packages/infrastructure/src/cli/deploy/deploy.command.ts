@@ -5,13 +5,9 @@ const logger = createLogger()
 import { writeEnvVar } from '@/adapters/github/env.ts'
 import { writeSummary } from '@/adapters/github/output.ts'
 import { getEnv, requireEnv } from '@/cli/env.ts'
-import { loadR2Runtime } from '@/cli/r2/load-runtime.ts'
 import { resolveServices } from '@/cli/services/resolve.ts'
 import type { DeployableConfig } from '@/config/types.ts'
-import {
-	isHetznerDeployableConfig,
-	requiresInfraStorage,
-} from '@/config/types.ts'
+import { isHetznerDeployableConfig } from '@/config/types.ts'
 import { buildDeploySummary } from '@/domain/deploy/deploy-summary.ts'
 import { parseImageRef } from '@/domain/deploy/image-ref.ts'
 import type { DeployInput } from '@/domain/deploy/target.ts'
@@ -19,6 +15,7 @@ import { resolveEnvironment } from '@/domain/environment.ts'
 import { mergeServiceEnvs } from '@/domain/services/service.ts'
 
 import { buildRuntimeTarget } from './build-runtime-target.ts'
+import { loadInfraStorageForConfig } from './load-infra-storage.ts'
 import { parseAllSecrets, pickSecrets } from './secrets.ts'
 
 export async function deployCommand(config: DeployableConfig): Promise<void> {
@@ -28,9 +25,7 @@ export async function deployCommand(config: DeployableConfig): Promise<void> {
 	)
 	const cfToken = requireEnv('CLOUDFLARE_API_TOKEN')
 
-	const infraStorage = requiresInfraStorage(config)
-		? await loadR2Runtime(cfToken)
-		: null
+	const infraStorage = await loadInfraStorageForConfig(config)
 	const target = buildRuntimeTarget(config, environment, infraStorage)
 
 	const baseEnv = await target.computeDeployEnv(config.project.name)

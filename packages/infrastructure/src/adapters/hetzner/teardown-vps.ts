@@ -1,11 +1,11 @@
 import { createLogger } from '@nextnode-solutions/logger'
 
-import type { R2Operations } from '@/adapters/r2/client.types.ts'
-import { deleteTailnetDevicesByHostname } from '@/adapters/tailscale/oauth.ts'
 import type { ResourceOutcome } from '@/domain/deploy/resource-outcome.ts'
 import type { DnsClient } from '@/domain/dns/client.ts'
 import type { AppEnvironment } from '@/domain/environment.ts'
 import { computeVpsDnsLookups } from '@/domain/hetzner/dns-records.ts'
+import type { ObjectStoreClient } from '@/domain/storage/object-store.ts'
+import type { TailnetClient } from '@/domain/tailnet/client.ts'
 
 import {
 	deleteFirewall,
@@ -25,7 +25,7 @@ const logger = createLogger()
 
 export async function teardownServer(
 	hcloudToken: string,
-	r2: R2Operations,
+	r2: ObjectStoreClient,
 	projectName: string,
 ): Promise<ResourceOutcome> {
 	const existing = await readState(r2, projectName)
@@ -105,13 +105,10 @@ export async function teardownFirewall(
 }
 
 export async function teardownTailscale(
-	tailscaleAuthKey: string,
+	tailnet: TailnetClient,
 	projectName: string,
 ): Promise<ResourceOutcome> {
-	const purged = await deleteTailnetDevicesByHostname(
-		tailscaleAuthKey,
-		projectName,
-	)
+	const purged = await tailnet.deleteByHostname(projectName)
 	logger.info(
 		`Tailscale: ${String(purged)} device(s) purged for "${projectName}"`,
 	)
@@ -139,7 +136,7 @@ export async function teardownVpsDns(
 }
 
 export async function teardownVpsState(
-	r2: R2Operations,
+	r2: ObjectStoreClient,
 	projectName: string,
 ): Promise<ResourceOutcome> {
 	await deleteState(r2, projectName)

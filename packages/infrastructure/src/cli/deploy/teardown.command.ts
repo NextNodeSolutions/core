@@ -1,15 +1,14 @@
 import { createLogger } from '@nextnode-solutions/logger'
 
 import { writeSummary } from '@/adapters/github/output.ts'
-import { getEnv, requireEnv } from '@/cli/env.ts'
-import { loadR2Runtime } from '@/cli/r2/load-runtime.ts'
+import { getEnv } from '@/cli/env.ts'
 import type { DeployableConfig } from '@/config/types.ts'
-import { isHetznerDeployableConfig } from '@/config/types.ts'
 import { buildTeardownSummary } from '@/domain/deploy/teardown-summary.ts'
 import { parseTeardownTarget } from '@/domain/deploy/teardown-target.ts'
 import { resolveEnvironment } from '@/domain/environment.ts'
 
 import { buildRuntimeTarget } from './build-runtime-target.ts'
+import { loadInfraStorageForConfig } from './load-infra-storage.ts'
 
 const logger = createLogger()
 
@@ -19,9 +18,7 @@ export async function teardownCommand(config: DeployableConfig): Promise<void> {
 		getEnv('PIPELINE_ENVIRONMENT'),
 	)
 	const teardownTarget = parseTeardownTarget(getEnv('TEARDOWN_TARGET'))
-	const infraStorage = isHetznerDeployableConfig(config)
-		? await loadR2Runtime(requireEnv('CLOUDFLARE_API_TOKEN'))
-		: null
+	const infraStorage = await loadInfraStorageForConfig(config)
 	const target = buildRuntimeTarget(config, environment, infraStorage)
 
 	// Audit line — emitted BEFORE any destructive call so CI log readers can

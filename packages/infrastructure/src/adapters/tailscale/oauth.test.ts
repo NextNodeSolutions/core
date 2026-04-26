@@ -1,33 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { httpError, okJson } from '@/test-fetch.ts'
+
 import { deleteTailnetDevicesByHostname, mintAuthkey } from './oauth.ts'
 
 const CLIENT_SECRET = 'tskey-client-abc123'
-
-interface MockResponse {
-	ok: boolean
-	status: number
-	json: () => Promise<unknown>
-	text: () => Promise<string>
-}
-
-function okJson(body: unknown): MockResponse {
-	return {
-		ok: true,
-		status: 200,
-		json: () => Promise.resolve(body),
-		text: () => Promise.resolve(JSON.stringify(body)),
-	}
-}
-
-function httpError(status: number, body: string): MockResponse {
-	return {
-		ok: false,
-		status,
-		json: () => Promise.resolve({}),
-		text: () => Promise.resolve(body),
-	}
-}
 
 function callAt(
 	mock: ReturnType<typeof vi.fn>,

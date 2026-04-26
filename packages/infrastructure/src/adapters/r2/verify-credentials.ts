@@ -1,10 +1,10 @@
+import { signSigV4Request } from '@/domain/aws/sigv4.ts'
+import { computeR2Host } from '@/domain/cloudflare/r2/addressing.ts'
 import {
 	HTTP_BAD_REQUEST,
 	HTTP_FORBIDDEN,
 	HTTP_UNAUTHORIZED,
-} from '@/adapters/http.ts'
-import { signSigV4Request } from '@/domain/aws/sigv4.ts'
-import { computeR2Host } from '@/domain/cloudflare/r2/addressing.ts'
+} from '@/domain/http/status.ts'
 
 const INVALID_CRED_STATUSES: ReadonlySet<number> = new Set([
 	HTTP_BAD_REQUEST,

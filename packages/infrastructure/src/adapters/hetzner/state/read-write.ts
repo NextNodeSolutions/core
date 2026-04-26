@@ -1,8 +1,8 @@
 import { createLogger } from '@nextnode-solutions/logger'
 
-import { HTTP_PRECONDITION_FAILED } from '@/adapters/http.ts'
-import type { R2Operations } from '@/adapters/r2/client.types.ts'
 import { isRecord } from '@/config/types.ts'
+import { HTTP_PRECONDITION_FAILED } from '@/domain/http/status.ts'
+import type { ObjectStoreClient } from '@/domain/storage/object-store.ts'
 
 import type {
 	HcloudConvergedState,
@@ -124,7 +124,7 @@ export interface StateWithEtag {
 }
 
 export async function readState(
-	r2: R2Operations,
+	r2: ObjectStoreClient,
 	projectName: string,
 ): Promise<StateWithEtag | null> {
 	const key = stateKey(projectName)
@@ -134,7 +134,7 @@ export async function readState(
 }
 
 export async function writeState(
-	r2: R2Operations,
+	r2: ObjectStoreClient,
 	projectName: string,
 	state: HcloudProjectState,
 	ifMatch?: string,
@@ -164,7 +164,7 @@ export async function writeState(
 }
 
 export async function deleteState(
-	r2: R2Operations,
+	r2: ObjectStoreClient,
 	projectName: string,
 ): Promise<void> {
 	await r2.delete(stateKey(projectName))

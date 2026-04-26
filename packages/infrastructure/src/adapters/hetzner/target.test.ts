@@ -5,6 +5,7 @@ import type {
 	VpsFullTeardownResult,
 } from '@/domain/deploy/teardown-result.ts'
 import { goldenImageFingerprint } from '@/domain/hetzner/golden-image.ts'
+import type { ObjectStoreClient } from '@/domain/storage/object-store.ts'
 
 import type { SshSession } from './ssh/session.types.ts'
 import type { HcloudProjectState } from './state/types.ts'
@@ -104,15 +105,18 @@ vi.mock('../../cli/hetzner/converge.ts', () => ({
 	converge: vi.fn(async () => undefined),
 }))
 
-// Mock Tailscale OAuth adapter (network boundary)
-vi.mock('../tailscale/oauth.ts', () => ({
-	mintAuthkey: vi.fn(async () => ({
-		key: 'tskey-auth-minted',
-		expires: '2099-01-01T00:00:00Z',
-	})),
-	getTailnetIpByHostname: vi.fn(async () => '100.74.91.126'),
-	deleteTailnetDevicesByHostname: vi.fn(async () => 0),
+// Tailnet is injected as a TailnetClient — no module-level mocks needed.
+const mockTailnetMintAuthkey = vi.fn(async () => ({
+	key: 'tskey-auth-minted',
+	expires: '2099-01-01T00:00:00Z',
 }))
+const mockTailnetGetIp = vi.fn(async () => '100.74.91.126')
+const mockTailnetDeleteByHostname = vi.fn(async () => 0)
+const mockTailnet = {
+	mintAuthkey: mockTailnetMintAuthkey,
+	getIpByHostname: mockTailnetGetIp,
+	deleteByHostname: mockTailnetDeleteByHostname,
+}
 
 // Mock node:timers/promises (sleep resolves instantly in tests)
 vi.mock('node:timers/promises', () => ({
@@ -123,27 +127,31 @@ vi.mock('node:timers/promises', () => ({
 const mockReconcile = vi.fn(async () => undefined)
 const mockDeleteByName = vi.fn(async () => 0)
 
-// Mock R2Client (network boundary)
+// Stores are injected as ObjectStoreClient — no module-level mocks needed.
 const fakeR2State = new Map<string, string>()
+const fakeCerts = new Map<string, string>()
 
-vi.mock('../r2/client.ts', () => ({
-	R2Client: vi.fn(() => ({
-		get: vi.fn(async (key: string) => {
-			const body = fakeR2State.get(key)
+function buildFakeStore(state: Map<string, string>): ObjectStoreClient {
+	return {
+		get: async (key: string) => {
+			const body = state.get(key)
 			if (!body) return null
 			return { body, etag: 'etag-1' }
-		}),
-		put: vi.fn(async (key: string, body: string) => {
-			fakeR2State.set(key, body)
+		},
+		put: async (key: string, body: string) => {
+			state.set(key, body)
 			return 'etag-2'
-		}),
-		delete: vi.fn(async (key: string) => {
-			fakeR2State.delete(key)
-		}),
-		exists: vi.fn(async (key: string) => fakeR2State.has(key)),
-		deleteByPrefix: vi.fn(async () => 0),
-	})),
-}))
+		},
+		delete: async (key: string) => {
+			state.delete(key)
+		},
+		exists: async (key: string) => state.has(key),
+		deleteByPrefix: async () => 0,
+	}
+}
+
+const mockStateStore = buildFakeStore(fakeR2State)
+const mockCertsStore = buildFakeStore(fakeCerts)
 
 const HETZNER_CONFIG = { serverType: 'cpx22', location: 'nbg1' } as const
 
@@ -160,12 +168,14 @@ const CREDENTIALS = {
 	hcloudToken: 'hcloud-token',
 	deployPrivateKey: 'fake-private-key',
 	deployPublicKey: 'ssh-ed25519 AAAA test@ci',
-	tailscaleAuthKey: 'tskey-auth-test',
+	tailnet: mockTailnet,
 } as const
 
 const TARGET_CONFIG = {
 	hetzner: HETZNER_CONFIG,
 	infraStorage: STORAGE_CONFIG,
+	stateStore: mockStateStore,
+	certsStore: mockCertsStore,
 	environment: 'production' as const,
 	domain: 'acme-web.example.com',
 	internal: false,
@@ -911,12 +921,10 @@ describe('HetznerVpsTarget', () => {
 				await import('./api/server.ts')
 			const { findFirewallsByName: mockedFindFw } =
 				await import('./api/firewall.ts')
-			const { deleteTailnetDevicesByHostname: mockedTailscale } =
-				await import('@/adapters/tailscale/oauth.ts')
 			vi.mocked(mockedFindFw).mockResolvedValueOnce([
 				{ id: 99, name: 'acme-web-fw', appliedToCount: 0 },
 			])
-			vi.mocked(mockedTailscale).mockResolvedValueOnce(1)
+			mockTailnetDeleteByHostname.mockResolvedValueOnce(1)
 			mockDeleteByName.mockResolvedValueOnce(1)
 
 			const target = new HetznerVpsTarget(TARGET_CONFIG)

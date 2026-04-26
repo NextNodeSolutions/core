@@ -2,6 +2,8 @@ import { deleteDnsRecordsByName } from '@/adapters/cloudflare/dns/delete-records
 import { reconcileDnsRecords } from '@/adapters/cloudflare/dns/reconcile.ts'
 import { derivePublicKey } from '@/adapters/hetzner/ssh/derive-public-key.ts'
 import { HetznerVpsTarget } from '@/adapters/hetzner/target.ts'
+import { R2Client } from '@/adapters/r2/client.ts'
+import { createTailnetClient } from '@/adapters/tailscale/oauth.ts'
 import { getEnv, requireB64Env, requireEnv } from '@/cli/env.ts'
 import type { HetznerDeployableConfig } from '@/config/types.ts'
 import { isHetznerDeployableConfig } from '@/config/types.ts'
@@ -35,6 +37,18 @@ export function createHetznerTarget(
 	return new HetznerVpsTarget({
 		hetzner: config.deploy.hetzner,
 		infraStorage,
+		stateStore: new R2Client({
+			endpoint: infraStorage.endpoint,
+			accessKeyId: infraStorage.accessKeyId,
+			secretAccessKey: infraStorage.secretAccessKey,
+			bucket: infraStorage.stateBucket,
+		}),
+		certsStore: new R2Client({
+			endpoint: infraStorage.endpoint,
+			accessKeyId: infraStorage.accessKeyId,
+			secretAccessKey: infraStorage.secretAccessKey,
+			bucket: infraStorage.certsBucket,
+		}),
 		environment,
 		domain: config.project.domain,
 		internal: config.project.internal,
@@ -42,7 +56,7 @@ export function createHetznerTarget(
 			hcloudToken: requireEnv('HETZNER_API_TOKEN'),
 			deployPrivateKey,
 			deployPublicKey: derivePublicKey(deployPrivateKey),
-			tailscaleAuthKey: requireEnv('TAILSCALE_AUTH_KEY'),
+			tailnet: createTailnetClient(requireEnv('TAILSCALE_AUTH_KEY')),
 		},
 		vector: vlUrl ? { clientId: requireEnv('NN_CLIENT_ID'), vlUrl } : null,
 		dns,

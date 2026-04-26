@@ -1,6 +1,6 @@
-import type { R2Operations } from '@/adapters/r2/client.types.ts'
 import { isRecord } from '@/config/types.ts'
 import type { R2ServiceState } from '@/domain/services/r2.ts'
+import type { ObjectStoreClient } from '@/domain/storage/object-store.ts'
 
 interface PersistedR2ServiceState {
 	readonly endpoint: string
@@ -75,7 +75,7 @@ function parseState(raw: string, key: string): PersistedR2ServiceState {
 }
 
 export async function readR2ServiceState(
-	r2: R2Operations,
+	r2: ObjectStoreClient,
 	key: string,
 ): Promise<R2ServiceState | null> {
 	const result = await r2.get(key)
@@ -84,7 +84,7 @@ export async function readR2ServiceState(
 }
 
 export async function writeR2ServiceState(
-	r2: R2Operations,
+	r2: ObjectStoreClient,
 	key: string,
 	state: R2ServiceState,
 ): Promise<void> {
