@@ -3,7 +3,7 @@ WORKDIR /repo
 RUN corepack enable pnpm
 
 FROM base AS deps
-COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
 COPY packages ./packages
 RUN pnpm install --frozen-lockfile --filter @nextnode-solutions/monitoring...
 
