@@ -1,4 +1,4 @@
-import type { AppEnvironment } from '../environment.ts'
+import type { AppEnvironment } from '#/domain/environment.ts'
 
 const DEFAULT_VPS_NAME_BY_ENV: Record<AppEnvironment, string> = {
 	production: 'nn-prod',

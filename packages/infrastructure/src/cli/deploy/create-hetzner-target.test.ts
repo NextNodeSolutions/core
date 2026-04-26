@@ -11,8 +11,8 @@ import {
 
 const { utils: sshUtils } = ssh2
 
-import type { HetznerDeployableConfig } from '../../config/types.ts'
-import type { R2RuntimeConfig } from '../../domain/cloudflare/r2/runtime-config.ts'
+import type { HetznerDeployableConfig } from '#/config/types.ts'
+import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 
 import { createHetznerTarget } from './create-hetzner-target.ts'
 
@@ -50,9 +50,10 @@ const HETZNER_CONFIG: HetznerDeployableConfig = {
 		vps: null,
 		hetzner: { serverType: 'cpx22', location: 'nbg1' },
 	},
+	services: {},
 }
 
-const FAKE_R2: R2RuntimeConfig = {
+const FAKE_INFRA_STORAGE: InfraStorageRuntimeConfig = {
 	accountId: 'acct',
 	endpoint: 'https://acct.r2.cloudflarestorage.com',
 	accessKeyId: 'r2-key',
@@ -85,32 +86,36 @@ describe('createHetznerTarget', () => {
 		stubHetznerEnv()
 
 		const { HetznerVpsTarget } =
-			await import('../../adapters/hetzner/target.ts')
+			await import('#/adapters/hetzner/target.ts')
 
-		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_R2)
+		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_INFRA_STORAGE)
 
 		expect(HetznerVpsTarget).toHaveBeenCalledWith(
 			expect.objectContaining({
-				credentials: {
+				credentials: expect.objectContaining({
 					hcloudToken: 'hcloud',
 					deployPrivateKey: TEST_PRIVATE_KEY,
 					deployPublicKey: TEST_PUBLIC_LINE,
-					tailscaleAuthKey: 'tskey',
-				},
+					tailnet: expect.objectContaining({
+						mintAuthkey: expect.any(Function),
+						deleteByHostname: expect.any(Function),
+						getIpByHostname: expect.any(Function),
+					}),
+				}),
 			}),
 		)
 	})
 
-	it('passes through the injected R2RuntimeConfig', async () => {
+	it('passes through the injected InfraStorageRuntimeConfig', async () => {
 		stubHetznerEnv()
 
 		const { HetznerVpsTarget } =
-			await import('../../adapters/hetzner/target.ts')
+			await import('#/adapters/hetzner/target.ts')
 
-		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_R2)
+		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_INFRA_STORAGE)
 
 		expect(HetznerVpsTarget).toHaveBeenCalledWith(
-			expect.objectContaining({ r2: FAKE_R2 }),
+			expect.objectContaining({ infraStorage: FAKE_INFRA_STORAGE }),
 		)
 	})
 
@@ -118,24 +123,35 @@ describe('createHetznerTarget', () => {
 		stubHetznerEnv()
 
 		const { HetznerVpsTarget } =
-			await import('../../adapters/hetzner/target.ts')
+			await import('#/adapters/hetzner/target.ts')
 
-		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_R2)
+		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_INFRA_STORAGE)
 
-		const call = vi.mocked(HetznerVpsTarget).mock.calls[0]?.[0]
-		expect(call?.credentials.deployPublicKey).toMatch(
-			/^ssh-ed25519 [A-Za-z0-9+/=]+$/,
+		expect(HetznerVpsTarget).toHaveBeenCalledWith(
+			expect.objectContaining({
+				credentials: expect.objectContaining({
+					deployPublicKey: expect.stringMatching(
+						/^ssh-ed25519 [A-Za-z0-9+/=]+$/,
+					),
+				}),
+			}),
 		)
-		expect(call?.credentials.deployPublicKey).toBe(TEST_PUBLIC_LINE)
+		expect(HetznerVpsTarget).toHaveBeenCalledWith(
+			expect.objectContaining({
+				credentials: expect.objectContaining({
+					deployPublicKey: TEST_PUBLIC_LINE,
+				}),
+			}),
+		)
 	})
 
 	it('omits the vector block when NN_VL_URL is unset', async () => {
 		stubHetznerEnv()
 
 		const { HetznerVpsTarget } =
-			await import('../../adapters/hetzner/target.ts')
+			await import('#/adapters/hetzner/target.ts')
 
-		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_R2)
+		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_INFRA_STORAGE)
 
 		expect(HetznerVpsTarget).toHaveBeenCalledWith(
 			expect.objectContaining({ vector: null }),
@@ -148,9 +164,9 @@ describe('createHetznerTarget', () => {
 		vi.stubEnv('NN_CLIENT_ID', 'nextnode')
 
 		const { HetznerVpsTarget } =
-			await import('../../adapters/hetzner/target.ts')
+			await import('#/adapters/hetzner/target.ts')
 
-		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_R2)
+		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_INFRA_STORAGE)
 
 		expect(HetznerVpsTarget).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -167,13 +183,21 @@ describe('createHetznerTarget', () => {
 		vi.stubEnv('CLOUDFLARE_API_TOKEN', 'cf-token')
 
 		expect(() =>
-			createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_R2),
+			createHetznerTarget(
+				HETZNER_CONFIG,
+				'production',
+				FAKE_INFRA_STORAGE,
+			),
 		).toThrow('HETZNER_API_TOKEN env var is required')
 	})
 
 	it('throws when DEPLOY_SSH_PRIVATE_KEY_B64 is missing', () => {
 		expect(() =>
-			createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_R2),
+			createHetznerTarget(
+				HETZNER_CONFIG,
+				'production',
+				FAKE_INFRA_STORAGE,
+			),
 		).toThrow('DEPLOY_SSH_PRIVATE_KEY_B64 env var is required')
 	})
 
@@ -182,7 +206,11 @@ describe('createHetznerTarget', () => {
 		vi.stubEnv('NN_VL_URL', 'http://vl:9428')
 
 		expect(() =>
-			createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_R2),
+			createHetznerTarget(
+				HETZNER_CONFIG,
+				'production',
+				FAKE_INFRA_STORAGE,
+			),
 		).toThrow('NN_CLIENT_ID env var is required')
 	})
 
@@ -195,20 +223,42 @@ describe('createHetznerTarget', () => {
 		vi.stubEnv('TAILSCALE_AUTH_KEY', 'tskey')
 
 		expect(() =>
-			createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_R2),
+			createHetznerTarget(
+				HETZNER_CONFIG,
+				'production',
+				FAKE_INFRA_STORAGE,
+			),
 		).toThrow('CLOUDFLARE_API_TOKEN env var is required')
 	})
 
-	it('passes cloudflareApiToken from env', async () => {
+	it('passes cloudflareApiToken from env (used by Caddy ACME DNS-01)', async () => {
 		stubHetznerEnv()
 
 		const { HetznerVpsTarget } =
-			await import('../../adapters/hetzner/target.ts')
+			await import('#/adapters/hetzner/target.ts')
 
-		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_R2)
+		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_INFRA_STORAGE)
 
 		expect(HetznerVpsTarget).toHaveBeenCalledWith(
 			expect.objectContaining({ cloudflareApiToken: 'cf-token' }),
+		)
+	})
+
+	it('wires a DnsClient with reconcile + deleteByName methods', async () => {
+		stubHetznerEnv()
+
+		const { HetznerVpsTarget } =
+			await import('#/adapters/hetzner/target.ts')
+
+		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_INFRA_STORAGE)
+
+		expect(HetznerVpsTarget).toHaveBeenCalledWith(
+			expect.objectContaining({
+				dns: expect.objectContaining({
+					reconcile: expect.any(Function),
+					deleteByName: expect.any(Function),
+				}),
+			}),
 		)
 	})
 })

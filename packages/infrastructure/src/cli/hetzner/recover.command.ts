@@ -1,17 +1,17 @@
-import { createLogger } from '@nextnode-solutions/logger'
-
-import { writeSummary } from '../../adapters/github/output.ts'
-import { findServersByLabels } from '../../adapters/hetzner/api/server.ts'
-import { recoverOrphanVps } from '../../adapters/hetzner/recover-orphan.ts'
-import { stateKey } from '../../adapters/hetzner/state/read-write.ts'
-import { R2Client } from '../../adapters/r2/client.ts'
-import { findOrphanVps } from '../../domain/hetzner/orphans.ts'
+import { writeSummary } from '#/adapters/github/output.ts'
+import { findServersByLabels } from '#/adapters/hetzner/api/server.ts'
+import { recoverOrphanVps } from '#/adapters/hetzner/recover-orphan.ts'
+import { stateKey } from '#/adapters/hetzner/state/read-write.ts'
+import { R2Client } from '#/adapters/r2/client.ts'
+import { createTailnetClient } from '#/adapters/tailscale/oauth.ts'
+import { getEnv, requireEnv } from '#/cli/env.ts'
+import { loadR2Runtime } from '#/cli/r2/load-runtime.ts'
+import { findOrphanVps } from '#/domain/hetzner/orphans.ts'
 import type {
 	HetznerServerSummary,
 	OrphanVps,
-} from '../../domain/hetzner/orphans.ts'
-import { getEnv, requireEnv } from '../env.ts'
-import { loadR2Runtime } from '../r2/load-runtime.ts'
+} from '#/domain/hetzner/orphans.ts'
+import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
 
@@ -39,18 +39,18 @@ export async function recoverCommand(): Promise<void> {
 	const cfToken = requireEnv('CLOUDFLARE_API_TOKEN')
 	const recoverList = parseRecoverList(getEnv('RECOVER_VPS_NAMES'))
 
-	const r2Runtime = await loadR2Runtime(cfToken)
+	const infraStorage = await loadR2Runtime(cfToken)
 	const stateR2 = new R2Client({
-		endpoint: r2Runtime.endpoint,
-		accessKeyId: r2Runtime.accessKeyId,
-		secretAccessKey: r2Runtime.secretAccessKey,
-		bucket: r2Runtime.stateBucket,
+		endpoint: infraStorage.endpoint,
+		accessKeyId: infraStorage.accessKeyId,
+		secretAccessKey: infraStorage.secretAccessKey,
+		bucket: infraStorage.stateBucket,
 	})
 	const certsR2 = new R2Client({
-		endpoint: r2Runtime.endpoint,
-		accessKeyId: r2Runtime.accessKeyId,
-		secretAccessKey: r2Runtime.secretAccessKey,
-		bucket: r2Runtime.certsBucket,
+		endpoint: infraStorage.endpoint,
+		accessKeyId: infraStorage.accessKeyId,
+		secretAccessKey: infraStorage.secretAccessKey,
+		bucket: infraStorage.certsBucket,
 	})
 
 	const servers = await findServersByLabels(hcloudToken, {
@@ -96,13 +96,13 @@ export async function recoverCommand(): Promise<void> {
 		return
 	}
 
-	const tailscaleAuthKey = requireEnv('TAILSCALE_AUTH_KEY')
+	const tailnet = createTailnetClient(requireEnv('TAILSCALE_AUTH_KEY'))
 	const results = await Promise.all(
 		targets.map(orphan =>
 			recoverOrphanVps({
 				orphan,
 				hcloudToken,
-				tailscaleAuthKey,
+				tailnet,
 				certsR2,
 			}),
 		),

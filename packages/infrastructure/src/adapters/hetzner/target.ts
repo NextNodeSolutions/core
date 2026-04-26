@@ -1,28 +1,27 @@
-import { createLogger } from '@nextnode-solutions/logger'
-
-import type { HetznerVpsDeploySection } from '../../config/types.ts'
-import type { R2RuntimeConfig } from '../../domain/cloudflare/r2/runtime-config.ts'
-import { resolveDeployDomain } from '../../domain/deploy/domain.ts'
-import type { VpsResourceOutcome } from '../../domain/deploy/resource-outcome.ts'
+import type { HetznerVpsDeploySection } from '#/config/types.ts'
+import { buildR2CaddyBinding } from '#/domain/cloudflare/r2/caddy-binding.ts'
+import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
+import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
+import type { VpsResourceOutcome } from '#/domain/deploy/resource-outcome.ts'
 import type {
 	DeployEnv,
 	DeployInput,
 	DeployResult,
 	DeployTarget,
+	TargetEnv,
 	VpsProvisionResult,
-} from '../../domain/deploy/target.ts'
-import type { TeardownResult } from '../../domain/deploy/teardown-result.ts'
-import type { TeardownTarget } from '../../domain/deploy/teardown-target.ts'
-import type { AppEnvironment } from '../../domain/environment.ts'
-import { extractUpstreams } from '../../domain/hetzner/caddy-config.ts'
-import {
-	CADDY_ENV_PATH,
-	renderCaddyEnv,
-} from '../../domain/hetzner/caddy-env.ts'
-import { buildCaddyForProject } from '../../domain/hetzner/caddy-for-project.ts'
-import { computeVpsDnsRecords } from '../../domain/hetzner/dns-records.ts'
-import { reconcileDnsRecords } from '../cloudflare/dns/reconcile.ts'
-import { R2Client } from '../r2/client.ts'
+} from '#/domain/deploy/target.ts'
+import type { TeardownResult } from '#/domain/deploy/teardown-result.ts'
+import type { TeardownTarget } from '#/domain/deploy/teardown-target.ts'
+import type { DnsClient } from '#/domain/dns/client.ts'
+import type { AppEnvironment } from '#/domain/environment.ts'
+import { extractUpstreams } from '#/domain/hetzner/caddy-config.ts'
+import { CADDY_ENV_PATH, renderCaddyEnv } from '#/domain/hetzner/caddy-env.ts'
+import { buildCaddyForProject } from '#/domain/hetzner/caddy-for-project.ts'
+import { computeVpsDnsRecords } from '#/domain/hetzner/dns-records.ts'
+import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
+import type { TailnetClient } from '#/domain/tailnet/client.ts'
+import { createLogger } from '@nextnode-solutions/logger'
 
 import { CADDY_CONFIG_PATH } from './constants.ts'
 import { deployContainer } from './deploy-container.ts'
@@ -37,7 +36,7 @@ export interface HetznerCredentials {
 	readonly hcloudToken: string
 	readonly deployPrivateKey: string
 	readonly deployPublicKey: string
-	readonly tailscaleAuthKey: string
+	readonly tailnet: TailnetClient
 }
 
 export interface HetznerVectorConfig {
@@ -48,12 +47,15 @@ export interface HetznerVectorConfig {
 export interface HetznerVpsTargetConfig {
 	readonly vpsName: string
 	readonly hetzner: HetznerVpsDeploySection['hetzner']
-	readonly r2: R2RuntimeConfig
+	readonly infraStorage: InfraStorageRuntimeConfig
+	readonly stateStore: ObjectStoreClient
+	readonly certsStore: ObjectStoreClient
 	readonly environment: AppEnvironment
 	readonly domain: string
 	readonly internal: boolean
 	readonly credentials: HetznerCredentials
 	readonly vector: HetznerVectorConfig | null
+	readonly dns: DnsClient
 	readonly cloudflareApiToken: string
 	readonly acmeEmail: string
 }
@@ -61,23 +63,13 @@ export interface HetznerVpsTargetConfig {
 export class HetznerVpsTarget implements DeployTarget {
 	readonly name = 'hetzner-vps'
 	private readonly config: HetznerVpsTargetConfig
-	private readonly r2: R2Client
-	private readonly certsR2: R2Client
+	private readonly r2: ObjectStoreClient
+	private readonly certsR2: ObjectStoreClient
 
 	constructor(config: HetznerVpsTargetConfig) {
 		this.config = config
-		this.r2 = new R2Client({
-			endpoint: config.r2.endpoint,
-			accessKeyId: config.r2.accessKeyId,
-			secretAccessKey: config.r2.secretAccessKey,
-			bucket: config.r2.stateBucket,
-		})
-		this.certsR2 = new R2Client({
-			endpoint: config.r2.endpoint,
-			accessKeyId: config.r2.accessKeyId,
-			secretAccessKey: config.r2.secretAccessKey,
-			bucket: config.r2.certsBucket,
-		})
+		this.r2 = config.stateStore
+		this.certsR2 = config.certsStore
 	}
 
 	async ensureInfra(projectName: string): Promise<VpsProvisionResult> {
@@ -144,15 +136,18 @@ export class HetznerVpsTarget implements DeployTarget {
 			tailnetIp: existing.state.tailnetIp,
 		})
 
-		await reconcileDnsRecords(records, this.config.cloudflareApiToken)
+		await this.config.dns.reconcile(records)
 		logger.info(
 			`DNS reconciled for "${projectName}" on VPS "${vpsName}" (${this.config.environment})`,
 		)
 	}
 
-	computeDeployEnv(): DeployEnv {
+	contributeEnv(): TargetEnv {
 		return {
-			SITE_URL: `https://${resolveDeployDomain(this.config.domain, this.config.environment)}`,
+			public: {
+				SITE_URL: `https://${resolveDeployDomain(this.config.domain, this.config.environment)}`,
+			},
+			secret: {},
 		}
 	}
 
@@ -210,8 +205,10 @@ export class HetznerVpsTarget implements DeployTarget {
 
 			const caddyConfig = JSON.stringify(
 				buildCaddyForProject({
-					projectName: vpsName,
-					r2: this.config.r2,
+					storage: buildR2CaddyBinding(
+						this.config.infraStorage,
+						vpsName,
+					),
 					upstreams: mergedUpstreams,
 					acmeEmail: this.config.acmeEmail,
 					internal: this.config.internal,
@@ -226,7 +223,7 @@ export class HetznerVpsTarget implements DeployTarget {
 			await session.writeFile(
 				CADDY_ENV_PATH,
 				renderCaddyEnv({
-					r2: this.config.r2,
+					infraStorage: this.config.infraStorage,
 					cloudflareApiToken: this.config.cloudflareApiToken,
 				}),
 			)
@@ -259,13 +256,13 @@ export class HetznerVpsTarget implements DeployTarget {
 			environment: this.config.environment,
 			internal: this.config.internal,
 			hcloudToken: this.config.credentials.hcloudToken,
-			tailscaleAuthKey: this.config.credentials.tailscaleAuthKey,
+			tailnet: this.config.credentials.tailnet,
 			deployPrivateKey: this.config.credentials.deployPrivateKey,
-			cloudflareApiToken: this.config.cloudflareApiToken,
-			acmeEmail: this.config.acmeEmail,
+			dns: this.config.dns,
 			r2: this.r2,
-			r2Runtime: this.config.r2,
 			certsR2: this.certsR2,
+			infraStorage: this.config.infraStorage,
+			acmeEmail: this.config.acmeEmail,
 		})
 	}
 }

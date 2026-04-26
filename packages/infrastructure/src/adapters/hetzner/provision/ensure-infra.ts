@@ -1,21 +1,26 @@
-import { createLogger } from '@nextnode-solutions/logger'
-
-import { executeHandlers } from '../../../domain/deploy/execute-handlers.ts'
+import { findImagesByLabels } from '#/adapters/hetzner/api/image.ts'
+import {
+	findServerById,
+	findServersByLabels,
+} from '#/adapters/hetzner/api/server.ts'
+import {
+	GOLDEN_IMAGE_LABEL,
+	GOLDEN_IMAGE_MAX_AGE_MS,
+} from '#/adapters/hetzner/constants.ts'
+import { convergeVps } from '#/adapters/hetzner/converge-vps.ts'
+import { deleteState, writeState } from '#/adapters/hetzner/state/read-write.ts'
+import type { HcloudVpsState } from '#/adapters/hetzner/state/types.ts'
+import type { HetznerVpsTargetConfig } from '#/adapters/hetzner/target.ts'
+import { executeHandlers } from '#/domain/deploy/execute-handlers.ts'
 import type {
 	ResourceOutcome,
 	VpsResourceOutcome,
-} from '../../../domain/deploy/resource-outcome.ts'
-import { goldenImageFingerprint } from '../../../domain/hetzner/golden-image.ts'
-import { VPS_MANAGED_RESOURCES } from '../../../domain/hetzner/managed-resources.ts'
-import { selectGoldenImage } from '../../../domain/hetzner/select-golden-image.ts'
-import type { R2Operations } from '../../r2/client.types.ts'
-import { findImagesByLabels } from '../api/image.ts'
-import { findServerById, findServersByLabels } from '../api/server.ts'
-import { GOLDEN_IMAGE_LABEL, GOLDEN_IMAGE_MAX_AGE_MS } from '../constants.ts'
-import { convergeVps } from '../converge-vps.ts'
-import { deleteState, writeState } from '../state/read-write.ts'
-import type { HcloudVpsState } from '../state/types.ts'
-import type { HetznerVpsTargetConfig } from '../target.ts'
+} from '#/domain/deploy/resource-outcome.ts'
+import { goldenImageFingerprint } from '#/domain/hetzner/golden-image.ts'
+import { VPS_MANAGED_RESOURCES } from '#/domain/hetzner/managed-resources.ts'
+import { selectGoldenImage } from '#/domain/hetzner/select-golden-image.ts'
+import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
+import { createLogger } from '@nextnode-solutions/logger'
 
 import { buildGoldenImage } from './build-golden-image.ts'
 import { completeProvisioning, createVps } from './create-vps.ts'
@@ -68,7 +73,7 @@ async function ensureGoldenImage(token: string): Promise<number> {
 
 export async function freshProvision(
 	config: HetznerVpsTargetConfig,
-	r2: R2Operations,
+	r2: ObjectStoreClient,
 	vpsName: string,
 ): Promise<VpsResourceOutcome> {
 	const existingServer = await findExistingVps(
@@ -158,7 +163,7 @@ export async function freshProvision(
 
 export async function resumeFromState(
 	config: HetznerVpsTargetConfig,
-	r2: R2Operations,
+	r2: ObjectStoreClient,
 	vpsName: string,
 	state: HcloudVpsState,
 	etag: string,
@@ -214,7 +219,7 @@ export async function resumeFromState(
 
 async function resumeFromCreated(
 	config: HetznerVpsTargetConfig,
-	r2: R2Operations,
+	r2: ObjectStoreClient,
 	vpsName: string,
 	state: HcloudVpsState & { phase: 'created' },
 	etag: string,
@@ -277,7 +282,7 @@ async function resumeFromCreated(
 
 async function convergeAndWriteState(
 	config: HetznerVpsTargetConfig,
-	r2: R2Operations,
+	r2: ObjectStoreClient,
 	vpsName: string,
 	state: {
 		serverId: number
@@ -291,7 +296,7 @@ async function convergeAndWriteState(
 		host: state.tailnetIp,
 		vpsName,
 		internal: config.internal,
-		r2: config.r2,
+		infraStorage: config.infraStorage,
 		vector: config.vector,
 		deployPrivateKey: config.credentials.deployPrivateKey,
 		expectedHostKeyFingerprint: state.sshHostKeyFingerprint,
@@ -369,7 +374,7 @@ function assertModeMatches(
 
 async function attachToExistingVps(
 	config: HetznerVpsTargetConfig,
-	r2: R2Operations,
+	r2: ObjectStoreClient,
 	vpsName: string,
 	server: ExistingVpsRef,
 ): Promise<VpsResourceOutcome> {

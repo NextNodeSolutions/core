@@ -11,21 +11,18 @@ import {
 
 const { utils: sshUtils } = ssh2
 
-import { APP_WITH_DOMAIN, STATIC_WITH_DOMAIN } from '../fixtures.ts'
+import { APP_WITH_DOMAIN, STATIC_WITH_DOMAIN } from '#/cli/fixtures.ts'
 
 import { buildRuntimeTarget } from './build-runtime-target.ts'
 
-// Mock loadR2Runtime (network boundary: Cloudflare accounts API + SigV4 verify)
-vi.mock(import('../r2/load-runtime.ts'), async () => ({
-	loadR2Runtime: vi.fn(async () => ({
-		accountId: 'acct',
-		endpoint: 'https://r2.example.com',
-		accessKeyId: 'r2-key',
-		secretAccessKey: 'r2-secret',
-		stateBucket: 'nextnode-state',
-		certsBucket: 'nextnode-certs',
-	})),
-}))
+const FAKE_INFRA_STORAGE = {
+	accountId: 'acct',
+	endpoint: 'https://r2.example.com',
+	accessKeyId: 'r2-key',
+	secretAccessKey: 'r2-secret',
+	stateBucket: 'nextnode-state',
+	certsBucket: 'nextnode-certs',
+}
 
 // Mock target classes so we can assert which one got instantiated
 vi.mock('../../adapters/hetzner/target.ts', () => ({
@@ -58,34 +55,43 @@ describe('buildRuntimeTarget', () => {
 		vi.restoreAllMocks()
 	})
 
-	it('loads R2 runtime and builds a Hetzner target for Hetzner configs', async () => {
-		const { loadR2Runtime } = await import('../r2/load-runtime.ts')
+	it('builds a Hetzner target with the threaded infra storage runtime', async () => {
 		const { HetznerVpsTarget } =
-			await import('../../adapters/hetzner/target.ts')
+			await import('#/adapters/hetzner/target.ts')
 		const { CloudflarePagesTarget } =
-			await import('../../adapters/cloudflare/target.ts')
+			await import('#/adapters/cloudflare/target.ts')
 
-		const target = await buildRuntimeTarget(APP_WITH_DOMAIN, 'production')
+		const target = buildRuntimeTarget(
+			APP_WITH_DOMAIN,
+			'production',
+			FAKE_INFRA_STORAGE,
+		)
 
-		expect(loadR2Runtime).toHaveBeenCalledWith('cf-token')
 		expect(HetznerVpsTarget).toHaveBeenCalledTimes(1)
 		expect(CloudflarePagesTarget).not.toHaveBeenCalled()
 		expect(target).toEqual({ name: 'hetzner-vps' })
 	})
 
-	it('skips R2 and builds a Cloudflare Pages target for CF configs', async () => {
-		const { loadR2Runtime } = await import('../r2/load-runtime.ts')
-		const { HetznerVpsTarget } =
-			await import('../../adapters/hetzner/target.ts')
-		const { CloudflarePagesTarget } =
-			await import('../../adapters/cloudflare/target.ts')
+	it('throws when Hetzner is requested without an infra storage runtime', () => {
+		expect(() =>
+			buildRuntimeTarget(APP_WITH_DOMAIN, 'production', null),
+		).toThrow(
+			'hetzner-vps target: infra storage (state + certs buckets) must be loaded by the caller — caller invariant broken',
+		)
+	})
 
-		const target = await buildRuntimeTarget(
+	it('builds a Cloudflare Pages target without needing infra storage', async () => {
+		const { HetznerVpsTarget } =
+			await import('#/adapters/hetzner/target.ts')
+		const { CloudflarePagesTarget } =
+			await import('#/adapters/cloudflare/target.ts')
+
+		const target = buildRuntimeTarget(
 			STATIC_WITH_DOMAIN,
 			'production',
+			null,
 		)
 
-		expect(loadR2Runtime).not.toHaveBeenCalled()
 		expect(HetznerVpsTarget).not.toHaveBeenCalled()
 		expect(CloudflarePagesTarget).toHaveBeenCalledTimes(1)
 		expect(target).toEqual({ name: 'cloudflare-pages' })

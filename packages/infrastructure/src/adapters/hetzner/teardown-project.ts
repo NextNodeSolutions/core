@@ -1,15 +1,15 @@
+import { extractRootDomain } from '#/domain/cloudflare/dns-records.ts'
+import { buildR2CaddyBinding } from '#/domain/cloudflare/r2/caddy-binding.ts'
+import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
+import type { ResourceOutcome } from '#/domain/deploy/resource-outcome.ts'
+import type { DnsClient } from '#/domain/dns/client.ts'
+import type { AppEnvironment } from '#/domain/environment.ts'
+import type { CaddyUpstream } from '#/domain/hetzner/caddy-config.ts'
+import { extractUpstreams } from '#/domain/hetzner/caddy-config.ts'
+import { buildCaddyForProject } from '#/domain/hetzner/caddy-for-project.ts'
+import { computeSilo } from '#/domain/hetzner/env-silo.ts'
+import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
 import { createLogger } from '@nextnode-solutions/logger'
-
-import { extractRootDomain } from '../../domain/cloudflare/dns-records.ts'
-import type { R2RuntimeConfig } from '../../domain/cloudflare/r2/runtime-config.ts'
-import type { ResourceOutcome } from '../../domain/deploy/resource-outcome.ts'
-import type { AppEnvironment } from '../../domain/environment.ts'
-import { extractUpstreams } from '../../domain/hetzner/caddy-config.ts'
-import type { CaddyUpstream } from '../../domain/hetzner/caddy-config.ts'
-import { buildCaddyForProject } from '../../domain/hetzner/caddy-for-project.ts'
-import { computeSilo } from '../../domain/hetzner/env-silo.ts'
-import { deleteDnsRecordsByName } from '../cloudflare/dns/delete-records.ts'
-import type { R2Operations } from '../r2/client.types.ts'
 
 import { CADDY_CONFIG_PATH } from './constants.ts'
 import type { SshSession } from './ssh/session.types.ts'
@@ -23,7 +23,7 @@ const EMPTY_CADDY_CONFIG = JSON.stringify({
 
 export interface TeardownCaddyContext {
 	readonly vpsName: string
-	readonly r2: R2RuntimeConfig
+	readonly infraStorage: InfraStorageRuntimeConfig
 	readonly acmeEmail: string
 	readonly internal: boolean
 }
@@ -94,8 +94,10 @@ export async function teardownProjectCaddyRoute(
 			? EMPTY_CADDY_CONFIG
 			: JSON.stringify(
 					buildCaddyForProject({
-						projectName: caddy.vpsName,
-						r2: caddy.r2,
+						storage: buildR2CaddyBinding(
+							caddy.infraStorage,
+							caddy.vpsName,
+						),
 						upstreams: remaining,
 						acmeEmail: caddy.acmeEmail,
 						internal: caddy.internal,
@@ -123,7 +125,7 @@ export async function teardownProjectCaddyRoute(
  * or ending with `/${hostname}.<ext>`.
  */
 export async function teardownProjectCerts(
-	certsR2: R2Operations,
+	certsR2: ObjectStoreClient,
 	vpsName: string,
 	projectHostname: string | undefined,
 ): Promise<ResourceOutcome> {
@@ -152,20 +154,17 @@ export async function teardownProjectCerts(
  */
 export async function teardownProjectDns(
 	projectHostname: string | undefined,
-	cloudflareApiToken: string,
+	dns: DnsClient,
 ): Promise<ResourceOutcome> {
 	if (!projectHostname) {
 		return { handled: false, detail: 'no domain configured' }
 	}
-	const deletedCount = await deleteDnsRecordsByName(
-		[
-			{
-				zoneName: extractRootDomain(projectHostname),
-				name: projectHostname,
-			},
-		],
-		cloudflareApiToken,
-	)
+	const deletedCount = await dns.deleteByName([
+		{
+			zoneName: extractRootDomain(projectHostname),
+			name: projectHostname,
+		},
+	])
 	return {
 		handled: deletedCount > 0,
 		detail: `${String(deletedCount)} record(s) deleted`,

@@ -1,14 +1,15 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-
-import { createServer, deleteServer, describeServer } from './server.ts'
 import {
-	TEST_TOKEN,
 	httpError,
 	lastBody,
 	lastCall,
 	noContent,
 	okJson,
-} from './test-helpers.ts'
+} from '#/test-fetch.ts'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import { createServer, deleteServer, describeServer } from './server.ts'
+
+const TEST_TOKEN = 'hcloud-test-token'
 
 afterEach(() => {
 	vi.unstubAllGlobals()

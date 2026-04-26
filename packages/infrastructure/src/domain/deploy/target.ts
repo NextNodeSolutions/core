@@ -1,3 +1,5 @@
+import type { ServiceEnv } from '#/domain/services/service.ts'
+
 import type {
 	PagesResourceOutcome,
 	VpsResourceOutcome,
@@ -12,21 +14,44 @@ export interface ImageRef {
 }
 
 /**
- * Env vars that the deploy target owns and exposes to:
- *   1. The deployed runtime (via container .env or Pages env_vars)
- *   2. The CI pipeline (via GITHUB_ENV) so later steps can use them
- *
- * These are authoritative — features like mail/auth depend on them being
- * correct across every environment. Each Strategy MUST compute these
- * itself; no caller builds them by hand.
- *
- * Extend as config-as-code features land (SUPABASE_URL, INTERNAL_SITE_URL,
- * etc.). Treat additions as opt-in: keep new keys optional unless every
- * target can always produce them.
+ * Public env surface handed to `target.deploy(env)` — already merged from
+ * the target, every declared service, and the user-declared secrets'
+ * public counterpart. SITE_URL is guaranteed by the orchestrator because
+ * every target's `contributeEnv` puts it in `public`.
  */
 export interface DeployEnv {
 	readonly SITE_URL: string
 	readonly [key: string]: string
+}
+
+/**
+ * Env contribution from a deploy target. Same `{public, secret}` shape
+ * as a `Service`, so targets and services merge through the same
+ * `mergeServiceEnvs` primitive — one source of truth, one collision
+ * detector. SITE_URL is required in `public` because every app needs it
+ * at build + runtime and only the target knows the resolved hostname.
+ */
+export interface TargetEnv extends ServiceEnv {
+	readonly public: Readonly<Record<string, string>> & {
+		readonly SITE_URL: string
+	}
+}
+
+/**
+ * Narrow a merged public-env Record to a DeployEnv. Throws when SITE_URL
+ * is missing — that means a DeployTarget skipped its `contributeEnv`
+ * obligation, which is a wiring bug, not a runtime condition.
+ */
+export function buildDeployEnv(
+	values: Readonly<Record<string, string>>,
+): DeployEnv {
+	const siteUrl = values['SITE_URL']
+	if (!siteUrl) {
+		throw new Error(
+			'SITE_URL missing from merged env — every DeployTarget must put it in contributeEnv().public',
+		)
+	}
+	return { ...values, SITE_URL: siteUrl }
 }
 
 export interface DeployInput {
@@ -88,13 +113,16 @@ export interface DeployResult {
 export interface DeployTarget {
 	readonly name: string
 	/**
-	 * Resolve the env vars to inject into the deployed runtime. Returned as
-	 * `DeployEnv | Promise<DeployEnv>` so sync impls (e.g. Hetzner, where
-	 * SITE_URL is pure config arithmetic) don't pay async ceremony, while
-	 * impls that need IO (e.g. Cloudflare looking up the live `*.pages.dev`
-	 * subdomain) can return a Promise. Callers `await` either way.
+	 * Contribute the env this target owns (always SITE_URL, plus any
+	 * target-specific keys). Returned as `TargetEnv | Promise<TargetEnv>`
+	 * so sync impls (Hetzner, where SITE_URL is pure config arithmetic)
+	 * don't pay async ceremony, while impls that need IO (Cloudflare
+	 * looking up the live `*.pages.dev` subdomain) can return a Promise.
+	 * The orchestrator merges this with services + user secrets via
+	 * `mergeServiceEnvs`, then hands the public projection back to
+	 * `deploy(env)`.
 	 */
-	computeDeployEnv(projectName: string): DeployEnv | Promise<DeployEnv>
+	contributeEnv(projectName: string): TargetEnv | Promise<TargetEnv>
 	ensureInfra(projectName: string): Promise<ProvisionResult>
 	reconcileDns(projectName: string, domain: string): Promise<void>
 	deploy(

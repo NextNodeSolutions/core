@@ -1,8 +1,7 @@
+import type { OrphanVps } from '#/domain/hetzner/orphans.ts'
+import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
+import type { TailnetClient } from '#/domain/tailnet/client.ts'
 import { createLogger } from '@nextnode-solutions/logger'
-
-import type { OrphanVps } from '../../domain/hetzner/orphans.ts'
-import type { R2Operations } from '../r2/client.types.ts'
-import { deleteTailnetDevicesByHostname } from '../tailscale/oauth.ts'
 
 import { deleteServer, findServerById } from './api/server.ts'
 import { MAX_POLL_ATTEMPTS, POLL_INTERVAL_MS } from './constants.ts'
@@ -13,8 +12,8 @@ const logger = createLogger()
 export interface RecoverOrphanInput {
 	readonly orphan: OrphanVps
 	readonly hcloudToken: string
-	readonly tailscaleAuthKey: string
-	readonly certsR2: R2Operations
+	readonly tailnet: TailnetClient
+	readonly certsR2: ObjectStoreClient
 }
 
 export interface RecoverOrphanResult {
@@ -39,7 +38,7 @@ export interface RecoverOrphanResult {
 export async function recoverOrphanVps(
 	input: RecoverOrphanInput,
 ): Promise<RecoverOrphanResult> {
-	const { orphan, hcloudToken, tailscaleAuthKey, certsR2 } = input
+	const { orphan, hcloudToken, tailnet, certsR2 } = input
 
 	await Promise.all(
 		orphan.serverIds.map(async serverId => {
@@ -55,8 +54,7 @@ export async function recoverOrphanVps(
 		}),
 	)
 
-	const tailscaleDevicesPurged = await deleteTailnetDevicesByHostname(
-		tailscaleAuthKey,
+	const tailscaleDevicesPurged = await tailnet.deleteByHostname(
 		orphan.vpsName,
 	)
 

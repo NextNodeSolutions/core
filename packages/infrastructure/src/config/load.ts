@@ -2,7 +2,12 @@ import { readFileSync } from 'node:fs'
 
 import { parse as parseTOML } from 'smol-toml'
 
-import type { NextNodeConfig, ParseConfigResult } from './types.ts'
+import type {
+	DeploySection,
+	NextNodeConfig,
+	ParseConfigResult,
+	ProjectSection,
+} from './types.ts'
 import { isDeployable } from './types.ts'
 import { validateDeploySection } from './validation/deploy.ts'
 import {
@@ -13,18 +18,24 @@ import {
 	validatePackageSection,
 	validateProjectSection,
 } from './validation/project.ts'
+import {
+	hasAnyService,
+	validateServicesSection,
+} from './validation/services.ts'
 
 export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 	const projectResult = validateProjectSection(raw['project'])
 	const scriptsResult = validateScriptsSection(raw['scripts'])
 	const envResult = validateEnvironmentSection(raw['environment'])
 	const pkgResult = validatePackageSection(raw['package'])
+	const servicesResult = validateServicesSection(raw['services'])
 
 	if (
 		!projectResult.ok ||
 		!scriptsResult.ok ||
 		!envResult.ok ||
-		!pkgResult.ok
+		!pkgResult.ok ||
+		!servicesResult.ok
 	) {
 		return {
 			ok: false,
@@ -33,11 +44,21 @@ export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 				scriptsResult,
 				envResult,
 				pkgResult,
+				servicesResult,
 			].flatMap(r => (r.ok ? [] : r.errors)),
 		}
 	}
 
 	const { type } = projectResult.section
+
+	if (type !== 'app' && hasAnyService(servicesResult.section)) {
+		return {
+			ok: false,
+			errors: [
+				`[services] section is forbidden for project type "${type}" — only "app" projects have a runtime that can consume service env vars`,
+			],
+		}
+	}
 
 	if (!isDeployable(type)) {
 		if (raw['deploy'] !== undefined) {
@@ -57,6 +78,7 @@ export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 				environment: envResult.section,
 				package: pkgResult.section,
 				deploy: false,
+				services: servicesResult.section,
 			},
 		}
 	}
@@ -65,30 +87,11 @@ export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 	const deployResult = validateDeploySection(raw['deploy'], type, hasDomain)
 	if (!deployResult.ok) return { ok: false, errors: deployResult.errors }
 
-	if (
-		projectResult.section.internal &&
-		deployResult.section.target === 'cloudflare-pages'
-	) {
-		return {
-			ok: false,
-			errors: [
-				'project.internal is not supported with deploy target "cloudflare-pages"',
-			],
-		}
-	}
-
-	if (
-		projectResult.section.internal &&
-		deployResult.section.target === 'hetzner-vps' &&
-		deployResult.section.vps === null
-	) {
-		return {
-			ok: false,
-			errors: [
-				'deploy.vps is required when project.internal = true (internal projects must pin to a dedicated VPS so they never share with public projects)',
-			],
-		}
-	}
+	const internalError = checkInternalCompatibility(
+		projectResult.section,
+		deployResult.section,
+	)
+	if (internalError) return { ok: false, errors: [internalError] }
 
 	return {
 		ok: true,
@@ -98,8 +101,23 @@ export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 			environment: envResult.section,
 			package: pkgResult.section,
 			deploy: deployResult.section,
+			services: servicesResult.section,
 		},
 	}
+}
+
+function checkInternalCompatibility(
+	project: ProjectSection,
+	deploy: DeploySection,
+): string | null {
+	if (!project.internal) return null
+	if (deploy.target === 'cloudflare-pages') {
+		return 'project.internal is not supported with deploy target "cloudflare-pages"'
+	}
+	if (deploy.target === 'hetzner-vps' && deploy.vps === null) {
+		return 'deploy.vps is required when project.internal = true (internal projects must pin to a dedicated VPS so they never share with public projects)'
+	}
+	return null
 }
 
 export function loadConfig(configPath: string): NextNodeConfig {

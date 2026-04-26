@@ -2,7 +2,7 @@ import type {
 	DeployableProjectType,
 	NonDeployableProjectType,
 	ProjectType,
-} from '../config/types.ts'
+} from '#/config/types.ts'
 
 export const APP_ENVIRONMENTS = ['development', 'production'] as const
 export type AppEnvironment = (typeof APP_ENVIRONMENTS)[number]

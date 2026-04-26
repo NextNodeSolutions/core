@@ -1,6 +1,6 @@
-import { isRecord } from '../../../config/types.ts'
-import type { FirewallRule } from '../../../domain/hetzner/firewall-rules.ts'
-import { HTTP_NOT_FOUND } from '../../http.ts'
+import { isRecord } from '#/config/types.ts'
+import type { FirewallRule } from '#/domain/hetzner/firewall-rules.ts'
+import { HTTP_NOT_FOUND } from '#/domain/http/status.ts'
 
 import { HCLOUD_API_BASE, authHeaders, requireOk } from './base.ts'
 

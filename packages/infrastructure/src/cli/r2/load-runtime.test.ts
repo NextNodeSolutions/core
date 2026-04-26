@@ -1,40 +1,8 @@
+import type { MockResponse } from '#/test-fetch.ts'
+import { okEmpty, okJson, unauthorized } from '#/test-fetch.ts'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { loadR2Runtime } from './load-runtime.ts'
-
-interface MockResponse {
-	ok: boolean
-	status: number
-	json: () => Promise<unknown>
-	text: () => Promise<string>
-}
-
-function okJson(body: unknown): MockResponse {
-	return {
-		ok: true,
-		status: 200,
-		json: () => Promise.resolve(body),
-		text: () => Promise.resolve(JSON.stringify(body)),
-	}
-}
-
-function okEmpty(): MockResponse {
-	return {
-		ok: true,
-		status: 200,
-		json: () => Promise.resolve({}),
-		text: () => Promise.resolve(''),
-	}
-}
-
-function unauthorized(): MockResponse {
-	return {
-		ok: false,
-		status: 401,
-		json: () => Promise.resolve({}),
-		text: () => Promise.resolve('InvalidAccessKeyId'),
-	}
-}
 
 interface StubOptions {
 	readonly accountId?: string

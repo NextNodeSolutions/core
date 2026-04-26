@@ -1,16 +1,15 @@
-import { createLogger } from '@nextnode-solutions/logger'
-
-import { resolveAccountId } from '../../adapters/cloudflare/accounts.ts'
-import { ensureR2Bucket } from '../../adapters/cloudflare/r2/buckets.ts'
-import { createOrgSecretsAdapter } from '../../adapters/github/org-secrets.ts'
-import { verifyR2Credentials } from '../../adapters/r2/verify-credentials.ts'
+import { resolveAccountId } from '#/adapters/cloudflare/accounts.ts'
+import { ensureR2Bucket } from '#/adapters/cloudflare/r2/buckets.ts'
+import { createOrgSecretsAdapter } from '#/adapters/github/org-secrets.ts'
+import { verifyR2Credentials } from '#/adapters/r2/verify-credentials.ts'
 import {
 	DEFAULT_R2_CERTS_BUCKET,
 	DEFAULT_R2_STATE_BUCKET,
 	R2_BUCKET_LOCATION_HINT,
-} from '../../config/types.ts'
-import { computeR2Endpoint } from '../../domain/cloudflare/r2/addressing.ts'
-import type { R2RuntimeConfig } from '../../domain/cloudflare/r2/runtime-config.ts'
+} from '#/config/types.ts'
+import { computeR2Endpoint } from '#/domain/cloudflare/r2/addressing.ts'
+import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
+import { createLogger } from '@nextnode-solutions/logger'
 
 import type { R2Context } from './context.ts'
 import type { R2Credentials } from './rotate-token.ts'
@@ -84,28 +83,32 @@ async function persistOrgSecrets(
  *      until it propagates, revoke stale tokens, persist as GitHub org
  *      secrets.
  *
- * Returns the resolved `R2RuntimeConfig` — callers thread it explicitly
- * into adapters that need R2 (no hidden coupling via `process.env`).
+ * Returns the resolved `InfraStorageRuntimeConfig` — callers thread it
+ * explicitly into adapters that need it (no hidden coupling via `process.env`).
  */
-export async function ensureR2Setup(cfToken: string): Promise<R2RuntimeConfig> {
+export async function ensureR2Setup(
+	cfToken: string,
+): Promise<InfraStorageRuntimeConfig> {
 	const stateBucket = DEFAULT_R2_STATE_BUCKET
 	const certsBucket = DEFAULT_R2_CERTS_BUCKET
 
 	const accountId = await resolveAccountId(cfToken)
 	logger.info(`Cloudflare account: ${accountId}`)
 
-	await ensureR2Bucket({
-		token: cfToken,
-		accountId,
-		bucketName: stateBucket,
-		locationHint: R2_BUCKET_LOCATION_HINT,
-	})
-	await ensureR2Bucket({
-		token: cfToken,
-		accountId,
-		bucketName: certsBucket,
-		locationHint: R2_BUCKET_LOCATION_HINT,
-	})
+	await Promise.all([
+		ensureR2Bucket({
+			token: cfToken,
+			accountId,
+			bucketName: stateBucket,
+			locationHint: R2_BUCKET_LOCATION_HINT,
+		}),
+		ensureR2Bucket({
+			token: cfToken,
+			accountId,
+			bucketName: certsBucket,
+			locationHint: R2_BUCKET_LOCATION_HINT,
+		}),
+	])
 
 	const ctx: R2Context = { cfToken, accountId, stateBucket, certsBucket }
 	const creds = await resolveCredsOrRotate(ctx)

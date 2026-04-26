@@ -2,10 +2,9 @@ import { readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import type { NextNodeConfig } from '#/config/types.ts'
+import type { QualityTask } from '#/domain/pipeline/quality-matrix.ts'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-
-import type { NextNodeConfig } from '../../config/types.ts'
-import type { QualityTask } from '../../domain/pipeline/quality-matrix.ts'
 
 import { writePlanOutputs } from './plan-outputs.ts'
 
@@ -27,6 +26,7 @@ const APP_CONFIG: NextNodeConfig = {
 		vps: null,
 		hetzner: { serverType: 'cpx22', location: 'nbg1' },
 	},
+	services: {},
 }
 
 const PACKAGE_CONFIG: NextNodeConfig = {
@@ -42,6 +42,7 @@ const PACKAGE_CONFIG: NextNodeConfig = {
 	package: false,
 	environment: { development: true },
 	deploy: false,
+	services: {},
 }
 
 const PUBLISHABLE_CONFIG: NextNodeConfig = {
@@ -57,6 +58,7 @@ const PUBLISHABLE_CONFIG: NextNodeConfig = {
 	package: { access: 'public' },
 	environment: { development: true },
 	deploy: false,
+	services: {},
 }
 
 describe('writePlanOutputs', () => {

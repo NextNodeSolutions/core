@@ -1,28 +1,26 @@
-import { createLogger } from '@nextnode-solutions/logger'
-
-import type { HetznerVpsDeploySection } from '../../../config/types.ts'
-import type { ResourceOutcome } from '../../../domain/deploy/resource-outcome.ts'
-import { renderProjectCloudInit } from '../../../domain/hetzner/cloud-init.ts'
-import { computeFirewallRules } from '../../../domain/hetzner/firewall-rules.ts'
 import {
-	deleteTailnetDevicesByHostname,
-	getTailnetIpByHostname,
-	mintAuthkey,
-} from '../../tailscale/oauth.ts'
-import { applyFirewall, createFirewall } from '../api/firewall.ts'
-import type { CreateServerInput } from '../api/server.ts'
+	applyFirewall,
+	createFirewall,
+} from '#/adapters/hetzner/api/firewall.ts'
+import type { CreateServerInput } from '#/adapters/hetzner/api/server.ts'
 import {
 	assertServerTypeAvailable,
 	createServer,
 	describeServer,
-} from '../api/server.ts'
+} from '#/adapters/hetzner/api/server.ts'
 import {
 	MAX_POLL_ATTEMPTS,
 	POLL_INTERVAL_MS,
 	TAILSCALE_AUTHKEY_TTL_SECONDS,
 	TAILSCALE_TAG,
-} from '../constants.ts'
-import { waitUntil } from '../wait.ts'
+} from '#/adapters/hetzner/constants.ts'
+import { waitUntil } from '#/adapters/hetzner/wait.ts'
+import type { HetznerVpsDeploySection } from '#/config/types.ts'
+import type { ResourceOutcome } from '#/domain/deploy/resource-outcome.ts'
+import { renderProjectCloudInit } from '#/domain/hetzner/cloud-init.ts'
+import { computeFirewallRules } from '#/domain/hetzner/firewall-rules.ts'
+import type { TailnetClient } from '#/domain/tailnet/client.ts'
+import { createLogger } from '@nextnode-solutions/logger'
 
 import { waitForSsh } from './wait-for-ssh.ts'
 
@@ -30,7 +28,7 @@ const logger = createLogger()
 
 export interface ProvisionVpsCredentials {
 	readonly hcloudToken: string
-	readonly tailscaleAuthKey: string
+	readonly tailnet: TailnetClient
 	readonly deployPublicKey: string
 	readonly deployPrivateKey: string
 }
@@ -73,18 +71,14 @@ export async function createVps(
 		`Preflight OK: server_type "${input.hetzner.serverType}" is available`,
 	)
 
-	const purged = await deleteTailnetDevicesByHostname(
-		credentials.tailscaleAuthKey,
-		input.vpsName,
-	)
+	const purged = await credentials.tailnet.deleteByHostname(input.vpsName)
 	if (purged > 0) {
 		logger.info(
 			`Purged ${purged} stale tailnet device(s) with hostname "${input.vpsName}"`,
 		)
 	}
 
-	const minted = await mintAuthkey(
-		credentials.tailscaleAuthKey,
+	const minted = await credentials.tailnet.mintAuthkey(
 		[TAILSCALE_TAG],
 		TAILSCALE_AUTHKEY_TTL_SECONDS,
 		`nextnode-infra provisioning ${input.vpsName}`,
@@ -151,10 +145,7 @@ export async function completeProvisioning(
 	)
 	await applyFirewall(credentials.hcloudToken, firewall.id, input.serverId)
 
-	const tailnetIp = await getTailnetIpByHostname(
-		credentials.tailscaleAuthKey,
-		input.vpsName,
-	)
+	const tailnetIp = await credentials.tailnet.getIpByHostname(input.vpsName)
 	logger.info(`Tailnet IP for "${input.vpsName}": ${tailnetIp}`)
 
 	const { hostKeyFingerprint } = await waitForSsh({

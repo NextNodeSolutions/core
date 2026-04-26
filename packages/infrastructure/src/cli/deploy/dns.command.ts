@@ -2,11 +2,12 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
 
-import type { DeployableConfig } from '../../config/types.ts'
-import { resolveEnvironment } from '../../domain/environment.ts'
-import { getEnv } from '../env.ts'
+import { getEnv } from '#/cli/env.ts'
+import type { DeployableConfig } from '#/config/types.ts'
+import { resolveEnvironment } from '#/domain/environment.ts'
 
 import { buildRuntimeTarget } from './build-runtime-target.ts'
+import { loadInfraStorageForConfig } from './load-infra-storage.ts'
 
 export async function dnsCommand(config: DeployableConfig): Promise<void> {
 	if (!config.project.domain) {
@@ -20,6 +21,7 @@ export async function dnsCommand(config: DeployableConfig): Promise<void> {
 		config.project.type,
 		getEnv('PIPELINE_ENVIRONMENT'),
 	)
-	const target = await buildRuntimeTarget(config, environment)
+	const infraStorage = await loadInfraStorageForConfig(config)
+	const target = buildRuntimeTarget(config, environment, infraStorage)
 	await target.reconcileDns(config.project.name, config.project.domain)
 }

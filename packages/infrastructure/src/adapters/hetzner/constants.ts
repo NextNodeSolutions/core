@@ -31,5 +31,5 @@ const GOLDEN_IMAGE_MAX_AGE_DAYS = 30
 export const GOLDEN_IMAGE_MAX_AGE_MS = GOLDEN_IMAGE_MAX_AGE_DAYS * MS_PER_DAY
 
 // Smallest amd64 SKU is enough — we only need to run cloud-init + produce a snapshot.
-export const GOLDEN_IMAGE_BUILDER_SERVER_TYPE = 'cx22'
+export const GOLDEN_IMAGE_BUILDER_SERVER_TYPE = 'cx23'
 export const GOLDEN_IMAGE_BUILDER_LOCATION = 'nbg1'

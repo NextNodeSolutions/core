@@ -1,24 +1,20 @@
+import type { ObjectStorageBinding } from '#/domain/storage/binding.ts'
 import { describe, expect, it } from 'vitest'
-
-import type { R2RuntimeConfig } from '../cloudflare/r2/runtime-config.ts'
 
 import { buildCaddyForProject } from './caddy-for-project.ts'
 
-const R2: R2RuntimeConfig = {
-	accountId: 'acct',
-	endpoint: 'https://r2.example.com',
+const STORAGE: ObjectStorageBinding = {
+	host: 'acct.r2.cloudflarestorage.com',
+	bucket: 'certs',
 	accessKeyId: 'key',
-	secretAccessKey: 'secret',
-	stateBucket: 'state',
-	certsBucket: 'certs',
+	prefix: 'acme-web/',
 }
 
 describe('buildCaddyForProject', () => {
-	it('binds the R2 storage block to the project prefix and uses env placeholder for secret_key', () => {
+	it('threads the storage binding into the Caddy s3 module', () => {
 		const config = buildCaddyForProject({
 			internal: false,
-			projectName: 'acme-web',
-			r2: R2,
+			storage: STORAGE,
 			upstreams: [],
 			acmeEmail: 'test@example.com',
 		})
@@ -34,23 +30,23 @@ describe('buildCaddyForProject', () => {
 		})
 	})
 
-	it('never embeds the raw R2 secret access key in the JSON config', () => {
+	it('routes secrets through env placeholders, never inlining raw values', () => {
 		const config = buildCaddyForProject({
 			internal: false,
-			projectName: 'acme-web',
-			r2: { ...R2, secretAccessKey: 'VERY_SECRET_VALUE' },
+			storage: STORAGE,
 			upstreams: [],
 			acmeEmail: 'test@example.com',
 		})
 
-		expect(JSON.stringify(config)).not.toContain('VERY_SECRET_VALUE')
+		const serialized = JSON.stringify(config)
+		expect(serialized).toContain('{env.CADDY_R2_SECRET_KEY}')
+		expect(serialized).not.toContain('"secret_key": "key"')
 	})
 
 	it('threads acmeEmail into issuers', () => {
 		const config = buildCaddyForProject({
 			internal: false,
-			projectName: 'acme-web',
-			r2: R2,
+			storage: STORAGE,
 			upstreams: [
 				{ hostname: 'acme.example.com', dial: 'localhost:8080' },
 			],
@@ -66,8 +62,7 @@ describe('buildCaddyForProject', () => {
 	it('maps upstream routes verbatim', () => {
 		const config = buildCaddyForProject({
 			internal: false,
-			projectName: 'acme-web',
-			r2: R2,
+			storage: STORAGE,
 			upstreams: [
 				{ hostname: 'acme.example.com', dial: 'localhost:8080' },
 			],
@@ -83,8 +78,7 @@ describe('buildCaddyForProject', () => {
 	it('uses DNS-01 challenge for internal projects with env placeholder for CF token', () => {
 		const config = buildCaddyForProject({
 			internal: true,
-			projectName: 'monitor',
-			r2: R2,
+			storage: STORAGE,
 			upstreams: [
 				{ hostname: 'monitor.nextnode.fr', dial: 'localhost:8080' },
 			],
@@ -101,11 +95,10 @@ describe('buildCaddyForProject', () => {
 		expect(issuer.challenges?.http).toStrictEqual({ disabled: true })
 	})
 
-	it('never embeds the raw Cloudflare API token in the internal JSON config', () => {
+	it('routes both R2 + CF tokens through env placeholders for internal projects', () => {
 		const config = buildCaddyForProject({
 			internal: true,
-			projectName: 'monitor',
-			r2: R2,
+			storage: STORAGE,
 			upstreams: [],
 			acmeEmail: 'infra@nextnode.fr',
 		})
@@ -115,11 +108,10 @@ describe('buildCaddyForProject', () => {
 		expect(serialized).toContain('{env.CADDY_R2_SECRET_KEY}')
 	})
 
-	it('stores certs in R2 for internal projects', () => {
+	it('preserves the storage binding for internal projects', () => {
 		const config = buildCaddyForProject({
 			internal: true,
-			projectName: 'monitor',
-			r2: R2,
+			storage: { ...STORAGE, prefix: 'monitor/' },
 			upstreams: [],
 			acmeEmail: 'infra@nextnode.fr',
 		})

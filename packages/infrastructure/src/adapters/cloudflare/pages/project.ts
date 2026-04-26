@@ -1,6 +1,5 @@
+import type { ResourceOutcome } from '#/domain/deploy/resource-outcome.ts'
 import { createLogger } from '@nextnode-solutions/logger'
-
-import type { ResourceOutcome } from '../../../domain/deploy/resource-outcome.ts'
 
 import { createPagesProject, getPagesProject } from './api.ts'
 

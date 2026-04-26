@@ -1,37 +1,21 @@
-import type { DeployableConfig } from '../../config/types.ts'
-import {
-	isCloudflarePagesDeployableConfig,
-	isHetznerDeployableConfig,
-} from '../../config/types.ts'
-import type { DeployTarget } from '../../domain/deploy/target.ts'
-import type { AppEnvironment } from '../../domain/environment.ts'
-import { requireEnv } from '../env.ts'
-import { loadR2Runtime } from '../r2/load-runtime.ts'
+import type { DeployableConfig } from '#/config/types.ts'
+import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
+import type { DeployTarget } from '#/domain/deploy/target.ts'
+import type { AppEnvironment } from '#/domain/environment.ts'
 
-import { createCloudflarePagesTarget } from './create-cloudflare-pages-target.ts'
-import { createHetznerTarget } from './create-hetzner-target.ts'
+import { TARGET_DEFINITIONS } from './registry.ts'
 
-/**
- * Build a DeployTarget for a runtime operation (deploy, dns) that consumes
- * already-provisioned infrastructure. For Hetzner, loads R2 creds from env
- * and verifies them via SigV4 — fails loud on stale creds.
- *
- * This is deliberately NOT used by `provisionCommand`: provision needs the
- * full R2 bootstrap (bucket creation, token rotation, org-secret persistence)
- * that only `ensureR2Setup` provides.
- */
-export async function buildRuntimeTarget(
+export function buildRuntimeTarget(
 	config: DeployableConfig,
 	environment: AppEnvironment,
-): Promise<DeployTarget> {
-	if (isHetznerDeployableConfig(config)) {
-		const r2 = await loadR2Runtime(requireEnv('CLOUDFLARE_API_TOKEN'))
-		return createHetznerTarget(config, environment, r2)
+	infraStorage: InfraStorageRuntimeConfig | null,
+): DeployTarget {
+	const definition = TARGET_DEFINITIONS[config.deploy.target]
+	const target = definition.build(config, { environment, infraStorage })
+	if (!target) {
+		throw new Error(
+			`buildRuntimeTarget: definition "${definition.name}" returned null for matching config — definition bug`,
+		)
 	}
-	if (isCloudflarePagesDeployableConfig(config)) {
-		return createCloudflarePagesTarget(config, environment)
-	}
-	throw new Error(
-		'buildRuntimeTarget: unknown deploy target — config validation should have caught this',
-	)
+	return target
 }

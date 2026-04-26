@@ -1,6 +1,5 @@
+import type { ImageRef } from '#/domain/deploy/target.ts'
 import { stringify } from 'yaml'
-
-import type { ImageRef } from '../deploy/target.ts'
 
 /**
  * Port the application container listens on.

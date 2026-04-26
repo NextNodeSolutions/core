@@ -1,10 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-
 import type {
 	TeardownResult,
 	VpsFullTeardownResult,
-} from '../../domain/deploy/teardown-result.ts'
-import { goldenImageFingerprint } from '../../domain/hetzner/golden-image.ts'
+} from '#/domain/deploy/teardown-result.ts'
+import { goldenImageFingerprint } from '#/domain/hetzner/golden-image.ts'
+import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { SshSession } from './ssh/session.types.ts'
 import type { HcloudVpsState } from './state/types.ts'
@@ -107,62 +107,57 @@ vi.mock('../../cli/hetzner/converge.ts', () => ({
 	converge: vi.fn(async () => undefined),
 }))
 
-// Mock Tailscale OAuth adapter (network boundary)
-vi.mock('../tailscale/oauth.ts', () => ({
-	mintAuthkey: vi.fn(async () => ({
-		key: 'tskey-auth-minted',
-		expires: '2099-01-01T00:00:00Z',
-	})),
-	getTailnetIpByHostname: vi.fn(async () => '100.74.91.126'),
-	deleteTailnetDevicesByHostname: vi.fn(async () => 0),
+// Tailnet is injected as a TailnetClient — no module-level mocks needed.
+const mockTailnetMintAuthkey = vi.fn(async () => ({
+	key: 'tskey-auth-minted',
+	expires: '2099-01-01T00:00:00Z',
 }))
+const mockTailnetGetIp = vi.fn(async () => '100.74.91.126')
+const mockTailnetDeleteByHostname = vi.fn(async () => 0)
+const mockTailnet = {
+	mintAuthkey: mockTailnetMintAuthkey,
+	getIpByHostname: mockTailnetGetIp,
+	deleteByHostname: mockTailnetDeleteByHostname,
+}
 
 // Mock node:timers/promises (sleep resolves instantly in tests)
 vi.mock('node:timers/promises', () => ({
 	setTimeout: vi.fn(async () => undefined),
 }))
 
-// Mock Cloudflare DNS reconciliation (network boundary: Cloudflare API)
-const { mockReconcileDnsRecords } = vi.hoisted(() => ({
-	mockReconcileDnsRecords: vi.fn(async () => undefined),
-}))
-vi.mock('../cloudflare/dns/reconcile.ts', () => ({
-	reconcileDnsRecords: mockReconcileDnsRecords,
-}))
+// DNS is injected as a DnsClient — no module-level mocks needed.
+const mockReconcile = vi.fn(async () => undefined)
+const mockDeleteByName = vi.fn(async () => 0)
 
-// Mock Cloudflare DNS delete (network boundary: Cloudflare API)
-const { mockDeleteDnsRecordsByName } = vi.hoisted(() => ({
-	mockDeleteDnsRecordsByName: vi.fn(async () => 0),
-}))
-vi.mock('../cloudflare/dns/delete-records.ts', () => ({
-	deleteDnsRecordsByName: mockDeleteDnsRecordsByName,
-}))
-
-// Mock R2Client (network boundary)
+// Stores are injected as ObjectStoreClient — no module-level mocks needed.
 const fakeR2State = new Map<string, string>()
+const fakeCerts = new Map<string, string>()
 
-vi.mock('../r2/client.ts', () => ({
-	R2Client: vi.fn(() => ({
-		get: vi.fn(async (key: string) => {
-			const body = fakeR2State.get(key)
+function buildFakeStore(state: Map<string, string>): ObjectStoreClient {
+	return {
+		get: async (key: string) => {
+			const body = state.get(key)
 			if (!body) return null
 			return { body, etag: 'etag-1' }
-		}),
-		put: vi.fn(async (key: string, body: string) => {
-			fakeR2State.set(key, body)
+		},
+		put: async (key: string, body: string) => {
+			state.set(key, body)
 			return 'etag-2'
-		}),
-		delete: vi.fn(async (key: string) => {
-			fakeR2State.delete(key)
-		}),
-		exists: vi.fn(async (key: string) => fakeR2State.has(key)),
-		deleteByPrefix: vi.fn(async () => 0),
-	})),
-}))
+		},
+		delete: async (key: string) => {
+			state.delete(key)
+		},
+		exists: async (key: string) => state.has(key),
+		deleteByPrefix: async () => 0,
+	}
+}
+
+const mockStateStore = buildFakeStore(fakeR2State)
+const mockCertsStore = buildFakeStore(fakeCerts)
 
 const HETZNER_CONFIG = { serverType: 'cpx22', location: 'nbg1' } as const
 
-const R2_CONFIG = {
+const STORAGE_CONFIG = {
 	accountId: 'acct',
 	endpoint: 'https://r2.example.com',
 	accessKeyId: 'r2-key',
@@ -175,13 +170,15 @@ const CREDENTIALS = {
 	hcloudToken: 'hcloud-token',
 	deployPrivateKey: 'fake-private-key',
 	deployPublicKey: 'ssh-ed25519 AAAA test@ci',
-	tailscaleAuthKey: 'tskey-auth-test',
+	tailnet: mockTailnet,
 } as const
 
 const TARGET_CONFIG = {
 	vpsName: 'acme-web',
 	hetzner: HETZNER_CONFIG,
-	r2: R2_CONFIG,
+	infraStorage: STORAGE_CONFIG,
+	stateStore: mockStateStore,
+	certsStore: mockCertsStore,
 	environment: 'production' as const,
 	domain: 'acme-web.example.com',
 	internal: false,
@@ -190,6 +187,7 @@ const TARGET_CONFIG = {
 		clientId: 'nextnode',
 		vlUrl: 'http://vl.tail0.ts.net:9428',
 	},
+	dns: { reconcile: mockReconcile, deleteByName: mockDeleteByName },
 	cloudflareApiToken: 'cf-token',
 	acmeEmail: 'test@example.com',
 }
@@ -219,6 +217,8 @@ function createMockSession(): SshSession {
 
 beforeEach(() => {
 	fakeR2State.clear()
+	mockReconcile.mockClear()
+	mockDeleteByName.mockClear()
 	vi.stubEnv('LOG_LEVEL', 'silent')
 })
 
@@ -622,7 +622,7 @@ describe('HetznerVpsTarget', () => {
 				const { createServer: mockedCreate } =
 					await import('./api/server.ts')
 				const { converge: mockedConverge } =
-					await import('../../cli/hetzner/converge.ts')
+					await import('#/cli/hetzner/converge.ts')
 				seedState({
 					phase: 'provisioned',
 					serverId: 42,
@@ -673,7 +673,7 @@ describe('HetznerVpsTarget', () => {
 
 			it('still runs convergence when state is converged', async () => {
 				const { converge: mockedConverge } =
-					await import('../../cli/hetzner/converge.ts')
+					await import('#/cli/hetzner/converge.ts')
 				seedState()
 
 				const target = new HetznerVpsTarget(TARGET_CONFIG)
@@ -724,7 +724,7 @@ describe('HetznerVpsTarget', () => {
 		describe('convergence', () => {
 			it('closes SSH session even when converge throws', async () => {
 				const { converge: mockedConverge } =
-					await import('../../cli/hetzner/converge.ts')
+					await import('#/cli/hetzner/converge.ts')
 				const { createSshSession: mockedSsh } =
 					await import('./ssh/session.ts')
 				const mockSession = createMockSession()
@@ -991,19 +991,16 @@ describe('HetznerVpsTarget', () => {
 			const target = new HetznerVpsTarget(TARGET_CONFIG)
 			await target.reconcileDns('acme-web', 'acme-web.example.com')
 
-			expect(mockReconcileDnsRecords).toHaveBeenCalledWith(
-				[
-					{
-						zoneName: 'example.com',
-						name: 'acme-web.example.com',
-						type: 'A',
-						content: '5.6.7.8',
-						proxied: true,
-						ttl: 1,
-					},
-				],
-				'cf-token',
-			)
+			expect(mockReconcile).toHaveBeenCalledWith([
+				{
+					zoneName: 'example.com',
+					name: 'acme-web.example.com',
+					type: 'A',
+					content: '5.6.7.8',
+					proxied: true,
+					ttl: 1,
+				},
+			])
 		})
 
 		it('uses dev subdomain for development environment', async () => {
@@ -1015,21 +1012,18 @@ describe('HetznerVpsTarget', () => {
 			})
 			await target.reconcileDns('acme-web', 'acme-web.example.com')
 
-			expect(mockReconcileDnsRecords).toHaveBeenCalledWith(
-				[
-					expect.objectContaining({
-						name: 'dev.acme-web.example.com',
-						proxied: false,
-						ttl: 300,
-					}),
-				],
-				'cf-token',
-			)
+			expect(mockReconcile).toHaveBeenCalledWith([
+				expect.objectContaining({
+					name: 'dev.acme-web.example.com',
+					proxied: false,
+					ttl: 300,
+				}),
+			])
 		})
 
 		it('propagates errors from the DNS reconciler', async () => {
 			seedState()
-			mockReconcileDnsRecords.mockRejectedValueOnce(
+			mockReconcile.mockRejectedValueOnce(
 				new Error('Cloudflare zone not found'),
 			)
 
@@ -1053,15 +1047,12 @@ describe('HetznerVpsTarget', () => {
 			})
 			await target.reconcileDns('acme-web', 'acme-web.example.com')
 
-			expect(mockReconcileDnsRecords).toHaveBeenCalledWith(
-				[
-					expect.objectContaining({
-						content: '100.64.0.5',
-						proxied: false,
-					}),
-				],
-				'cf-token',
-			)
+			expect(mockReconcile).toHaveBeenCalledWith([
+				expect.objectContaining({
+					content: '100.64.0.5',
+					proxied: false,
+				}),
+			])
 		})
 	})
 
@@ -1078,13 +1069,11 @@ describe('HetznerVpsTarget', () => {
 				await import('./api/server.ts')
 			const { findFirewallsByName: mockedFindFw } =
 				await import('./api/firewall.ts')
-			const { deleteTailnetDevicesByHostname: mockedTailscale } =
-				await import('../tailscale/oauth.ts')
 			vi.mocked(mockedFindFw).mockResolvedValueOnce([
 				{ id: 99, name: 'acme-web-fw', appliedToCount: 0 },
 			])
-			vi.mocked(mockedTailscale).mockResolvedValueOnce(1)
-			mockDeleteDnsRecordsByName.mockResolvedValueOnce(1)
+			mockTailnetDeleteByHostname.mockResolvedValueOnce(1)
+			mockDeleteByName.mockResolvedValueOnce(1)
 
 			const target = new HetznerVpsTarget(TARGET_CONFIG)
 			const raw = await target.teardown(
@@ -1140,7 +1129,7 @@ describe('HetznerVpsTarget', () => {
 
 			expect(result.outcome.dns.handled).toBe(false)
 			expect(result.outcome.dns.detail).toBe('no hostnames to delete')
-			expect(mockDeleteDnsRecordsByName).not.toHaveBeenCalled()
+			expect(mockDeleteByName).not.toHaveBeenCalled()
 		})
 
 		it('deletes R2 state', async () => {

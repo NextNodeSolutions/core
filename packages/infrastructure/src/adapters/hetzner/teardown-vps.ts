@@ -1,10 +1,9 @@
+import { extractRootDomain } from '#/domain/cloudflare/dns-records.ts'
+import type { ResourceOutcome } from '#/domain/deploy/resource-outcome.ts'
+import type { DnsClient } from '#/domain/dns/client.ts'
+import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
+import type { TailnetClient } from '#/domain/tailnet/client.ts'
 import { createLogger } from '@nextnode-solutions/logger'
-
-import { extractRootDomain } from '../../domain/cloudflare/dns-records.ts'
-import type { ResourceOutcome } from '../../domain/deploy/resource-outcome.ts'
-import { deleteDnsRecordsByName } from '../cloudflare/dns/delete-records.ts'
-import type { R2Operations } from '../r2/client.types.ts'
-import { deleteTailnetDevicesByHostname } from '../tailscale/oauth.ts'
 
 import {
 	deleteFirewall,
@@ -20,7 +19,7 @@ const logger = createLogger()
 
 export async function teardownServer(
 	hcloudToken: string,
-	r2: R2Operations,
+	r2: ObjectStoreClient,
 	vpsName: string,
 ): Promise<ResourceOutcome> {
 	const existing = await readState(r2, vpsName)
@@ -80,13 +79,10 @@ export async function teardownFirewall(
 }
 
 export async function teardownTailscale(
-	tailscaleAuthKey: string,
+	tailnet: TailnetClient,
 	vpsName: string,
 ): Promise<ResourceOutcome> {
-	const purged = await deleteTailnetDevicesByHostname(
-		tailscaleAuthKey,
-		vpsName,
-	)
+	const purged = await tailnet.deleteByHostname(vpsName)
 	logger.info(
 		`Tailscale: ${String(purged)} device(s) purged for VPS "${vpsName}"`,
 	)
@@ -104,7 +100,7 @@ export async function teardownTailscale(
  */
 export async function teardownVpsDns(
 	hostnames: ReadonlyArray<string>,
-	cloudflareApiToken: string,
+	dns: DnsClient,
 ): Promise<ResourceOutcome> {
 	if (hostnames.length === 0) {
 		return { handled: false, detail: 'no hostnames to delete' }
@@ -114,10 +110,7 @@ export async function teardownVpsDns(
 		zoneName: extractRootDomain(name),
 		name,
 	}))
-	const deletedCount = await deleteDnsRecordsByName(
-		lookups,
-		cloudflareApiToken,
-	)
+	const deletedCount = await dns.deleteByName(lookups)
 	return {
 		handled: deletedCount > 0,
 		detail: `${String(deletedCount)} record(s) deleted across ${String(hostnames.length)} hostname(s)`,
@@ -130,7 +123,7 @@ export async function teardownVpsDns(
  * project is going away, so we drop the prefix wholesale.
  */
 export async function teardownVpsCerts(
-	certsR2: R2Operations,
+	certsR2: ObjectStoreClient,
 	vpsName: string,
 ): Promise<ResourceOutcome> {
 	const prefix = `${vpsName}/`
@@ -145,7 +138,7 @@ export async function teardownVpsCerts(
 }
 
 export async function teardownVpsState(
-	r2: R2Operations,
+	r2: ObjectStoreClient,
 	vpsName: string,
 ): Promise<ResourceOutcome> {
 	await deleteState(r2, vpsName)

@@ -1,6 +1,5 @@
+import type { SshSession } from '#/adapters/hetzner/ssh/session.types.ts'
 import { createLogger } from '@nextnode-solutions/logger'
-
-import type { SshSession } from '../../adapters/hetzner/ssh/session.types.ts'
 
 const logger = createLogger()
 

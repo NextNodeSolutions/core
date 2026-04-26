@@ -1,13 +1,9 @@
+import { httpError, lastCall, noContent, okJson } from '#/test-fetch.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { deleteImage, findImagesByLabels } from './image.ts'
-import {
-	TEST_TOKEN,
-	httpError,
-	lastCall,
-	noContent,
-	okJson,
-} from './test-helpers.ts'
+
+const TEST_TOKEN = 'hcloud-test-token'
 
 afterEach(() => {
 	vi.unstubAllGlobals()

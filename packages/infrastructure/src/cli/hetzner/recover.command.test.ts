@@ -1,15 +1,14 @@
 import { readFileSync } from 'node:fs'
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-
 import type {
 	RecoverOrphanInput,
 	RecoverOrphanResult,
-} from '../../adapters/hetzner/recover-orphan.ts'
+} from '#/adapters/hetzner/recover-orphan.ts'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { recoverCommand } from './recover.command.ts'
 
-vi.mock(import('../r2/load-runtime.ts'), async () => ({
+vi.mock(import('#/cli/r2/load-runtime.ts'), async () => ({
 	loadR2Runtime: vi.fn(async () => ({
 		accountId: 'acct',
 		endpoint: 'https://r2.example.com',
@@ -23,7 +22,7 @@ vi.mock(import('../r2/load-runtime.ts'), async () => ({
 const { mockFindServersByLabels } = vi.hoisted(() => ({
 	mockFindServersByLabels: vi.fn(),
 }))
-vi.mock('../../adapters/hetzner/api/server.ts', () => ({
+vi.mock('#/adapters/hetzner/api/server.ts', () => ({
 	findServersByLabels: mockFindServersByLabels,
 	deleteServer: vi.fn(async () => undefined),
 	findServerById: vi.fn(async () => null),
@@ -33,20 +32,28 @@ const { mockRecoverOrphanVps } = vi.hoisted(() => ({
 	mockRecoverOrphanVps:
 		vi.fn<(input: RecoverOrphanInput) => Promise<RecoverOrphanResult>>(),
 }))
-vi.mock('../../adapters/hetzner/recover-orphan.ts', () => ({
+vi.mock('#/adapters/hetzner/recover-orphan.ts', () => ({
 	recoverOrphanVps: mockRecoverOrphanVps,
 }))
 
 const { mockExists } = vi.hoisted(() => ({
 	mockExists: vi.fn<(key: string) => Promise<boolean>>(),
 }))
-vi.mock('../../adapters/r2/client.ts', () => ({
+vi.mock('#/adapters/r2/client.ts', () => ({
 	R2Client: vi.fn(() => ({
 		get: vi.fn(),
 		put: vi.fn(),
 		delete: vi.fn(),
 		exists: mockExists,
 		deleteByPrefix: vi.fn(async () => 0),
+	})),
+}))
+
+vi.mock('#/adapters/tailscale/oauth.ts', () => ({
+	createTailnetClient: vi.fn(() => ({
+		mintAuthkey: vi.fn(),
+		getIpByHostname: vi.fn(),
+		deleteByHostname: vi.fn(async () => 0),
 	})),
 }))
 

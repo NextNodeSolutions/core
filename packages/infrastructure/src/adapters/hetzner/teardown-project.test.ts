@@ -9,7 +9,7 @@ import type { TeardownCaddyContext } from './teardown-project.ts'
 
 const CADDY_CONTEXT: TeardownCaddyContext = {
 	vpsName: 'nn-prod',
-	r2: {
+	infraStorage: {
 		accountId: 'acct',
 		endpoint: 'https://acct.r2.cloudflarestorage.com',
 		accessKeyId: 'r2-key',

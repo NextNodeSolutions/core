@@ -1,18 +1,19 @@
-import { createLogger } from '@nextnode-solutions/logger'
-
-import type { R2RuntimeConfig } from '../../domain/cloudflare/r2/runtime-config.ts'
-import { resolveDeployDomain } from '../../domain/deploy/domain.ts'
-import { executeHandlers } from '../../domain/deploy/execute-handlers.ts'
-import type { ResourceOutcome } from '../../domain/deploy/resource-outcome.ts'
-import type { TeardownResult } from '../../domain/deploy/teardown-result.ts'
-import type { TeardownTarget } from '../../domain/deploy/teardown-target.ts'
-import type { AppEnvironment } from '../../domain/environment.ts'
-import { extractUpstreams } from '../../domain/hetzner/caddy-config.ts'
+import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
+import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
+import { executeHandlers } from '#/domain/deploy/execute-handlers.ts'
+import type { ResourceOutcome } from '#/domain/deploy/resource-outcome.ts'
+import type { TeardownResult } from '#/domain/deploy/teardown-result.ts'
+import type { TeardownTarget } from '#/domain/deploy/teardown-target.ts'
+import type { DnsClient } from '#/domain/dns/client.ts'
+import type { AppEnvironment } from '#/domain/environment.ts'
+import { extractUpstreams } from '#/domain/hetzner/caddy-config.ts'
 import {
 	VPS_MANAGED_RESOURCES,
 	VPS_PROJECT_MANAGED_RESOURCES,
-} from '../../domain/hetzner/managed-resources.ts'
-import type { R2Client } from '../r2/client.ts'
+} from '#/domain/hetzner/managed-resources.ts'
+import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
+import type { TailnetClient } from '#/domain/tailnet/client.ts'
+import { createLogger } from '@nextnode-solutions/logger'
 
 import { CADDY_CONFIG_PATH } from './constants.ts'
 import { createSshSession } from './ssh/session.ts'
@@ -43,13 +44,13 @@ export interface HetznerTeardownContext {
 	readonly environment: AppEnvironment
 	readonly internal: boolean
 	readonly hcloudToken: string
-	readonly tailscaleAuthKey: string
+	readonly tailnet: TailnetClient
 	readonly deployPrivateKey: string
-	readonly cloudflareApiToken: string
+	readonly dns: DnsClient
+	readonly r2: ObjectStoreClient
+	readonly certsR2: ObjectStoreClient
+	readonly infraStorage: InfraStorageRuntimeConfig
 	readonly acmeEmail: string
-	readonly r2: R2Client
-	readonly r2Runtime: R2RuntimeConfig
-	readonly certsR2: R2Client
 }
 
 export async function runHetznerTeardown(
@@ -98,9 +99,9 @@ async function teardownVps(
 	const outcome = await executeHandlers(VPS_MANAGED_RESOURCES, {
 		server: () => teardownServer(ctx.hcloudToken, ctx.r2, ctx.vpsName),
 		firewall: () => teardownFirewall(ctx.hcloudToken, ctx.vpsName),
-		tailscale: () => teardownTailscale(ctx.tailscaleAuthKey, ctx.vpsName),
+		tailscale: () => teardownTailscale(ctx.tailnet, ctx.vpsName),
 		certs: () => teardownVpsCerts(ctx.certsR2, ctx.vpsName),
-		dns: () => teardownVpsDns(dnsHostnames, ctx.cloudflareApiToken),
+		dns: () => teardownVpsDns(dnsHostnames, ctx.dns),
 		state: () => teardownVpsState(ctx.r2, ctx.vpsName),
 	})
 
@@ -199,13 +200,13 @@ async function teardownProjectWithSession(
 		caddy: () =>
 			teardownProjectCaddyRoute(session, projectHostname, {
 				vpsName: ctx.vpsName,
-				r2: ctx.r2Runtime,
+				infraStorage: ctx.infraStorage,
 				acmeEmail: ctx.acmeEmail,
 				internal: ctx.internal,
 			}),
 		certs: () =>
 			teardownProjectCerts(ctx.certsR2, ctx.vpsName, projectHostname),
-		dns: () => teardownProjectDns(projectHostname, ctx.cloudflareApiToken),
+		dns: () => teardownProjectDns(projectHostname, ctx.dns),
 		state: () => skipSharedState(),
 	})
 

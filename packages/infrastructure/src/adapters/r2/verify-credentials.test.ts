@@ -1,18 +1,14 @@
+import type { MockResponse } from '#/test-fetch.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { verifyR2Credentials } from './verify-credentials.ts'
-
-interface MockResponse {
-	ok: boolean
-	status: number
-	text: () => Promise<string>
-}
 
 function status(code: number, body = ''): MockResponse {
 	return {
 		ok: code >= 200 && code < 300,
 		status: code,
 		text: () => Promise.resolve(body),
+		json: () => Promise.resolve({}),
 	}
 }
 

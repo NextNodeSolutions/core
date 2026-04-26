@@ -1,10 +1,10 @@
 import type {
 	DesiredDnsRecord,
 	DnsRecordLookup,
-} from '../cloudflare/dns-records.ts'
-import { extractRootDomain } from '../cloudflare/dns-records.ts'
-import { resolveDeployDomain } from '../deploy/domain.ts'
-import type { AppEnvironment } from '../environment.ts'
+} from '#/domain/cloudflare/dns-records.ts'
+import { extractRootDomain } from '#/domain/cloudflare/dns-records.ts'
+import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
+import type { AppEnvironment } from '#/domain/environment.ts'
 
 const DNS_TTL_UNPROXIED = 300
 

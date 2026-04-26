@@ -1,41 +1,9 @@
+import type { DnsRecordLookup } from '#/domain/cloudflare/dns-records.ts'
+import type { FetchImpl } from '#/test-fetch.ts'
+import { methodOf, okJson, urlOf } from '#/test-fetch.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { DnsRecordLookup } from '../../../domain/cloudflare/dns-records.ts'
-
 import { deleteDnsRecordsByName } from './delete-records.ts'
-
-type FetchInput = string | URL
-type FetchImpl = (
-	input: FetchInput,
-	init?: RequestInit,
-) => Promise<{
-	ok: boolean
-	status: number
-	json: () => Promise<unknown>
-	text: () => Promise<string>
-}>
-
-function okJson(body: unknown): {
-	ok: true
-	status: 200
-	json: () => Promise<unknown>
-	text: () => Promise<string>
-} {
-	return {
-		ok: true,
-		status: 200,
-		json: () => Promise.resolve(body),
-		text: () => Promise.resolve(JSON.stringify(body)),
-	}
-}
-
-function urlOf(input: FetchInput): string {
-	return typeof input === 'string' ? input : input.toString()
-}
-
-function methodOf(init: RequestInit | undefined): string {
-	return init?.method ?? 'GET'
-}
 
 afterEach(() => {
 	vi.unstubAllGlobals()

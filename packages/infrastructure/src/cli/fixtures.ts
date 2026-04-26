@@ -1,4 +1,4 @@
-import type { DeployableConfig } from '../config/types.ts'
+import type { DeployableConfig } from '#/config/types.ts'
 
 export const APP_WITH_DOMAIN: DeployableConfig = {
 	project: {
@@ -12,6 +12,7 @@ export const APP_WITH_DOMAIN: DeployableConfig = {
 	scripts: { lint: 'lint', test: 'test', build: 'build' },
 	package: false,
 	environment: { development: true },
+	services: {},
 	deploy: {
 		target: 'hetzner-vps',
 		hetzner: { serverType: 'cx23', location: 'nbg1' },
@@ -32,6 +33,7 @@ export const APP_WITH_SECRETS: DeployableConfig = {
 	scripts: { lint: 'lint', test: 'test', build: 'build' },
 	package: false,
 	environment: { development: true },
+	services: {},
 	deploy: {
 		target: 'hetzner-vps',
 		hetzner: { serverType: 'cx23', location: 'nbg1' },
@@ -52,6 +54,7 @@ export const STATIC_WITH_DOMAIN: DeployableConfig = {
 	scripts: { lint: 'lint', test: 'test', build: 'build' },
 	package: false,
 	environment: { development: true },
+	services: {},
 	deploy: { target: 'cloudflare-pages', secrets: [], vps: null },
 }
 
@@ -67,6 +70,7 @@ export const STATIC_NO_DOMAIN: DeployableConfig = {
 	scripts: { lint: 'lint', test: 'test', build: 'build' },
 	package: false,
 	environment: { development: true },
+	services: {},
 	deploy: { target: 'cloudflare-pages', secrets: [], vps: null },
 }
 
@@ -82,6 +86,7 @@ export const STATIC_WITH_SECRETS: DeployableConfig = {
 	scripts: { lint: 'lint', test: 'test', build: 'build' },
 	package: false,
 	environment: { development: true },
+	services: {},
 	deploy: {
 		target: 'cloudflare-pages',
 		secrets: ['RESEND_API_KEY'],
@@ -101,6 +106,7 @@ export const STATIC_WITH_MISSING_SECRET: DeployableConfig = {
 	scripts: { lint: 'lint', test: 'test', build: 'build' },
 	package: false,
 	environment: { development: true },
+	services: {},
 	deploy: {
 		target: 'cloudflare-pages',
 		secrets: ['MISSING_KEY'],
