@@ -2,9 +2,8 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { STATIC_WITH_DOMAIN } from '#/cli/fixtures.ts'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-
-import { STATIC_WITH_DOMAIN } from '@/cli/fixtures.ts'
 
 import { seoGuardCommand } from './seo-guard.command.ts'
 

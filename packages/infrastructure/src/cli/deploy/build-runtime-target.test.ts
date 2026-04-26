@@ -11,7 +11,7 @@ import {
 
 const { utils: sshUtils } = ssh2
 
-import { APP_WITH_DOMAIN, STATIC_WITH_DOMAIN } from '@/cli/fixtures.ts'
+import { APP_WITH_DOMAIN, STATIC_WITH_DOMAIN } from '#/cli/fixtures.ts'
 
 import { buildRuntimeTarget } from './build-runtime-target.ts'
 
@@ -57,9 +57,9 @@ describe('buildRuntimeTarget', () => {
 
 	it('builds a Hetzner target with the threaded infra storage runtime', async () => {
 		const { HetznerVpsTarget } =
-			await import('@/adapters/hetzner/target.ts')
+			await import('#/adapters/hetzner/target.ts')
 		const { CloudflarePagesTarget } =
-			await import('@/adapters/cloudflare/target.ts')
+			await import('#/adapters/cloudflare/target.ts')
 
 		const target = buildRuntimeTarget(
 			APP_WITH_DOMAIN,
@@ -82,9 +82,9 @@ describe('buildRuntimeTarget', () => {
 
 	it('builds a Cloudflare Pages target without needing infra storage', async () => {
 		const { HetznerVpsTarget } =
-			await import('@/adapters/hetzner/target.ts')
+			await import('#/adapters/hetzner/target.ts')
 		const { CloudflarePagesTarget } =
-			await import('@/adapters/cloudflare/target.ts')
+			await import('#/adapters/cloudflare/target.ts')
 
 		const target = buildRuntimeTarget(
 			STATIC_WITH_DOMAIN,

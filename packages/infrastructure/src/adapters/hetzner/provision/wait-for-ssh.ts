@@ -1,12 +1,11 @@
 import { setTimeout as sleep } from 'node:timers/promises'
 
-import { createLogger } from '@nextnode-solutions/logger'
-
 import {
 	MAX_SSH_ATTEMPTS,
 	SSH_RETRY_INTERVAL_MS,
-} from '@/adapters/hetzner/constants.ts'
-import { createSshSession } from '@/adapters/hetzner/ssh/session.ts'
+} from '#/adapters/hetzner/constants.ts'
+import { createSshSession } from '#/adapters/hetzner/ssh/session.ts'
+import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
 

@@ -2,9 +2,9 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
 
-import { fetchWorkflowRuns } from '@/adapters/github/api.ts'
-import { getEnv, requireEnv } from '@/cli/env.ts'
-import { evaluateDevRun, findDevRun } from '@/domain/pipeline/prod-gate.ts'
+import { fetchWorkflowRuns } from '#/adapters/github/api.ts'
+import { getEnv, requireEnv } from '#/cli/env.ts'
+import { evaluateDevRun, findDevRun } from '#/domain/pipeline/prod-gate.ts'
 
 const DEFAULT_DEV_WORKFLOW_FILE = 'deploy-dev.yml'
 const WORKFLOW_PATH_PREFIX = '.github/workflows/'

@@ -1,4 +1,4 @@
-import type { InfraStorageRuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
+import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 
 import {
 	CADDY_ENV_CF_API_TOKEN,

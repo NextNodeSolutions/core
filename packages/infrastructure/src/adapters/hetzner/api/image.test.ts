@@ -1,6 +1,5 @@
+import { httpError, lastCall, noContent, okJson } from '#/test-fetch.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-
-import { httpError, lastCall, noContent, okJson } from '@/test-fetch.ts'
 
 import { deleteImage, findImagesByLabels } from './image.ts'
 

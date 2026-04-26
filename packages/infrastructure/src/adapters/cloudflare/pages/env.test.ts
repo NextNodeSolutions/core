@@ -1,7 +1,6 @@
+import type { FetchImpl } from '#/test-fetch.ts'
+import { httpError, okJson } from '#/test-fetch.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-
-import type { FetchImpl } from '@/test-fetch.ts'
-import { httpError, okJson } from '@/test-fetch.ts'
 
 import { updatePagesEnvVars } from './env.ts'
 

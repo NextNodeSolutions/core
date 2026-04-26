@@ -1,11 +1,11 @@
-import type { PackageSection, ProjectSection } from '@/config/types.ts'
+import type { PackageSection, ProjectSection } from '#/config/types.ts'
 import {
 	isProjectType,
 	isRecord,
 	isScriptValue,
 	KEBAB_IDENTIFIER_PATTERN,
 	PROJECT_TYPES,
-} from '@/config/types.ts'
+} from '#/config/types.ts'
 
 import type { ValidationResult } from './result.ts'
 

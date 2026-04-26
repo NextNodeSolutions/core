@@ -1,6 +1,5 @@
+import type { CloudflarePagesDeployableConfig } from '#/config/types.ts'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-
-import type { CloudflarePagesDeployableConfig } from '@/config/types.ts'
 
 import { createCloudflarePagesTarget } from './create-cloudflare-pages-target.ts'
 
@@ -42,7 +41,7 @@ describe('createCloudflarePagesTarget', () => {
 		vi.stubEnv('CLOUDFLARE_API_TOKEN', 'cf-token')
 
 		const { CloudflarePagesTarget } =
-			await import('@/adapters/cloudflare/target.ts')
+			await import('#/adapters/cloudflare/target.ts')
 
 		createCloudflarePagesTarget(STATIC_CONFIG, 'production')
 

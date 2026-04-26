@@ -5,7 +5,7 @@ import {
 	requireArrayResult,
 	requireObjectResult,
 	requireOk,
-} from '@/adapters/cloudflare/api.ts'
+} from '#/adapters/cloudflare/api.ts'
 
 export interface CloudflareDnsRecord {
 	readonly id: string

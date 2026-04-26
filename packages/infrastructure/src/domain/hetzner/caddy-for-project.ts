@@ -1,4 +1,4 @@
-import type { ObjectStorageBinding } from '@/domain/storage/binding.ts'
+import type { ObjectStorageBinding } from '#/domain/storage/binding.ts'
 
 import type { CaddyJsonConfig, CaddyUpstream } from './caddy-config.ts'
 import { buildCaddyConfig, buildInternalCaddyConfig } from './caddy-config.ts'

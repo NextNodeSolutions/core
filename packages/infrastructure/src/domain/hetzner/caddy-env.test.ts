@@ -1,6 +1,5 @@
+import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import { describe, expect, it } from 'vitest'
-
-import type { InfraStorageRuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
 
 import { CADDY_ENV_PATH, renderCaddyEnv } from './caddy-env.ts'
 

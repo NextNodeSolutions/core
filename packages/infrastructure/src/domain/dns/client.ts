@@ -1,7 +1,7 @@
 import type {
 	DesiredDnsRecord,
 	DnsRecordLookup,
-} from '@/domain/cloudflare/dns-records.ts'
+} from '#/domain/cloudflare/dns-records.ts'
 
 /**
  * Provider-agnostic DNS contract. Adapters that need DNS reconciliation

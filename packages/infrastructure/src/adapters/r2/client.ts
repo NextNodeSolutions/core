@@ -1,3 +1,7 @@
+import type {
+	ObjectStoreClient,
+	ObjectStoreEntry,
+} from '#/domain/storage/object-store.ts'
 import {
 	DeleteObjectCommand,
 	DeleteObjectsCommand,
@@ -8,11 +12,6 @@ import {
 	PutObjectCommand,
 	S3Client,
 } from '@aws-sdk/client-s3'
-
-import type {
-	ObjectStoreClient,
-	ObjectStoreEntry,
-} from '@/domain/storage/object-store.ts'
 
 import type { R2ClientConfig } from './client.types.ts'
 

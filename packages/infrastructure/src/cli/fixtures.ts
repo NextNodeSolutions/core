@@ -1,4 +1,4 @@
-import type { DeployableConfig } from '@/config/types.ts'
+import type { DeployableConfig } from '#/config/types.ts'
 
 export const APP_WITH_DOMAIN: DeployableConfig = {
 	project: {

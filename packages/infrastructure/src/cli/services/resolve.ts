@@ -1,6 +1,6 @@
-import type { DeployableConfig } from '@/config/types.ts'
-import type { InfraStorageRuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
-import type { AppEnvironment } from '@/domain/environment.ts'
+import type { DeployableConfig } from '#/config/types.ts'
+import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
+import type { AppEnvironment } from '#/domain/environment.ts'
 
 import { SERVICE_DEFINITIONS } from './registry.ts'
 import type { Service, ServiceFactoryContext } from './service.ts'

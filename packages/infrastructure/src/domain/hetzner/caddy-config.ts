@@ -1,4 +1,4 @@
-import type { ObjectStorageBinding } from '@/domain/storage/binding.ts'
+import type { ObjectStorageBinding } from '#/domain/storage/binding.ts'
 
 export interface CaddyUpstream {
 	readonly hostname: string

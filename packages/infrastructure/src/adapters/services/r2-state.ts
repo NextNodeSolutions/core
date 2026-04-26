@@ -1,6 +1,6 @@
-import { isRecord } from '@/config/types.ts'
-import type { R2ServiceState } from '@/domain/services/r2.ts'
-import type { ObjectStoreClient } from '@/domain/storage/object-store.ts'
+import { isRecord } from '#/config/types.ts'
+import type { R2ServiceState } from '#/domain/services/r2.ts'
+import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
 
 interface PersistedR2ServiceState {
 	readonly endpoint: string

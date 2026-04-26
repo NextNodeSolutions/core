@@ -22,10 +22,10 @@ import {
 	STATIC_WITH_DOMAIN,
 	STATIC_WITH_MISSING_SECRET,
 	STATIC_WITH_SECRETS,
-} from '@/cli/fixtures.ts'
-import type { DeployResult } from '@/domain/deploy/target.ts'
-import type { FetchImpl } from '@/test-fetch.ts'
-import { okJson } from '@/test-fetch.ts'
+} from '#/cli/fixtures.ts'
+import type { DeployResult } from '#/domain/deploy/target.ts'
+import type { FetchImpl } from '#/test-fetch.ts'
+import { okJson } from '#/test-fetch.ts'
 
 import { deployCommand } from './deploy.command.ts'
 
@@ -83,7 +83,7 @@ const { mockHetznerDeploy } = vi.hoisted(() => ({
 
 // Mock loadR2Runtime (network boundary: Cloudflare accounts API + SigV4 verify).
 // Deploy must NOT call ensureR2Setup — R2 bootstrap is provision's responsibility.
-vi.mock(import('@/cli/r2/load-runtime.ts'), async () => ({
+vi.mock(import('#/cli/r2/load-runtime.ts'), async () => ({
 	loadR2Runtime: vi.fn(async () => ({
 		accountId: 'acct',
 		endpoint: 'https://r2.example.com',

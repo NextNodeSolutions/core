@@ -1,7 +1,6 @@
+import type { R2ServiceState } from '#/domain/services/r2.ts'
+import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
 import { describe, expect, it, vi } from 'vitest'
-
-import type { R2ServiceState } from '@/domain/services/r2.ts'
-import type { ObjectStoreClient } from '@/domain/storage/object-store.ts'
 
 import { readR2ServiceState, writeR2ServiceState } from './r2-state.ts'
 

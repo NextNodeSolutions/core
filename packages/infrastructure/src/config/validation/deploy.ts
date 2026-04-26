@@ -2,13 +2,13 @@ import type {
 	DeploySection,
 	DeployTargetType,
 	DeployableProjectType,
-} from '@/config/types.ts'
+} from '#/config/types.ts'
 import {
 	DEFAULT_DEPLOY_TARGETS,
 	DEPLOY_TARGETS,
 	isDeployTarget,
 	isRecord,
-} from '@/config/types.ts'
+} from '#/config/types.ts'
 
 import { DEPLOY_PROVIDER_VALIDATORS } from './providers/registry.ts'
 import type { ValidationResult } from './result.ts'

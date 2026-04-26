@@ -1,4 +1,4 @@
-import type { AppEnvironment } from '@/domain/environment.ts'
+import type { AppEnvironment } from '#/domain/environment.ts'
 
 import type { ServiceEnv } from './service.ts'
 

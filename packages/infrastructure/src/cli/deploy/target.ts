@@ -1,7 +1,7 @@
-import type { DeployableConfig, DeployTargetType } from '@/config/types.ts'
-import type { InfraStorageRuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
-import type { DeployTarget } from '@/domain/deploy/target.ts'
-import type { AppEnvironment } from '@/domain/environment.ts'
+import type { DeployableConfig, DeployTargetType } from '#/config/types.ts'
+import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
+import type { DeployTarget } from '#/domain/deploy/target.ts'
+import type { AppEnvironment } from '#/domain/environment.ts'
 
 /**
  * Shared context every target definition receives. Hetzner targets

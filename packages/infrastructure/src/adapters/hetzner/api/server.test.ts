@@ -1,12 +1,11 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-
 import {
 	httpError,
 	lastBody,
 	lastCall,
 	noContent,
 	okJson,
-} from '@/test-fetch.ts'
+} from '#/test-fetch.ts'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createServer, deleteServer, describeServer } from './server.ts'
 

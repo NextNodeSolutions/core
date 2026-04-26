@@ -1,18 +1,17 @@
-import { createLogger } from '@nextnode-solutions/logger'
-
-import { resolveDeployDomain } from '@/domain/deploy/domain.ts'
-import { executeHandlers } from '@/domain/deploy/execute-handlers.ts'
-import type { ResourceOutcome } from '@/domain/deploy/resource-outcome.ts'
-import type { TeardownResult } from '@/domain/deploy/teardown-result.ts'
-import type { TeardownTarget } from '@/domain/deploy/teardown-target.ts'
-import type { DnsClient } from '@/domain/dns/client.ts'
-import type { AppEnvironment } from '@/domain/environment.ts'
+import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
+import { executeHandlers } from '#/domain/deploy/execute-handlers.ts'
+import type { ResourceOutcome } from '#/domain/deploy/resource-outcome.ts'
+import type { TeardownResult } from '#/domain/deploy/teardown-result.ts'
+import type { TeardownTarget } from '#/domain/deploy/teardown-target.ts'
+import type { DnsClient } from '#/domain/dns/client.ts'
+import type { AppEnvironment } from '#/domain/environment.ts'
 import {
 	VPS_MANAGED_RESOURCES,
 	VPS_PROJECT_MANAGED_RESOURCES,
-} from '@/domain/hetzner/managed-resources.ts'
-import type { ObjectStoreClient } from '@/domain/storage/object-store.ts'
-import type { TailnetClient } from '@/domain/tailnet/client.ts'
+} from '#/domain/hetzner/managed-resources.ts'
+import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
+import type { TailnetClient } from '#/domain/tailnet/client.ts'
+import { createLogger } from '@nextnode-solutions/logger'
 
 import { createSshSession } from './ssh/session.ts'
 import type { SshSession } from './ssh/session.types.ts'

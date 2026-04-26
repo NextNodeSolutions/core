@@ -1,6 +1,5 @@
+import { okJson } from '#/test-fetch.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-
-import { okJson } from '@/test-fetch.ts'
 
 import { resolveR2PermissionGroupIds } from './permission-groups.ts'
 

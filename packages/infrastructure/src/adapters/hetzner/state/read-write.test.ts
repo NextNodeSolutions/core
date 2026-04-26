@@ -1,6 +1,5 @@
+import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-import type { ObjectStoreClient } from '@/domain/storage/object-store.ts'
 
 import {
 	deleteState,

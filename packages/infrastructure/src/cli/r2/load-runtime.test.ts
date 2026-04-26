@@ -1,7 +1,6 @@
+import type { MockResponse } from '#/test-fetch.ts'
+import { okEmpty, okJson, unauthorized } from '#/test-fetch.ts'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-
-import type { MockResponse } from '@/test-fetch.ts'
-import { okEmpty, okJson, unauthorized } from '@/test-fetch.ts'
 
 import { loadR2Runtime } from './load-runtime.ts'
 

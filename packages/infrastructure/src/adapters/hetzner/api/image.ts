@@ -1,5 +1,5 @@
-import { isRecord } from '@/config/types.ts'
-import { HTTP_NOT_FOUND } from '@/domain/http/status.ts'
+import { isRecord } from '#/config/types.ts'
+import { HTTP_NOT_FOUND } from '#/domain/http/status.ts'
 
 import {
 	HCLOUD_API_BASE,

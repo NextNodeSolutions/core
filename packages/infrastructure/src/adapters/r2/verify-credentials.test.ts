@@ -1,6 +1,5 @@
+import type { MockResponse } from '#/test-fetch.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-
-import type { MockResponse } from '@/test-fetch.ts'
 
 import { verifyR2Credentials } from './verify-credentials.ts'
 

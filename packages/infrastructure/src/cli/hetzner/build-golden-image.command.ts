@@ -1,18 +1,17 @@
-import { createLogger } from '@nextnode-solutions/logger'
-
-import { writeSummary } from '@/adapters/github/output.ts'
+import { writeSummary } from '#/adapters/github/output.ts'
 import {
 	deleteImage,
 	findImagesByLabels,
-} from '@/adapters/hetzner/api/image.ts'
+} from '#/adapters/hetzner/api/image.ts'
 import {
 	GOLDEN_IMAGE_LABEL,
 	MAX_GOLDEN_IMAGE_SNAPSHOTS,
-} from '@/adapters/hetzner/constants.ts'
-import { buildGoldenImage } from '@/adapters/hetzner/provision/build-golden-image.ts'
-import { requireEnv } from '@/cli/env.ts'
-import { formatGoldenImageSummary } from '@/domain/hetzner/golden-image-summary.ts'
-import { goldenImageFingerprint } from '@/domain/hetzner/golden-image.ts'
+} from '#/adapters/hetzner/constants.ts'
+import { buildGoldenImage } from '#/adapters/hetzner/provision/build-golden-image.ts'
+import { requireEnv } from '#/cli/env.ts'
+import { formatGoldenImageSummary } from '#/domain/hetzner/golden-image-summary.ts'
+import { goldenImageFingerprint } from '#/domain/hetzner/golden-image.ts'
+import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
 

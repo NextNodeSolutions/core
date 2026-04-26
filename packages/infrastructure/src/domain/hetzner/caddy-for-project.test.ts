@@ -1,6 +1,5 @@
+import type { ObjectStorageBinding } from '#/domain/storage/binding.ts'
 import { describe, expect, it } from 'vitest'
-
-import type { ObjectStorageBinding } from '@/domain/storage/binding.ts'
 
 import { buildCaddyForProject } from './caddy-for-project.ts'
 

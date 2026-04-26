@@ -1,5 +1,5 @@
-import type { R2ServiceConfig, ServicesConfig } from '@/config/types.ts'
-import { isRecord, SERVICE_NAMES } from '@/config/types.ts'
+import type { R2ServiceConfig, ServicesConfig } from '#/config/types.ts'
+import { isRecord, SERVICE_NAMES } from '#/config/types.ts'
 
 import type { ValidationResult } from './result.ts'
 import { validateR2Service } from './services/r2.ts'

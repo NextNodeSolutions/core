@@ -1,8 +1,7 @@
+import type { DnsRecordLookup } from '#/domain/cloudflare/dns-records.ts'
+import type { FetchImpl } from '#/test-fetch.ts'
+import { methodOf, okJson, urlOf } from '#/test-fetch.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-
-import type { DnsRecordLookup } from '@/domain/cloudflare/dns-records.ts'
-import type { FetchImpl } from '@/test-fetch.ts'
-import { methodOf, okJson, urlOf } from '@/test-fetch.ts'
 
 import { deleteDnsRecordsByName } from './delete-records.ts'
 

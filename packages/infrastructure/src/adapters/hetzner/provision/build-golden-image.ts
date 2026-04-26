@@ -1,12 +1,10 @@
-import { createLogger } from '@nextnode-solutions/logger'
-
-import { createSnapshot, findImageById } from '@/adapters/hetzner/api/image.ts'
-import type { CreateServerInput } from '@/adapters/hetzner/api/server.ts'
+import { createSnapshot, findImageById } from '#/adapters/hetzner/api/image.ts'
+import type { CreateServerInput } from '#/adapters/hetzner/api/server.ts'
 import {
 	createServer,
 	deleteServer,
 	describeServer,
-} from '@/adapters/hetzner/api/server.ts'
+} from '#/adapters/hetzner/api/server.ts'
 import {
 	GOLDEN_IMAGE_BUILDER_LABEL,
 	GOLDEN_IMAGE_BUILDER_LOCATION,
@@ -17,12 +15,13 @@ import {
 	MAX_GOLDEN_IMAGE_BUILD_ATTEMPTS,
 	MAX_SNAPSHOT_ATTEMPTS,
 	SNAPSHOT_POLL_INTERVAL_MS,
-} from '@/adapters/hetzner/constants.ts'
-import { waitUntil } from '@/adapters/hetzner/wait.ts'
+} from '#/adapters/hetzner/constants.ts'
+import { waitUntil } from '#/adapters/hetzner/wait.ts'
 import {
 	goldenImageFingerprint,
 	renderGoldenImageCloudInit,
-} from '@/domain/hetzner/golden-image.ts'
+} from '#/domain/hetzner/golden-image.ts'
+import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
 

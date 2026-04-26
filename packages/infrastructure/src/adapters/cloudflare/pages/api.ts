@@ -7,8 +7,8 @@ import {
 	requireArrayResult,
 	requireObjectResult,
 	requireOk,
-} from '@/adapters/cloudflare/api.ts'
-import { HTTP_NOT_FOUND } from '@/domain/http/status.ts'
+} from '#/adapters/cloudflare/api.ts'
+import { HTTP_NOT_FOUND } from '#/domain/http/status.ts'
 
 export interface CloudflarePagesProject {
 	readonly name: string

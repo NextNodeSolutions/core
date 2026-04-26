@@ -1,8 +1,8 @@
-import { CloudflarePagesTarget } from '@/adapters/cloudflare/target.ts'
-import { requireEnv } from '@/cli/env.ts'
-import type { CloudflarePagesDeployableConfig } from '@/config/types.ts'
-import { isCloudflarePagesDeployableConfig } from '@/config/types.ts'
-import type { AppEnvironment } from '@/domain/environment.ts'
+import { CloudflarePagesTarget } from '#/adapters/cloudflare/target.ts'
+import { requireEnv } from '#/cli/env.ts'
+import type { CloudflarePagesDeployableConfig } from '#/config/types.ts'
+import { isCloudflarePagesDeployableConfig } from '#/config/types.ts'
+import type { AppEnvironment } from '#/domain/environment.ts'
 
 import type { TargetDefinition } from './target.ts'
 

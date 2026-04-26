@@ -1,7 +1,7 @@
-import type { ServiceName, ServicesConfig } from '@/config/types.ts'
-import type { InfraStorageRuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
-import type { AppEnvironment } from '@/domain/environment.ts'
-import type { ServiceEnv, ServiceMode } from '@/domain/services/service.ts'
+import type { ServiceName, ServicesConfig } from '#/config/types.ts'
+import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
+import type { AppEnvironment } from '#/domain/environment.ts'
+import type { ServiceEnv, ServiceMode } from '#/domain/services/service.ts'
 
 /**
  * Strategy contract for a per-project service (R2, D1, KV, queues, …).

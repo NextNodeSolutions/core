@@ -1,10 +1,9 @@
+import { injectFiles } from '#/adapters/build-output/inject-files.ts'
+import { getEnv, requireEnv } from '#/cli/env.ts'
+import type { DeployableConfig } from '#/config/types.ts'
+import { computeSeoGuardFiles } from '#/domain/deploy/seo-guard.ts'
+import { resolveEnvironment } from '#/domain/environment.ts'
 import { createLogger } from '@nextnode-solutions/logger'
-
-import { injectFiles } from '@/adapters/build-output/inject-files.ts'
-import { getEnv, requireEnv } from '@/cli/env.ts'
-import type { DeployableConfig } from '@/config/types.ts'
-import { computeSeoGuardFiles } from '@/domain/deploy/seo-guard.ts'
-import { resolveEnvironment } from '@/domain/environment.ts'
 
 const logger = createLogger()
 

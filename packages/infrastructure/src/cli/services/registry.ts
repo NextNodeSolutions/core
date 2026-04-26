@@ -1,4 +1,4 @@
-import type { ServiceName } from '@/config/types.ts'
+import type { ServiceName } from '#/config/types.ts'
 
 import { r2ServiceDefinition } from './r2/r2.service.ts'
 import type { ServiceDefinition } from './service.ts'

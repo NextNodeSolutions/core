@@ -15,12 +15,12 @@ import {
 	APP_WITH_DOMAIN,
 	STATIC_NO_DOMAIN,
 	STATIC_WITH_DOMAIN,
-} from '@/cli/fixtures.ts'
+} from '#/cli/fixtures.ts'
 
 import { dnsCommand } from './dns.command.ts'
 
 // Mock loadR2Runtime (network boundary: Cloudflare accounts API + SigV4 verify)
-vi.mock(import('@/cli/r2/load-runtime.ts'), async () => ({
+vi.mock(import('#/cli/r2/load-runtime.ts'), async () => ({
 	loadR2Runtime: vi.fn(async () => ({
 		accountId: 'acct',
 		endpoint: 'https://r2.example.com',
@@ -45,8 +45,8 @@ vi.mock('../../adapters/hetzner/target.ts', () => ({
 	})),
 }))
 
-import type { FetchImpl } from '@/test-fetch.ts'
-import { methodOf, okJson, urlOf } from '@/test-fetch.ts'
+import type { FetchImpl } from '#/test-fetch.ts'
+import { methodOf, okJson, urlOf } from '#/test-fetch.ts'
 
 function stubCloudflareApi(): ReturnType<typeof vi.fn<FetchImpl>> {
 	const impl: FetchImpl = (input, init) => {
@@ -192,9 +192,9 @@ describe('dnsCommand — hetzner dispatch', () => {
 
 	it('dispatches to the Hetzner target (no CF-only guard regression)', async () => {
 		mockHetznerReconcileDns.mockResolvedValue(undefined)
-		const { loadR2Runtime } = await import('@/cli/r2/load-runtime.ts')
+		const { loadR2Runtime } = await import('#/cli/r2/load-runtime.ts')
 		const { HetznerVpsTarget } =
-			await import('@/adapters/hetzner/target.ts')
+			await import('#/adapters/hetzner/target.ts')
 
 		await dnsCommand(APP_WITH_DOMAIN)
 

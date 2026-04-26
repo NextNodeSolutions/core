@@ -1,6 +1,5 @@
+import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-
-import type { InfraStorageRuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
 
 vi.mock('node:timers/promises', () => ({
 	setTimeout: vi.fn(() => Promise.resolve()),
@@ -8,7 +7,7 @@ vi.mock('node:timers/promises', () => ({
 
 const fakeR2State = new Map<string, string>()
 
-vi.mock('@/adapters/r2/client.ts', () => ({
+vi.mock('#/adapters/r2/client.ts', () => ({
 	R2Client: vi.fn(() => ({
 		get: vi.fn(async (key: string) => {
 			const body = fakeR2State.get(key)
@@ -24,8 +23,8 @@ vi.mock('@/adapters/r2/client.ts', () => ({
 	})),
 }))
 
-import type { MockResponse } from '@/test-fetch.ts'
-import { notFound, okJson, unauthorized } from '@/test-fetch.ts'
+import type { MockResponse } from '#/test-fetch.ts'
+import { notFound, okJson, unauthorized } from '#/test-fetch.ts'
 
 import { ensureR2Service } from './ensure.ts'
 

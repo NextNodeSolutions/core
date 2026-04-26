@@ -1,6 +1,5 @@
+import { okJson } from '#/test-fetch.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-
-import { okJson } from '@/test-fetch.ts'
 
 import { createR2Token, deleteUserToken, listUserTokens } from './tokens.ts'
 

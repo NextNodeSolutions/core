@@ -1,9 +1,9 @@
-import { requireEnv } from '@/cli/env.ts'
-import { ensureR2Setup } from '@/cli/r2/ensure-setup.ts'
-import { loadR2Runtime } from '@/cli/r2/load-runtime.ts'
-import type { DeployableConfig } from '@/config/types.ts'
-import { requiresInfraStorage } from '@/config/types.ts'
-import type { InfraStorageRuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
+import { requireEnv } from '#/cli/env.ts'
+import { ensureR2Setup } from '#/cli/r2/ensure-setup.ts'
+import { loadR2Runtime } from '#/cli/r2/load-runtime.ts'
+import type { DeployableConfig } from '#/config/types.ts'
+import { requiresInfraStorage } from '#/config/types.ts'
+import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 
 /**
  * Single entry point for deploy/dns/teardown to resolve the infra

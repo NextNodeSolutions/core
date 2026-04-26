@@ -1,6 +1,6 @@
-import type { R2ServiceConfig } from '@/config/types.ts'
-import { buildR2ServiceEnv } from '@/domain/services/r2.ts'
-import type { ServiceEnv } from '@/domain/services/service.ts'
+import type { R2ServiceConfig } from '#/config/types.ts'
+import { buildR2ServiceEnv } from '#/domain/services/r2.ts'
+import type { ServiceEnv } from '#/domain/services/service.ts'
 
 import type {
 	Service,

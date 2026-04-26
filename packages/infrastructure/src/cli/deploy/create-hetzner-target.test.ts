@@ -11,8 +11,8 @@ import {
 
 const { utils: sshUtils } = ssh2
 
-import type { HetznerDeployableConfig } from '@/config/types.ts'
-import type { InfraStorageRuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
+import type { HetznerDeployableConfig } from '#/config/types.ts'
+import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 
 import { createHetznerTarget } from './create-hetzner-target.ts'
 
@@ -85,7 +85,7 @@ describe('createHetznerTarget', () => {
 		stubHetznerEnv()
 
 		const { HetznerVpsTarget } =
-			await import('@/adapters/hetzner/target.ts')
+			await import('#/adapters/hetzner/target.ts')
 
 		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_INFRA_STORAGE)
 
@@ -109,7 +109,7 @@ describe('createHetznerTarget', () => {
 		stubHetznerEnv()
 
 		const { HetznerVpsTarget } =
-			await import('@/adapters/hetzner/target.ts')
+			await import('#/adapters/hetzner/target.ts')
 
 		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_INFRA_STORAGE)
 
@@ -122,7 +122,7 @@ describe('createHetznerTarget', () => {
 		stubHetznerEnv()
 
 		const { HetznerVpsTarget } =
-			await import('@/adapters/hetzner/target.ts')
+			await import('#/adapters/hetzner/target.ts')
 
 		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_INFRA_STORAGE)
 
@@ -148,7 +148,7 @@ describe('createHetznerTarget', () => {
 		stubHetznerEnv()
 
 		const { HetznerVpsTarget } =
-			await import('@/adapters/hetzner/target.ts')
+			await import('#/adapters/hetzner/target.ts')
 
 		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_INFRA_STORAGE)
 
@@ -163,7 +163,7 @@ describe('createHetznerTarget', () => {
 		vi.stubEnv('NN_CLIENT_ID', 'nextnode')
 
 		const { HetznerVpsTarget } =
-			await import('@/adapters/hetzner/target.ts')
+			await import('#/adapters/hetzner/target.ts')
 
 		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_INFRA_STORAGE)
 
@@ -234,7 +234,7 @@ describe('createHetznerTarget', () => {
 		stubHetznerEnv()
 
 		const { HetznerVpsTarget } =
-			await import('@/adapters/hetzner/target.ts')
+			await import('#/adapters/hetzner/target.ts')
 
 		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_INFRA_STORAGE)
 
@@ -247,7 +247,7 @@ describe('createHetznerTarget', () => {
 		stubHetznerEnv()
 
 		const { HetznerVpsTarget } =
-			await import('@/adapters/hetzner/target.ts')
+			await import('#/adapters/hetzner/target.ts')
 
 		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_INFRA_STORAGE)
 

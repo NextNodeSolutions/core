@@ -1,6 +1,6 @@
-import type { R2ServiceConfig } from '@/config/types.ts'
-import { KEBAB_IDENTIFIER_PATTERN, isRecord } from '@/config/types.ts'
-import type { ValidationResult } from '@/config/validation/result.ts'
+import type { R2ServiceConfig } from '#/config/types.ts'
+import { KEBAB_IDENTIFIER_PATTERN, isRecord } from '#/config/types.ts'
+import type { ValidationResult } from '#/config/validation/result.ts'
 
 export function validateR2Service(
 	raw: unknown,

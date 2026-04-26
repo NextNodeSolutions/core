@@ -4,8 +4,8 @@ import {
 	formatErrors,
 	parseEnvelope,
 	requireOk,
-} from '@/adapters/cloudflare/api.ts'
-import { HTTP_NOT_FOUND } from '@/domain/http/status.ts'
+} from '#/adapters/cloudflare/api.ts'
+import { HTTP_NOT_FOUND } from '#/domain/http/status.ts'
 
 export interface EnsureR2BucketInput {
 	readonly token: string

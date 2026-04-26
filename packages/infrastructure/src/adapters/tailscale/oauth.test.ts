@@ -1,6 +1,5 @@
+import { httpError, okJson } from '#/test-fetch.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-
-import { httpError, okJson } from '@/test-fetch.ts'
 
 import { deleteTailnetDevicesByHostname, mintAuthkey } from './oauth.ts'
 

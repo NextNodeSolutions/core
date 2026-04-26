@@ -6,8 +6,8 @@ vi.mock('node:timers/promises', () => ({
 	setTimeout: vi.fn(() => Promise.resolve()),
 }))
 
-import type { MockResponse } from '@/test-fetch.ts'
-import { notFound, okJson, unauthorized } from '@/test-fetch.ts'
+import type { MockResponse } from '#/test-fetch.ts'
+import { notFound, okJson, unauthorized } from '#/test-fetch.ts'
 
 import { ensureR2Setup } from './ensure-setup.ts'
 
