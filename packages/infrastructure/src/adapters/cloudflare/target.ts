@@ -14,6 +14,7 @@ import type {
 	DeployTarget,
 	ProvisionResult,
 	StaticDeployedEnvironment,
+	TargetEnv,
 } from '#/domain/deploy/target.ts'
 import type { TeardownResult } from '#/domain/deploy/teardown-result.ts'
 import type { TeardownTarget } from '#/domain/deploy/teardown-target.ts'
@@ -50,12 +51,15 @@ export class CloudflarePagesTarget implements DeployTarget {
 		this.redirectDomains = config.redirectDomains
 	}
 
-	async computeDeployEnv(projectName: string): Promise<DeployEnv> {
+	async contributeEnv(projectName: string): Promise<TargetEnv> {
 		const pagesProjectName = computePagesProjectName(
 			projectName,
 			this.environment,
 		)
-		return { SITE_URL: await this.resolveSiteUrl(pagesProjectName) }
+		return {
+			public: { SITE_URL: await this.resolveSiteUrl(pagesProjectName) },
+			secret: {},
+		}
 	}
 
 	async ensureInfra(projectName: string): Promise<ProvisionResult> {

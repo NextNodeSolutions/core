@@ -40,7 +40,7 @@ vi.mock('../../adapters/hetzner/target.ts', () => ({
 		name: 'hetzner-vps',
 		reconcileDns: mockHetznerReconcileDns,
 		ensureInfra: vi.fn(),
-		computeDeployEnv: vi.fn(),
+		contributeEnv: vi.fn(),
 		deploy: vi.fn(),
 	})),
 }))

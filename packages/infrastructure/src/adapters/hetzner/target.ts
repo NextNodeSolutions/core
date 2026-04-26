@@ -8,6 +8,7 @@ import type {
 	DeployInput,
 	DeployResult,
 	DeployTarget,
+	TargetEnv,
 	VpsProvisionResult,
 } from '#/domain/deploy/target.ts'
 import type { TeardownResult } from '#/domain/deploy/teardown-result.ts'
@@ -132,9 +133,12 @@ export class HetznerVpsTarget implements DeployTarget {
 		)
 	}
 
-	computeDeployEnv(): DeployEnv {
+	contributeEnv(): TargetEnv {
 		return {
-			SITE_URL: `https://${resolveDeployDomain(this.config.domain, this.config.environment)}`,
+			public: {
+				SITE_URL: `https://${resolveDeployDomain(this.config.domain, this.config.environment)}`,
+			},
+			secret: {},
 		}
 	}
 
