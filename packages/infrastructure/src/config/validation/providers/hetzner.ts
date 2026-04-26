@@ -48,12 +48,12 @@ function parseHetzner(rawHetzner: unknown): {
 
 export const hetznerVps: DeployProviderValidator = {
 	requiresDomain: true,
-	validate(deployRecord, secrets) {
+	validate(deployRecord, secrets, vps) {
 		const { errors, hetzner } = parseHetzner(deployRecord['hetzner'])
 		if (!hetzner) return { errors, deploy: undefined }
 		return {
 			errors: [],
-			deploy: { target: 'hetzner-vps', secrets, hetzner },
+			deploy: { target: 'hetzner-vps', secrets, vps, hetzner },
 		}
 	},
 }

@@ -22,7 +22,7 @@ export interface ConvergeVpsVector {
 
 export interface ConvergeVpsInput {
 	readonly host: string
-	readonly projectName: string
+	readonly vpsName: string
 	readonly internal: boolean
 	readonly r2: R2RuntimeConfig
 	readonly vector: ConvergeVpsVector | null
@@ -60,7 +60,7 @@ export async function convergeVps(input: ConvergeVpsInput): Promise<void> {
 
 		const caddyConfig = JSON.stringify(
 			buildCaddyForProject({
-				projectName: input.projectName,
+				projectName: input.vpsName,
 				r2: input.r2,
 				upstreams: existingUpstreams,
 				acmeEmail: input.acmeEmail,
@@ -72,14 +72,14 @@ export async function convergeVps(input: ConvergeVpsInput): Promise<void> {
 			input.vector
 				? {
 						clientId: input.vector.clientId,
-						project: input.projectName,
+						project: input.vpsName,
 						vlUrl: input.vector.vlUrl,
 					}
 				: null,
 		)
 
 		await converge(session, {
-			projectName: input.projectName,
+			vpsName: input.vpsName,
 			vectorToml: vectorSelection.vectorToml,
 			vectorEnv: vectorSelection.vectorEnv,
 			caddyConfig,

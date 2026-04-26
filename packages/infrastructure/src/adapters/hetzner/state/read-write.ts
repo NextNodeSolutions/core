@@ -7,8 +7,8 @@ import type { R2Operations } from '../../r2/client.types.ts'
 import type {
 	HcloudConvergedState,
 	HcloudCreatedState,
-	HcloudProjectState,
 	HcloudProvisionedState,
+	HcloudVpsState,
 } from './types.ts'
 
 const logger = createLogger()
@@ -26,9 +26,9 @@ const MAX_TRANSIENT_RETRIES = 3
  * there — not to retry with the same outdated precondition.
  */
 export class EtagMismatchError extends Error {
-	constructor(projectName: string, cause: unknown) {
+	constructor(vpsName: string, cause: unknown) {
 		super(
-			`State ETag mismatch for "${projectName}" — another process advanced state concurrently; re-run the pipeline to observe the latest state`,
+			`State ETag mismatch for VPS "${vpsName}" — another process advanced state concurrently; re-run the pipeline to observe the latest state`,
 			{ cause },
 		)
 		this.name = 'EtagMismatchError'
@@ -50,8 +50,8 @@ function isEtagMismatch(error: unknown): boolean {
 	return false
 }
 
-function stateKey(projectName: string): string {
-	return `hetzner/${projectName}.json`
+function stateKey(vpsName: string): string {
+	return `hetzner/${vpsName}.json`
 }
 
 function requireBase(
@@ -104,7 +104,7 @@ function parseConverged(
 	}
 }
 
-function parseState(raw: string, key: string): HcloudProjectState {
+function parseState(raw: string, key: string): HcloudVpsState {
 	const data: unknown = JSON.parse(raw)
 	if (!isRecord(data)) {
 		throw new Error(`Invalid state at "${key}": not an object`)
@@ -119,15 +119,15 @@ function parseState(raw: string, key: string): HcloudProjectState {
 }
 
 export interface StateWithEtag {
-	readonly state: HcloudProjectState
+	readonly state: HcloudVpsState
 	readonly etag: string
 }
 
 export async function readState(
 	r2: R2Operations,
-	projectName: string,
+	vpsName: string,
 ): Promise<StateWithEtag | null> {
-	const key = stateKey(projectName)
+	const key = stateKey(vpsName)
 	const result = await r2.get(key)
 	if (!result) return null
 	return { state: parseState(result.body, key), etag: result.etag }
@@ -135,11 +135,11 @@ export async function readState(
 
 export async function writeState(
 	r2: R2Operations,
-	projectName: string,
-	state: HcloudProjectState,
+	vpsName: string,
+	state: HcloudVpsState,
 	ifMatch?: string,
 ): Promise<string> {
-	const key = stateKey(projectName)
+	const key = stateKey(vpsName)
 	const body = JSON.stringify(state)
 	let lastError: unknown
 
@@ -148,24 +148,24 @@ export async function writeState(
 			return await r2.put(key, body, ifMatch) // eslint-disable-line no-await-in-loop -- sequential retries by design
 		} catch (error) {
 			if (isEtagMismatch(error)) {
-				throw new EtagMismatchError(projectName, error)
+				throw new EtagMismatchError(vpsName, error)
 			}
 			logger.warn(
-				`writeState attempt ${attempt}/${MAX_TRANSIENT_RETRIES} failed for "${projectName}" (transient): ${String(error)}`,
+				`writeState attempt ${attempt}/${MAX_TRANSIENT_RETRIES} failed for VPS "${vpsName}" (transient): ${String(error)}`,
 			)
 			lastError = error
 		}
 	}
 
 	throw new Error(
-		`writeState for "${projectName}" failed after ${MAX_TRANSIENT_RETRIES} transient retries`,
+		`writeState for VPS "${vpsName}" failed after ${MAX_TRANSIENT_RETRIES} transient retries`,
 		{ cause: lastError },
 	)
 }
 
 export async function deleteState(
 	r2: R2Operations,
-	projectName: string,
+	vpsName: string,
 ): Promise<void> {
-	await r2.delete(stateKey(projectName))
+	await r2.delete(stateKey(vpsName))
 }

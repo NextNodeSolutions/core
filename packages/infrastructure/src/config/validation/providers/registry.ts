@@ -13,6 +13,7 @@ export interface DeployProviderValidator {
 	validate(
 		deployRecord: Record<string, unknown>,
 		secrets: ReadonlyArray<string>,
+		vps: string | null,
 	): DeployProviderResult
 }
 

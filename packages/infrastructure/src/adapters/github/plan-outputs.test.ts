@@ -24,6 +24,7 @@ const APP_CONFIG: NextNodeConfig = {
 	deploy: {
 		target: 'hetzner-vps',
 		secrets: [],
+		vps: null,
 		hetzner: { serverType: 'cpx22', location: 'nbg1' },
 	},
 }

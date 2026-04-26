@@ -14,6 +14,7 @@ import type {
 import type { TeardownResult } from '../../domain/deploy/teardown-result.ts'
 import type { TeardownTarget } from '../../domain/deploy/teardown-target.ts'
 import type { AppEnvironment } from '../../domain/environment.ts'
+import { extractUpstreams } from '../../domain/hetzner/caddy-config.ts'
 import {
 	CADDY_ENV_PATH,
 	renderCaddyEnv,
@@ -45,6 +46,7 @@ export interface HetznerVectorConfig {
 }
 
 export interface HetznerVpsTargetConfig {
+	readonly vpsName: string
 	readonly hetzner: HetznerVpsDeploySection['hetzner']
 	readonly r2: R2RuntimeConfig
 	readonly environment: AppEnvironment
@@ -80,30 +82,36 @@ export class HetznerVpsTarget implements DeployTarget {
 
 	async ensureInfra(projectName: string): Promise<VpsProvisionResult> {
 		const start = Date.now()
-		const existing = await readState(this.r2, projectName)
+		// projectName is unused for VPS provisioning: provisioning is keyed
+		// by vpsName so multiple projects on the same shared VPS reuse the
+		// same provisioned host. The DeployTarget interface still passes it
+		// for symmetry with deploy()/reconcileDns().
+		void projectName
+		const vpsName = this.config.vpsName
+		const existing = await readState(this.r2, vpsName)
 
 		const outcome = existing
 			? await resumeFromState(
 					this.config,
 					this.r2,
-					projectName,
+					vpsName,
 					existing.state,
 					existing.etag,
 				)
-			: await freshProvision(this.config, this.r2, projectName)
+			: await freshProvision(this.config, this.r2, vpsName)
 
-		return this.readProvisionResult(projectName, start, outcome)
+		return this.readProvisionResult(start, outcome)
 	}
 
 	private async readProvisionResult(
-		projectName: string,
 		startMs: number,
 		outcome: VpsResourceOutcome,
 	): Promise<VpsProvisionResult> {
-		const finalState = await readState(this.r2, projectName)
+		const vpsName = this.config.vpsName
+		const finalState = await readState(this.r2, vpsName)
 		if (!finalState || finalState.state.phase === 'created') {
 			throw new Error(
-				`Provisioning did not reach a deployable state for "${projectName}"`,
+				`Provisioning did not reach a deployable state for VPS "${vpsName}"`,
 			)
 		}
 
@@ -120,10 +128,11 @@ export class HetznerVpsTarget implements DeployTarget {
 	}
 
 	async reconcileDns(projectName: string, domain: string): Promise<void> {
-		const existing = await readState(this.r2, projectName)
+		const vpsName = this.config.vpsName
+		const existing = await readState(this.r2, vpsName)
 		if (!existing || existing.state.phase === 'created') {
 			throw new Error(
-				`Invariant: expected deployable state for "${projectName}"`,
+				`Invariant: expected deployable state for VPS "${vpsName}"`,
 			)
 		}
 
@@ -137,7 +146,7 @@ export class HetznerVpsTarget implements DeployTarget {
 
 		await reconcileDnsRecords(records, this.config.cloudflareApiToken)
 		logger.info(
-			`DNS reconciled for "${projectName}" (${this.config.environment})`,
+			`DNS reconciled for "${projectName}" on VPS "${vpsName}" (${this.config.environment})`,
 		)
 	}
 
@@ -153,6 +162,7 @@ export class HetznerVpsTarget implements DeployTarget {
 		env: DeployEnv,
 	): Promise<DeployResult> {
 		const start = Date.now()
+		const vpsName = this.config.vpsName
 
 		if (!input.image) {
 			throw new Error('image is required for Hetzner VPS deploys')
@@ -162,10 +172,10 @@ export class HetznerVpsTarget implements DeployTarget {
 			this.config.environment,
 		)
 
-		const existing = await readState(this.r2, projectName)
+		const existing = await readState(this.r2, vpsName)
 		if (!existing || existing.state.phase === 'created') {
 			throw new Error(
-				`Invariant: expected deployable state for "${projectName}"`,
+				`Invariant: expected deployable state for VPS "${vpsName}"`,
 			)
 		}
 
@@ -187,11 +197,22 @@ export class HetznerVpsTarget implements DeployTarget {
 				registryToken: input.registryToken!,
 			})
 
+			// Multi-tenant Caddy: read the existing config, drop any prior
+			// upstream for THIS project's hostname (re-deploy case), then add
+			// the fresh one. Upstreams from other projects on this VPS are
+			// preserved untouched.
+			const existingConfig = await session.readFile(CADDY_CONFIG_PATH)
+			const existingUpstreams = extractUpstreams(existingConfig ?? '')
+			const otherUpstreams = existingUpstreams.filter(
+				u => u.hostname !== upstream.hostname,
+			)
+			const mergedUpstreams = [...otherUpstreams, upstream]
+
 			const caddyConfig = JSON.stringify(
 				buildCaddyForProject({
-					projectName,
+					projectName: vpsName,
 					r2: this.config.r2,
-					upstreams: [upstream],
+					upstreams: mergedUpstreams,
 					acmeEmail: this.config.acmeEmail,
 					internal: this.config.internal,
 				}),
@@ -211,7 +232,9 @@ export class HetznerVpsTarget implements DeployTarget {
 			)
 			await session.writeFile(CADDY_CONFIG_PATH, caddyConfig)
 			await session.exec(`caddy reload --config ${CADDY_CONFIG_PATH}`)
-			logger.info('Caddy config reloaded')
+			logger.info(
+				`Caddy reloaded on VPS "${vpsName}" with ${String(mergedUpstreams.length)} upstream(s)`,
+			)
 
 			return {
 				projectName,
@@ -230,14 +253,18 @@ export class HetznerVpsTarget implements DeployTarget {
 	): Promise<TeardownResult> {
 		return runHetznerTeardown({
 			projectName,
+			vpsName: this.config.vpsName,
 			domain,
 			target,
 			environment: this.config.environment,
+			internal: this.config.internal,
 			hcloudToken: this.config.credentials.hcloudToken,
 			tailscaleAuthKey: this.config.credentials.tailscaleAuthKey,
 			deployPrivateKey: this.config.credentials.deployPrivateKey,
 			cloudflareApiToken: this.config.cloudflareApiToken,
+			acmeEmail: this.config.acmeEmail,
 			r2: this.r2,
+			r2Runtime: this.config.r2,
 			certsR2: this.certsR2,
 		})
 	}

@@ -8,6 +8,7 @@ export const VPS_MANAGED_RESOURCES = [
 	'server',
 	'firewall',
 	'tailscale',
+	'certs',
 	'dns',
 	'state',
 ] as const

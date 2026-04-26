@@ -77,6 +77,19 @@ export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 		}
 	}
 
+	if (
+		projectResult.section.internal &&
+		deployResult.section.target === 'hetzner-vps' &&
+		deployResult.section.vps === null
+	) {
+		return {
+			ok: false,
+			errors: [
+				'deploy.vps is required when project.internal = true (internal projects must pin to a dedicated VPS so they never share with public projects)',
+			],
+		}
+	}
+
 	return {
 		ok: true,
 		config: {

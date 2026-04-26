@@ -7,7 +7,7 @@ import type {
 import { goldenImageFingerprint } from '../../domain/hetzner/golden-image.ts'
 
 import type { SshSession } from './ssh/session.types.ts'
-import type { HcloudProjectState } from './state/types.ts'
+import type { HcloudVpsState } from './state/types.ts'
 import { HetznerVpsTarget } from './target.ts'
 
 const GOLDEN_IMAGE_ID = 7777
@@ -46,18 +46,21 @@ vi.mock(import('./api/server.ts'), async importOriginal => {
 			id: 42,
 			name: 'acme-web',
 			status: 'running',
+			labels: { vps: 'acme-web', managed_by: 'nextnode', mode: 'public' },
 			public_net: { ipv4: { ip: '1.2.3.4' } },
 		})),
 		describeServer: vi.fn(async () => ({
 			id: 42,
 			name: 'acme-web',
 			status: 'running',
+			labels: { vps: 'acme-web', managed_by: 'nextnode', mode: 'public' },
 			public_net: { ipv4: { ip: '1.2.3.4' } },
 		})),
 		findServerById: vi.fn(async () => ({
 			id: 42,
 			name: 'acme-web',
 			status: 'running',
+			labels: { vps: 'acme-web', managed_by: 'nextnode', mode: 'public' },
 			public_net: { ipv4: { ip: '1.2.3.4' } },
 		})),
 		findServersByLabels: vi.fn(async () => []),
@@ -176,6 +179,7 @@ const CREDENTIALS = {
 } as const
 
 const TARGET_CONFIG = {
+	vpsName: 'acme-web',
 	hetzner: HETZNER_CONFIG,
 	r2: R2_CONFIG,
 	environment: 'production' as const,
@@ -190,7 +194,7 @@ const TARGET_CONFIG = {
 	acmeEmail: 'test@example.com',
 }
 
-const CONVERGED_STATE: HcloudProjectState = {
+const CONVERGED_STATE: HcloudVpsState = {
 	phase: 'converged',
 	serverId: 42,
 	publicIp: '1.2.3.4',
@@ -198,7 +202,7 @@ const CONVERGED_STATE: HcloudProjectState = {
 	convergedAt: '2026-04-17T10:00:00.000Z',
 }
 
-function seedState(state: HcloudProjectState = CONVERGED_STATE): void {
+function seedState(state: HcloudVpsState = CONVERGED_STATE): void {
 	fakeR2State.set('hetzner/acme-web.json', JSON.stringify(state))
 }
 
@@ -293,7 +297,7 @@ describe('HetznerVpsTarget', () => {
 				)
 			})
 
-			it('passes project and managed_by labels', async () => {
+			it('passes vps, managed_by and mode labels', async () => {
 				const { createServer: mockedCreate } =
 					await import('./api/server.ts')
 
@@ -303,12 +307,38 @@ describe('HetznerVpsTarget', () => {
 				expect(mockedCreate).toHaveBeenCalledWith(
 					'hcloud-token',
 					expect.objectContaining({
-						labels: { project: 'acme-web', managed_by: 'nextnode' },
+						labels: {
+							vps: 'acme-web',
+							managed_by: 'nextnode',
+							mode: 'public',
+						},
 					}),
 				)
 			})
 
-			it('checks for orphan servers before creating', async () => {
+			it('tags the VPS with mode=internal when project is internal', async () => {
+				const { createServer: mockedCreate } =
+					await import('./api/server.ts')
+
+				const target = new HetznerVpsTarget({
+					...TARGET_CONFIG,
+					internal: true,
+				})
+				await target.ensureInfra('acme-web')
+
+				expect(mockedCreate).toHaveBeenCalledWith(
+					'hcloud-token',
+					expect.objectContaining({
+						labels: {
+							vps: 'acme-web',
+							managed_by: 'nextnode',
+							mode: 'internal',
+						},
+					}),
+				)
+			})
+
+			it('looks up an existing VPS by vps label before creating', async () => {
 				const { findServersByLabels: mockedFind } =
 					await import('./api/server.ts')
 
@@ -316,12 +346,39 @@ describe('HetznerVpsTarget', () => {
 				await target.ensureInfra('acme-web')
 
 				expect(mockedFind).toHaveBeenCalledWith('hcloud-token', {
-					project: 'acme-web',
+					vps: 'acme-web',
 					managed_by: 'nextnode',
 				})
 			})
 
-			it('throws on orphan server detection', async () => {
+			it('attaches to an existing VPS instead of creating a duplicate', async () => {
+				const {
+					findServersByLabels: mockedFind,
+					createServer: mockedCreate,
+				} = await import('./api/server.ts')
+				vi.mocked(mockedFind).mockResolvedValueOnce([
+					{
+						id: 99,
+						name: 'acme-web',
+						status: 'running',
+						labels: {
+							vps: 'acme-web',
+							managed_by: 'nextnode',
+							mode: 'public',
+						},
+						public_net: { ipv4: { ip: '9.9.9.9' } },
+					},
+				])
+
+				const target = new HetznerVpsTarget(TARGET_CONFIG)
+				const result = await target.ensureInfra('acme-web')
+
+				expect(mockedCreate).not.toHaveBeenCalled()
+				expect(result.serverId).toBe(99)
+				expect(result.publicIp).toBe('9.9.9.9')
+			})
+
+			it('refuses to attach an internal project to a public VPS', async () => {
 				const { findServersByLabels: mockedFind } =
 					await import('./api/server.ts')
 				vi.mocked(mockedFind).mockResolvedValueOnce([
@@ -329,6 +386,38 @@ describe('HetznerVpsTarget', () => {
 						id: 99,
 						name: 'acme-web',
 						status: 'running',
+						labels: {
+							vps: 'acme-web',
+							managed_by: 'nextnode',
+							mode: 'public',
+						},
+						public_net: { ipv4: { ip: '9.9.9.9' } },
+					},
+				])
+
+				const target = new HetznerVpsTarget({
+					...TARGET_CONFIG,
+					internal: true,
+				})
+
+				await expect(target.ensureInfra('acme-web')).rejects.toThrow(
+					/labelled `mode=public` but this project is `mode=internal`/,
+				)
+			})
+
+			it('refuses to attach a public project to an internal VPS', async () => {
+				const { findServersByLabels: mockedFind } =
+					await import('./api/server.ts')
+				vi.mocked(mockedFind).mockResolvedValueOnce([
+					{
+						id: 99,
+						name: 'acme-web',
+						status: 'running',
+						labels: {
+							vps: 'acme-web',
+							managed_by: 'nextnode',
+							mode: 'internal',
+						},
 						public_net: { ipv4: { ip: '9.9.9.9' } },
 					},
 				])
@@ -336,7 +425,62 @@ describe('HetznerVpsTarget', () => {
 				const target = new HetznerVpsTarget(TARGET_CONFIG)
 
 				await expect(target.ensureInfra('acme-web')).rejects.toThrow(
-					/Orphan server\(s\) detected.*IDs: 99/,
+					/labelled `mode=internal` but this project is `mode=public`/,
+				)
+			})
+
+			it('refuses to attach when the existing VPS has no mode label', async () => {
+				const { findServersByLabels: mockedFind } =
+					await import('./api/server.ts')
+				vi.mocked(mockedFind).mockResolvedValueOnce([
+					{
+						id: 99,
+						name: 'acme-web',
+						status: 'running',
+						labels: { vps: 'acme-web', managed_by: 'nextnode' },
+						public_net: { ipv4: { ip: '9.9.9.9' } },
+					},
+				])
+
+				const target = new HetznerVpsTarget(TARGET_CONFIG)
+
+				await expect(target.ensureInfra('acme-web')).rejects.toThrow(
+					/has no `mode` label/,
+				)
+			})
+
+			it('throws when multiple VPSes share the same vps label', async () => {
+				const { findServersByLabels: mockedFind } =
+					await import('./api/server.ts')
+				vi.mocked(mockedFind).mockResolvedValueOnce([
+					{
+						id: 99,
+						name: 'acme-web',
+						status: 'running',
+						labels: {
+							vps: 'acme-web',
+							managed_by: 'nextnode',
+							mode: 'public',
+						},
+						public_net: { ipv4: { ip: '9.9.9.9' } },
+					},
+					{
+						id: 100,
+						name: 'acme-web',
+						status: 'running',
+						labels: {
+							vps: 'acme-web',
+							managed_by: 'nextnode',
+							mode: 'public',
+						},
+						public_net: { ipv4: { ip: '9.9.9.10' } },
+					},
+				])
+
+				const target = new HetznerVpsTarget(TARGET_CONFIG)
+
+				await expect(target.ensureInfra('acme-web')).rejects.toThrow(
+					/Multiple Hetzner servers labelled vps="acme-web"/,
 				)
 			})
 
@@ -397,6 +541,11 @@ describe('HetznerVpsTarget', () => {
 					id: 42,
 					name: 'acme-web',
 					status: 'initializing',
+					labels: {
+						vps: 'acme-web',
+						managed_by: 'nextnode',
+						mode: 'public',
+					},
 					public_net: { ipv4: { ip: '1.2.3.4' } },
 				}))
 
@@ -651,7 +800,7 @@ describe('HetznerVpsTarget', () => {
 			await expect(
 				target.deploy('acme-web', DEPLOY_INPUT, DEPLOY_ENV),
 			).rejects.toThrow(
-				'Invariant: expected deployable state for "acme-web"',
+				'Invariant: expected deployable state for VPS "acme-web"',
 			)
 		})
 
@@ -667,7 +816,7 @@ describe('HetznerVpsTarget', () => {
 			await expect(
 				target.deploy('acme-web', DEPLOY_INPUT, DEPLOY_ENV),
 			).rejects.toThrow(
-				'Invariant: expected deployable state for "acme-web"',
+				'Invariant: expected deployable state for VPS "acme-web"',
 			)
 		})
 
@@ -832,7 +981,7 @@ describe('HetznerVpsTarget', () => {
 			await expect(
 				target.reconcileDns('acme-web', 'acme-web.example.com'),
 			).rejects.toThrow(
-				'Invariant: expected deployable state for "acme-web"',
+				'Invariant: expected deployable state for VPS "acme-web"',
 			)
 		})
 
@@ -954,46 +1103,12 @@ describe('HetznerVpsTarget', () => {
 			expect(mockedDelete).toHaveBeenCalledWith('hcloud-token', 42)
 		})
 
-		it('reports server as already gone when no state and no orphans', async () => {
+		it('refuses VPS teardown when state is missing', async () => {
 			const target = new HetznerVpsTarget(TARGET_CONFIG)
-			const result = requireVpsScope(
-				await target.teardown(
-					'acme-web',
-					'acme-web.example.com',
-					'vps',
-				),
-			)
 
-			expect(result.outcome.server.handled).toBe(false)
-			expect(result.outcome.server.detail).toBe('already gone')
-		})
-
-		it('deletes orphan servers found by labels when no state exists', async () => {
-			const { findServersByLabels: mockedFind } =
-				await import('./api/server.ts')
-			const { deleteServer: mockedDelete } =
-				await import('./api/server.ts')
-			vi.mocked(mockedFind).mockResolvedValueOnce([
-				{
-					id: 99,
-					name: 'acme-web',
-					status: 'running',
-					public_net: { ipv4: { ip: '9.9.9.9' } },
-				},
-			])
-
-			const target = new HetznerVpsTarget(TARGET_CONFIG)
-			const result = requireVpsScope(
-				await target.teardown(
-					'acme-web',
-					'acme-web.example.com',
-					'vps',
-				),
-			)
-
-			expect(result.outcome.server.handled).toBe(true)
-			expect(result.outcome.server.detail).toContain('orphan')
-			expect(mockedDelete).toHaveBeenCalledWith('hcloud-token', 99)
+			await expect(
+				target.teardown('acme-web', 'acme-web.example.com', 'vps'),
+			).rejects.toThrow(/no R2 state found/)
 		})
 
 		it('reports firewall as not found when it does not exist', async () => {
@@ -1012,7 +1127,7 @@ describe('HetznerVpsTarget', () => {
 			expect(result.outcome.firewall.detail).toBe('not found')
 		})
 
-		it('skips DNS when no domain is configured', async () => {
+		it('skips DNS when no domain and Caddy has no upstreams', async () => {
 			seedState()
 
 			const target = new HetznerVpsTarget({
@@ -1024,7 +1139,7 @@ describe('HetznerVpsTarget', () => {
 			)
 
 			expect(result.outcome.dns.handled).toBe(false)
-			expect(result.outcome.dns.detail).toBe('no domain configured')
+			expect(result.outcome.dns.detail).toBe('no hostnames to delete')
 			expect(mockDeleteDnsRecordsByName).not.toHaveBeenCalled()
 		})
 

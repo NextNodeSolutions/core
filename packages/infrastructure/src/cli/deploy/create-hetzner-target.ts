@@ -3,6 +3,7 @@ import { HetznerVpsTarget } from '../../adapters/hetzner/target.ts'
 import type { HetznerDeployableConfig } from '../../config/types.ts'
 import type { R2RuntimeConfig } from '../../domain/cloudflare/r2/runtime-config.ts'
 import type { AppEnvironment } from '../../domain/environment.ts'
+import { resolveVpsName } from '../../domain/hetzner/resolve-vps-name.ts'
 import { getEnv, requireB64Env, requireEnv } from '../env.ts'
 
 const ACME_EMAIL = 'infra@nextnode.fr'
@@ -19,7 +20,9 @@ export function createHetznerTarget(
 ): HetznerVpsTarget {
 	const vlUrl = getEnv('NN_VL_URL')
 	const deployPrivateKey = requireB64Env('DEPLOY_SSH_PRIVATE_KEY_B64')
+	const vpsName = resolveVpsName(config.deploy.vps, environment)
 	return new HetznerVpsTarget({
+		vpsName,
 		hetzner: config.deploy.hetzner,
 		r2,
 		environment,

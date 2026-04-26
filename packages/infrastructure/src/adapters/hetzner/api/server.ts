@@ -12,6 +12,7 @@ export interface HcloudServerResponse {
 	readonly id: number
 	readonly name: string
 	readonly status: string
+	readonly labels: Readonly<Record<string, string>>
 	readonly public_net: {
 		readonly ipv4: { readonly ip: string }
 	}
@@ -45,10 +46,17 @@ export function parseServerObject(
 	) {
 		throw new Error(`${context}: missing public_net.ipv4.ip`)
 	}
+	const labels: Record<string, string> = {}
+	if (isRecord(s.labels)) {
+		for (const [key, value] of Object.entries(s.labels)) {
+			if (typeof value === 'string') labels[key] = value
+		}
+	}
 	return {
 		id: s.id,
 		name: s.name,
 		status: s.status,
+		labels,
 		public_net: { ipv4: { ip: s.public_net.ipv4.ip } },
 	}
 }

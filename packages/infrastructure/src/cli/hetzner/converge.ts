@@ -1,7 +1,6 @@
 import { createLogger } from '@nextnode-solutions/logger'
 
 import type { SshSession } from '../../adapters/hetzner/ssh/session.types.ts'
-import { shellEscape } from '../../adapters/hetzner/ssh/shell-escape.ts'
 
 const logger = createLogger()
 
@@ -10,7 +9,7 @@ const VECTOR_ENV_PATH = '/etc/vector/vector.env'
 const CADDY_CONFIG_PATH = '/etc/caddy/config.json'
 
 export interface ConvergenceInput {
-	readonly projectName: string
+	readonly vpsName: string
 	readonly vectorToml: string | undefined
 	readonly vectorEnv: string | undefined
 	readonly caddyConfig: string
@@ -67,12 +66,8 @@ export async function converge(
 		logger.info('Restarted caddy')
 	}
 
-	// Project directories — deploy is the SSH user, so mkdir creates dirs
-	// owned by deploy. No chown needed.
-	const basePath = `/opt/apps/${input.projectName}`
-	await session.exec(
-		`mkdir -p ${shellEscape(`${basePath}/dev`)} ${shellEscape(`${basePath}/production`)}`,
-	)
+	// Per-project directories are created on demand by deployContainer when
+	// each project deploys onto this VPS. Convergence is purely VPS-level.
 
-	logger.info(`Convergence complete for "${input.projectName}"`)
+	logger.info(`Convergence complete for VPS "${input.vpsName}"`)
 }

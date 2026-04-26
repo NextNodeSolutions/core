@@ -1,8 +1,7 @@
 import { createLogger } from '@nextnode-solutions/logger'
 
+import { extractRootDomain } from '../../domain/cloudflare/dns-records.ts'
 import type { ResourceOutcome } from '../../domain/deploy/resource-outcome.ts'
-import type { AppEnvironment } from '../../domain/environment.ts'
-import { computeVpsDnsLookups } from '../../domain/hetzner/dns-records.ts'
 import { deleteDnsRecordsByName } from '../cloudflare/dns/delete-records.ts'
 import type { R2Operations } from '../r2/client.types.ts'
 import { deleteTailnetDevicesByHostname } from '../tailscale/oauth.ts'
@@ -26,9 +25,9 @@ const logger = createLogger()
 export async function teardownServer(
 	hcloudToken: string,
 	r2: R2Operations,
-	projectName: string,
+	vpsName: string,
 ): Promise<ResourceOutcome> {
-	const existing = await readState(r2, projectName)
+	const existing = await readState(r2, vpsName)
 
 	if (existing) {
 		const { serverId } = existing.state
@@ -48,7 +47,7 @@ export async function teardownServer(
 	}
 
 	const orphans = await findServersByLabels(hcloudToken, {
-		project: projectName,
+		vps: vpsName,
 		managed_by: 'nextnode',
 	})
 	if (orphans.length === 0) {
@@ -75,9 +74,9 @@ export async function teardownServer(
 
 export async function teardownFirewall(
 	hcloudToken: string,
-	projectName: string,
+	vpsName: string,
 ): Promise<ResourceOutcome> {
-	const firewallName = `${projectName}-fw`
+	const firewallName = `${vpsName}-fw`
 	const firewalls = await findFirewallsByName(hcloudToken, firewallName)
 	if (firewalls.length === 0) {
 		return { handled: false, detail: 'not found' }
@@ -106,14 +105,14 @@ export async function teardownFirewall(
 
 export async function teardownTailscale(
 	tailscaleAuthKey: string,
-	projectName: string,
+	vpsName: string,
 ): Promise<ResourceOutcome> {
 	const purged = await deleteTailnetDevicesByHostname(
 		tailscaleAuthKey,
-		projectName,
+		vpsName,
 	)
 	logger.info(
-		`Tailscale: ${String(purged)} device(s) purged for "${projectName}"`,
+		`Tailscale: ${String(purged)} device(s) purged for VPS "${vpsName}"`,
 	)
 	return {
 		handled: purged > 0,
@@ -121,31 +120,59 @@ export async function teardownTailscale(
 	}
 }
 
+/**
+ * Delete every DNS record for the given hostnames. Used by VPS teardown to
+ * clean up DNS for ALL projects hosted on the VPS in one shot — the list
+ * of hostnames is read from the live Caddy config before the server is
+ * destroyed.
+ */
 export async function teardownVpsDns(
-	domain: string | undefined,
-	environment: AppEnvironment,
+	hostnames: ReadonlyArray<string>,
 	cloudflareApiToken: string,
 ): Promise<ResourceOutcome> {
-	if (!domain) {
-		return { handled: false, detail: 'no domain configured' }
+	if (hostnames.length === 0) {
+		return { handled: false, detail: 'no hostnames to delete' }
 	}
 
-	const lookups = computeVpsDnsLookups({ domain, environment })
+	const lookups = hostnames.map(name => ({
+		zoneName: extractRootDomain(name),
+		name,
+	}))
 	const deletedCount = await deleteDnsRecordsByName(
 		lookups,
 		cloudflareApiToken,
 	)
 	return {
 		handled: deletedCount > 0,
-		detail: `${String(deletedCount)} record(s) deleted`,
+		detail: `${String(deletedCount)} record(s) deleted across ${String(hostnames.length)} hostname(s)`,
+	}
+}
+
+/**
+ * Wipe every Caddy ACME cert object for the VPS. The whole `${vpsName}/`
+ * R2 prefix is shared across all projects — at VPS teardown time every
+ * project is going away, so we drop the prefix wholesale.
+ */
+export async function teardownVpsCerts(
+	certsR2: R2Operations,
+	vpsName: string,
+): Promise<ResourceOutcome> {
+	const prefix = `${vpsName}/`
+	const deletedCount = await certsR2.deleteByPrefix(prefix)
+	logger.info(
+		`R2 certs purged for VPS "${vpsName}" (${String(deletedCount)} object(s))`,
+	)
+	return {
+		handled: deletedCount > 0,
+		detail: `${String(deletedCount)} cert object(s) deleted`,
 	}
 }
 
 export async function teardownVpsState(
 	r2: R2Operations,
-	projectName: string,
+	vpsName: string,
 ): Promise<ResourceOutcome> {
-	await deleteState(r2, projectName)
-	logger.info(`R2 state deleted for "${projectName}"`)
+	await deleteState(r2, vpsName)
+	logger.info(`R2 state deleted for VPS "${vpsName}"`)
 	return { handled: true, detail: 'deleted' }
 }

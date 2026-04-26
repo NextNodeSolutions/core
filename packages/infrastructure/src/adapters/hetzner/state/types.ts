@@ -21,7 +21,7 @@ export interface HcloudConvergedState {
 	readonly sshHostKeyFingerprint?: string | undefined
 }
 
-export type HcloudProjectState =
+export type HcloudVpsState =
 	| HcloudCreatedState
 	| HcloudProvisionedState
 	| HcloudConvergedState
