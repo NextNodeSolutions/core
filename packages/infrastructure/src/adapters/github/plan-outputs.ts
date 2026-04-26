@@ -17,6 +17,7 @@ interface PlanInput {
 	readonly pagesProjectName: string
 	readonly tasks: ReadonlyArray<QualityTask>
 	readonly buildDirectory: string
+	readonly packageDir: string
 }
 
 export function writePlanOutputs({
@@ -24,6 +25,7 @@ export function writePlanOutputs({
 	pagesProjectName,
 	tasks,
 	buildDirectory,
+	packageDir,
 }: PlanInput): void {
 	const qualityMatrix = tasks.length > 0 ? tasks : SKIP_MATRIX
 	const matrixJson = JSON.stringify(qualityMatrix)
@@ -38,6 +40,7 @@ export function writePlanOutputs({
 	writeOutput('has_domain', String(Boolean(config.project.domain)))
 	writeOutput('domain', config.project.domain ?? '')
 	writeOutput('build_directory', buildDirectory)
+	writeOutput('package_dir', packageDir)
 
 	logger.info(`Quality matrix: ${matrixJson}`)
 	logger.info('Plan outputs written to GITHUB_OUTPUT')

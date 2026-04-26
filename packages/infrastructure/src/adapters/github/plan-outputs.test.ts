@@ -94,6 +94,7 @@ describe('writePlanOutputs', () => {
 			pagesProjectName: 'my-app',
 			tasks,
 			buildDirectory: 'apps/landing/dist',
+			packageDir: 'apps/landing',
 		})
 
 		const output = readFileSync(outputFile, 'utf-8')
@@ -102,7 +103,7 @@ describe('writePlanOutputs', () => {
 			{ id: 'test', name: 'Test', cmd: 'pnpm test' },
 		])
 		expect(output).toBe(
-			`quality_matrix=${matrixJson}\nproject_name=my-app\nproject_type=app\nproject_filter=\npublish=false\ndevelopment_enabled=true\nhas_prod_gate=false\nhas_domain=false\ndomain=\nbuild_directory=apps/landing/dist\n`,
+			`quality_matrix=${matrixJson}\nproject_name=my-app\nproject_type=app\nproject_filter=\npublish=false\ndevelopment_enabled=true\nhas_prod_gate=false\nhas_domain=false\ndomain=\nbuild_directory=apps/landing/dist\npackage_dir=apps/landing\n`,
 		)
 	})
 
@@ -112,6 +113,7 @@ describe('writePlanOutputs', () => {
 			pagesProjectName: 'my-app-dev',
 			tasks: [],
 			buildDirectory: 'apps/landing/dist',
+			packageDir: 'apps/landing',
 		})
 
 		const output = readFileSync(outputFile, 'utf-8')
@@ -124,6 +126,7 @@ describe('writePlanOutputs', () => {
 			pagesProjectName: 'my-app',
 			tasks: [],
 			buildDirectory: 'dist',
+			packageDir: '.',
 		})
 
 		const output = readFileSync(outputFile, 'utf-8')
@@ -138,6 +141,7 @@ describe('writePlanOutputs', () => {
 			pagesProjectName: 'my-lib',
 			tasks: [],
 			buildDirectory: 'dist',
+			packageDir: '.',
 		})
 
 		const output = readFileSync(outputFile, 'utf-8')
@@ -153,6 +157,7 @@ describe('writePlanOutputs', () => {
 			pagesProjectName: 'logger',
 			tasks: [],
 			buildDirectory: 'dist',
+			packageDir: '.',
 		})
 
 		const output = readFileSync(outputFile, 'utf-8')
@@ -171,6 +176,7 @@ describe('writePlanOutputs', () => {
 			pagesProjectName: 'my-app',
 			tasks: [],
 			buildDirectory: 'dist',
+			packageDir: '.',
 		})
 
 		const output = readFileSync(outputFile, 'utf-8')
@@ -188,6 +194,7 @@ describe('writePlanOutputs', () => {
 			pagesProjectName: 'my-app',
 			tasks,
 			buildDirectory: 'apps/landing/dist',
+			packageDir: 'apps/landing',
 		})
 
 		const output = readFileSync(outputFile, 'utf-8')
@@ -212,6 +219,7 @@ describe('writePlanOutputs', () => {
 			pagesProjectName: 'my-site',
 			tasks: [],
 			buildDirectory: 'dist',
+			packageDir: '.',
 		})
 
 		const output = readFileSync(outputFile, 'utf-8')
@@ -232,6 +240,7 @@ describe('writePlanOutputs', () => {
 			pagesProjectName: 'my-app',
 			tasks: [],
 			buildDirectory: 'dist',
+			packageDir: '.',
 		})
 
 		const output = readFileSync(outputFile, 'utf-8')
@@ -245,11 +254,25 @@ describe('writePlanOutputs', () => {
 			pagesProjectName: 'my-app',
 			tasks: [],
 			buildDirectory: 'dist',
+			packageDir: '.',
 		})
 
 		const output = readFileSync(outputFile, 'utf-8')
 		expect(output).toContain('has_domain=false\n')
 		expect(output).toContain('domain=\n')
+	})
+
+	it('writes package_dir output', () => {
+		writePlanOutputs({
+			config: APP_CONFIG,
+			pagesProjectName: 'my-app',
+			tasks: [],
+			buildDirectory: 'packages/monitoring/dist',
+			packageDir: 'packages/monitoring',
+		})
+
+		const output = readFileSync(outputFile, 'utf-8')
+		expect(output).toContain('package_dir=packages/monitoring\n')
 	})
 
 	it('throws when GITHUB_OUTPUT is not set', () => {
@@ -261,6 +284,7 @@ describe('writePlanOutputs', () => {
 				pagesProjectName: 'my-app',
 				tasks: [],
 				buildDirectory: 'dist',
+				packageDir: '.',
 			}),
 		).toThrow('GITHUB_OUTPUT env var')
 	})

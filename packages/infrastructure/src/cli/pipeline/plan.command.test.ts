@@ -74,6 +74,7 @@ describe('planCommand', () => {
 		expect(output).toContain('has_domain=true\n')
 		expect(output).toContain('domain=example.com\n')
 		expect(output).toContain('build_directory=apps/landing/dist\n')
+		expect(output).toContain('package_dir=apps/landing\n')
 	})
 
 	it('writes plan outputs for a package project', () => {

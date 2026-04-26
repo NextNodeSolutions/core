@@ -29,11 +29,13 @@ export function planCommand(config: NextNodeConfig): void {
 		environment,
 	)
 
-	const buildDirectory = computeBuildDirectory()
+	const packageDir = computePackageDir()
+	const buildDirectory = join(packageDir, DEFAULT_BUILD_OUTPUT)
 
 	logger.info(`Project: ${config.project.name}`)
 	logger.info(`Environment: ${environment}`)
 	logger.info(`Pages project: ${pagesProjectName}`)
+	logger.info(`Package dir: ${packageDir}`)
 	logger.info(`Build directory: ${buildDirectory}`)
 
 	const tasks = buildQualityMatrix(config.scripts, config.project, {
@@ -41,13 +43,17 @@ export function planCommand(config: NextNodeConfig): void {
 		developmentEnabled: config.environment.development,
 		prodGateCommand: PROD_GATE_COMMAND,
 	})
-	writePlanOutputs({ config, pagesProjectName, tasks, buildDirectory })
+	writePlanOutputs({
+		config,
+		pagesProjectName,
+		tasks,
+		buildDirectory,
+		packageDir,
+	})
 }
 
-function computeBuildDirectory(): string {
+function computePackageDir(): string {
 	const configFilePath = requireEnv('PIPELINE_CONFIG_FILE')
 	const workspace = getEnv('GITHUB_WORKSPACE') ?? process.cwd()
-	const configDir = relative(workspace, dirname(configFilePath))
-
-	return join(configDir, DEFAULT_BUILD_OUTPUT)
+	return relative(workspace, dirname(configFilePath))
 }
