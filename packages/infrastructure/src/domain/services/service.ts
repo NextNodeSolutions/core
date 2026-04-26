@@ -1,4 +1,16 @@
 /**
+ * Where a service is fulfilled. `'remote'` is the GitHub-driven cloud
+ * deploy (Cloudflare R2, Hetzner-hosted Supabase, …). The forthcoming
+ * `'local'` variant — driven by the future `nn` CLI — will return a
+ * docker-compose-backed Service (minio for r2, supabase-cli, …) so a
+ * developer can run `nn up` and get the same surface locally.
+ */
+// TODO(nn-local): extend to `'remote' | 'local'` and propagate through
+// every ServiceDefinition.build so each factory can return the local
+// docker-compose variant when `mode === 'local'`.
+export type ServiceMode = 'remote'
+
+/**
  * Surface a deployed runtime gets from a service (R2, D1, KV, …). The
  * `public` map carries non-sensitive values that travel through GITHUB_ENV
  * and into the runtime as plain env vars; the `secret` map carries

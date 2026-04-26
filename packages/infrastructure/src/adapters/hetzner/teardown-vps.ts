@@ -1,9 +1,9 @@
 import { createLogger } from '@nextnode-solutions/logger'
 
-import { deleteDnsRecordsByName } from '@/adapters/cloudflare/dns/delete-records.ts'
 import type { R2Operations } from '@/adapters/r2/client.types.ts'
 import { deleteTailnetDevicesByHostname } from '@/adapters/tailscale/oauth.ts'
 import type { ResourceOutcome } from '@/domain/deploy/resource-outcome.ts'
+import type { DnsClient } from '@/domain/dns/client.ts'
 import type { AppEnvironment } from '@/domain/environment.ts'
 import { computeVpsDnsLookups } from '@/domain/hetzner/dns-records.ts'
 
@@ -124,17 +124,14 @@ export async function teardownTailscale(
 export async function teardownVpsDns(
 	domain: string | undefined,
 	environment: AppEnvironment,
-	cloudflareApiToken: string,
+	dns: DnsClient,
 ): Promise<ResourceOutcome> {
 	if (!domain) {
 		return { handled: false, detail: 'no domain configured' }
 	}
 
 	const lookups = computeVpsDnsLookups({ domain, environment })
-	const deletedCount = await deleteDnsRecordsByName(
-		lookups,
-		cloudflareApiToken,
-	)
+	const deletedCount = await dns.deleteByName(lookups)
 	return {
 		handled: deletedCount > 0,
 		detail: `${String(deletedCount)} record(s) deleted`,

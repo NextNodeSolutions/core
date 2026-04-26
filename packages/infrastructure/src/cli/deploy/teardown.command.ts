@@ -19,10 +19,10 @@ export async function teardownCommand(config: DeployableConfig): Promise<void> {
 		getEnv('PIPELINE_ENVIRONMENT'),
 	)
 	const teardownTarget = parseTeardownTarget(getEnv('TEARDOWN_TARGET'))
-	const infraR2 = isHetznerDeployableConfig(config)
+	const infraStorage = isHetznerDeployableConfig(config)
 		? await loadR2Runtime(requireEnv('CLOUDFLARE_API_TOKEN'))
 		: null
-	const target = buildRuntimeTarget(config, environment, infraR2)
+	const target = buildRuntimeTarget(config, environment, infraStorage)
 
 	// Audit line — emitted BEFORE any destructive call so CI log readers can
 	// reconstruct the exact scope of the teardown (project, env, target type,

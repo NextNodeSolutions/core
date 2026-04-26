@@ -1,9 +1,9 @@
 import { createLogger } from '@nextnode-solutions/logger'
 
-import { reconcileDnsRecords } from '@/adapters/cloudflare/dns/reconcile.ts'
 import { R2Client } from '@/adapters/r2/client.ts'
 import type { HetznerVpsDeploySection } from '@/config/types.ts'
-import type { R2RuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
+import { buildR2CaddyBinding } from '@/domain/cloudflare/r2/caddy-binding.ts'
+import type { InfraStorageRuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
 import { resolveDeployDomain } from '@/domain/deploy/domain.ts'
 import type { VpsResourceOutcome } from '@/domain/deploy/resource-outcome.ts'
 import type {
@@ -15,6 +15,7 @@ import type {
 } from '@/domain/deploy/target.ts'
 import type { TeardownResult } from '@/domain/deploy/teardown-result.ts'
 import type { TeardownTarget } from '@/domain/deploy/teardown-target.ts'
+import type { DnsClient } from '@/domain/dns/client.ts'
 import type { AppEnvironment } from '@/domain/environment.ts'
 import { CADDY_ENV_PATH, renderCaddyEnv } from '@/domain/hetzner/caddy-env.ts'
 import { buildCaddyForProject } from '@/domain/hetzner/caddy-for-project.ts'
@@ -43,12 +44,13 @@ export interface HetznerVectorConfig {
 
 export interface HetznerVpsTargetConfig {
 	readonly hetzner: HetznerVpsDeploySection['hetzner']
-	readonly r2: R2RuntimeConfig
+	readonly infraStorage: InfraStorageRuntimeConfig
 	readonly environment: AppEnvironment
 	readonly domain: string
 	readonly internal: boolean
 	readonly credentials: HetznerCredentials
 	readonly vector: HetznerVectorConfig | null
+	readonly dns: DnsClient
 	readonly cloudflareApiToken: string
 	readonly acmeEmail: string
 }
@@ -62,16 +64,16 @@ export class HetznerVpsTarget implements DeployTarget {
 	constructor(config: HetznerVpsTargetConfig) {
 		this.config = config
 		this.r2 = new R2Client({
-			endpoint: config.r2.endpoint,
-			accessKeyId: config.r2.accessKeyId,
-			secretAccessKey: config.r2.secretAccessKey,
-			bucket: config.r2.stateBucket,
+			endpoint: config.infraStorage.endpoint,
+			accessKeyId: config.infraStorage.accessKeyId,
+			secretAccessKey: config.infraStorage.secretAccessKey,
+			bucket: config.infraStorage.stateBucket,
 		})
 		this.certsR2 = new R2Client({
-			endpoint: config.r2.endpoint,
-			accessKeyId: config.r2.accessKeyId,
-			secretAccessKey: config.r2.secretAccessKey,
-			bucket: config.r2.certsBucket,
+			endpoint: config.infraStorage.endpoint,
+			accessKeyId: config.infraStorage.accessKeyId,
+			secretAccessKey: config.infraStorage.secretAccessKey,
+			bucket: config.infraStorage.certsBucket,
 		})
 	}
 
@@ -132,7 +134,7 @@ export class HetznerVpsTarget implements DeployTarget {
 			tailnetIp: existing.state.tailnetIp,
 		})
 
-		await reconcileDnsRecords(records, this.config.cloudflareApiToken)
+		await this.config.dns.reconcile(records)
 		logger.info(
 			`DNS reconciled for "${projectName}" (${this.config.environment})`,
 		)
@@ -186,8 +188,10 @@ export class HetznerVpsTarget implements DeployTarget {
 
 			const caddyConfig = JSON.stringify(
 				buildCaddyForProject({
-					projectName,
-					r2: this.config.r2,
+					storage: buildR2CaddyBinding(
+						this.config.infraStorage,
+						projectName,
+					),
 					upstreams: [upstream],
 					acmeEmail: this.config.acmeEmail,
 					internal: this.config.internal,
@@ -202,7 +206,7 @@ export class HetznerVpsTarget implements DeployTarget {
 			await session.writeFile(
 				CADDY_ENV_PATH,
 				renderCaddyEnv({
-					r2: this.config.r2,
+					infraStorage: this.config.infraStorage,
 					cloudflareApiToken: this.config.cloudflareApiToken,
 				}),
 			)
@@ -233,7 +237,7 @@ export class HetznerVpsTarget implements DeployTarget {
 			hcloudToken: this.config.credentials.hcloudToken,
 			tailscaleAuthKey: this.config.credentials.tailscaleAuthKey,
 			deployPrivateKey: this.config.credentials.deployPrivateKey,
-			cloudflareApiToken: this.config.cloudflareApiToken,
+			dns: this.config.dns,
 			r2: this.r2,
 			certsR2: this.certsR2,
 		})

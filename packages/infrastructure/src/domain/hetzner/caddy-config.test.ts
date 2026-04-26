@@ -10,15 +10,19 @@ import {
 	extractUpstreams,
 } from './caddy-config.ts'
 
-const r2Storage = {
+const STORAGE_BINDING = {
 	host: 'abc123.r2.cloudflarestorage.com',
 	bucket: 'nextnode-certs',
-	accessId: 'R2_ACCESS_KEY',
+	accessKeyId: 'R2_ACCESS_KEY',
 	prefix: 'certs',
 } as const
 
 function makeInput(upstreams: CaddyConfigInput['upstreams']): CaddyConfigInput {
-	return { upstreams, r2Storage, acmeEmail: 'test@example.com' }
+	return {
+		upstreams,
+		storage: STORAGE_BINDING,
+		acmeEmail: 'test@example.com',
+	}
 }
 
 describe('buildCaddyConfig', () => {
@@ -173,7 +177,7 @@ describe('buildInternalCaddyConfig', () => {
 	): InternalCaddyConfigInput {
 		return {
 			upstreams,
-			r2Storage,
+			storage: STORAGE_BINDING,
 			acmeEmail: 'test@example.com',
 		}
 	}

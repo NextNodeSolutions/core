@@ -130,7 +130,7 @@ export type ServicesConfig = {
 
 export const KEBAB_IDENTIFIER_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/
 
-export function requiresInfraR2(config: DeployableConfig): boolean {
+export function requiresInfraStorage(config: DeployableConfig): boolean {
 	return isHetznerDeployableConfig(config) || config.services.r2 !== undefined
 }
 

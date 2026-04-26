@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { R2RuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
+import type { InfraStorageRuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
 import type { R2ServiceState } from '@/domain/services/r2.ts'
 
 const fakeR2State = new Map<string, string>()
@@ -75,7 +75,7 @@ function stubFetch(options: StubOptions = {}): StubContext {
 	return { fetchMock, urls }
 }
 
-const INFRA_R2: R2RuntimeConfig = {
+const INFRA_STORAGE: InfraStorageRuntimeConfig = {
 	accountId: 'acct-123',
 	endpoint: 'https://r2.example.com',
 	accessKeyId: 'infra-ak',
@@ -115,7 +115,7 @@ describe('loadR2Service', () => {
 		stubFetch({ verifyStatus: 'ok' })
 
 		const result = await loadR2Service({
-			infraR2: INFRA_R2,
+			infraStorage: INFRA_STORAGE,
 			projectName: 'myapp',
 			environment: 'production',
 		})
@@ -128,7 +128,7 @@ describe('loadR2Service', () => {
 
 		await expect(
 			loadR2Service({
-				infraR2: INFRA_R2,
+				infraStorage: INFRA_STORAGE,
 				projectName: 'myapp',
 				environment: 'production',
 			}),
@@ -143,7 +143,7 @@ describe('loadR2Service', () => {
 
 		await expect(
 			loadR2Service({
-				infraR2: INFRA_R2,
+				infraStorage: INFRA_STORAGE,
 				projectName: 'myapp',
 				environment: 'production',
 			}),
@@ -156,7 +156,7 @@ describe('loadR2Service', () => {
 
 		await expect(
 			loadR2Service({
-				infraR2: INFRA_R2,
+				infraStorage: INFRA_STORAGE,
 				projectName: 'myapp',
 				environment: 'production',
 			}),
@@ -168,7 +168,7 @@ describe('loadR2Service', () => {
 		const { urls } = stubFetch({ verifyStatus: 'ok' })
 
 		await loadR2Service({
-			infraR2: INFRA_R2,
+			infraStorage: INFRA_STORAGE,
 			projectName: 'myapp',
 			environment: 'production',
 		})
@@ -193,7 +193,7 @@ describe('loadR2Service', () => {
 		stubFetch({ verifyStatus: 'ok' })
 
 		const result = await loadR2Service({
-			infraR2: INFRA_R2,
+			infraStorage: INFRA_STORAGE,
 			projectName: 'myapp',
 			environment: 'production',
 		})

@@ -1,4 +1,4 @@
-import type { R2RuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
+import type { InfraStorageRuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
 
 import {
 	CADDY_ENV_CF_API_TOKEN,
@@ -6,7 +6,7 @@ import {
 } from './caddy-config.ts'
 
 export interface CaddyEnvInput {
-	readonly r2: R2RuntimeConfig
+	readonly infraStorage: InfraStorageRuntimeConfig
 	readonly cloudflareApiToken: string
 }
 
@@ -31,7 +31,7 @@ function rejectNewline(name: string, value: string): string {
 
 export function renderCaddyEnv(input: CaddyEnvInput): string {
 	return [
-		`${CADDY_ENV_R2_SECRET_KEY}=${rejectNewline(CADDY_ENV_R2_SECRET_KEY, input.r2.secretAccessKey)}`,
+		`${CADDY_ENV_R2_SECRET_KEY}=${rejectNewline(CADDY_ENV_R2_SECRET_KEY, input.infraStorage.secretAccessKey)}`,
 		`${CADDY_ENV_CF_API_TOKEN}=${rejectNewline(CADDY_ENV_CF_API_TOKEN, input.cloudflareApiToken)}`,
 	].join('\n')
 }

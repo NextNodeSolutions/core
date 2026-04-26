@@ -1,13 +1,8 @@
+import type { ObjectStorageBinding } from '@/domain/storage/binding.ts'
+
 export interface CaddyUpstream {
 	readonly hostname: string
 	readonly dial: string
-}
-
-export interface R2StorageConfig {
-	readonly host: string
-	readonly bucket: string
-	readonly accessId: string
-	readonly prefix: string
 }
 
 /** Caddy reads env vars from /etc/caddy/env at startup via EnvironmentFile. */
@@ -39,7 +34,7 @@ export type CaddyIssuer = AcmeIssuer | InternalIssuer
 
 export interface CaddyConfigInput {
 	readonly upstreams: ReadonlyArray<CaddyUpstream>
-	readonly r2Storage: R2StorageConfig
+	readonly storage: ObjectStorageBinding
 	readonly acmeEmail: string
 }
 
@@ -174,11 +169,11 @@ export function buildCaddyConfig(input: CaddyConfigInput): CaddyJsonConfig {
 							],
 							storage: {
 								module: 's3',
-								host: input.r2Storage.host,
-								bucket: input.r2Storage.bucket,
-								access_id: input.r2Storage.accessId,
+								host: input.storage.host,
+								bucket: input.storage.bucket,
+								access_id: input.storage.accessKeyId,
 								secret_key: CADDY_R2_SECRET_PLACEHOLDER,
-								prefix: input.r2Storage.prefix,
+								prefix: input.storage.prefix,
 							},
 						},
 					],
@@ -190,7 +185,7 @@ export function buildCaddyConfig(input: CaddyConfigInput): CaddyJsonConfig {
 
 export interface InternalCaddyConfigInput {
 	readonly upstreams: ReadonlyArray<CaddyUpstream>
-	readonly r2Storage: R2StorageConfig
+	readonly storage: ObjectStorageBinding
 	readonly acmeEmail: string
 }
 
@@ -240,11 +235,11 @@ export function buildInternalCaddyConfig(
 							],
 							storage: {
 								module: 's3',
-								host: input.r2Storage.host,
-								bucket: input.r2Storage.bucket,
-								access_id: input.r2Storage.accessId,
+								host: input.storage.host,
+								bucket: input.storage.bucket,
+								access_id: input.storage.accessKeyId,
 								secret_key: CADDY_R2_SECRET_PLACEHOLDER,
-								prefix: input.r2Storage.prefix,
+								prefix: input.storage.prefix,
 							},
 						},
 					],

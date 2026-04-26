@@ -350,7 +350,7 @@ describe('ensureR2Setup', () => {
 		)
 	})
 
-	it('returns the resolved R2RuntimeConfig without mutating process.env', async () => {
+	it('returns the resolved InfraStorageRuntimeConfig without mutating process.env', async () => {
 		stubFetch()
 		stubGh()
 

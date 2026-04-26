@@ -1,13 +1,13 @@
 import { R2Client } from '@/adapters/r2/client.ts'
 import { verifyR2Credentials } from '@/adapters/r2/verify-credentials.ts'
 import { readR2ServiceState } from '@/adapters/services/r2-state.ts'
-import type { R2RuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
+import type { InfraStorageRuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
 import type { AppEnvironment } from '@/domain/environment.ts'
 import type { R2ServiceState } from '@/domain/services/r2.ts'
 import { r2ServiceStateKey } from '@/domain/services/r2.ts'
 
 export interface LoadR2ServiceInput {
-	readonly infraR2: R2RuntimeConfig
+	readonly infraStorage: InfraStorageRuntimeConfig
 	readonly projectName: string
 	readonly environment: AppEnvironment
 }
@@ -22,10 +22,10 @@ export async function loadR2Service(
 	const stateKey = r2ServiceStateKey(input.projectName, input.environment)
 	const state = await readR2ServiceState(
 		new R2Client({
-			endpoint: input.infraR2.endpoint,
-			accessKeyId: input.infraR2.accessKeyId,
-			secretAccessKey: input.infraR2.secretAccessKey,
-			bucket: input.infraR2.stateBucket,
+			endpoint: input.infraStorage.endpoint,
+			accessKeyId: input.infraStorage.accessKeyId,
+			secretAccessKey: input.infraStorage.secretAccessKey,
+			bucket: input.infraStorage.stateBucket,
 		}),
 		stateKey,
 	)
@@ -41,7 +41,7 @@ export async function loadR2Service(
 	}
 
 	const verify = await verifyR2Credentials({
-		accountId: input.infraR2.accountId,
+		accountId: input.infraStorage.accountId,
 		accessKeyId: state.accessKeyId,
 		secretAccessKey: state.secretAccessKey,
 		bucketName: state.buckets[0]!.name,

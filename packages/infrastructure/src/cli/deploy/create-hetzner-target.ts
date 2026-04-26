@@ -1,27 +1,40 @@
+import { deleteDnsRecordsByName } from '@/adapters/cloudflare/dns/delete-records.ts'
+import { reconcileDnsRecords } from '@/adapters/cloudflare/dns/reconcile.ts'
 import { derivePublicKey } from '@/adapters/hetzner/ssh/derive-public-key.ts'
 import { HetznerVpsTarget } from '@/adapters/hetzner/target.ts'
 import { getEnv, requireB64Env, requireEnv } from '@/cli/env.ts'
 import type { HetznerDeployableConfig } from '@/config/types.ts'
-import type { R2RuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
+import { isHetznerDeployableConfig } from '@/config/types.ts'
+import type { InfraStorageRuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
+import type { DnsClient } from '@/domain/dns/client.ts'
 import type { AppEnvironment } from '@/domain/environment.ts'
+
+import type { TargetDefinition } from './target.ts'
 
 const ACME_EMAIL = 'infra@nextnode.fr'
 
 /**
- * Pure factory for the Hetzner VPS deploy target. Takes the already-resolved
- * R2 runtime config - callers pick bootstrap (`ensureR2Setup`, provision) or
- * runtime-load (`loadR2Runtime`, deploy) before calling this.
+ * Pure factory for the Hetzner VPS deploy target. Reads env-derived
+ * credentials and bridges the Cloudflare DNS adapter into a
+ * provider-agnostic `DnsClient` so the Hetzner adapter never imports
+ * across to Cloudflare.
  */
 export function createHetznerTarget(
 	config: HetznerDeployableConfig,
 	environment: AppEnvironment,
-	r2: R2RuntimeConfig,
+	infraStorage: InfraStorageRuntimeConfig,
 ): HetznerVpsTarget {
 	const vlUrl = getEnv('NN_VL_URL')
 	const deployPrivateKey = requireB64Env('DEPLOY_SSH_PRIVATE_KEY_B64')
+	const cloudflareApiToken = requireEnv('CLOUDFLARE_API_TOKEN')
+	const dns: DnsClient = {
+		reconcile: records => reconcileDnsRecords(records, cloudflareApiToken),
+		deleteByName: lookups =>
+			deleteDnsRecordsByName(lookups, cloudflareApiToken),
+	}
 	return new HetznerVpsTarget({
 		hetzner: config.deploy.hetzner,
-		r2,
+		infraStorage,
 		environment,
 		domain: config.project.domain,
 		internal: config.project.internal,
@@ -32,7 +45,21 @@ export function createHetznerTarget(
 			tailscaleAuthKey: requireEnv('TAILSCALE_AUTH_KEY'),
 		},
 		vector: vlUrl ? { clientId: requireEnv('NN_CLIENT_ID'), vlUrl } : null,
-		cloudflareApiToken: requireEnv('CLOUDFLARE_API_TOKEN'),
+		dns,
+		cloudflareApiToken,
 		acmeEmail: ACME_EMAIL,
 	})
+}
+
+export const hetznerTargetDefinition: TargetDefinition<'hetzner-vps'> = {
+	name: 'hetzner-vps',
+	build(config, ctx) {
+		if (!isHetznerDeployableConfig(config)) return null
+		if (!ctx.infraStorage) {
+			throw new Error(
+				'hetzner-vps target: infra storage (state + certs buckets) must be loaded by the caller — caller invariant broken',
+			)
+		}
+		return createHetznerTarget(config, ctx.environment, ctx.infraStorage)
+	},
 }

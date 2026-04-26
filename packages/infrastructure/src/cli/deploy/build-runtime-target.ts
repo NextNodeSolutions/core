@@ -1,42 +1,51 @@
-import { CloudflarePagesTarget } from '@/adapters/cloudflare/target.ts'
-import type { DeployableConfig } from '@/config/types.ts'
-import {
-	isCloudflarePagesDeployableConfig,
-	isHetznerDeployableConfig,
+import type {
+	CloudflarePagesDeployableConfig,
+	DeployableConfig,
+	HetznerDeployableConfig,
 } from '@/config/types.ts'
-import type { R2RuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
+import type { InfraStorageRuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
 import type { DeployTarget } from '@/domain/deploy/target.ts'
 import type { AppEnvironment } from '@/domain/environment.ts'
 
-import { createHetznerTarget } from './create-hetzner-target.ts'
+import { TARGET_DEFINITIONS } from './registry.ts'
 
 /**
- * Builds a DeployTarget. Hetzner targets need a verified infra R2 runtime;
- * Pages targets do not. Callers pick the R2 entry point: `ensureR2Setup` for
- * provision (bootstraps buckets + tokens + org secrets), `loadR2Runtime` for
- * runtime ops (deploy, dns, teardown).
+ * Build a DeployTarget by looking up the definition in `TARGET_DEFINITIONS`
+ * keyed on the config's `deploy.target` discriminator. Hetzner targets
+ * need a verified infra storage runtime; Pages targets do not — the
+ * preconditions live on each definition, not in this dispatcher.
+ *
+ * The overloads encode "Hetzner requires non-null infra storage, Pages
+ * accepts null" so callers that have already narrowed the config get
+ * compile-time enforcement; the union signature handles
+ * still-unnarrowed callers (today's commands).
  */
+export function buildRuntimeTarget(
+	config: HetznerDeployableConfig,
+	environment: AppEnvironment,
+	infraStorage: InfraStorageRuntimeConfig,
+): DeployTarget
+export function buildRuntimeTarget(
+	config: CloudflarePagesDeployableConfig,
+	environment: AppEnvironment,
+	infraStorage: InfraStorageRuntimeConfig | null,
+): DeployTarget
 export function buildRuntimeTarget(
 	config: DeployableConfig,
 	environment: AppEnvironment,
-	infraR2: R2RuntimeConfig | null,
+	infraStorage: InfraStorageRuntimeConfig | null,
+): DeployTarget
+export function buildRuntimeTarget(
+	config: DeployableConfig,
+	environment: AppEnvironment,
+	infraStorage: InfraStorageRuntimeConfig | null,
 ): DeployTarget {
-	if (isHetznerDeployableConfig(config)) {
-		if (!infraR2) {
-			throw new Error(
-				'buildRuntimeTarget: Hetzner target requires infra R2 — invariant broken',
-			)
-		}
-		return createHetznerTarget(config, environment, infraR2)
+	const definition = TARGET_DEFINITIONS[config.deploy.target]
+	const target = definition.build(config, { environment, infraStorage })
+	if (!target) {
+		throw new Error(
+			`buildRuntimeTarget: definition "${definition.name}" returned null for matching config — definition bug`,
+		)
 	}
-	if (isCloudflarePagesDeployableConfig(config)) {
-		return new CloudflarePagesTarget({
-			environment,
-			domain: config.project.domain,
-			redirectDomains: config.project.redirectDomains,
-		})
-	}
-	throw new Error(
-		'buildRuntimeTarget: unknown deploy target — config validation should have caught this',
-	)
+	return target
 }

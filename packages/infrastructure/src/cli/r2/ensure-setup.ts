@@ -10,7 +10,7 @@ import {
 	R2_BUCKET_LOCATION_HINT,
 } from '@/config/types.ts'
 import { computeR2Endpoint } from '@/domain/cloudflare/r2/addressing.ts'
-import type { R2RuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
+import type { InfraStorageRuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
 
 import type { R2Context } from './context.ts'
 import type { R2Credentials } from './rotate-token.ts'
@@ -84,10 +84,12 @@ async function persistOrgSecrets(
  *      until it propagates, revoke stale tokens, persist as GitHub org
  *      secrets.
  *
- * Returns the resolved `R2RuntimeConfig` — callers thread it explicitly
- * into adapters that need R2 (no hidden coupling via `process.env`).
+ * Returns the resolved `InfraStorageRuntimeConfig` — callers thread it
+ * explicitly into adapters that need it (no hidden coupling via `process.env`).
  */
-export async function ensureR2Setup(cfToken: string): Promise<R2RuntimeConfig> {
+export async function ensureR2Setup(
+	cfToken: string,
+): Promise<InfraStorageRuntimeConfig> {
 	const stateBucket = DEFAULT_R2_STATE_BUCKET
 	const certsBucket = DEFAULT_R2_CERTS_BUCKET
 

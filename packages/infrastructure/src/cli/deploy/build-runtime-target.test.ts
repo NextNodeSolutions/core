@@ -15,7 +15,7 @@ import { APP_WITH_DOMAIN, STATIC_WITH_DOMAIN } from '@/cli/fixtures.ts'
 
 import { buildRuntimeTarget } from './build-runtime-target.ts'
 
-const FAKE_INFRA_R2 = {
+const FAKE_INFRA_STORAGE = {
 	accountId: 'acct',
 	endpoint: 'https://r2.example.com',
 	accessKeyId: 'r2-key',
@@ -55,7 +55,7 @@ describe('buildRuntimeTarget', () => {
 		vi.restoreAllMocks()
 	})
 
-	it('builds a Hetzner target with the threaded R2 runtime', async () => {
+	it('builds a Hetzner target with the threaded infra storage runtime', async () => {
 		const { HetznerVpsTarget } =
 			await import('@/adapters/hetzner/target.ts')
 		const { CloudflarePagesTarget } =
@@ -64,7 +64,7 @@ describe('buildRuntimeTarget', () => {
 		const target = buildRuntimeTarget(
 			APP_WITH_DOMAIN,
 			'production',
-			FAKE_INFRA_R2,
+			FAKE_INFRA_STORAGE,
 		)
 
 		expect(HetznerVpsTarget).toHaveBeenCalledTimes(1)
@@ -72,13 +72,15 @@ describe('buildRuntimeTarget', () => {
 		expect(target).toEqual({ name: 'hetzner-vps' })
 	})
 
-	it('throws when Hetzner is requested without an infra R2 runtime', () => {
+	it('throws when Hetzner is requested without an infra storage runtime', () => {
 		expect(() =>
 			buildRuntimeTarget(APP_WITH_DOMAIN, 'production', null),
-		).toThrow('Hetzner target requires infra R2')
+		).toThrow(
+			'hetzner-vps target: infra storage (state + certs buckets) must be loaded by the caller — caller invariant broken',
+		)
 	})
 
-	it('builds a Cloudflare Pages target without needing infra R2', async () => {
+	it('builds a Cloudflare Pages target without needing infra storage', async () => {
 		const { HetznerVpsTarget } =
 			await import('@/adapters/hetzner/target.ts')
 		const { CloudflarePagesTarget } =

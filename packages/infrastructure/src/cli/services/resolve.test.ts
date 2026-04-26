@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest'
 
 import { APP_WITH_DOMAIN, STATIC_WITH_DOMAIN } from '@/cli/fixtures.ts'
 import type { DeployableConfig } from '@/config/types.ts'
-import type { R2RuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
+import type { InfraStorageRuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
 
 import { resolveServices } from './resolve.ts'
 
-const INFRA_R2: R2RuntimeConfig = {
+const INFRA_STORAGE: InfraStorageRuntimeConfig = {
 	accountId: 'acct',
 	endpoint: 'https://r2.example.com',
 	accessKeyId: 'r2-key',
@@ -29,18 +29,18 @@ describe('resolveServices', () => {
 				config: STATIC_WITH_DOMAIN,
 				environment: 'production',
 				cfToken: 'cf-token',
-				infraR2: null,
+				infraStorage: null,
 			}),
 		).toEqual([])
 	})
 
-	it('returns no services for Hetzner without [services.r2] (infra R2 only used for VPS state)', () => {
+	it('returns no services for Hetzner without [services.r2] (infra storage only used for VPS state)', () => {
 		expect(
 			resolveServices({
 				config: APP_WITH_DOMAIN,
 				environment: 'production',
 				cfToken: 'cf-token',
-				infraR2: INFRA_R2,
+				infraStorage: INFRA_STORAGE,
 			}),
 		).toEqual([])
 	})
@@ -50,23 +50,23 @@ describe('resolveServices', () => {
 			config: withR2Service(STATIC_WITH_DOMAIN, ['uploads', 'media']),
 			environment: 'production',
 			cfToken: 'cf-token',
-			infraR2: INFRA_R2,
+			infraStorage: INFRA_STORAGE,
 		})
 
 		expect(services).toHaveLength(1)
 		expect(services[0]?.name).toBe('r2')
 	})
 
-	it('throws when [services.r2] is declared but infra R2 is missing — invariant broken upstream', () => {
+	it('throws when [services.r2] is declared but infra storage is missing — invariant broken upstream', () => {
 		expect(() =>
 			resolveServices({
 				config: withR2Service(STATIC_WITH_DOMAIN, ['uploads']),
 				environment: 'production',
 				cfToken: 'cf-token',
-				infraR2: null,
+				infraStorage: null,
 			}),
 		).toThrow(
-			'resolveServices: R2 service requires infra R2 — invariant broken',
+			'r2 service: infra storage (state bucket) must be loaded by the caller — caller invariant broken',
 		)
 	})
 })

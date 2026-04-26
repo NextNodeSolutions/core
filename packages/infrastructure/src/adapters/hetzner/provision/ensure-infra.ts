@@ -275,7 +275,7 @@ async function convergeAndWriteState(
 		host: state.tailnetIp,
 		projectName,
 		internal: config.internal,
-		r2: config.r2,
+		infraStorage: config.infraStorage,
 		vector: config.vector,
 		deployPrivateKey: config.credentials.deployPrivateKey,
 		expectedHostKeyFingerprint: state.sshHostKeyFingerprint,

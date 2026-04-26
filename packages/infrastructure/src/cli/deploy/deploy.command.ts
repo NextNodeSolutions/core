@@ -8,7 +8,10 @@ import { getEnv, requireEnv } from '@/cli/env.ts'
 import { loadR2Runtime } from '@/cli/r2/load-runtime.ts'
 import { resolveServices } from '@/cli/services/resolve.ts'
 import type { DeployableConfig } from '@/config/types.ts'
-import { isHetznerDeployableConfig, requiresInfraR2 } from '@/config/types.ts'
+import {
+	isHetznerDeployableConfig,
+	requiresInfraStorage,
+} from '@/config/types.ts'
 import { buildDeploySummary } from '@/domain/deploy/deploy-summary.ts'
 import { parseImageRef } from '@/domain/deploy/image-ref.ts'
 import type { DeployInput } from '@/domain/deploy/target.ts'
@@ -25,13 +28,18 @@ export async function deployCommand(config: DeployableConfig): Promise<void> {
 	)
 	const cfToken = requireEnv('CLOUDFLARE_API_TOKEN')
 
-	const infraR2 = requiresInfraR2(config)
+	const infraStorage = requiresInfraStorage(config)
 		? await loadR2Runtime(cfToken)
 		: null
-	const target = buildRuntimeTarget(config, environment, infraR2)
+	const target = buildRuntimeTarget(config, environment, infraStorage)
 
 	const baseEnv = await target.computeDeployEnv(config.project.name)
-	const services = resolveServices({ config, environment, cfToken, infraR2 })
+	const services = resolveServices({
+		config,
+		environment,
+		cfToken,
+		infraStorage,
+	})
 	const servicesEnv = mergeServiceEnvs(
 		await Promise.all(services.map(service => service.loadEnv())),
 	)

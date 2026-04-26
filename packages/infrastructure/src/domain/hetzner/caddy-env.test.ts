@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import type { R2RuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
+import type { InfraStorageRuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
 
 import { CADDY_ENV_PATH, renderCaddyEnv } from './caddy-env.ts'
 
-const R2: R2RuntimeConfig = {
+const STORAGE: InfraStorageRuntimeConfig = {
 	accountId: 'account-123',
 	accessKeyId: 'AKID',
 	secretAccessKey: 'SECRET',
@@ -19,15 +19,18 @@ describe('renderCaddyEnv', () => {
 	})
 
 	it('emits KEY=value lines for R2 secret and CF API token', () => {
-		expect(renderCaddyEnv({ r2: R2, cloudflareApiToken: 'cf-token' })).toBe(
-			'CADDY_R2_SECRET_KEY=SECRET\nCF_DNS_API_TOKEN=cf-token',
-		)
+		expect(
+			renderCaddyEnv({
+				infraStorage: STORAGE,
+				cloudflareApiToken: 'cf-token',
+			}),
+		).toBe('CADDY_R2_SECRET_KEY=SECRET\nCF_DNS_API_TOKEN=cf-token')
 	})
 
 	it('rejects R2 secret values containing newlines', () => {
 		expect(() =>
 			renderCaddyEnv({
-				r2: { ...R2, secretAccessKey: 'SECRET\nINJECT' },
+				infraStorage: { ...STORAGE, secretAccessKey: 'SECRET\nINJECT' },
 				cloudflareApiToken: 'cf-token',
 			}),
 		).toThrow(/contains a newline/)
@@ -36,7 +39,7 @@ describe('renderCaddyEnv', () => {
 	it('rejects CF tokens containing newlines', () => {
 		expect(() =>
 			renderCaddyEnv({
-				r2: R2,
+				infraStorage: STORAGE,
 				cloudflareApiToken: 'cf-token\nINJECT',
 			}),
 		).toThrow(/contains a newline/)

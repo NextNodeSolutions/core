@@ -12,7 +12,7 @@ import {
 import { R2_BUCKET_LOCATION_HINT } from '@/config/types.ts'
 import { computeR2Endpoint } from '@/domain/cloudflare/r2/addressing.ts'
 import { deriveR2Credentials } from '@/domain/cloudflare/r2/credentials.ts'
-import type { R2RuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
+import type { InfraStorageRuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
 import type { AppEnvironment } from '@/domain/environment.ts'
 import type { R2ServiceState } from '@/domain/services/r2.ts'
 import {
@@ -25,7 +25,7 @@ const logger = createLogger()
 
 export interface EnsureR2ServiceInput {
 	readonly cfToken: string
-	readonly infraR2: R2RuntimeConfig
+	readonly infraStorage: InfraStorageRuntimeConfig
 	readonly projectName: string
 	readonly environment: AppEnvironment
 	readonly bucketAliases: ReadonlyArray<string>
@@ -39,7 +39,7 @@ export interface EnsureR2ServiceInput {
 export async function ensureR2Service(
 	input: EnsureR2ServiceInput,
 ): Promise<R2ServiceState> {
-	const accountId = input.infraR2.accountId
+	const accountId = input.infraStorage.accountId
 	const bindings = computeR2BucketBindings(
 		input.projectName,
 		input.environment,
@@ -96,10 +96,10 @@ export async function ensureR2Service(
 	const stateKey = r2ServiceStateKey(input.projectName, input.environment)
 	await writeR2ServiceState(
 		new R2Client({
-			endpoint: input.infraR2.endpoint,
-			accessKeyId: input.infraR2.accessKeyId,
-			secretAccessKey: input.infraR2.secretAccessKey,
-			bucket: input.infraR2.stateBucket,
+			endpoint: input.infraStorage.endpoint,
+			accessKeyId: input.infraStorage.accessKeyId,
+			secretAccessKey: input.infraStorage.secretAccessKey,
+			bucket: input.infraStorage.stateBucket,
 		}),
 		stateKey,
 		state,

@@ -27,17 +27,11 @@ import { provisionProject } from './pages/project.ts'
 import { teardownPagesDns, teardownProject } from './teardown-pages.ts'
 
 export interface CloudflarePagesTargetConfig {
+	readonly accountId: string
+	readonly token: string
 	readonly environment: AppEnvironment
 	readonly domain: string | undefined
 	readonly redirectDomains: ReadonlyArray<string>
-}
-
-function requireEnv(name: string): string {
-	const value = process.env[name]
-	if (!value) {
-		throw new Error(`${name} env var is required`)
-	}
-	return value
 }
 
 export class CloudflarePagesTarget implements DeployTarget {
@@ -49,8 +43,8 @@ export class CloudflarePagesTarget implements DeployTarget {
 	private readonly redirectDomains: ReadonlyArray<string>
 
 	constructor(config: CloudflarePagesTargetConfig) {
-		this.accountId = requireEnv('CLOUDFLARE_ACCOUNT_ID')
-		this.token = requireEnv('CLOUDFLARE_API_TOKEN')
+		this.accountId = config.accountId
+		this.token = config.token
 		this.environment = config.environment
 		this.domain = config.domain
 		this.redirectDomains = config.redirectDomains

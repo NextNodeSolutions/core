@@ -1,45 +1,65 @@
-import type { Service } from '@/cli/services/service.ts'
-import type { R2RuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
-import type { AppEnvironment } from '@/domain/environment.ts'
+import type { R2ServiceConfig } from '@/config/types.ts'
 import { buildR2ServiceEnv } from '@/domain/services/r2.ts'
 import type { ServiceEnv } from '@/domain/services/service.ts'
+
+import type {
+	Service,
+	ServiceDefinition,
+	ServiceFactoryContext,
+} from '../service.ts'
 
 import { ensureR2Service } from './ensure.ts'
 import { loadR2Service } from './load.ts'
 
-export interface R2ServiceFactoryInput {
-	readonly cfToken: string
-	readonly infraR2: R2RuntimeConfig
-	readonly projectName: string
-	readonly environment: AppEnvironment
-	readonly bucketAliases: ReadonlyArray<string>
-}
-
 /**
- * Wrap the R2 ensure/load orchestrators behind the `Service` strategy so
- * `deploy.command` and `provision.command` only ever call generic
- * `service.provision()` / `service.loadEnv()` — they do not import any
- * R2-specific module.
+ * Build the R2 `Service`. Validates that infra storage is loaded — every
+ * R2-aware project needs the state bucket to persist credentials.
+ *
+ * Exported for direct unit testing; production code reaches it through
+ * `r2ServiceDefinition` registered in `cli/services/registry.ts`.
  */
-export function createR2Service(input: R2ServiceFactoryInput): Service {
+export function createR2Service(
+	ctx: ServiceFactoryContext,
+	config: R2ServiceConfig,
+): Service {
+	if (!ctx.infraStorage) {
+		throw new Error(
+			'r2 service: infra storage (state bucket) must be loaded by the caller — caller invariant broken',
+		)
+	}
+	const infraStorage = ctx.infraStorage
+	// TODO(nn-local): when ctx.mode === 'local', return a Service that
+	// wires a docker-compose minio container and synthesizes ServiceEnv
+	// from the local container's creds instead of round-tripping through
+	// the remote R2 state bucket. The Service shape stays identical so
+	// deploy.command / provision.command remain unchanged.
 	return {
 		name: 'r2',
 		async provision(): Promise<void> {
 			await ensureR2Service({
-				cfToken: input.cfToken,
-				infraR2: input.infraR2,
-				projectName: input.projectName,
-				environment: input.environment,
-				bucketAliases: input.bucketAliases,
+				cfToken: ctx.cfToken,
+				infraStorage,
+				projectName: ctx.projectName,
+				environment: ctx.environment,
+				bucketAliases: config.buckets,
 			})
 		},
 		async loadEnv(): Promise<ServiceEnv> {
 			const state = await loadR2Service({
-				infraR2: input.infraR2,
-				projectName: input.projectName,
-				environment: input.environment,
+				infraStorage,
+				projectName: ctx.projectName,
+				environment: ctx.environment,
 			})
 			return buildR2ServiceEnv(state)
 		},
 	}
+}
+
+export const r2ServiceDefinition: ServiceDefinition<'r2'> = {
+	name: 'r2',
+	build(services, ctx) {
+		const config = services.r2
+		if (config === undefined) return null
+		return createR2Service(ctx, config)
+	},
 }

@@ -1,52 +1,43 @@
 import type { DeployableConfig } from '@/config/types.ts'
-import type { R2RuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
+import type { InfraStorageRuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
 import type { AppEnvironment } from '@/domain/environment.ts'
 
-import { createR2Service } from './r2/r2.service.ts'
-import type { Service } from './service.ts'
+import { SERVICE_DEFINITIONS } from './registry.ts'
+import type { Service, ServiceFactoryContext } from './service.ts'
 
 export interface ResolveServicesInput {
 	readonly config: DeployableConfig
 	readonly environment: AppEnvironment
 	readonly cfToken: string
-	readonly infraR2: R2RuntimeConfig | null
+	readonly infraStorage: InfraStorageRuntimeConfig | null
 }
 
 /**
- * Walk the config and return every service the project has opted into.
+ * Walk every registered service definition and return the ones the
+ * project opted into. `deploy.command` and `provision.command` iterate
+ * the result without knowing which services exist — adding a new
+ * service is one entry in `SERVICE_DEFINITIONS`, with zero churn here.
  *
- * Each `[<service>]` block in `nextnode.toml` corresponds to one branch
- * here. `deploy.command` and `provision.command` iterate over the
- * returned list without knowing what services exist — adding D1/KV/Queues
- * is one new branch + one factory, with zero churn in the commands.
- *
- * Service factories that need infra R2 (state bucket, certs bucket) get
- * it injected here. The invariant — "if you need infra R2, the caller
- * must have loaded it" — is enforced once, locally, instead of being
- * duplicated in both commands.
+ * Each definition validates its own preconditions (e.g. R2 needs infra
+ * storage to be loaded). Cross-service ordering, when it eventually matters,
+ * will live on the definitions, not in this loop.
  */
 export function resolveServices(
 	input: ResolveServicesInput,
 ): ReadonlyArray<Service> {
-	const services: Service[] = []
-
-	const r2Config = input.config.services.r2
-	if (r2Config !== undefined) {
-		if (!input.infraR2) {
-			throw new Error(
-				'resolveServices: R2 service requires infra R2 — invariant broken',
-			)
-		}
-		services.push(
-			createR2Service({
-				cfToken: input.cfToken,
-				infraR2: input.infraR2,
-				projectName: input.config.project.name,
-				environment: input.environment,
-				bucketAliases: r2Config.buckets,
-			}),
-		)
+	const ctx: ServiceFactoryContext = {
+		projectName: input.config.project.name,
+		environment: input.environment,
+		cfToken: input.cfToken,
+		infraStorage: input.infraStorage,
+		// TODO(nn-local): plumb 'local' from the future `nn` CLI so each
+		// service definition can return its docker-compose-driven variant.
+		mode: 'remote',
 	}
-
+	const services: Service[] = []
+	for (const definition of Object.values(SERVICE_DEFINITIONS)) {
+		const service = definition.build(input.config.services, ctx)
+		if (service !== null) services.push(service)
+	}
 	return services
 }

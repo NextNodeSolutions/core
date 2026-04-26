@@ -6,6 +6,7 @@ import { executeHandlers } from '@/domain/deploy/execute-handlers.ts'
 import type { ResourceOutcome } from '@/domain/deploy/resource-outcome.ts'
 import type { TeardownResult } from '@/domain/deploy/teardown-result.ts'
 import type { TeardownTarget } from '@/domain/deploy/teardown-target.ts'
+import type { DnsClient } from '@/domain/dns/client.ts'
 import type { AppEnvironment } from '@/domain/environment.ts'
 import {
 	VPS_MANAGED_RESOURCES,
@@ -38,7 +39,7 @@ export interface HetznerTeardownContext {
 	readonly hcloudToken: string
 	readonly tailscaleAuthKey: string
 	readonly deployPrivateKey: string
-	readonly cloudflareApiToken: string
+	readonly dns: DnsClient
 	readonly r2: R2Client
 	readonly certsR2: R2Client
 }
@@ -62,8 +63,7 @@ async function teardownVps(
 		firewall: () => teardownFirewall(ctx.hcloudToken, ctx.projectName),
 		tailscale: () =>
 			teardownTailscale(ctx.tailscaleAuthKey, ctx.projectName),
-		dns: () =>
-			teardownVpsDns(ctx.domain, ctx.environment, ctx.cloudflareApiToken),
+		dns: () => teardownVpsDns(ctx.domain, ctx.environment, ctx.dns),
 		state: () => teardownVpsState(ctx.r2, ctx.projectName),
 	})
 
@@ -115,8 +115,7 @@ async function teardownProjectWithSession(
 			teardownProjectContainer(session, ctx.projectName, ctx.environment),
 		caddy: () => teardownProjectCaddyRoute(session, projectHostname),
 		certs: () => teardownProjectCerts(ctx.certsR2, ctx.projectName),
-		dns: () =>
-			teardownVpsDns(ctx.domain, ctx.environment, ctx.cloudflareApiToken),
+		dns: () => teardownVpsDns(ctx.domain, ctx.environment, ctx.dns),
 		state: () => teardownVpsState(ctx.r2, ctx.projectName),
 	})
 
@@ -138,8 +137,7 @@ async function teardownProjectWithoutSession(
 		container: () => skipUnreachable(),
 		caddy: () => skipUnreachable(),
 		certs: () => teardownProjectCerts(ctx.certsR2, ctx.projectName),
-		dns: () =>
-			teardownVpsDns(ctx.domain, ctx.environment, ctx.cloudflareApiToken),
+		dns: () => teardownVpsDns(ctx.domain, ctx.environment, ctx.dns),
 		state: () => teardownVpsState(ctx.r2, ctx.projectName),
 	})
 

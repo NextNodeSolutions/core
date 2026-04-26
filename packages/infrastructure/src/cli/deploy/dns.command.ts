@@ -22,9 +22,9 @@ export async function dnsCommand(config: DeployableConfig): Promise<void> {
 		config.project.type,
 		getEnv('PIPELINE_ENVIRONMENT'),
 	)
-	const infraR2 = isHetznerDeployableConfig(config)
+	const infraStorage = isHetznerDeployableConfig(config)
 		? await loadR2Runtime(requireEnv('CLOUDFLARE_API_TOKEN'))
 		: null
-	const target = buildRuntimeTarget(config, environment, infraR2)
+	const target = buildRuntimeTarget(config, environment, infraStorage)
 	await target.reconcileDns(config.project.name, config.project.domain)
 }

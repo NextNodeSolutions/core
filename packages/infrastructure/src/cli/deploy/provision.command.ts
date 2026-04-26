@@ -3,7 +3,7 @@ import { getEnv, requireEnv } from '@/cli/env.ts'
 import { ensureR2Setup } from '@/cli/r2/ensure-setup.ts'
 import { resolveServices } from '@/cli/services/resolve.ts'
 import type { DeployableConfig } from '@/config/types.ts'
-import { requiresInfraR2 } from '@/config/types.ts'
+import { requiresInfraStorage } from '@/config/types.ts'
 import { buildProvisionSummary } from '@/domain/deploy/provision-summary.ts'
 import { resolveEnvironment } from '@/domain/environment.ts'
 
@@ -18,14 +18,19 @@ export async function provisionCommand(
 	)
 	const cfToken = requireEnv('CLOUDFLARE_API_TOKEN')
 
-	const infraR2 = requiresInfraR2(config)
+	const infraStorage = requiresInfraStorage(config)
 		? await ensureR2Setup(cfToken)
 		: null
 
-	const target = buildRuntimeTarget(config, environment, infraR2)
+	const target = buildRuntimeTarget(config, environment, infraStorage)
 	const result = await target.ensureInfra(config.project.name)
 
-	const services = resolveServices({ config, environment, cfToken, infraR2 })
+	const services = resolveServices({
+		config,
+		environment,
+		cfToken,
+		infraStorage,
+	})
 	await Promise.all(services.map(service => service.provision()))
 
 	writeSummary(

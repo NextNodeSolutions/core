@@ -1,42 +1,22 @@
-import { computeR2Host } from '@/domain/cloudflare/r2/addressing.ts'
-import type { R2RuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
+import type { ObjectStorageBinding } from '@/domain/storage/binding.ts'
 
-import type {
-	CaddyJsonConfig,
-	CaddyUpstream,
-	R2StorageConfig,
-} from './caddy-config.ts'
+import type { CaddyJsonConfig, CaddyUpstream } from './caddy-config.ts'
 import { buildCaddyConfig, buildInternalCaddyConfig } from './caddy-config.ts'
 
 export interface CaddyForProjectInput {
-	readonly projectName: string
-	readonly r2: R2RuntimeConfig
+	readonly storage: ObjectStorageBinding
 	readonly upstreams: ReadonlyArray<CaddyUpstream>
 	readonly acmeEmail: string
 	readonly internal: boolean
 }
 
-function buildR2Storage(
-	r2: R2RuntimeConfig,
-	projectName: string,
-): R2StorageConfig {
-	return {
-		host: computeR2Host(r2.accountId),
-		bucket: r2.certsBucket,
-		accessId: r2.accessKeyId,
-		prefix: `${projectName}/`,
-	}
-}
-
 export function buildCaddyForProject(
 	input: CaddyForProjectInput,
 ): CaddyJsonConfig {
-	const r2Storage = buildR2Storage(input.r2, input.projectName)
-
 	if (input.internal) {
 		return buildInternalCaddyConfig({
 			upstreams: input.upstreams,
-			r2Storage,
+			storage: input.storage,
 			acmeEmail: input.acmeEmail,
 		})
 	}
@@ -44,6 +24,6 @@ export function buildCaddyForProject(
 	return buildCaddyConfig({
 		upstreams: input.upstreams,
 		acmeEmail: input.acmeEmail,
-		r2Storage,
+		storage: input.storage,
 	})
 }

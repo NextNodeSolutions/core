@@ -119,21 +119,9 @@ vi.mock('node:timers/promises', () => ({
 	setTimeout: vi.fn(async () => undefined),
 }))
 
-// Mock Cloudflare DNS reconciliation (network boundary: Cloudflare API)
-const { mockReconcileDnsRecords } = vi.hoisted(() => ({
-	mockReconcileDnsRecords: vi.fn(async () => undefined),
-}))
-vi.mock('../cloudflare/dns/reconcile.ts', () => ({
-	reconcileDnsRecords: mockReconcileDnsRecords,
-}))
-
-// Mock Cloudflare DNS delete (network boundary: Cloudflare API)
-const { mockDeleteDnsRecordsByName } = vi.hoisted(() => ({
-	mockDeleteDnsRecordsByName: vi.fn(async () => 0),
-}))
-vi.mock('../cloudflare/dns/delete-records.ts', () => ({
-	deleteDnsRecordsByName: mockDeleteDnsRecordsByName,
-}))
+// DNS is injected as a DnsClient — no module-level mocks needed.
+const mockReconcile = vi.fn(async () => undefined)
+const mockDeleteByName = vi.fn(async () => 0)
 
 // Mock R2Client (network boundary)
 const fakeR2State = new Map<string, string>()
@@ -159,7 +147,7 @@ vi.mock('../r2/client.ts', () => ({
 
 const HETZNER_CONFIG = { serverType: 'cpx22', location: 'nbg1' } as const
 
-const R2_CONFIG = {
+const STORAGE_CONFIG = {
 	accountId: 'acct',
 	endpoint: 'https://r2.example.com',
 	accessKeyId: 'r2-key',
@@ -177,7 +165,7 @@ const CREDENTIALS = {
 
 const TARGET_CONFIG = {
 	hetzner: HETZNER_CONFIG,
-	r2: R2_CONFIG,
+	infraStorage: STORAGE_CONFIG,
 	environment: 'production' as const,
 	domain: 'acme-web.example.com',
 	internal: false,
@@ -186,6 +174,7 @@ const TARGET_CONFIG = {
 		clientId: 'nextnode',
 		vlUrl: 'http://vl.tail0.ts.net:9428',
 	},
+	dns: { reconcile: mockReconcile, deleteByName: mockDeleteByName },
 	cloudflareApiToken: 'cf-token',
 	acmeEmail: 'test@example.com',
 }
@@ -215,6 +204,8 @@ function createMockSession(): SshSession {
 
 beforeEach(() => {
 	fakeR2State.clear()
+	mockReconcile.mockClear()
+	mockDeleteByName.mockClear()
 	vi.stubEnv('LOG_LEVEL', 'silent')
 })
 
@@ -842,19 +833,16 @@ describe('HetznerVpsTarget', () => {
 			const target = new HetznerVpsTarget(TARGET_CONFIG)
 			await target.reconcileDns('acme-web', 'acme-web.example.com')
 
-			expect(mockReconcileDnsRecords).toHaveBeenCalledWith(
-				[
-					{
-						zoneName: 'example.com',
-						name: 'acme-web.example.com',
-						type: 'A',
-						content: '5.6.7.8',
-						proxied: true,
-						ttl: 1,
-					},
-				],
-				'cf-token',
-			)
+			expect(mockReconcile).toHaveBeenCalledWith([
+				{
+					zoneName: 'example.com',
+					name: 'acme-web.example.com',
+					type: 'A',
+					content: '5.6.7.8',
+					proxied: true,
+					ttl: 1,
+				},
+			])
 		})
 
 		it('uses dev subdomain for development environment', async () => {
@@ -866,21 +854,18 @@ describe('HetznerVpsTarget', () => {
 			})
 			await target.reconcileDns('acme-web', 'acme-web.example.com')
 
-			expect(mockReconcileDnsRecords).toHaveBeenCalledWith(
-				[
-					expect.objectContaining({
-						name: 'dev.acme-web.example.com',
-						proxied: false,
-						ttl: 300,
-					}),
-				],
-				'cf-token',
-			)
+			expect(mockReconcile).toHaveBeenCalledWith([
+				expect.objectContaining({
+					name: 'dev.acme-web.example.com',
+					proxied: false,
+					ttl: 300,
+				}),
+			])
 		})
 
 		it('propagates errors from the DNS reconciler', async () => {
 			seedState()
-			mockReconcileDnsRecords.mockRejectedValueOnce(
+			mockReconcile.mockRejectedValueOnce(
 				new Error('Cloudflare zone not found'),
 			)
 
@@ -904,15 +889,12 @@ describe('HetznerVpsTarget', () => {
 			})
 			await target.reconcileDns('acme-web', 'acme-web.example.com')
 
-			expect(mockReconcileDnsRecords).toHaveBeenCalledWith(
-				[
-					expect.objectContaining({
-						content: '100.64.0.5',
-						proxied: false,
-					}),
-				],
-				'cf-token',
-			)
+			expect(mockReconcile).toHaveBeenCalledWith([
+				expect.objectContaining({
+					content: '100.64.0.5',
+					proxied: false,
+				}),
+			])
 		})
 	})
 
@@ -935,7 +917,7 @@ describe('HetznerVpsTarget', () => {
 				{ id: 99, name: 'acme-web-fw', appliedToCount: 0 },
 			])
 			vi.mocked(mockedTailscale).mockResolvedValueOnce(1)
-			mockDeleteDnsRecordsByName.mockResolvedValueOnce(1)
+			mockDeleteByName.mockResolvedValueOnce(1)
 
 			const target = new HetznerVpsTarget(TARGET_CONFIG)
 			const raw = await target.teardown(
@@ -1025,7 +1007,7 @@ describe('HetznerVpsTarget', () => {
 
 			expect(result.outcome.dns.handled).toBe(false)
 			expect(result.outcome.dns.detail).toBe('no domain configured')
-			expect(mockDeleteDnsRecordsByName).not.toHaveBeenCalled()
+			expect(mockDeleteByName).not.toHaveBeenCalled()
 		})
 
 		it('deletes R2 state', async () => {

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { R2RuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
+import type { InfraStorageRuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
 
 vi.mock('node:timers/promises', () => ({
 	setTimeout: vi.fn(() => Promise.resolve()),
@@ -195,7 +195,7 @@ function stubFetch(overrides: FetchOverrides = {}): StubFetchContext {
 	return { fetchMock, calls, deletedTokenIds }
 }
 
-const INFRA_R2: R2RuntimeConfig = {
+const INFRA_STORAGE: InfraStorageRuntimeConfig = {
 	accountId: 'acct-123',
 	endpoint: 'https://r2.example.com',
 	accessKeyId: 'infra-ak',
@@ -219,7 +219,7 @@ describe('ensureR2Service', () => {
 
 		await ensureR2Service({
 			cfToken: 'cf-token',
-			infraR2: INFRA_R2,
+			infraStorage: INFRA_STORAGE,
 			projectName: 'myapp',
 			environment: 'production',
 			bucketAliases: ['uploads', 'media'],
@@ -244,7 +244,7 @@ describe('ensureR2Service', () => {
 
 		await ensureR2Service({
 			cfToken: 'cf-token',
-			infraR2: INFRA_R2,
+			infraStorage: INFRA_STORAGE,
 			projectName: 'myapp',
 			environment: 'production',
 			bucketAliases: ['uploads'],
@@ -266,7 +266,7 @@ describe('ensureR2Service', () => {
 
 		await ensureR2Service({
 			cfToken: 'cf-token',
-			infraR2: INFRA_R2,
+			infraStorage: INFRA_STORAGE,
 			projectName: 'myapp',
 			environment: 'development',
 			bucketAliases: ['uploads'],
@@ -287,7 +287,7 @@ describe('ensureR2Service', () => {
 
 		const result = await ensureR2Service({
 			cfToken: 'cf-token',
-			infraR2: INFRA_R2,
+			infraStorage: INFRA_STORAGE,
 			projectName: 'myapp',
 			environment: 'production',
 			bucketAliases: ['uploads', 'media'],
@@ -311,7 +311,7 @@ describe('ensureR2Service', () => {
 
 		const result = await ensureR2Service({
 			cfToken: 'cf-token',
-			infraR2: INFRA_R2,
+			infraStorage: INFRA_STORAGE,
 			projectName: 'myapp',
 			environment: 'production',
 			bucketAliases: ['uploads'],
@@ -332,7 +332,7 @@ describe('ensureR2Service', () => {
 
 		const result = await ensureR2Service({
 			cfToken: 'cf-token',
-			infraR2: INFRA_R2,
+			infraStorage: INFRA_STORAGE,
 			projectName: 'myapp',
 			environment: 'production',
 			bucketAliases: ['uploads'],
@@ -347,7 +347,7 @@ describe('ensureR2Service', () => {
 		await expect(
 			ensureR2Service({
 				cfToken: 'cf-token',
-				infraR2: INFRA_R2,
+				infraStorage: INFRA_STORAGE,
 				projectName: 'myapp',
 				environment: 'production',
 				bucketAliases: ['uploads'],
@@ -379,7 +379,7 @@ describe('ensureR2Service', () => {
 
 		await ensureR2Service({
 			cfToken: 'cf-token',
-			infraR2: INFRA_R2,
+			infraStorage: INFRA_STORAGE,
 			projectName: 'myapp',
 			environment: 'production',
 			bucketAliases: ['uploads'],
@@ -394,7 +394,7 @@ describe('ensureR2Service', () => {
 		await expect(
 			ensureR2Service({
 				cfToken: 'cf-token',
-				infraR2: INFRA_R2,
+				infraStorage: INFRA_STORAGE,
 				projectName: 'myapp',
 				environment: 'production',
 				bucketAliases: ['uploads'],
@@ -407,7 +407,7 @@ describe('ensureR2Service', () => {
 
 		await ensureR2Service({
 			cfToken: 'cf-token',
-			infraR2: INFRA_R2,
+			infraStorage: INFRA_STORAGE,
 			projectName: 'myapp',
 			environment: 'production',
 			bucketAliases: ['first-bucket', 'second-bucket'],

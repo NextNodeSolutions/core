@@ -6,7 +6,7 @@ import {
 	DEFAULT_R2_STATE_BUCKET,
 } from '@/config/types.ts'
 import { computeR2Endpoint } from '@/domain/cloudflare/r2/addressing.ts'
-import type { R2RuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
+import type { InfraStorageRuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
 
 /**
  * Load the R2 runtime config at deploy time from creds already provisioned
@@ -25,7 +25,9 @@ import type { R2RuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
  * Fails loud on stale creds — the operator should re-run provision to
  * rotate rather than having deploy self-heal silently.
  */
-export async function loadR2Runtime(cfToken: string): Promise<R2RuntimeConfig> {
+export async function loadR2Runtime(
+	cfToken: string,
+): Promise<InfraStorageRuntimeConfig> {
 	const accountId = await resolveAccountId(cfToken)
 	const endpoint = computeR2Endpoint(accountId)
 	const accessKeyId = requireEnv('R2_ACCESS_KEY_ID')
