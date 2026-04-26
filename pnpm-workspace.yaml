@@ -1,6 +1,5 @@
 packages:
   - packages/*
-inject-workspace-packages: true
 onlyBuiltDependencies:
   - cpu-features
   - esbuild
