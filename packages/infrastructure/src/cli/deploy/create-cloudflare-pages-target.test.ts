@@ -22,6 +22,7 @@ const STATIC_CONFIG: CloudflarePagesDeployableConfig = {
 	deploy: {
 		target: 'cloudflare-pages',
 		secrets: [],
+		vps: null,
 	},
 	services: {},
 }

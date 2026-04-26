@@ -10,6 +10,7 @@ import { isHetznerDeployableConfig } from '#/config/types.ts'
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import type { DnsClient } from '#/domain/dns/client.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
+import { resolveVpsName } from '#/domain/hetzner/resolve-vps-name.ts'
 
 import type { TargetDefinition } from './target.ts'
 
@@ -22,6 +23,7 @@ export function createHetznerTarget(
 ): HetznerVpsTarget {
 	const vlUrl = getEnv('NN_VL_URL')
 	const deployPrivateKey = requireB64Env('DEPLOY_SSH_PRIVATE_KEY_B64')
+	const vpsName = resolveVpsName(config.deploy.vps, environment)
 	const cloudflareApiToken = requireEnv('CLOUDFLARE_API_TOKEN')
 	const dns: DnsClient = {
 		reconcile: records => reconcileDnsRecords(records, cloudflareApiToken),
@@ -29,6 +31,7 @@ export function createHetznerTarget(
 			deleteDnsRecordsByName(lookups, cloudflareApiToken),
 	}
 	return new HetznerVpsTarget({
+		vpsName,
 		hetzner: config.deploy.hetzner,
 		infraStorage,
 		stateStore: new R2Client({

@@ -1,0 +1,50 @@
+---
+import StatCard from '@/components/dashboard/StatCard.astro'
+import { badgeStatusToTone } from '@/lib/domain/badge-status.ts'
+import type { Health } from '@/lib/domain/badge-status.ts'
+import type { HetznerVps } from '@/lib/domain/hetzner/vps.ts'
+import { formatRelativeTime } from '@/lib/domain/relative-time.ts'
+
+interface Props {
+	server: HetznerVps
+	health: Health
+	nowMs: number
+}
+
+const { server, health, nowMs } = Astro.props
+
+const cpuValue = `${String(server.serverType.cores)} ${
+	server.serverType.cores > 1 ? 'cores' : 'core'
+}`
+const cpuHint =
+	server.serverType.cpuType === 'unknown'
+		? server.serverType.architecture
+		: `${server.serverType.cpuType} · ${server.serverType.architecture}`
+
+const memoryValue = `${String(server.serverType.memoryGb)} GB`
+const diskValue = `${String(server.serverType.diskGb)} GB`
+const locationValue = server.location.city ?? server.location.name
+const locationHint =
+	[server.location.country, server.location.datacenter]
+		.filter((part): part is string => part !== null)
+		.join(' · ') || undefined
+---
+
+<section class="mt-10 grid grid-cols-2 gap-4 lg:grid-cols-4">
+	<StatCard
+		label="Status"
+		value={health.label}
+		tone={badgeStatusToTone[health.status]}
+	/>
+	<StatCard label="Type" value={server.serverType.name} hint={cpuHint} />
+	<StatCard label="CPU" value={cpuValue} />
+	<StatCard label="Memory" value={memoryValue} />
+	<StatCard label="Disk" value={diskValue} hint="Primary volume" />
+	<StatCard label="Location" value={locationValue} hint={locationHint} />
+	<StatCard
+		label="Image"
+		value={server.image ?? '—'}
+		hint={server.image ? 'Operating system' : undefined}
+	/>
+	<StatCard label="Age" value={formatRelativeTime(server.createdAt, nowMs)} />
+</section>

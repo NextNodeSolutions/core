@@ -1,0 +1,94 @@
+---
+import LoadStateBanner from '@/components/dashboard/LoadStateBanner.astro'
+import VpsActions from '@/components/vps/VpsActions.astro'
+import VpsHeader from '@/components/vps/VpsHeader.astro'
+import VpsHostedProjects from '@/components/vps/VpsHostedProjects.astro'
+import VpsLabels from '@/components/vps/VpsLabels.astro'
+import VpsNetworkInfo from '@/components/vps/VpsNetworkInfo.astro'
+import VpsObservabilityPlaceholders from '@/components/vps/VpsObservabilityPlaceholders.astro'
+import VpsStatsGrid from '@/components/vps/VpsStatsGrid.astro'
+import DashboardLayout from '@/layouts/DashboardLayout.astro'
+import { resolveCloudflareClient } from '@/lib/adapters/cloudflare/accounts.ts'
+import { listDnsMatchesForVps } from '@/lib/adapters/cloudflare/vps-dns.ts'
+import { ENV_KEYS, getEnv, requireEnv } from '@/lib/adapters/env.ts'
+import { getServerByName } from '@/lib/adapters/hetzner/servers.ts'
+import { loadPageState } from '@/lib/adapters/load-page-state.ts'
+import { getTailnetIpByHostname } from '@/lib/adapters/tailscale/oauth.ts'
+import { groupDnsMatchesByHostname } from '@/lib/domain/cloudflare/vps-hosted-project.ts'
+import type { VpsHostedProject } from '@/lib/domain/cloudflare/vps-hosted-project.ts'
+import { computeVpsHealth } from '@/lib/domain/hetzner/vps-health.ts'
+import type { LoadState } from '@/lib/domain/load-state.ts'
+
+export const prerender = false
+
+const { slug } = Astro.params
+
+if (!slug) {
+	return Astro.redirect('/vps')
+}
+
+const state = await loadPageState(`hetzner.servers.${slug}.page`, () => {
+	const token = requireEnv(ENV_KEYS.HETZNER_API_TOKEN)
+	return getServerByName(token, slug)
+})
+
+const server = state.kind === 'ok' ? state.data : null
+const health = server ? computeVpsHealth(server.status) : null
+const nowMs = Date.now()
+
+let dnsState: LoadState<ReadonlyArray<VpsHostedProject>> | null = null
+if (server) {
+	dnsState = await loadPageState(`cloudflare.dns.vps.${slug}`, async () => {
+		const client = await resolveCloudflareClient()
+		const tailscaleSecret = getEnv(ENV_KEYS.TS_OAUTH_SECRET)
+		const tailnetIp = tailscaleSecret
+			? await getTailnetIpByHostname(tailscaleSecret, server.name)
+			: null
+		const matches = await listDnsMatchesForVps({
+			client,
+			publicIpv4: server.ipv4,
+			publicIpv6: server.ipv6,
+			tailnetIp,
+		})
+		return groupDnsMatchesByHostname(matches)
+	})
+}
+const hostedProjects = dnsState?.kind === 'ok' ? dnsState.data : null
+---
+
+<DashboardLayout
+	title={`VPS · ${slug}`}
+	breadcrumbs={[
+		{ label: 'Infrastructure' },
+		{ label: 'VPS fleet', href: '/vps' },
+		{ label: slug },
+	]}
+>
+	{
+		server && health && (
+			<>
+				<VpsHeader server={server} health={health} />
+				<VpsStatsGrid server={server} health={health} nowMs={nowMs} />
+				<VpsNetworkInfo server={server} />
+				{hostedProjects && <VpsHostedProjects projects={hostedProjects} />}
+				<VpsLabels labels={server.labels} />
+				<VpsActions serverName={server.name} />
+				<VpsObservabilityPlaceholders />
+			</>
+		)
+	}
+
+	{
+		state.kind === 'ok' && server === null && (
+			<div class="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-6 text-amber-900">
+				<p class="font-display text-base font-semibold">Server not found</p>
+				<p class="mt-1 font-mono text-xs">
+					No Hetzner server matches the name <code>{slug}</code>.
+				</p>
+			</div>
+		)
+	}
+
+	<LoadStateBanner state={state} upstreamLabel="Hetzner API error" />
+	{dnsState && <LoadStateBanner state={dnsState} upstreamLabel="Cloudflare DNS error" />}
+</DashboardLayout>

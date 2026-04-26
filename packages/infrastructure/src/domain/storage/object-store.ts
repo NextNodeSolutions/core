@@ -20,5 +20,8 @@ export interface ObjectStoreClient {
 	put(key: string, body: string, ifMatch?: string): Promise<string>
 	delete(key: string): Promise<void>
 	exists(key: string): Promise<boolean>
-	deleteByPrefix(prefix: string): Promise<number>
+	deleteByPrefix(
+		prefix: string,
+		predicate?: (key: string) => boolean,
+	): Promise<number>
 }

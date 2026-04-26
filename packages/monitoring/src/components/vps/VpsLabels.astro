@@ -1,0 +1,31 @@
+---
+import SectionHeader from '@/components/dashboard/SectionHeader.astro'
+
+interface Props {
+	labels: Readonly<Record<string, string>>
+}
+
+const { labels } = Astro.props
+const entries = Object.entries(labels)
+---
+
+{
+	entries.length > 0 && (
+		<section class="mt-10 space-y-6">
+			<SectionHeader
+				kicker="Metadata"
+				title="Labels"
+				description="Hetzner labels carried by this server."
+			/>
+			<ul class="flex flex-wrap gap-2">
+				{entries.map(([key, value]) => (
+					<li class="inline-flex items-center gap-2 rounded-full border border-base-100 bg-white px-3 py-1 font-mono text-xs shadow-subtle">
+						<span class="text-base-500">{key}</span>
+						<span class="text-base-300">=</span>
+						<span class="text-base-900">{value}</span>
+					</li>
+				))}
+			</ul>
+		</section>
+	)
+}

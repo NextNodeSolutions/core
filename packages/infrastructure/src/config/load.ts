@@ -2,7 +2,12 @@ import { readFileSync } from 'node:fs'
 
 import { parse as parseTOML } from 'smol-toml'
 
-import type { NextNodeConfig, ParseConfigResult } from './types.ts'
+import type {
+	DeploySection,
+	NextNodeConfig,
+	ParseConfigResult,
+	ProjectSection,
+} from './types.ts'
 import { isDeployable } from './types.ts'
 import { validateDeploySection } from './validation/deploy.ts'
 import {
@@ -82,17 +87,11 @@ export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 	const deployResult = validateDeploySection(raw['deploy'], type, hasDomain)
 	if (!deployResult.ok) return { ok: false, errors: deployResult.errors }
 
-	if (
-		projectResult.section.internal &&
-		deployResult.section.target === 'cloudflare-pages'
-	) {
-		return {
-			ok: false,
-			errors: [
-				'project.internal is not supported with deploy target "cloudflare-pages"',
-			],
-		}
-	}
+	const internalError = checkInternalCompatibility(
+		projectResult.section,
+		deployResult.section,
+	)
+	if (internalError) return { ok: false, errors: [internalError] }
 
 	return {
 		ok: true,
@@ -105,6 +104,20 @@ export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 			services: servicesResult.section,
 		},
 	}
+}
+
+function checkInternalCompatibility(
+	project: ProjectSection,
+	deploy: DeploySection,
+): string | null {
+	if (!project.internal) return null
+	if (deploy.target === 'cloudflare-pages') {
+		return 'project.internal is not supported with deploy target "cloudflare-pages"'
+	}
+	if (deploy.target === 'hetzner-vps' && deploy.vps === null) {
+		return 'deploy.vps is required when project.internal = true (internal projects must pin to a dedicated VPS so they never share with public projects)'
+	}
+	return null
 }
 
 export function loadConfig(configPath: string): NextNodeConfig {

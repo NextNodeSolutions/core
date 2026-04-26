@@ -1,12 +1,25 @@
-import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { SshSession } from './ssh/session.types.ts'
 import {
 	teardownProjectCaddyRoute,
-	teardownProjectCerts,
 	teardownProjectContainer,
 } from './teardown-project.ts'
+import type { TeardownCaddyContext } from './teardown-project.ts'
+
+const CADDY_CONTEXT: TeardownCaddyContext = {
+	vpsName: 'nn-prod',
+	infraStorage: {
+		accountId: 'acct',
+		endpoint: 'https://acct.r2.cloudflarestorage.com',
+		accessKeyId: 'r2-key',
+		secretAccessKey: 'r2-secret',
+		stateBucket: 'nextnode-state',
+		certsBucket: 'nextnode-certs',
+	},
+	acmeEmail: 'infra@nextnode.fr',
+	internal: false,
+}
 
 function createMockSession(): SshSession {
 	return {
@@ -16,16 +29,6 @@ function createMockSession(): SshSession {
 		readFile: vi.fn(async () => null),
 		close: vi.fn(),
 		hostKeyFingerprint: 'test-fingerprint',
-	}
-}
-
-function createMockR2(): ObjectStoreClient {
-	return {
-		get: vi.fn(async () => null),
-		put: vi.fn(async () => ''),
-		delete: vi.fn(async () => undefined),
-		exists: vi.fn(async () => false),
-		deleteByPrefix: vi.fn(async () => 0),
 	}
 }
 
@@ -73,7 +76,11 @@ describe('teardownProjectCaddyRoute', () => {
 	it('reports no domain when hostname is undefined', async () => {
 		const session = createMockSession()
 
-		const outcome = await teardownProjectCaddyRoute(session, undefined)
+		const outcome = await teardownProjectCaddyRoute(
+			session,
+			undefined,
+			CADDY_CONTEXT,
+		)
 
 		expect(outcome).toEqual({
 			handled: false,
@@ -88,6 +95,7 @@ describe('teardownProjectCaddyRoute', () => {
 		const outcome = await teardownProjectCaddyRoute(
 			session,
 			'acme-web.example.com',
+			CADDY_CONTEXT,
 		)
 
 		expect(outcome).toEqual({ handled: false, detail: 'no caddy config' })
@@ -128,6 +136,7 @@ describe('teardownProjectCaddyRoute', () => {
 		const outcome = await teardownProjectCaddyRoute(
 			session,
 			'acme-web.example.com',
+			CADDY_CONTEXT,
 		)
 
 		expect(outcome).toEqual({
@@ -171,6 +180,7 @@ describe('teardownProjectCaddyRoute', () => {
 		const outcome = await teardownProjectCaddyRoute(
 			session,
 			'acme-web.example.com',
+			CADDY_CONTEXT,
 		)
 
 		expect(outcome.handled).toBe(true)
@@ -183,7 +193,7 @@ describe('teardownProjectCaddyRoute', () => {
 		)
 	})
 
-	it('fails loud when other project routes coexist (colocation not supported)', async () => {
+	it('rebuilds the Caddy config preserving sibling project routes', async () => {
 		const session = createMockSession()
 		vi.mocked(session.readFile).mockResolvedValueOnce(
 			JSON.stringify({
@@ -229,42 +239,21 @@ describe('teardownProjectCaddyRoute', () => {
 			}),
 		)
 
-		await expect(
-			teardownProjectCaddyRoute(session, 'acme-web.example.com'),
-		).rejects.toThrow(/colocation teardown not yet supported/)
-	})
-})
+		const outcome = await teardownProjectCaddyRoute(
+			session,
+			'acme-web.example.com',
+			CADDY_CONTEXT,
+		)
 
-describe('teardownProjectCerts', () => {
-	it('calls deleteByPrefix with the project prefix', async () => {
-		const r2 = createMockR2()
-
-		await teardownProjectCerts(r2, 'acme-web')
-
-		expect(r2.deleteByPrefix).toHaveBeenCalledWith('acme-web/')
-	})
-
-	it('reports handled=false when no cert objects exist', async () => {
-		const r2 = createMockR2()
-		vi.mocked(r2.deleteByPrefix).mockResolvedValueOnce(0)
-
-		const outcome = await teardownProjectCerts(r2, 'acme-web')
-
-		expect(outcome).toEqual({
-			handled: false,
-			detail: '0 cert object(s) deleted',
-		})
-	})
-
-	it('reports handled=true when certs are deleted', async () => {
-		const r2 = createMockR2()
-		vi.mocked(r2.deleteByPrefix).mockResolvedValueOnce(4)
-
-		const outcome = await teardownProjectCerts(r2, 'acme-web')
-
-		expect(outcome).toEqual({
-			handled: true,
-			detail: '4 cert object(s) deleted',
-		})
+		expect(outcome.handled).toBe(true)
+		const writtenConfig = vi
+			.mocked(session.writeFile)
+			.mock.calls.find(([path]) => path === '/etc/caddy/config.json')?.[1]
+		expect(writtenConfig).toBeDefined()
+		expect(writtenConfig).toContain('other.example.com')
+		expect(writtenConfig).not.toContain('acme-web.example.com')
+		expect(session.exec).toHaveBeenCalledWith(
+			'caddy reload --config /etc/caddy/config.json',
+		)
 	})
 })

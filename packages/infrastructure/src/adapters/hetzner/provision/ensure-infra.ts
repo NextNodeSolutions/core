@@ -9,7 +9,7 @@ import {
 } from '#/adapters/hetzner/constants.ts'
 import { convergeVps } from '#/adapters/hetzner/converge-vps.ts'
 import { deleteState, writeState } from '#/adapters/hetzner/state/read-write.ts'
-import type { HcloudProjectState } from '#/adapters/hetzner/state/types.ts'
+import type { HcloudVpsState } from '#/adapters/hetzner/state/types.ts'
 import type { HetznerVpsTargetConfig } from '#/adapters/hetzner/target.ts'
 import { executeHandlers } from '#/domain/deploy/execute-handlers.ts'
 import type {
@@ -32,6 +32,15 @@ import { completeProvisioning, createVps } from './create-vps.ts'
 const DNS_PROVISION_OUTCOME: ResourceOutcome = {
 	handled: false,
 	detail: 'managed by dns command',
+}
+
+/**
+ * Certs are managed by Caddy itself at runtime (ACME). Provision does not
+ * pre-create them — every provision path returns this same outcome.
+ */
+const CERTS_PROVISION_OUTCOME: ResourceOutcome = {
+	handled: false,
+	detail: 'managed by Caddy at runtime',
 }
 
 const logger = createLogger()
@@ -65,9 +74,19 @@ async function ensureGoldenImage(token: string): Promise<number> {
 export async function freshProvision(
 	config: HetznerVpsTargetConfig,
 	r2: ObjectStoreClient,
-	projectName: string,
+	vpsName: string,
 ): Promise<VpsResourceOutcome> {
-	await checkForOrphans(config.credentials.hcloudToken, projectName)
+	const existingServer = await findExistingVps(
+		config.credentials.hcloudToken,
+		vpsName,
+	)
+	if (existingServer) {
+		assertModeMatches(vpsName, existingServer, config.internal)
+		logger.info(
+			`VPS "${vpsName}" already exists (server #${String(existingServer.serverId)}) — attaching instead of creating`,
+		)
+		return attachToExistingVps(config, r2, vpsName, existingServer)
+	}
 
 	const goldenImageId = await ensureGoldenImage(
 		config.credentials.hcloudToken,
@@ -78,19 +97,19 @@ export async function freshProvision(
 		publicIp,
 		outcome: serverOutcome,
 	} = await createVps(config.credentials, {
-		projectName,
+		vpsName,
 		hetzner: config.hetzner,
 		internal: config.internal,
 		goldenImageId,
 	})
 
-	const createdEtag = await writeState(r2, projectName, {
+	const createdEtag = await writeState(r2, vpsName, {
 		phase: 'created',
 		serverId,
 		publicIp,
 	})
 	logger.info(
-		`State written: phase=created for "${projectName}" (server ${serverId})`,
+		`State written: phase=created for VPS "${vpsName}" (server ${serverId})`,
 	)
 
 	const {
@@ -100,13 +119,13 @@ export async function freshProvision(
 		tailscaleOutcome,
 	} = await completeProvisioning(config.credentials, {
 		serverId,
-		projectName,
+		vpsName,
 		internal: config.internal,
 	})
 
 	const provisionedEtag = await writeState(
 		r2,
-		projectName,
+		vpsName,
 		{
 			phase: 'provisioned',
 			serverId,
@@ -117,19 +136,20 @@ export async function freshProvision(
 		createdEtag,
 	)
 	logger.info(
-		`State written: phase=provisioned for "${projectName}" (tailnet ${tailnetIp})`,
+		`State written: phase=provisioned for VPS "${vpsName}" (tailnet ${tailnetIp})`,
 	)
 
 	return executeHandlers(VPS_MANAGED_RESOURCES, {
 		server: () => serverOutcome,
 		firewall: () => firewallOutcome,
 		tailscale: () => tailscaleOutcome,
+		certs: () => CERTS_PROVISION_OUTCOME,
 		dns: () => DNS_PROVISION_OUTCOME,
 		state: () =>
 			convergeAndWriteState(
 				config,
 				r2,
-				projectName,
+				vpsName,
 				{
 					serverId,
 					publicIp,
@@ -144,8 +164,8 @@ export async function freshProvision(
 export async function resumeFromState(
 	config: HetznerVpsTargetConfig,
 	r2: ObjectStoreClient,
-	projectName: string,
-	state: HcloudProjectState,
+	vpsName: string,
+	state: HcloudVpsState,
 	etag: string,
 ): Promise<VpsResourceOutcome> {
 	const server = await findServerById(
@@ -156,17 +176,17 @@ export async function resumeFromState(
 		logger.warn(
 			`Server ${state.serverId} not found - state is stale, wiping and re-provisioning`,
 		)
-		await deleteState(r2, projectName)
-		return freshProvision(config, r2, projectName)
+		await deleteState(r2, vpsName)
+		return freshProvision(config, r2, vpsName)
 	}
 
 	if (state.phase === 'created') {
-		return resumeFromCreated(config, r2, projectName, state, etag)
+		return resumeFromCreated(config, r2, vpsName, state, etag)
 	}
 
 	const label = state.phase === 'provisioned' ? 'Resuming from' : 'Re-running'
 	logger.info(
-		`${label} phase=${state.phase} for "${projectName}" (server ${state.serverId})`,
+		`${label} phase=${state.phase} for VPS "${vpsName}" (server ${state.serverId})`,
 	)
 
 	return executeHandlers(VPS_MANAGED_RESOURCES, {
@@ -179,12 +199,13 @@ export async function resumeFromState(
 			handled: false,
 			detail: `existing (${state.tailnetIp})`,
 		}),
+		certs: () => CERTS_PROVISION_OUTCOME,
 		dns: () => DNS_PROVISION_OUTCOME,
 		state: () =>
 			convergeAndWriteState(
 				config,
 				r2,
-				projectName,
+				vpsName,
 				{
 					serverId: state.serverId,
 					publicIp: state.publicIp,
@@ -199,12 +220,12 @@ export async function resumeFromState(
 async function resumeFromCreated(
 	config: HetznerVpsTargetConfig,
 	r2: ObjectStoreClient,
-	projectName: string,
-	state: HcloudProjectState & { phase: 'created' },
+	vpsName: string,
+	state: HcloudVpsState & { phase: 'created' },
 	etag: string,
 ): Promise<VpsResourceOutcome> {
 	logger.info(
-		`Resuming from phase=created for "${projectName}" (server ${state.serverId})`,
+		`Resuming from phase=created for VPS "${vpsName}" (server ${state.serverId})`,
 	)
 
 	const {
@@ -214,13 +235,13 @@ async function resumeFromCreated(
 		tailscaleOutcome,
 	} = await completeProvisioning(config.credentials, {
 		serverId: state.serverId,
-		projectName,
+		vpsName,
 		internal: config.internal,
 	})
 
 	const provisionedEtag = await writeState(
 		r2,
-		projectName,
+		vpsName,
 		{
 			phase: 'provisioned',
 			serverId: state.serverId,
@@ -231,7 +252,7 @@ async function resumeFromCreated(
 		etag,
 	)
 	logger.info(
-		`State written: phase=provisioned for "${projectName}" (tailnet ${tailnetIp})`,
+		`State written: phase=provisioned for VPS "${vpsName}" (tailnet ${tailnetIp})`,
 	)
 
 	return executeHandlers(VPS_MANAGED_RESOURCES, {
@@ -241,12 +262,13 @@ async function resumeFromCreated(
 		}),
 		firewall: () => firewallOutcome,
 		tailscale: () => tailscaleOutcome,
+		certs: () => CERTS_PROVISION_OUTCOME,
 		dns: () => DNS_PROVISION_OUTCOME,
 		state: () =>
 			convergeAndWriteState(
 				config,
 				r2,
-				projectName,
+				vpsName,
 				{
 					serverId: state.serverId,
 					publicIp: state.publicIp,
@@ -261,7 +283,7 @@ async function resumeFromCreated(
 async function convergeAndWriteState(
 	config: HetznerVpsTargetConfig,
 	r2: ObjectStoreClient,
-	projectName: string,
+	vpsName: string,
 	state: {
 		serverId: number
 		publicIp: string
@@ -272,7 +294,7 @@ async function convergeAndWriteState(
 ): Promise<ResourceOutcome> {
 	await convergeVps({
 		host: state.tailnetIp,
-		projectName,
+		vpsName,
 		internal: config.internal,
 		infraStorage: config.infraStorage,
 		vector: config.vector,
@@ -284,7 +306,7 @@ async function convergeAndWriteState(
 
 	await writeState(
 		r2,
-		projectName,
+		vpsName,
 		{
 			phase: 'converged',
 			serverId: state.serverId,
@@ -296,22 +318,123 @@ async function convergeAndWriteState(
 		etag,
 	)
 
-	logger.info(`Infrastructure ready for "${projectName}"`)
+	logger.info(`Infrastructure ready for VPS "${vpsName}"`)
 	return { handled: true, detail: 'written (converged)' }
 }
 
-async function checkForOrphans(
+interface ExistingVpsRef {
+	readonly serverId: number
+	readonly publicIp: string
+	readonly mode: string | undefined
+}
+
+async function findExistingVps(
 	hcloudToken: string,
-	projectName: string,
-): Promise<void> {
-	const orphans = await findServersByLabels(hcloudToken, {
-		project: projectName,
+	vpsName: string,
+): Promise<ExistingVpsRef | null> {
+	const matches = await findServersByLabels(hcloudToken, {
+		vps: vpsName,
 		managed_by: 'nextnode',
 	})
-	if (orphans.length > 0) {
-		const ids = orphans.map(s => s.id).join(', ')
+	if (matches.length === 0) return null
+	if (matches.length > 1) {
+		const ids = matches.map(s => s.id).join(', ')
 		throw new Error(
-			`Orphan server(s) detected for "${projectName}" (IDs: ${ids}) — run teardown or delete manually before provisioning`,
+			`Multiple Hetzner servers labelled vps="${vpsName}" (IDs: ${ids}) — manual cleanup required before provisioning can attach`,
 		)
 	}
+	const [server] = matches
+	if (!server) {
+		throw new Error(`Unreachable: matches has length 1 but no server`)
+	}
+	return {
+		serverId: server.id,
+		publicIp: server.public_net.ipv4.ip,
+		mode: server.labels['mode'],
+	}
+}
+
+function assertModeMatches(
+	vpsName: string,
+	existing: ExistingVpsRef,
+	wantInternal: boolean,
+): void {
+	const wantMode = wantInternal ? 'internal' : 'public'
+	if (existing.mode === undefined) {
+		throw new Error(
+			`VPS "${vpsName}" (server #${String(existing.serverId)}) has no \`mode\` label — refusing to attach. Re-provision the VPS or add label \`mode=${wantMode}\` manually.`,
+		)
+	}
+	if (existing.mode !== wantMode) {
+		throw new Error(
+			`VPS "${vpsName}" is labelled \`mode=${existing.mode}\` but this project is \`mode=${wantMode}\`. Internal and public projects cannot share a VPS — use a distinct \`[deploy].vps\` name.`,
+		)
+	}
+}
+
+async function attachToExistingVps(
+	config: HetznerVpsTargetConfig,
+	r2: ObjectStoreClient,
+	vpsName: string,
+	server: ExistingVpsRef,
+): Promise<VpsResourceOutcome> {
+	const createdEtag = await writeState(r2, vpsName, {
+		phase: 'created',
+		serverId: server.serverId,
+		publicIp: server.publicIp,
+	})
+	logger.info(
+		`State seeded: phase=created for attached VPS "${vpsName}" (server ${server.serverId})`,
+	)
+
+	const {
+		tailnetIp,
+		sshHostKeyFingerprint,
+		firewallOutcome,
+		tailscaleOutcome,
+	} = await completeProvisioning(config.credentials, {
+		serverId: server.serverId,
+		vpsName,
+		internal: config.internal,
+	})
+
+	const provisionedEtag = await writeState(
+		r2,
+		vpsName,
+		{
+			phase: 'provisioned',
+			serverId: server.serverId,
+			publicIp: server.publicIp,
+			tailnetIp,
+			sshHostKeyFingerprint,
+		},
+		createdEtag,
+	)
+	logger.info(
+		`State written: phase=provisioned for attached VPS "${vpsName}" (tailnet ${tailnetIp})`,
+	)
+
+	return executeHandlers(VPS_MANAGED_RESOURCES, {
+		server: () => ({
+			handled: false,
+			detail: `attached #${String(server.serverId)}`,
+		}),
+		firewall: () => firewallOutcome,
+		tailscale: () => tailscaleOutcome,
+		certs: () => CERTS_PROVISION_OUTCOME,
+		dns: () => DNS_PROVISION_OUTCOME,
+		state: () =>
+			convergeAndWriteState(
+				config,
+				r2,
+				vpsName,
+				{
+					serverId: server.serverId,
+					publicIp: server.publicIp,
+					tailnetIp,
+					sshHostKeyFingerprint,
+				},
+				provisionedEtag,
+			),
+	})
 }

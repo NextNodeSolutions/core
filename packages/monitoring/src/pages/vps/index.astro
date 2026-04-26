@@ -6,6 +6,7 @@ import DashboardLayout from '@/layouts/DashboardLayout.astro'
 import { ENV_KEYS, requireEnv } from '@/lib/adapters/env.ts'
 import { listServers } from '@/lib/adapters/hetzner/servers.ts'
 import { loadPageState } from '@/lib/adapters/load-page-state.ts'
+import { vpsDetailPath } from '@/lib/domain/hetzner/vps-routes.ts'
 
 export const prerender = false
 
@@ -29,50 +30,62 @@ const state = await loadPageState('hetzner.servers.page', () => {
 		state.kind === 'ok' && state.data.length > 0 && (
 			<ul class="mt-8 divide-y divide-base-100 overflow-hidden rounded-2xl border border-base-100 bg-white shadow-subtle">
 				{state.data.map((server) => (
-					<li class="flex flex-wrap items-center gap-4 px-6 py-5">
-						<div class="min-w-0 flex-1">
-							<h3 class="font-display text-base font-semibold text-base-900">
-								{server.name}
-							</h3>
-							<p class="mt-1 font-mono text-xs text-base-500 truncate">
-								{server.ipv4 ?? 'no public ipv4'}
-							</p>
-						</div>
+					<li>
+						<a
+							href={vpsDetailPath(server.name)}
+							class="group flex flex-wrap items-center gap-4 px-6 py-5 transition-colors hover:bg-base-50"
+						>
+							<div class="min-w-0 flex-1">
+								<h3 class="font-display text-base font-semibold text-base-900">
+									{server.name}
+								</h3>
+								<p class="mt-1 font-mono text-xs text-base-500 truncate">
+									{server.ipv4 ?? 'no public ipv4'}
+								</p>
+							</div>
 
-						<dl class="flex items-center gap-6 text-xs">
-							<div>
-								<dt class="font-mono text-[10px] uppercase tracking-wider text-base-500">
-									Status
-								</dt>
-								<dd class="mt-1 font-mono text-base-900 capitalize">
-									{server.status}
-								</dd>
-							</div>
-							<div>
-								<dt class="font-mono text-[10px] uppercase tracking-wider text-base-500">
-									Type
-								</dt>
-								<dd class="mt-1 font-mono text-base-900">
-									{server.serverType}
-								</dd>
-							</div>
-							<div>
-								<dt class="font-mono text-[10px] uppercase tracking-wider text-base-500">
-									Location
-								</dt>
-								<dd class="mt-1 font-mono text-base-900">
-									{server.location}
-								</dd>
-							</div>
-							<div>
-								<dt class="font-mono text-[10px] uppercase tracking-wider text-base-500">
-									ID
-								</dt>
-								<dd class="mt-1 font-mono text-base-900">
-									{server.id}
-								</dd>
-							</div>
-						</dl>
+							<dl class="flex items-center gap-6 text-xs">
+								<div>
+									<dt class="font-mono text-[10px] uppercase tracking-wider text-base-500">
+										Status
+									</dt>
+									<dd class="mt-1 font-mono text-base-900 capitalize">
+										{server.status}
+									</dd>
+								</div>
+								<div>
+									<dt class="font-mono text-[10px] uppercase tracking-wider text-base-500">
+										Type
+									</dt>
+									<dd class="mt-1 font-mono text-base-900">
+										{server.serverType.name}
+									</dd>
+								</div>
+								<div>
+									<dt class="font-mono text-[10px] uppercase tracking-wider text-base-500">
+										Location
+									</dt>
+									<dd class="mt-1 font-mono text-base-900">
+										{server.location.name}
+									</dd>
+								</div>
+								<div>
+									<dt class="font-mono text-[10px] uppercase tracking-wider text-base-500">
+										ID
+									</dt>
+									<dd class="mt-1 font-mono text-base-900">
+										{server.id}
+									</dd>
+								</div>
+							</dl>
+
+							<span
+								aria-hidden="true"
+								class="text-base-400 transition-all group-hover:text-accent-700 group-hover:translate-x-0.5"
+							>
+								→
+							</span>
+						</a>
 					</li>
 				))}
 			</ul>

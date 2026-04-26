@@ -180,6 +180,61 @@ describe('deleteByPrefix', () => {
 
 		expect(count).toBe(1)
 	})
+
+	it('only deletes keys matching the predicate', async () => {
+		send.mockImplementation(async command => {
+			const name: unknown = command.constructor.name
+			if (name === 'ListObjectsV2Command') {
+				return {
+					Contents: [
+						{ Key: 'vps/certificates/le/foo.example.com/cert' },
+						{ Key: 'vps/certificates/le/bar.example.com/cert' },
+						{ Key: 'vps/certificates/le/foo.example.com/key' },
+					],
+					NextContinuationToken: undefined,
+				}
+			}
+			return {}
+		})
+
+		const count = await client.deleteByPrefix('vps/certificates/', key =>
+			key.includes('/foo.example.com/'),
+		)
+
+		expect(count).toBe(2)
+		const deleteCall = send.mock.calls.find(
+			c => c[0].constructor.name === 'DeleteObjectsCommand',
+		)
+		const keys = deleteCall?.[0].input.Delete.Objects.map(
+			(o: { Key: string }) => o.Key,
+		)
+		expect(keys).toEqual([
+			'vps/certificates/le/foo.example.com/cert',
+			'vps/certificates/le/foo.example.com/key',
+		])
+	})
+
+	it('returns 0 when nothing matches the predicate', async () => {
+		send.mockImplementation(async command => {
+			const name: unknown = command.constructor.name
+			if (name === 'ListObjectsV2Command') {
+				return {
+					Contents: [{ Key: 'vps/certificates/le/foo/cert' }],
+					NextContinuationToken: undefined,
+				}
+			}
+			return {}
+		})
+
+		const count = await client.deleteByPrefix(
+			'vps/certificates/',
+			() => false,
+		)
+
+		expect(count).toBe(0)
+		const calls = send.mock.calls.map(c => c[0].constructor.name)
+		expect(calls).not.toContain('DeleteObjectsCommand')
+	})
 })
 
 describe('exists', () => {

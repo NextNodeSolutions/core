@@ -11,6 +11,10 @@ describe('buildProvisionSummary', () => {
 				server: { handled: true, detail: 'created #42' },
 				firewall: { handled: true, detail: 'created' },
 				tailscale: { handled: true, detail: 'joined (100.74.91.126)' },
+				certs: {
+					handled: false,
+					detail: 'managed by Caddy at runtime',
+				},
 				dns: { handled: false, detail: 'managed by dns command' },
 				state: { handled: true, detail: 'written (converged)' },
 			},

@@ -10,7 +10,7 @@ const CADDY_CONFIG = '{"apps":{}}'
 
 function makeInput(overrides?: Partial<ConvergenceInput>): ConvergenceInput {
 	return {
-		projectName: 'acme-web',
+		vpsName: 'acme-web',
 		vectorToml: VECTOR_TOML,
 		vectorEnv: VECTOR_ENV,
 		caddyConfig: CADDY_CONFIG,
@@ -118,29 +118,14 @@ describe('converge', () => {
 		expect(restartCalls).toHaveLength(0)
 	})
 
-	it('creates project directories for dev and production', async () => {
-		const files = new Map<string, string>([
-			['/etc/vector/vector.toml', VECTOR_TOML],
-			['/etc/vector/vector.env', VECTOR_ENV],
-			['/etc/caddy/config.json', CADDY_CONFIG],
-		])
-		const session = createFakeSession(files)
-
-		await converge(session, makeInput())
-
-		expect(session.execCalls).toContain(
-			"mkdir -p '/opt/apps/acme-web/dev' '/opt/apps/acme-web/production'",
-		)
-	})
-
-	it('does not chown project dir (SSH user is deploy, mkdir already owned by deploy)', async () => {
+	it('does not create per-project dirs (handled at deploy time)', async () => {
 		const files = new Map<string, string>()
 		const session = createFakeSession(files)
 
 		await converge(session, makeInput())
 
-		const chownCalls = session.execCalls.filter(c => c.startsWith('chown'))
-		expect(chownCalls).toHaveLength(0)
+		const mkdirCalls = session.execCalls.filter(c => c.startsWith('mkdir'))
+		expect(mkdirCalls).toHaveLength(0)
 	})
 
 	it('skips Vector when vectorToml and vectorEnv are undefined', async () => {

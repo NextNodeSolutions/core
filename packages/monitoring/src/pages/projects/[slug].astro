@@ -4,6 +4,10 @@ import Button from '@/components/foundations/Button.astro'
 import StatusBadge from '@/components/dashboard/StatusBadge.astro'
 import SectionHeader from '@/components/dashboard/SectionHeader.astro'
 import StatCard from '@/components/dashboard/StatCard.astro'
+import {
+	METHOD_OVERRIDE_DELETE,
+	METHOD_OVERRIDE_FIELD,
+} from '@/lib/adapters/method-override-route.ts'
 
 export const prerender = false
 
@@ -34,7 +38,11 @@ if (!slug) {
 	</header>
 
 	<section class="mt-10 space-y-6">
-		<SectionHeader kicker="Actions" title="Workflow control" />
+		<SectionHeader
+			kicker="Project actions"
+			title="App lifecycle"
+			description="Project-scoped controls only. Host-level actions (destroy VPS, server reboot) live on the VPS view."
+		/>
 		<div class="rounded-2xl border border-base-100 bg-white p-6 shadow-subtle">
 			<div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
 				<form
@@ -81,21 +89,25 @@ if (!slug) {
 					</form>
 					<form
 						method="post"
-						action={`/api/projects/${slug}`}
-						onsubmit="return confirm('Delete project? This cannot be undone.')"
+						action={`/api/projects/${slug}/teardown`}
+						data-confirm="Teardown this project on its host VPS? Other projects on the same VPS keep running."
 					>
-						<input type="hidden" name="_method" value="delete" />
-						<Button size="sm" variant="danger" type="submit" class="w-full">
-							Delete project
+						<Button size="sm" variant="muted" type="submit" class="w-full">
+							Teardown app on host VPS
 						</Button>
 					</form>
 					<form
 						method="post"
-						action={`/api/vps/${slug}/destroy`}
-						onsubmit="return confirm('Destroy VPS? This will delete the Hetzner server.')"
+						action={`/api/projects/${slug}`}
+						data-confirm="Delete project? This cannot be undone."
 					>
+						<input
+							type="hidden"
+							name={METHOD_OVERRIDE_FIELD}
+							value={METHOD_OVERRIDE_DELETE}
+						/>
 						<Button size="sm" variant="danger" type="submit" class="w-full">
-							Destroy Hetzner VPS
+							Delete project
 						</Button>
 					</form>
 				</div>
@@ -104,7 +116,11 @@ if (!slug) {
 	</section>
 
 	<section class="mt-10 space-y-6">
-		<SectionHeader kicker="Host" title="VPS metrics" />
+		<SectionHeader
+			kicker="Host"
+			title="VPS metrics"
+			description="Read-only metrics from the host this project runs on. Destroying the VPS happens on the VPS view."
+		/>
 		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
 			<StatCard label="CPU" value="—" hint="15 min avg" />
 			<StatCard label="Memory" value="—" hint="Resident" />
@@ -138,3 +154,14 @@ if (!slug) {
 		</pre>
 	</section>
 </DashboardLayout>
+
+<script>
+	document.querySelectorAll<HTMLFormElement>('form[data-confirm]').forEach((form) => {
+		form.addEventListener('submit', (event) => {
+			const message = form.dataset.confirm
+			if (message && !window.confirm(message)) {
+				event.preventDefault()
+			}
+		})
+	})
+</script>

@@ -1,16 +1,16 @@
 ---
 import Button from '@/components/foundations/Button.astro'
 import StatusBadge from '@/components/dashboard/StatusBadge.astro'
+import type { Health } from '@/lib/domain/badge-status.ts'
 import { environmentLabel } from '@/lib/domain/cloudflare/pages-environment.ts'
 import type { CloudflarePagesEnvironment } from '@/lib/domain/cloudflare/pages-environment.ts'
-import type { ProjectHealth } from '@/lib/domain/cloudflare/pages-project-health.ts'
 
 interface Props {
 	name: string
 	environment: CloudflarePagesEnvironment
 	subdomain: string | null
 	dashboardUrl: string | null
-	health: ProjectHealth
+	health: Health
 }
 
 const { name, environment, subdomain, dashboardUrl, health } = Astro.props

@@ -92,6 +92,10 @@ export interface EnvironmentSection {
 
 interface BaseDeploySection {
 	readonly secrets: ReadonlyArray<string>
+	// Override the VPS hostname this project deploys onto. When `null`, the
+	// CLI resolves a shared default per environment (see resolveVpsName).
+	// Only consumed by the hetzner-vps target; cloudflare-pages ignores it.
+	readonly vps: string | null
 }
 
 export interface HetznerVpsDeploySection extends BaseDeploySection {

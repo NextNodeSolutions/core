@@ -34,7 +34,7 @@ export interface ProvisionVpsCredentials {
 }
 
 export interface CreateVpsInput {
-	readonly projectName: string
+	readonly vpsName: string
 	readonly hetzner: HetznerVpsDeploySection['hetzner']
 	readonly internal: boolean
 	readonly goldenImageId: number
@@ -48,7 +48,7 @@ export interface CreateVpsResult {
 
 export interface CompleteProvisioningInput {
 	readonly serverId: number
-	readonly projectName: string
+	readonly vpsName: string
 	readonly internal: boolean
 }
 
@@ -71,44 +71,48 @@ export async function createVps(
 		`Preflight OK: server_type "${input.hetzner.serverType}" is available`,
 	)
 
-	const purged = await credentials.tailnet.deleteByHostname(input.projectName)
+	const purged = await credentials.tailnet.deleteByHostname(input.vpsName)
 	if (purged > 0) {
 		logger.info(
-			`Purged ${purged} stale tailnet device(s) with hostname "${input.projectName}"`,
+			`Purged ${purged} stale tailnet device(s) with hostname "${input.vpsName}"`,
 		)
 	}
 
 	const minted = await credentials.tailnet.mintAuthkey(
 		[TAILSCALE_TAG],
 		TAILSCALE_AUTHKEY_TTL_SECONDS,
-		`nextnode-infra provisioning ${input.projectName}`,
+		`nextnode-infra provisioning ${input.vpsName}`,
 	)
 	logger.info(
-		`Minted ephemeral Tailscale authkey for "${input.projectName}" (expires ${minted.expires})`,
+		`Minted ephemeral Tailscale authkey for "${input.vpsName}" (expires ${minted.expires})`,
 	)
 
 	const cloudInit = renderProjectCloudInit({
 		tailscaleAuthKey: minted.key,
-		tailscaleHostname: input.projectName,
+		tailscaleHostname: input.vpsName,
 		deployPublicKey: credentials.deployPublicKey,
 		internal: input.internal,
 	})
 
 	logger.info(
-		`Using golden image ${input.goldenImageId} for "${input.projectName}"`,
+		`Using golden image ${input.goldenImageId} for "${input.vpsName}"`,
 	)
 
 	const serverInput: CreateServerInput = {
-		name: input.projectName,
+		name: input.vpsName,
 		serverType: input.hetzner.serverType,
 		location: input.hetzner.location,
 		image: input.goldenImageId.toString(),
 		userData: cloudInit,
-		labels: { project: input.projectName, managed_by: 'nextnode' },
+		labels: {
+			vps: input.vpsName,
+			managed_by: 'nextnode',
+			mode: input.internal ? 'internal' : 'public',
+		},
 	}
 
 	logger.info(
-		`Creating VPS "${input.projectName}" (${input.hetzner.serverType} in ${input.hetzner.location})`,
+		`Creating VPS "${input.vpsName}" (${input.hetzner.serverType} in ${input.hetzner.location})`,
 	)
 	const server = await createServer(credentials.hcloudToken, serverInput)
 
@@ -132,7 +136,7 @@ export async function completeProvisioning(
 		intervalMs: POLL_INTERVAL_MS,
 	})
 
-	const firewallName = `${input.projectName}-fw`
+	const firewallName = `${input.vpsName}-fw`
 	logger.info(`Ensuring firewall "${firewallName}"`)
 	const firewall = await createFirewall(
 		credentials.hcloudToken,
@@ -141,10 +145,8 @@ export async function completeProvisioning(
 	)
 	await applyFirewall(credentials.hcloudToken, firewall.id, input.serverId)
 
-	const tailnetIp = await credentials.tailnet.getIpByHostname(
-		input.projectName,
-	)
-	logger.info(`Tailnet IP for "${input.projectName}": ${tailnetIp}`)
+	const tailnetIp = await credentials.tailnet.getIpByHostname(input.vpsName)
+	logger.info(`Tailnet IP for "${input.vpsName}": ${tailnetIp}`)
 
 	const { hostKeyFingerprint } = await waitForSsh({
 		host: tailnetIp,

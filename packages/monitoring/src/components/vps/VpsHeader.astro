@@ -1,0 +1,50 @@
+---
+import StatusBadge from '@/components/dashboard/StatusBadge.astro'
+import Button from '@/components/foundations/Button.astro'
+import type { Health } from '@/lib/domain/badge-status.ts'
+import { HETZNER_CONSOLE_URL } from '@/lib/domain/hetzner/vps-routes.ts'
+import type { HetznerVps } from '@/lib/domain/hetzner/vps.ts'
+
+interface Props {
+	server: HetznerVps
+	health: Health
+}
+
+const { server, health } = Astro.props
+---
+
+<header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+	<div class="min-w-0">
+		<p class="font-mono text-[10px] uppercase tracking-wider text-base-500">
+			Hetzner VPS
+		</p>
+		<h1
+			class="mt-2 flex items-center gap-3 font-display text-3xl font-semibold tracking-tight text-base-900"
+		>
+			<span class="truncate">{server.name}</span>
+			<span
+				class="inline-flex shrink-0 items-center rounded-full border border-base-200 bg-base-50 px-3 py-0.5 font-mono text-[10px] uppercase tracking-wider text-base-700"
+			>
+				{server.serverType.description}
+			</span>
+		</h1>
+		{
+			server.ipv4 && (
+				<p class="mt-2 font-mono text-sm text-accent-800">{server.ipv4}</p>
+			)
+		}
+	</div>
+	<div class="flex shrink-0 items-center gap-3">
+		<StatusBadge status={health.status} label={health.label} />
+		<Button
+			isLink
+			variant="muted"
+			size="sm"
+			href={HETZNER_CONSOLE_URL}
+			target="_blank"
+			rel="noreferrer"
+		>
+			Open Hetzner ↗
+		</Button>
+	</div>
+</header>

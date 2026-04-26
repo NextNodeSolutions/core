@@ -8,3 +8,8 @@ export const badgeStatusToTone: Record<BadgeStatus, Tone> = {
 	down: 'danger',
 	unknown: 'neutral',
 }
+
+export interface Health {
+	readonly status: BadgeStatus
+	readonly label: string
+}

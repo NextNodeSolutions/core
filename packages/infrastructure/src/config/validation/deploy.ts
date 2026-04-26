@@ -39,6 +39,18 @@ function validateSecrets(deployRecord: Record<string, unknown>): {
 	return { errors: [], secrets: rawSecrets }
 }
 
+function validateVps(deployRecord: Record<string, unknown>): {
+	errors: string[]
+	vps: string | null
+} {
+	const raw = deployRecord['vps']
+	if (raw === undefined) return { errors: [], vps: null }
+	if (typeof raw !== 'string' || raw === '') {
+		return { errors: ['deploy.vps must be a non-empty string'], vps: null }
+	}
+	return { errors: [], vps: raw }
+}
+
 export function validateDeploySection(
 	raw: unknown,
 	projectType: DeployableProjectType,
@@ -67,10 +79,14 @@ export function validateDeploySection(
 	const secretsResult = validateSecrets(deployRecord)
 	errors.push(...secretsResult.errors)
 
+	const vpsResult = validateVps(deployRecord)
+	errors.push(...vpsResult.errors)
+
 	const provider = DEPLOY_PROVIDER_VALIDATORS[target]
 	const providerResult = provider.validate(
 		deployRecord,
 		secretsResult.secrets,
+		vpsResult.vps,
 	)
 	errors.push(...providerResult.errors)
 

@@ -96,6 +96,7 @@ describe('parseConfig', () => {
 			expect(result.config.deploy).toEqual({
 				target: 'hetzner-vps',
 				secrets: [],
+				vps: null,
 				hetzner: { serverType: 'cpx22', location: 'nbg1' },
 			})
 		})
@@ -592,7 +593,7 @@ describe('parseConfig', () => {
 			expect(result.config.project.internal).toBe(false)
 		})
 
-		it('accepts internal set to true', () => {
+		it('accepts internal set to true when vps is pinned', () => {
 			const result = parseConfig({
 				project: {
 					name: 'monitor',
@@ -600,6 +601,7 @@ describe('parseConfig', () => {
 					domain: 'monitor.nextnode.fr',
 					internal: true,
 				},
+				deploy: { vps: 'monitor-vps' },
 			})
 
 			expect(result.ok).toBe(true)
@@ -677,7 +679,34 @@ describe('parseConfig', () => {
 			)
 		})
 
-		it('accepts internal with hetzner-vps target', () => {
+		it('accepts internal with hetzner-vps target when vps is pinned', () => {
+			const result = parseConfig({
+				project: {
+					name: 'monitor',
+					type: 'app',
+					domain: 'monitor.nextnode.fr',
+					internal: true,
+				},
+				deploy: {
+					target: 'hetzner-vps',
+					vps: 'monitor-vps',
+					hetzner: { server_type: 'cx23', location: 'nbg1' },
+				},
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok) return
+
+			expect(result.config.project.internal).toBe(true)
+			expect(result.config.deploy).toEqual({
+				target: 'hetzner-vps',
+				secrets: [],
+				vps: 'monitor-vps',
+				hetzner: { serverType: 'cx23', location: 'nbg1' },
+			})
+		})
+
+		it('rejects internal hetzner-vps without a pinned vps', () => {
 			const result = parseConfig({
 				project: {
 					name: 'monitor',
@@ -691,15 +720,12 @@ describe('parseConfig', () => {
 				},
 			})
 
-			expect(result.ok).toBe(true)
-			if (!result.ok) return
+			expect(result.ok).toBe(false)
+			if (result.ok) return
 
-			expect(result.config.project.internal).toBe(true)
-			expect(result.config.deploy).toEqual({
-				target: 'hetzner-vps',
-				secrets: [],
-				hetzner: { serverType: 'cx23', location: 'nbg1' },
-			})
+			expect(result.errors).toContain(
+				'deploy.vps is required when project.internal = true (internal projects must pin to a dedicated VPS so they never share with public projects)',
+			)
 		})
 	})
 
@@ -715,6 +741,7 @@ describe('parseConfig', () => {
 			expect(result.config.deploy).toEqual({
 				target: 'cloudflare-pages',
 				secrets: [],
+				vps: null,
 				hetzner: undefined,
 			})
 		})
@@ -731,6 +758,7 @@ describe('parseConfig', () => {
 			expect(result.config.deploy).toEqual({
 				target: 'cloudflare-pages',
 				secrets: ['RESEND_API_KEY', 'SUPABASE_URL'],
+				vps: null,
 				hetzner: undefined,
 			})
 		})
@@ -783,6 +811,7 @@ describe('parseConfig', () => {
 			expect(result.config.deploy).toEqual({
 				target: 'hetzner-vps',
 				secrets: [],
+				vps: null,
 				hetzner: { serverType: 'cpx22', location: 'nbg1' },
 			})
 		})
@@ -798,6 +827,7 @@ describe('parseConfig', () => {
 			expect(result.config.deploy).toEqual({
 				target: 'cloudflare-pages',
 				secrets: [],
+				vps: null,
 				hetzner: undefined,
 			})
 		})
@@ -814,6 +844,7 @@ describe('parseConfig', () => {
 			expect(result.config.deploy).toEqual({
 				target: 'cloudflare-pages',
 				secrets: [],
+				vps: null,
 				hetzner: undefined,
 			})
 		})
@@ -837,6 +868,7 @@ describe('parseConfig', () => {
 			expect(result.config.deploy).toEqual({
 				target: 'hetzner-vps',
 				secrets: [],
+				vps: null,
 				hetzner: { serverType: 'cax11', location: 'fsn1' },
 			})
 		})
@@ -856,6 +888,7 @@ describe('parseConfig', () => {
 			expect(result.config.deploy).toEqual({
 				target: 'hetzner-vps',
 				secrets: [],
+				vps: null,
 				hetzner: { serverType: 'cx23', location: 'nbg1' },
 			})
 		})
@@ -876,6 +909,7 @@ describe('parseConfig', () => {
 			expect(result.config.deploy).toEqual({
 				target: 'hetzner-vps',
 				secrets: [],
+				vps: null,
 				hetzner: { serverType: 'cx23', location: 'nbg1' },
 			})
 		})
@@ -896,6 +930,7 @@ describe('parseConfig', () => {
 			expect(result.config.deploy).toEqual({
 				target: 'hetzner-vps',
 				secrets: [],
+				vps: null,
 				hetzner: { serverType: 'cpx22', location: 'nbg1' },
 			})
 		})
@@ -1025,6 +1060,7 @@ describe('parseConfig', () => {
 			expect(result.config.deploy).toEqual({
 				target: 'hetzner-vps',
 				secrets: ['DATABASE_URL', 'REDIS_URL'],
+				vps: null,
 				hetzner: { serverType: 'cpx22', location: 'nbg1' },
 			})
 		})

@@ -1,0 +1,36 @@
+---
+import SectionHeader from '@/components/dashboard/SectionHeader.astro'
+import StatCard from '@/components/dashboard/StatCard.astro'
+---
+
+<section class="mt-10 space-y-6">
+	<SectionHeader
+		kicker="Observability"
+		title="Live host metrics"
+		description="CPU, memory, disk, and uptime probes from the host. Wiring through SSH probes is pending — values are placeholders."
+	/>
+	<div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+		<StatCard label="CPU load" value="—" hint="15 min avg" />
+		<StatCard label="Memory" value="—" hint="Resident" />
+		<StatCard label="Disk" value="—" hint="Root volume" />
+		<StatCard label="Uptime" value="—" hint="systemd" />
+	</div>
+</section>
+
+<section class="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-2">
+	<article class="rounded-2xl border border-base-100 bg-white p-6 shadow-subtle">
+		<SectionHeader kicker="Logs" title="Live container logs" />
+		<p class="mt-4 font-mono text-xs text-base-500">
+			SSH log tail bridge pending. Will stream `docker compose logs -f` from
+			the host once the SSH probe is wired.
+		</p>
+	</article>
+
+	<article class="rounded-2xl border border-base-100 bg-white p-6 shadow-subtle">
+		<SectionHeader kicker="Analytics" title="Caddy access logs" />
+		<p class="mt-4 font-mono text-xs text-base-500">
+			Per-domain request rate, status code mix, and p95 latency parsed from
+			Caddy JSON logs. Not collected yet.
+		</p>
+	</article>
+</section>

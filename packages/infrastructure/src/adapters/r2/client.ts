@@ -82,7 +82,10 @@ export class R2Client implements ObjectStoreClient {
 		}
 	}
 
-	async deleteByPrefix(prefix: string): Promise<number> {
+	async deleteByPrefix(
+		prefix: string,
+		predicate: (key: string) => boolean = () => true,
+	): Promise<number> {
 		let deletedCount = 0
 		let continuationToken: string | undefined
 
@@ -98,7 +101,7 @@ export class R2Client implements ObjectStoreClient {
 
 			const keysToDelete: Array<{ Key: string }> = []
 			for (const object of listResponse.Contents ?? []) {
-				if (typeof object.Key === 'string') {
+				if (typeof object.Key === 'string' && predicate(object.Key)) {
 					keysToDelete.push({ Key: object.Key })
 				}
 			}
