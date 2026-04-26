@@ -1,0 +1,15 @@
+name: Monitoring
+
+on:
+    workflow_dispatch:
+    push:
+        branches: [main]
+        paths: ['packages/monitoring/**']
+
+jobs:
+    pipeline:
+        uses: ./.github/workflows/deploy.yml
+        with:
+            config_file: packages/monitoring/nextnode.toml
+            environment: production
+        secrets: inherit

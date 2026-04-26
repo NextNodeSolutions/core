@@ -1,0 +1,113 @@
+---
+import EmptyListMessage from '@/components/dashboard/EmptyListMessage.astro'
+import SectionHeader from '@/components/dashboard/SectionHeader.astro'
+import type {
+	VpsAccessKind,
+	VpsHostedProject,
+} from '@/lib/domain/cloudflare/vps-hosted-project.ts'
+import { projectDetailPath } from '@/lib/domain/project-routes.ts'
+
+interface Props {
+	projects: ReadonlyArray<VpsHostedProject>
+}
+
+const { projects } = Astro.props
+
+const recordTypes = (project: VpsHostedProject): string =>
+	Array.from(new Set(project.records.map(record => record.type)))
+		.toSorted()
+		.join(' · ')
+
+const proxiedBadge = (project: VpsHostedProject): boolean =>
+	project.records.some(record => record.proxied)
+
+const ACCESS_BADGE: Record<
+	VpsAccessKind,
+	{ label: string; classes: string }
+> = {
+	internal: {
+		label: 'Internal · Tailscale',
+		classes: 'border-base-200 bg-base-50 text-base-700',
+	},
+	public: {
+		label: 'Public',
+		classes: 'border-accent-200 bg-accent-50 text-accent-800',
+	},
+}
+---
+
+<section class="mt-10 space-y-6">
+	<SectionHeader
+		kicker="Cloudflare DNS"
+		title="Projects on this VPS"
+		description="DNS records pointing to this VPS — both public IPs and the tailnet IP — grouped by hostname. Each hostname is a project; the badge shows whether it is reachable publicly or only over Tailscale."
+	/>
+
+	{
+		projects.length > 0 && (
+			<ul class="grid grid-cols-1 gap-3 md:grid-cols-2">
+				{projects.map(project => (
+					<li>
+						<a
+							href={projectDetailPath(project.hostname)}
+							class="group flex h-full flex-col gap-3 rounded-2xl border border-base-100 bg-white p-5 shadow-subtle transition-colors hover:border-accent-200"
+						>
+							<div class="flex items-start justify-between gap-3">
+								<div class="min-w-0">
+									<p class="font-mono text-[10px] uppercase tracking-wider text-base-500">
+										{project.zoneName}
+									</p>
+									<h3 class="mt-1 truncate font-display text-base font-semibold text-base-900">
+										{project.hostname}
+									</h3>
+								</div>
+								<span
+									aria-hidden="true"
+									class="shrink-0 text-base-400 transition-all group-hover:text-accent-700 group-hover:translate-x-0.5"
+								>
+									→
+								</span>
+							</div>
+							<div class="flex flex-wrap items-center gap-2">
+								<span
+									class:list={[
+										'inline-flex items-center rounded-full border px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-wider',
+										ACCESS_BADGE[project.accessKind].classes,
+									]}
+								>
+									{ACCESS_BADGE[project.accessKind].label}
+								</span>
+								<span class="inline-flex items-center rounded-full border border-base-100 bg-base-50 px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-base-700">
+									{recordTypes(project)}
+								</span>
+								{proxiedBadge(project) && (
+									<span class="inline-flex items-center rounded-full border border-accent-200 bg-accent-50 px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-accent-800">
+										Proxied
+									</span>
+								)}
+							</div>
+							<dl class="grid grid-cols-1 gap-1 text-xs text-base-600">
+								{project.records.map(record => (
+									<div class="flex items-center justify-between gap-3">
+										<dt class="font-mono text-[10px] uppercase tracking-wider text-base-500">
+											{record.type}
+										</dt>
+										<dd class="truncate font-mono text-base-900" title={record.content}>
+											{record.content}
+										</dd>
+									</div>
+								))}
+							</dl>
+						</a>
+					</li>
+				))}
+			</ul>
+		)
+	}
+
+	{
+		projects.length === 0 && (
+			<EmptyListMessage message="No Cloudflare DNS record points at this VPS yet." />
+		)
+	}
+</section>
