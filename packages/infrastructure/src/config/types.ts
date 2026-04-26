@@ -4,6 +4,7 @@ export interface NextNodeConfig {
 	readonly package: PackageSection | false
 	readonly environment: EnvironmentSection
 	readonly deploy: DeploySection | false
+	readonly services: ServicesConfig
 }
 
 export interface HetznerDeployableConfig extends NextNodeConfig {
@@ -105,6 +106,33 @@ export interface CloudflarePagesDeploySection extends BaseDeploySection {
 export type DeploySection =
 	| HetznerVpsDeploySection
 	| CloudflarePagesDeploySection
+
+export interface R2ServiceConfig {
+	readonly buckets: ReadonlyArray<string>
+}
+
+/**
+ * Single source of truth for the set of supported backing services. Adding
+ * a new service means appending its name here AND adding its config type
+ * to `ServiceConfigByName` — TypeScript will then force every service-aware
+ * site (validators, `hasAnyService`, future routers) to handle it.
+ */
+export const SERVICE_NAMES = ['r2'] as const
+export type ServiceName = (typeof SERVICE_NAMES)[number]
+
+export interface ServiceConfigByName {
+	readonly r2: R2ServiceConfig
+}
+
+export type ServicesConfig = {
+	readonly [K in ServiceName]?: ServiceConfigByName[K]
+}
+
+export const KEBAB_IDENTIFIER_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/
+
+export function requiresInfraR2(config: DeployableConfig): boolean {
+	return isHetznerDeployableConfig(config) || config.services.r2 !== undefined
+}
 
 export const DEFAULT_SCRIPTS: ScriptsSection = {
 	lint: 'lint',

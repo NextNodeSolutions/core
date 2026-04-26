@@ -1,11 +1,13 @@
 import { createLogger } from '@nextnode-solutions/logger'
 
-import { writeSummary } from '../../adapters/github/output.ts'
-import type { DeployableConfig } from '../../config/types.ts'
-import { buildTeardownSummary } from '../../domain/deploy/teardown-summary.ts'
-import { parseTeardownTarget } from '../../domain/deploy/teardown-target.ts'
-import { resolveEnvironment } from '../../domain/environment.ts'
-import { getEnv } from '../env.ts'
+import { writeSummary } from '@/adapters/github/output.ts'
+import { getEnv, requireEnv } from '@/cli/env.ts'
+import { loadR2Runtime } from '@/cli/r2/load-runtime.ts'
+import type { DeployableConfig } from '@/config/types.ts'
+import { isHetznerDeployableConfig } from '@/config/types.ts'
+import { buildTeardownSummary } from '@/domain/deploy/teardown-summary.ts'
+import { parseTeardownTarget } from '@/domain/deploy/teardown-target.ts'
+import { resolveEnvironment } from '@/domain/environment.ts'
 
 import { buildRuntimeTarget } from './build-runtime-target.ts'
 
@@ -17,7 +19,10 @@ export async function teardownCommand(config: DeployableConfig): Promise<void> {
 		getEnv('PIPELINE_ENVIRONMENT'),
 	)
 	const teardownTarget = parseTeardownTarget(getEnv('TEARDOWN_TARGET'))
-	const target = await buildRuntimeTarget(config, environment)
+	const infraR2 = isHetznerDeployableConfig(config)
+		? await loadR2Runtime(requireEnv('CLOUDFLARE_API_TOKEN'))
+		: null
+	const target = buildRuntimeTarget(config, environment, infraR2)
 
 	// Audit line — emitted BEFORE any destructive call so CI log readers can
 	// reconstruct the exact scope of the teardown (project, env, target type,

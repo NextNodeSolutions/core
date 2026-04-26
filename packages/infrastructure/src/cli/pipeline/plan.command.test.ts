@@ -4,8 +4,8 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { NextNodeConfig } from '../../config/types.ts'
-import { STATIC_WITH_DOMAIN } from '../fixtures.ts'
+import { STATIC_WITH_DOMAIN } from '@/cli/fixtures.ts'
+import type { NextNodeConfig } from '@/config/types.ts'
 
 import { planCommand } from './plan.command.ts'
 
@@ -22,6 +22,7 @@ const PACKAGE_CONFIG: NextNodeConfig = {
 	package: false,
 	environment: { development: true },
 	deploy: false,
+	services: {},
 }
 
 const APP_CONFIG: NextNodeConfig = {
@@ -41,6 +42,7 @@ const APP_CONFIG: NextNodeConfig = {
 		secrets: [],
 		hetzner: { serverType: 'cx23', location: 'nbg1' },
 	},
+	services: {},
 }
 
 describe('planCommand', () => {

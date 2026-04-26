@@ -1,34 +1,13 @@
-import { writeSummary } from '../../adapters/github/output.ts'
-import type { DeployableConfig } from '../../config/types.ts'
-import {
-	isCloudflarePagesDeployableConfig,
-	isHetznerDeployableConfig,
-} from '../../config/types.ts'
-import { buildProvisionSummary } from '../../domain/deploy/provision-summary.ts'
-import type { DeployTarget } from '../../domain/deploy/target.ts'
-import type { AppEnvironment } from '../../domain/environment.ts'
-import { resolveEnvironment } from '../../domain/environment.ts'
-import { getEnv, requireEnv } from '../env.ts'
-import { ensureR2Setup } from '../r2/ensure-setup.ts'
+import { writeSummary } from '@/adapters/github/output.ts'
+import { getEnv, requireEnv } from '@/cli/env.ts'
+import { ensureR2Setup } from '@/cli/r2/ensure-setup.ts'
+import { resolveServices } from '@/cli/services/resolve.ts'
+import type { DeployableConfig } from '@/config/types.ts'
+import { requiresInfraR2 } from '@/config/types.ts'
+import { buildProvisionSummary } from '@/domain/deploy/provision-summary.ts'
+import { resolveEnvironment } from '@/domain/environment.ts'
 
-import { createCloudflarePagesTarget } from './create-cloudflare-pages-target.ts'
-import { createHetznerTarget } from './create-hetzner-target.ts'
-
-async function buildProvisionTarget(
-	config: DeployableConfig,
-	environment: AppEnvironment,
-): Promise<DeployTarget> {
-	if (isHetznerDeployableConfig(config)) {
-		const r2 = await ensureR2Setup(requireEnv('CLOUDFLARE_API_TOKEN'))
-		return createHetznerTarget(config, environment, r2)
-	}
-	if (isCloudflarePagesDeployableConfig(config)) {
-		return createCloudflarePagesTarget(config, environment)
-	}
-	throw new Error(
-		'provisionCommand: unknown deploy target - config validation should have caught this',
-	)
-}
+import { buildRuntimeTarget } from './build-runtime-target.ts'
 
 export async function provisionCommand(
 	config: DeployableConfig,
@@ -37,8 +16,17 @@ export async function provisionCommand(
 		config.project.type,
 		getEnv('PIPELINE_ENVIRONMENT'),
 	)
-	const target = await buildProvisionTarget(config, environment)
+	const cfToken = requireEnv('CLOUDFLARE_API_TOKEN')
+
+	const infraR2 = requiresInfraR2(config)
+		? await ensureR2Setup(cfToken)
+		: null
+
+	const target = buildRuntimeTarget(config, environment, infraR2)
 	const result = await target.ensureInfra(config.project.name)
+
+	const services = resolveServices({ config, environment, cfToken, infraR2 })
+	await Promise.all(services.map(service => service.provision()))
 
 	writeSummary(
 		buildProvisionSummary(result, config.project.name, target.name),

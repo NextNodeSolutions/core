@@ -1,35 +1,40 @@
-import type { DeployableConfig } from '../../config/types.ts'
+import { CloudflarePagesTarget } from '@/adapters/cloudflare/target.ts'
+import type { DeployableConfig } from '@/config/types.ts'
 import {
 	isCloudflarePagesDeployableConfig,
 	isHetznerDeployableConfig,
-} from '../../config/types.ts'
-import type { DeployTarget } from '../../domain/deploy/target.ts'
-import type { AppEnvironment } from '../../domain/environment.ts'
-import { requireEnv } from '../env.ts'
-import { loadR2Runtime } from '../r2/load-runtime.ts'
+} from '@/config/types.ts'
+import type { R2RuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
+import type { DeployTarget } from '@/domain/deploy/target.ts'
+import type { AppEnvironment } from '@/domain/environment.ts'
 
-import { createCloudflarePagesTarget } from './create-cloudflare-pages-target.ts'
 import { createHetznerTarget } from './create-hetzner-target.ts'
 
 /**
- * Build a DeployTarget for a runtime operation (deploy, dns) that consumes
- * already-provisioned infrastructure. For Hetzner, loads R2 creds from env
- * and verifies them via SigV4 — fails loud on stale creds.
- *
- * This is deliberately NOT used by `provisionCommand`: provision needs the
- * full R2 bootstrap (bucket creation, token rotation, org-secret persistence)
- * that only `ensureR2Setup` provides.
+ * Builds a DeployTarget. Hetzner targets need a verified infra R2 runtime;
+ * Pages targets do not. Callers pick the R2 entry point: `ensureR2Setup` for
+ * provision (bootstraps buckets + tokens + org secrets), `loadR2Runtime` for
+ * runtime ops (deploy, dns, teardown).
  */
-export async function buildRuntimeTarget(
+export function buildRuntimeTarget(
 	config: DeployableConfig,
 	environment: AppEnvironment,
-): Promise<DeployTarget> {
+	infraR2: R2RuntimeConfig | null,
+): DeployTarget {
 	if (isHetznerDeployableConfig(config)) {
-		const r2 = await loadR2Runtime(requireEnv('CLOUDFLARE_API_TOKEN'))
-		return createHetznerTarget(config, environment, r2)
+		if (!infraR2) {
+			throw new Error(
+				'buildRuntimeTarget: Hetzner target requires infra R2 — invariant broken',
+			)
+		}
+		return createHetznerTarget(config, environment, infraR2)
 	}
 	if (isCloudflarePagesDeployableConfig(config)) {
-		return createCloudflarePagesTarget(config, environment)
+		return new CloudflarePagesTarget({
+			environment,
+			domain: config.project.domain,
+			redirectDomains: config.project.redirectDomains,
+		})
 	}
 	throw new Error(
 		'buildRuntimeTarget: unknown deploy target — config validation should have caught this',

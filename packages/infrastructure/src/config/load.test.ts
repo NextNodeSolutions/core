@@ -1043,6 +1043,91 @@ describe('parseConfig', () => {
 		})
 	})
 
+	describe('services section', () => {
+		it('defaults services to an empty object when not provided', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok) return
+
+			expect(result.config.services).toEqual({})
+		})
+
+		it('parses [services.r2] buckets into the config', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				services: { r2: { buckets: ['uploads', 'media'] } },
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok) return
+
+			expect(result.config.services).toEqual({
+				r2: { buckets: ['uploads', 'media'] },
+			})
+		})
+
+		it('rejects [services] for package projects', () => {
+			const result = parseConfig({
+				project: { name: 'my-lib', type: 'package' },
+				services: { r2: { buckets: ['uploads'] } },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'[services] section is forbidden for project type "package" — only "app" projects have a runtime that can consume service env vars',
+			)
+		})
+
+		it('rejects [services] for static projects', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-site',
+					type: 'static',
+					domain: 'my-site.example.com',
+				},
+				services: { r2: { buckets: ['uploads'] } },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'[services] section is forbidden for project type "static" — only "app" projects have a runtime that can consume service env vars',
+			)
+		})
+
+		it('rejects an empty bucket list', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				services: { r2: { buckets: [] } },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'services.r2.buckets must declare at least one bucket alias',
+			)
+		})
+	})
+
 	describe('edge cases', () => {
 		it('ignores unknown script keys without error', () => {
 			const result = parseConfig({

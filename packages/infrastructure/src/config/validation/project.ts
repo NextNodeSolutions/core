@@ -1,14 +1,13 @@
-import type { PackageSection, ProjectSection } from '../types.ts'
+import type { PackageSection, ProjectSection } from '@/config/types.ts'
 import {
 	isProjectType,
 	isRecord,
 	isScriptValue,
+	KEBAB_IDENTIFIER_PATTERN,
 	PROJECT_TYPES,
-} from '../types.ts'
+} from '@/config/types.ts'
 
 import type { ValidationResult } from './result.ts'
-
-const PROJECT_NAME_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/
 
 function validateProjectName(value: unknown): {
 	errors: string[]
@@ -20,10 +19,10 @@ function validateProjectName(value: unknown): {
 			name: undefined,
 		}
 	}
-	if (!PROJECT_NAME_PATTERN.test(value)) {
+	if (!KEBAB_IDENTIFIER_PATTERN.test(value)) {
 		return {
 			errors: [
-				'project.name must be lowercase alphanumeric with dashes only (pattern: ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$)',
+				`project.name must be lowercase alphanumeric with dashes only (pattern: ${KEBAB_IDENTIFIER_PATTERN.source})`,
 			],
 			name: undefined,
 		}

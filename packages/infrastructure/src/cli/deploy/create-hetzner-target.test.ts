@@ -11,8 +11,8 @@ import {
 
 const { utils: sshUtils } = ssh2
 
-import type { HetznerDeployableConfig } from '../../config/types.ts'
-import type { R2RuntimeConfig } from '../../domain/cloudflare/r2/runtime-config.ts'
+import type { HetznerDeployableConfig } from '@/config/types.ts'
+import type { R2RuntimeConfig } from '@/domain/cloudflare/r2/runtime-config.ts'
 
 import { createHetznerTarget } from './create-hetzner-target.ts'
 
@@ -49,6 +49,7 @@ const HETZNER_CONFIG: HetznerDeployableConfig = {
 		secrets: [],
 		hetzner: { serverType: 'cpx22', location: 'nbg1' },
 	},
+	services: {},
 }
 
 const FAKE_R2: R2RuntimeConfig = {
@@ -84,7 +85,7 @@ describe('createHetznerTarget', () => {
 		stubHetznerEnv()
 
 		const { HetznerVpsTarget } =
-			await import('../../adapters/hetzner/target.ts')
+			await import('@/adapters/hetzner/target.ts')
 
 		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_R2)
 
@@ -104,7 +105,7 @@ describe('createHetznerTarget', () => {
 		stubHetznerEnv()
 
 		const { HetznerVpsTarget } =
-			await import('../../adapters/hetzner/target.ts')
+			await import('@/adapters/hetzner/target.ts')
 
 		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_R2)
 
@@ -117,7 +118,7 @@ describe('createHetznerTarget', () => {
 		stubHetznerEnv()
 
 		const { HetznerVpsTarget } =
-			await import('../../adapters/hetzner/target.ts')
+			await import('@/adapters/hetzner/target.ts')
 
 		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_R2)
 
@@ -132,7 +133,7 @@ describe('createHetznerTarget', () => {
 		stubHetznerEnv()
 
 		const { HetznerVpsTarget } =
-			await import('../../adapters/hetzner/target.ts')
+			await import('@/adapters/hetzner/target.ts')
 
 		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_R2)
 
@@ -147,7 +148,7 @@ describe('createHetznerTarget', () => {
 		vi.stubEnv('NN_CLIENT_ID', 'nextnode')
 
 		const { HetznerVpsTarget } =
-			await import('../../adapters/hetzner/target.ts')
+			await import('@/adapters/hetzner/target.ts')
 
 		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_R2)
 
@@ -202,7 +203,7 @@ describe('createHetznerTarget', () => {
 		stubHetznerEnv()
 
 		const { HetznerVpsTarget } =
-			await import('../../adapters/hetzner/target.ts')
+			await import('@/adapters/hetzner/target.ts')
 
 		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_R2)
 
