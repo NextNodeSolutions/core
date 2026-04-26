@@ -1,23 +1,15 @@
-import type { R2ServiceConfig } from '#/config/types.ts'
-import { buildR2ServiceEnv } from '#/domain/services/r2.ts'
-import type { ServiceEnv } from '#/domain/services/service.ts'
-
 import type {
 	Service,
 	ServiceDefinition,
 	ServiceFactoryContext,
-} from '../service.ts'
+} from '#/cli/services/service.ts'
+import type { R2ServiceConfig } from '#/config/types.ts'
+import { buildR2ServiceEnv } from '#/domain/services/r2.ts'
+import type { ServiceEnv } from '#/domain/services/service.ts'
 
 import { ensureR2Service } from './ensure.ts'
 import { loadR2Service } from './load.ts'
 
-/**
- * Build the R2 `Service`. Validates that infra storage is loaded — every
- * R2-aware project needs the state bucket to persist credentials.
- *
- * Exported for direct unit testing; production code reaches it through
- * `r2ServiceDefinition` registered in `cli/services/registry.ts`.
- */
 export function createR2Service(
 	ctx: ServiceFactoryContext,
 	config: R2ServiceConfig,
@@ -28,11 +20,6 @@ export function createR2Service(
 		)
 	}
 	const infraStorage = ctx.infraStorage
-	// TODO(nn-local): when ctx.mode === 'local', return a Service that
-	// wires a docker-compose minio container and synthesizes ServiceEnv
-	// from the local container's creds instead of round-tripping through
-	// the remote R2 state bucket. The Service shape stays identical so
-	// deploy.command / provision.command remain unchanged.
 	return {
 		name: 'r2',
 		async provision(): Promise<void> {

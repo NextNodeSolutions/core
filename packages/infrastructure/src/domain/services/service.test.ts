@@ -1,13 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { ServiceEnv } from './service.ts'
-import { emptyServiceEnv, mergeServiceEnvs } from './service.ts'
-
-describe('emptyServiceEnv', () => {
-	it('returns both channels empty', () => {
-		expect(emptyServiceEnv()).toEqual({ public: {}, secret: {} })
-	})
-})
+import { mergeServiceEnvs } from './service.ts'
 
 describe('mergeServiceEnvs', () => {
 	it('returns an empty env when no services contribute', () => {

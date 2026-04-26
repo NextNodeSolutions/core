@@ -4,10 +4,9 @@ import type { DeployTarget } from '#/domain/deploy/target.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 
 /**
- * Shared context every target definition receives. Hetzner targets
- * require a non-null `infraStorage`; Pages targets do not. Each definition
- * validates the preconditions it actually needs — the runtime guard
- * lives once in the definition, not duplicated in callers.
+ * `infraStorage` is nullable because Pages targets don't need it. Each
+ * definition validates the precondition it actually needs — the runtime
+ * guard lives once on the definition, not duplicated in every caller.
  */
 export interface TargetFactoryContext {
 	readonly environment: AppEnvironment
@@ -15,12 +14,10 @@ export interface TargetFactoryContext {
 }
 
 /**
- * Registry-friendly deploy-target definition: a uniform `build` over the
- * full DeployableConfig, returning a `DeployTarget` when this definition
- * matches the config's `deploy.target` discriminator and `null`
- * otherwise. Each definition narrows the union internally — that keeps
- * the registry shape uniform across providers with different config
- * types.
+ * `build` accepts the full `DeployableConfig` union and narrows it
+ * internally, returning `null` when the config doesn't match this
+ * definition's discriminator. That keeps the registry shape uniform
+ * across providers with different config types.
  */
 export interface TargetDefinition<
 	K extends DeployTargetType = DeployTargetType,

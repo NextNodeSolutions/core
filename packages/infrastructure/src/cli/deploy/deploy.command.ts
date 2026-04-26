@@ -39,10 +39,8 @@ export async function deployCommand(config: DeployableConfig): Promise<void> {
 		await Promise.all(services.map(service => service.loadEnv())),
 	)
 	const env = { ...baseEnv, ...servicesEnv.public }
-
-	// GITHUB_ENV only carries the public surface (SITE_URL plus per-service
-	// public bindings); credentials route through input.secrets so they
-	// never land in the workflow env file.
+	// GITHUB_ENV only carries the public surface; credentials route through
+	// `input.secrets` so they never land in the workflow env file.
 	for (const [key, value] of Object.entries(env)) {
 		writeEnvVar(key, value)
 	}

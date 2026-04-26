@@ -128,10 +128,31 @@ export type ServicesConfig = {
 	readonly [K in ServiceName]?: ServiceConfigByName[K]
 }
 
+/**
+ * Per-service flag declaring whether opting into the service requires the
+ * infra storage runtime (state + certs buckets) to be loaded. The mapped
+ * type forces every entry in `SERVICE_NAMES` to set this flag — adding a
+ * new service is a TypeScript error until it answers the question.
+ */
+export const SERVICE_REQUIRES_INFRA_STORAGE: {
+	readonly [K in ServiceName]: boolean
+} = {
+	r2: true,
+}
+
 export const KEBAB_IDENTIFIER_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/
 
 export function requiresInfraStorage(config: DeployableConfig): boolean {
-	return isHetznerDeployableConfig(config) || config.services.r2 !== undefined
+	if (isHetznerDeployableConfig(config)) return true
+	for (const name of SERVICE_NAMES) {
+		if (
+			config.services[name] !== undefined &&
+			SERVICE_REQUIRES_INFRA_STORAGE[name]
+		) {
+			return true
+		}
+	}
+	return false
 }
 
 export const DEFAULT_SCRIPTS: ScriptsSection = {

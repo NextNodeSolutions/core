@@ -20,10 +20,9 @@ export interface AwaitTokenPropagationInput {
 }
 
 /**
- * Poll until newly-minted R2 credentials become active for SigV4 access.
- * Cloudflare propagates new tokens through their edge asynchronously, so
- * the verify call may 401/403 for a few seconds after `POST /user/tokens`
- * returns. Throws if propagation takes longer than the configured budget.
+ * Poll a SigV4 verify until a newly-minted R2 token becomes active.
+ * Cloudflare propagates tokens asynchronously, so verify may 401/403 for
+ * a few seconds after `POST /user/tokens` returns.
  */
 export async function awaitTokenPropagation(
 	input: AwaitTokenPropagationInput,
@@ -48,10 +47,9 @@ export async function awaitTokenPropagation(
 }
 
 /**
- * Best-effort revoke every prior token sharing `tokenName` (other than the
- * one we just minted). Failures log and propagate to the next run rather
- * than aborting — partial cleanup is preferable to leaving the new token
- * unactivated.
+ * Best-effort revoke prior tokens with `tokenName` (other than `keepTokenId`).
+ * Per-token failures log and continue — partial cleanup is preferable to
+ * leaving the freshly-minted token unactivated.
  */
 export async function revokeStaleTokens(
 	cfToken: string,

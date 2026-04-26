@@ -1,21 +1,11 @@
 import { isRecord } from '#/config/types.ts'
-import type { R2ServiceState } from '#/domain/services/r2.ts'
+import type { R2BucketBinding, R2ServiceState } from '#/domain/services/r2.ts'
 import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
-
-interface PersistedR2ServiceState {
-	readonly endpoint: string
-	readonly accessKeyId: string
-	readonly secretAccessKey: string
-	readonly buckets: ReadonlyArray<{
-		readonly alias: string
-		readonly name: string
-	}>
-}
 
 function parseBucketBindings(
 	value: unknown,
 	key: string,
-): ReadonlyArray<{ alias: string; name: string }> {
+): ReadonlyArray<R2BucketBinding> {
 	if (!Array.isArray(value)) {
 		throw new Error(
 			`Invalid R2 service state at "${key}": buckets is not an array`,
@@ -43,7 +33,7 @@ function parseBucketBindings(
 	})
 }
 
-function parseState(raw: string, key: string): PersistedR2ServiceState {
+function parseState(raw: string, key: string): R2ServiceState {
 	const data: unknown = JSON.parse(raw)
 	if (!isRecord(data)) {
 		throw new Error(`Invalid R2 service state at "${key}": not an object`)
@@ -88,11 +78,5 @@ export async function writeR2ServiceState(
 	key: string,
 	state: R2ServiceState,
 ): Promise<void> {
-	const payload: PersistedR2ServiceState = {
-		endpoint: state.endpoint,
-		accessKeyId: state.accessKeyId,
-		secretAccessKey: state.secretAccessKey,
-		buckets: state.buckets.map(b => ({ alias: b.alias, name: b.name })),
-	}
-	await r2.put(key, JSON.stringify(payload))
+	await r2.put(key, JSON.stringify(state))
 }

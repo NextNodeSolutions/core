@@ -6,12 +6,6 @@ import type { AppEnvironment } from '#/domain/environment.ts'
 
 import type { TargetDefinition } from './target.ts'
 
-/**
- * CLI-layer factory for the Cloudflare Pages deploy target. Reads the
- * Cloudflare account + token from env vars (the only place env-var I/O
- * is allowed) and hands a fully-formed config to the adapter, mirroring
- * how `createHetznerTarget` wires its credentials.
- */
 export function createCloudflarePagesTarget(
 	config: CloudflarePagesDeployableConfig,
 	environment: AppEnvironment,

@@ -95,18 +95,20 @@ export async function ensureR2Setup(
 	const accountId = await resolveAccountId(cfToken)
 	logger.info(`Cloudflare account: ${accountId}`)
 
-	await ensureR2Bucket({
-		token: cfToken,
-		accountId,
-		bucketName: stateBucket,
-		locationHint: R2_BUCKET_LOCATION_HINT,
-	})
-	await ensureR2Bucket({
-		token: cfToken,
-		accountId,
-		bucketName: certsBucket,
-		locationHint: R2_BUCKET_LOCATION_HINT,
-	})
+	await Promise.all([
+		ensureR2Bucket({
+			token: cfToken,
+			accountId,
+			bucketName: stateBucket,
+			locationHint: R2_BUCKET_LOCATION_HINT,
+		}),
+		ensureR2Bucket({
+			token: cfToken,
+			accountId,
+			bucketName: certsBucket,
+			locationHint: R2_BUCKET_LOCATION_HINT,
+		}),
+	])
 
 	const ctx: R2Context = { cfToken, accountId, stateBucket, certsBucket }
 	const creds = await resolveCredsOrRotate(ctx)

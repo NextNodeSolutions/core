@@ -15,12 +15,6 @@ import type { TargetDefinition } from './target.ts'
 
 const ACME_EMAIL = 'infra@nextnode.fr'
 
-/**
- * Pure factory for the Hetzner VPS deploy target. Reads env-derived
- * credentials and bridges the Cloudflare DNS adapter into a
- * provider-agnostic `DnsClient` so the Hetzner adapter never imports
- * across to Cloudflare.
- */
 export function createHetznerTarget(
 	config: HetznerDeployableConfig,
 	environment: AppEnvironment,

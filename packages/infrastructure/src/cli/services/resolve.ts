@@ -12,16 +12,6 @@ export interface ResolveServicesInput {
 	readonly infraStorage: InfraStorageRuntimeConfig | null
 }
 
-/**
- * Walk every registered service definition and return the ones the
- * project opted into. `deploy.command` and `provision.command` iterate
- * the result without knowing which services exist — adding a new
- * service is one entry in `SERVICE_DEFINITIONS`, with zero churn here.
- *
- * Each definition validates its own preconditions (e.g. R2 needs infra
- * storage to be loaded). Cross-service ordering, when it eventually matters,
- * will live on the definitions, not in this loop.
- */
 export function resolveServices(
 	input: ResolveServicesInput,
 ): ReadonlyArray<Service> {
@@ -30,9 +20,6 @@ export function resolveServices(
 		environment: input.environment,
 		cfToken: input.cfToken,
 		infraStorage: input.infraStorage,
-		// TODO(nn-local): plumb 'local' from the future `nn` CLI so each
-		// service definition can return its docker-compose-driven variant.
-		mode: 'remote',
 	}
 	const services: Service[] = []
 	for (const definition of Object.values(SERVICE_DEFINITIONS)) {
