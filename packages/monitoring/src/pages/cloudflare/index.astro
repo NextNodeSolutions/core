@@ -1,22 +1,10 @@
 ---
-import CloudflareProjectGroupCard from '@/components/dashboard/CloudflareProjectGroupCard.astro'
-import EmptyListMessage from '@/components/dashboard/EmptyListMessage.astro'
-import LoadStateBanner from '@/components/dashboard/LoadStateBanner.astro'
+import CloudflareFleetSection from '@/components/cloudflare/CloudflareFleetSection.astro'
 import SectionHeader from '@/components/dashboard/SectionHeader.astro'
+import Skeleton from '@/components/dashboard/Skeleton.astro'
 import DashboardLayout from '@/layouts/DashboardLayout.astro'
-import { resolveCloudflareClient } from '@/lib/adapters/cloudflare/accounts.ts'
-import { listPagesEntries } from '@/lib/adapters/cloudflare/list-pages-entries.ts'
-import { loadPageState } from '@/lib/adapters/load-page-state.ts'
-import { groupPagesProjects } from '@/lib/domain/cloudflare/project-group.ts'
 
 export const prerender = false
-
-const state = await loadPageState('cloudflare.projects.page', async () => {
-	const client = await resolveCloudflareClient()
-	return listPagesEntries({ client })
-})
-
-const groups = state.kind === 'ok' ? groupPagesProjects(state.data) : []
 ---
 
 <DashboardLayout
@@ -29,21 +17,7 @@ const groups = state.kind === 'ok' ? groupPagesProjects(state.data) : []
 		description="Logical projects grouped by base name. Each card shows the production project (`name`) and its development counterpart (`name-dev`) when both exist."
 	/>
 
-	{
-		state.kind === 'ok' && groups.length > 0 && (
-			<div class="mt-8 flex flex-col gap-4">
-				{groups.map((group) => (
-					<CloudflareProjectGroupCard group={group} />
-				))}
-			</div>
-		)
-	}
-
-	{
-		state.kind === 'ok' && groups.length === 0 && (
-			<EmptyListMessage message="No Pages project found in this account." />
-		)
-	}
-
-	<LoadStateBanner state={state} upstreamLabel="Cloudflare API error" />
+	<CloudflareFleetSection server:defer>
+		<Skeleton slot="fallback" rows={5} class="mt-8" />
+	</CloudflareFleetSection>
 </DashboardLayout>

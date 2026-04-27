@@ -1,0 +1,46 @@
+---
+const DEFAULT_ROWS = 3
+const STATS_COLUMN_COUNT = 3
+const STAT_PLACEHOLDERS = Array.from({ length: STATS_COLUMN_COUNT })
+
+interface Props {
+	rows?: number
+	withStats?: boolean
+	class?: string
+}
+
+const {
+	rows = DEFAULT_ROWS,
+	withStats = false,
+	class: className = '',
+} = Astro.props
+
+const rowKeys = Array.from({ length: rows })
+---
+
+<div
+	class:list={['animate-pulse space-y-4', className]}
+	role="status"
+	aria-label="Loading"
+>
+	{
+		withStats && (
+			<div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+				{STAT_PLACEHOLDERS.map(() => (
+					<div class="h-24 rounded-2xl border border-base-100 bg-base-50" />
+				))}
+			</div>
+		)
+	}
+	<div class="overflow-hidden rounded-2xl border border-base-100 bg-white">
+		{
+			rowKeys.map(() => (
+				<div class="flex items-center gap-4 border-b border-base-100 px-6 py-5 last:border-b-0">
+					<div class="h-3 w-1/3 rounded-full bg-base-100" />
+					<div class="h-3 w-16 rounded-full bg-base-100" />
+					<div class="ml-auto h-3 w-20 rounded-full bg-base-100" />
+				</div>
+			))
+		}
+	</div>
+</div>

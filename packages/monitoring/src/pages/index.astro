@@ -1,63 +1,11 @@
 ---
-import CloudflareProjectGroupCard from '@/components/dashboard/CloudflareProjectGroupCard.astro'
-import EmptyListMessage from '@/components/dashboard/EmptyListMessage.astro'
-import LoadStateBanner from '@/components/dashboard/LoadStateBanner.astro'
+import HomeCloudflareSection from '@/components/dashboard/HomeCloudflareSection.astro'
+import HomeHetznerSection from '@/components/dashboard/HomeHetznerSection.astro'
 import SectionHeader from '@/components/dashboard/SectionHeader.astro'
-import StatCard from '@/components/dashboard/StatCard.astro'
+import Skeleton from '@/components/dashboard/Skeleton.astro'
 import DashboardLayout from '@/layouts/DashboardLayout.astro'
-import { resolveCloudflareClient } from '@/lib/adapters/cloudflare/accounts.ts'
-import { listPagesEntries } from '@/lib/adapters/cloudflare/list-pages-entries.ts'
-import { ENV_KEYS, requireEnv } from '@/lib/adapters/env.ts'
-import { listServers } from '@/lib/adapters/hetzner/servers.ts'
-import { loadPageState } from '@/lib/adapters/load-page-state.ts'
-import { groupPagesProjects } from '@/lib/domain/cloudflare/project-group.ts'
 
 export const prerender = false
-
-const [hetznerState, cloudflareState] = await Promise.all([
-	loadPageState('hetzner.servers.page', () => {
-		const token = requireEnv(ENV_KEYS.HETZNER_API_TOKEN)
-		return listServers(token)
-	}),
-	loadPageState('cloudflare.projects.page', async () => {
-		const client = await resolveCloudflareClient()
-		return listPagesEntries({ client })
-	}),
-])
-
-const servers = hetznerState.kind === 'ok' ? hetznerState.data : []
-const cloudflareGroups =
-	cloudflareState.kind === 'ok'
-		? groupPagesProjects(cloudflareState.data)
-		: []
-
-const runningServers = servers.filter((s) => s.status === 'running').length
-
-interface DashboardStat {
-	readonly label: string
-	readonly value: string | number
-	readonly hint: string
-	readonly tone?: 'positive'
-}
-
-const stats: ReadonlyArray<DashboardStat> = [
-	{
-		label: 'Hetzner VPS',
-		value: hetznerState.kind === 'ok' ? servers.length : '—',
-		hint: 'Tailscale fleet',
-	},
-	{
-		label: 'Running',
-		value: hetznerState.kind === 'ok' ? runningServers : '—',
-		hint: 'status=running',
-		tone: 'positive',
-	},
-	{
-		label: 'Cloudflare projects',
-		value: cloudflareState.kind === 'ok' ? cloudflareGroups.length : '—',
-		hint: 'Pages logical groups',
-	},
-]
 ---
 
 <DashboardLayout title="Dashboard" breadcrumbs={[{ label: 'Overview' }]}>
@@ -67,116 +15,17 @@ const stats: ReadonlyArray<DashboardStat> = [
 			title="NextNode control plane"
 			description="Live view of the Hetzner fleet and Cloudflare Pages projects managed by this account."
 		/>
-
-		<div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-			{
-				stats.map((stat) => (
-					<StatCard
-						label={stat.label}
-						value={stat.value}
-						hint={stat.hint}
-						tone={stat.tone}
-					/>
-				))
-			}
-		</div>
 	</section>
 
-	<section class="mt-14 space-y-6">
-		<div class="flex items-end justify-between gap-4">
-			<SectionHeader kicker="Hetzner" title="VPS fleet" />
-			<a
-				href="/vps"
-				class="font-mono text-xs uppercase tracking-wider text-base-500 transition-colors hover:text-base-900"
-			>
-				Open →
-			</a>
-		</div>
+	<div class="mt-14">
+		<HomeHetznerSection server:defer>
+			<Skeleton slot="fallback" rows={3} withStats />
+		</HomeHetznerSection>
+	</div>
 
-		{
-			hetznerState.kind === 'ok' && servers.length > 0 && (
-				<ul class="divide-y divide-base-100 overflow-hidden rounded-2xl border border-base-100 bg-white shadow-subtle">
-					{servers.map((server) => (
-						<li class="flex flex-wrap items-center gap-4 px-6 py-4">
-							<div class="min-w-0 flex-1">
-								<h3 class="font-display text-sm font-semibold text-base-900 truncate">
-									{server.name}
-								</h3>
-								<p class="mt-0.5 font-mono text-[11px] text-base-500 truncate">
-									{server.ipv4 ?? 'no public ipv4'}
-								</p>
-							</div>
-							<dl class="flex items-center gap-6 text-xs">
-								<div>
-									<dt class="font-mono text-[10px] uppercase tracking-wider text-base-500">
-										Status
-									</dt>
-									<dd class="mt-0.5 font-mono text-base-900 capitalize">
-										{server.status}
-									</dd>
-								</div>
-								<div>
-									<dt class="font-mono text-[10px] uppercase tracking-wider text-base-500">
-										Type
-									</dt>
-									<dd class="mt-0.5 font-mono text-base-900">
-										{server.serverType}
-									</dd>
-								</div>
-								<div>
-									<dt class="font-mono text-[10px] uppercase tracking-wider text-base-500">
-										Location
-									</dt>
-									<dd class="mt-0.5 font-mono text-base-900">
-										{server.location}
-									</dd>
-								</div>
-							</dl>
-						</li>
-					))}
-				</ul>
-			)
-		}
-
-		{
-			hetznerState.kind === 'ok' && servers.length === 0 && (
-				<EmptyListMessage message="No Hetzner server found for this token." />
-			)
-		}
-
-		<LoadStateBanner state={hetznerState} upstreamLabel="Hetzner API error" />
-	</section>
-
-	<section class="mt-14 space-y-6">
-		<div class="flex items-end justify-between gap-4">
-			<SectionHeader kicker="Cloudflare" title="Pages projects" />
-			<a
-				href="/cloudflare"
-				class="font-mono text-xs uppercase tracking-wider text-base-500 transition-colors hover:text-base-900"
-			>
-				Open →
-			</a>
-		</div>
-
-		{
-			cloudflareState.kind === 'ok' && cloudflareGroups.length > 0 && (
-				<div class="grid gap-5 lg:grid-cols-2">
-					{cloudflareGroups.map((group) => (
-						<CloudflareProjectGroupCard group={group} />
-					))}
-				</div>
-			)
-		}
-
-		{
-			cloudflareState.kind === 'ok' && cloudflareGroups.length === 0 && (
-				<EmptyListMessage message="No Pages project found in this account." />
-			)
-		}
-
-		<LoadStateBanner
-			state={cloudflareState}
-			upstreamLabel="Cloudflare API error"
-		/>
-	</section>
+	<div class="mt-14">
+		<HomeCloudflareSection server:defer>
+			<Skeleton slot="fallback" rows={4} />
+		</HomeCloudflareSection>
+	</div>
 </DashboardLayout>
