@@ -1,3 +1,4 @@
+import { keyedMemoizeAsync } from '@/lib/adapters/cache.ts'
 import { listAll } from '@/lib/adapters/cloudflare/client.ts'
 import type { CloudflareClient } from '@/lib/adapters/cloudflare/client.ts'
 import type { CloudflareDnsRecord } from '@/lib/domain/cloudflare/dns-record.ts'
@@ -49,7 +50,11 @@ export interface ListDnsRecordsByContentOptions {
 	readonly content: string
 }
 
-export const listDnsRecordsByContent = async ({
+// DNS records can change but rarely faster than a minute — operator-driven
+// edits are confirm-gated and not the common navigation case.
+const DNS_RECORDS_TTL_MS = 60_000
+
+const fetchDnsRecordsByContent = async ({
 	client,
 	zoneId,
 	zoneName,
@@ -66,3 +71,15 @@ export const listDnsRecordsByContent = async ({
 	)
 	return raw.map((item, index) => parseDnsRecord(item, index, zoneName))
 }
+
+const memoizedListDnsRecordsByContent = keyedMemoizeAsync(
+	DNS_RECORDS_TTL_MS,
+	({ zoneId, content }: ListDnsRecordsByContentOptions) =>
+		`${zoneId} ${content}`,
+	fetchDnsRecordsByContent,
+)
+
+export const listDnsRecordsByContent = (
+	options: ListDnsRecordsByContentOptions,
+): Promise<ReadonlyArray<CloudflareDnsRecord>> =>
+	memoizedListDnsRecordsByContent(options)

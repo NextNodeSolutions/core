@@ -1,3 +1,4 @@
+import { keyedMemoizeAsync } from '@/lib/adapters/cache.ts'
 import { listAll } from '@/lib/adapters/cloudflare/client.ts'
 import type { CloudflareClient } from '@/lib/adapters/cloudflare/client.ts'
 import { parseCloudflarePagesDomainStatus } from '@/lib/domain/cloudflare/pages-domain.ts'
@@ -41,7 +42,10 @@ export interface ListPagesDomainsOptions {
 	readonly projectName: string
 }
 
-export const listPagesDomains = async ({
+// Pages custom domains don't churn within a minute under normal operation.
+const PAGES_DOMAINS_TTL_MS = 60_000
+
+const fetchPagesDomains = async ({
 	client,
 	projectName,
 }: ListPagesDomainsOptions): Promise<ReadonlyArray<CloudflarePagesDomain>> => {
@@ -54,3 +58,15 @@ export const listPagesDomains = async ({
 	)
 	return raw.map(parsePagesDomain)
 }
+
+const memoizedListPagesDomains = keyedMemoizeAsync(
+	PAGES_DOMAINS_TTL_MS,
+	({ client, projectName }: ListPagesDomainsOptions) =>
+		`${client.accountId} ${projectName}`,
+	fetchPagesDomains,
+)
+
+export const listPagesDomains = (
+	options: ListPagesDomainsOptions,
+): Promise<ReadonlyArray<CloudflarePagesDomain>> =>
+	memoizedListPagesDomains(options)

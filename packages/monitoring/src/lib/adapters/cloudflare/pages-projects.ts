@@ -1,3 +1,4 @@
+import { keyedMemoizeAsync } from '@/lib/adapters/cache.ts'
 import {
 	apiGet,
 	extractObjectResult,
@@ -37,11 +38,15 @@ const parsePagesProject = (
 	}
 }
 
+// Pages project lists rarely change (creation/deletion are infrequent).
+const PAGES_PROJECTS_TTL_MS = 60_000
+const PAGES_PROJECT_TTL_MS = 60_000
+
 export interface ListPagesProjectsOptions {
 	readonly client: CloudflareClient
 }
 
-export const listPagesProjects = async ({
+const fetchPagesProjects = async ({
 	client,
 }: ListPagesProjectsOptions): Promise<
 	ReadonlyArray<CloudflarePagesProject>
@@ -58,12 +63,23 @@ export const listPagesProjects = async ({
 	)
 }
 
+const memoizedListPagesProjects = keyedMemoizeAsync(
+	PAGES_PROJECTS_TTL_MS,
+	({ client }: ListPagesProjectsOptions) => client.accountId,
+	fetchPagesProjects,
+)
+
+export const listPagesProjects = (
+	options: ListPagesProjectsOptions,
+): Promise<ReadonlyArray<CloudflarePagesProject>> =>
+	memoizedListPagesProjects(options)
+
 export interface GetPagesProjectOptions {
 	readonly client: CloudflareClient
 	readonly projectName: string
 }
 
-export const getPagesProject = async ({
+const fetchPagesProject = async ({
 	client,
 	projectName,
 }: GetPagesProjectOptions): Promise<CloudflarePagesProject> => {
@@ -76,3 +92,14 @@ export const getPagesProject = async ({
 	const result = extractObjectResult(data, context)
 	return parsePagesProject(result, context)
 }
+
+const memoizedGetPagesProject = keyedMemoizeAsync(
+	PAGES_PROJECT_TTL_MS,
+	({ client, projectName }: GetPagesProjectOptions) =>
+		`${client.accountId} ${projectName}`,
+	fetchPagesProject,
+)
+
+export const getPagesProject = (
+	options: GetPagesProjectOptions,
+): Promise<CloudflarePagesProject> => memoizedGetPagesProject(options)

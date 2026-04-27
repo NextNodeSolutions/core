@@ -1,3 +1,4 @@
+import { keyedMemoizeAsync } from '@/lib/adapters/cache.ts'
 import { listAll } from '@/lib/adapters/cloudflare/client.ts'
 import type { CloudflareClient } from '@/lib/adapters/cloudflare/client.ts'
 import type { CloudflareZone } from '@/lib/domain/cloudflare/zone.ts'
@@ -24,7 +25,11 @@ const parseZone = (raw: unknown, index: number): CloudflareZone => {
 	}
 }
 
-export const listZones = async (
+// Zones change very rarely — adding a new zone is a manual operator step. A
+// 5 min TTL is plenty fresh and removes most of the per-page-render fan-out.
+const ZONES_TTL_MS = 300_000
+
+const fetchZones = async (
 	client: CloudflareClient,
 ): Promise<ReadonlyArray<CloudflareZone>> => {
 	const context = `Cloudflare zones list (account ${client.accountId})`
@@ -36,3 +41,13 @@ export const listZones = async (
 	)
 	return raw.map(parseZone)
 }
+
+const memoizedListZones = keyedMemoizeAsync(
+	ZONES_TTL_MS,
+	(client: CloudflareClient) => client.accountId,
+	fetchZones,
+)
+
+export const listZones = (
+	client: CloudflareClient,
+): Promise<ReadonlyArray<CloudflareZone>> => memoizedListZones(client)

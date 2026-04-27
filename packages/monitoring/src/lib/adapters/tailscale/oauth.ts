@@ -1,3 +1,4 @@
+import { keyedMemoizeAsync } from '@/lib/adapters/cache.ts'
 import { isRecord } from '@/lib/domain/is-record.ts'
 
 const TAILSCALE_API_BASE = 'https://api.tailscale.com/api/v2'
@@ -81,14 +82,33 @@ const findDeviceIpv4 = (devices: unknown, hostname: string): string | null => {
 	)
 }
 
+// Tailscale device IPs change only when a host re-registers — rare enough
+// that 60 s is well within "fresh enough" for the monitoring view, and it
+// collapses two sequential fetches (token exchange + list devices) into a
+// single cached lookup per host per minute.
+const TAILNET_IP_TTL_MS = 60_000
+
 // Returns `null` instead of throwing when the device is not (yet) on the
 // tailnet. The monitoring dashboard surfaces this via the empty state — it
 // does not poll.
-export const getTailnetIpByHostname = async (
+const fetchTailnetIpByHostname = async (args: {
+	clientSecret: string
+	hostname: string
+}): Promise<string | null> => {
+	const accessToken = await exchangeClientSecret(args.clientSecret)
+	const data = await listDevices(accessToken)
+	return findDeviceIpv4(data, args.hostname)
+}
+
+const memoizedGetTailnetIpByHostname = keyedMemoizeAsync(
+	TAILNET_IP_TTL_MS,
+	(args: { clientSecret: string; hostname: string }) =>
+		`${args.clientSecret} ${args.hostname}`,
+	fetchTailnetIpByHostname,
+)
+
+export const getTailnetIpByHostname = (
 	clientSecret: string,
 	hostname: string,
-): Promise<string | null> => {
-	const accessToken = await exchangeClientSecret(clientSecret)
-	const data = await listDevices(accessToken)
-	return findDeviceIpv4(data, hostname)
-}
+): Promise<string | null> =>
+	memoizedGetTailnetIpByHostname({ clientSecret, hostname })
