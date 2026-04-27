@@ -11,6 +11,9 @@
   "homepage": "https://github.com/NextNodeSolutions/core#readme",
   "license": "MIT",
   "author": "NextNode Solutions",
+  "files": [
+    "dist"
+  ],
   "repository": {
     "directory": "packages/monitoring",
     "type": "git",
