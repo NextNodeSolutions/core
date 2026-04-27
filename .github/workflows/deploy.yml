@@ -68,9 +68,6 @@ jobs:
         name: Provision
         needs: [plan, quality]
         runs-on: ubuntu-latest
-        outputs:
-            r2_access_key_id: ${{ steps.provision.outputs.r2_access_key_id }}
-            r2_secret_access_key: ${{ steps.provision.outputs.r2_secret_access_key }}
         steps:
             - uses: NextNodeSolutions/core/.github/actions/setup@main
               with:
@@ -130,8 +127,8 @@ jobs:
                   TAILSCALE_AUTH_KEY: ${{ secrets.TS_OAUTH_SECRET }}
                   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
                   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-                  R2_ACCESS_KEY_ID: ${{ needs.provision.outputs.r2_access_key_id }}
-                  R2_SECRET_ACCESS_KEY: ${{ needs.provision.outputs.r2_secret_access_key }}
+                  R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+                  R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
 
     build-image:
         name: Build image
@@ -205,8 +202,8 @@ jobs:
                   TAILSCALE_AUTH_KEY: ${{ secrets.TS_OAUTH_SECRET }}
                   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
                   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-                  R2_ACCESS_KEY_ID: ${{ needs.provision.outputs.r2_access_key_id }}
-                  R2_SECRET_ACCESS_KEY: ${{ needs.provision.outputs.r2_secret_access_key }}
+                  R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+                  R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
                   IMAGE_REF: ${{ needs.build-image.outputs.image_ref }}
                   GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   ALL_SECRETS: ${{ toJSON(secrets) }}

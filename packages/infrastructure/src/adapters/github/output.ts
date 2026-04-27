@@ -10,11 +10,6 @@ export function writeOutput(key: string, value: string): void {
 	appendFileSync(outputFile, `${key}=${value}\n`)
 }
 
-export function writeMaskedOutput(key: string, value: string): void {
-	process.stdout.write(`::add-mask::${value}\n`)
-	writeOutput(key, value)
-}
-
 export function writeSummary(markdown: string): void {
 	const summaryFile = process.env['GITHUB_STEP_SUMMARY']
 	if (!summaryFile) {

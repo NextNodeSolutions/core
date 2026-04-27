@@ -1,27 +1,11 @@
-import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import ssh2 from 'ssh2'
-import {
-	afterEach,
-	beforeAll,
-	beforeEach,
-	describe,
-	expect,
-	it,
-	vi,
-} from 'vitest'
-
-const { utils: sshUtils } = ssh2
-
-import {
-	APP_WITH_DOMAIN,
-	STATIC_NO_DOMAIN,
-	STATIC_WITH_DOMAIN,
-} from '#/cli/fixtures.ts'
+import { STATIC_NO_DOMAIN, STATIC_WITH_DOMAIN } from '#/cli/fixtures.ts'
 import type { FetchImpl } from '#/test-fetch.ts'
 import { methodOf, notFound, okJson, urlOf } from '#/test-fetch.ts'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { provisionCommand } from './provision.command.ts'
 
@@ -113,12 +97,6 @@ function stubCloudflareApi(): ReturnType<typeof vi.fn<FetchImpl>> {
 describe('provisionCommand', () => {
 	let summaryFile: string
 	let outputFile: string
-	let stdoutSpy: ReturnType<typeof vi.spyOn>
-	let testPrivateKey: string
-
-	beforeAll(() => {
-		testPrivateKey = sshUtils.generateKeyPairSync('ed25519').private
-	})
 
 	beforeEach(() => {
 		const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -129,9 +107,6 @@ describe('provisionCommand', () => {
 		vi.stubEnv('CLOUDFLARE_API_TOKEN', 'cf-token')
 		vi.stubEnv('GITHUB_STEP_SUMMARY', summaryFile)
 		vi.stubEnv('GITHUB_OUTPUT', outputFile)
-		stdoutSpy = vi
-			.spyOn(process.stdout, 'write')
-			.mockImplementation(() => true)
 	})
 
 	afterEach(() => {
@@ -140,7 +115,6 @@ describe('provisionCommand', () => {
 		vi.unstubAllEnvs()
 		vi.unstubAllGlobals()
 		vi.restoreAllMocks()
-		stdoutSpy.mockRestore()
 	})
 
 	it('provisions Pages project and domains for a static project with domain', async () => {
@@ -171,40 +145,6 @@ describe('provisionCommand', () => {
 		const summary = readFileSync(summaryFile, 'utf-8')
 		expect(summary).toContain('Infrastructure ready for `my-site`')
 		expect(summary).toContain('cloudflare-pages')
-	})
-
-	it('emits R2 creds as masked GITHUB_OUTPUT entries when infra storage is provisioned', async () => {
-		vi.stubEnv('HETZNER_API_TOKEN', 'hcloud-token')
-		vi.stubEnv(
-			'DEPLOY_SSH_PRIVATE_KEY_B64',
-			Buffer.from(testPrivateKey).toString('base64'),
-		)
-		vi.stubEnv('TAILSCALE_AUTH_KEY', 'tskey-auth-test')
-
-		await provisionCommand(APP_WITH_DOMAIN)
-
-		const output = readFileSync(outputFile, 'utf-8')
-		expect(output).toContain('r2_access_key_id=fresh-r2-key\n')
-		expect(output).toContain('r2_secret_access_key=fresh-r2-secret\n')
-
-		const writes = stdoutSpy.mock.calls.map(call => String(call[0]))
-		expect(writes).toContain('::add-mask::fresh-r2-key\n')
-		expect(writes).toContain('::add-mask::fresh-r2-secret\n')
-	})
-
-	it('does not write R2 outputs when no infra storage is required', async () => {
-		stubCloudflareApi()
-
-		await provisionCommand(STATIC_NO_DOMAIN)
-
-		const output = existsSync(outputFile)
-			? readFileSync(outputFile, 'utf-8')
-			: ''
-		expect(output).not.toContain('r2_access_key_id')
-		expect(output).not.toContain('r2_secret_access_key')
-
-		const writes = stdoutSpy.mock.calls.map(call => String(call[0]))
-		expect(writes.some(w => w.startsWith('::add-mask::'))).toBe(false)
 	})
 
 	it('throws when CLOUDFLARE_ACCOUNT_ID is missing', async () => {
