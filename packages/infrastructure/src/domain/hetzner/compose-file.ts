@@ -10,13 +10,6 @@ import { stringify } from 'yaml'
  */
 export const CONTAINER_PORT = 3000
 
-const HOST_PORT_BASE = 8080
-
-const ENV_PORT_OFFSET: Readonly<Record<string, number>> = {
-	production: 0,
-	development: 1,
-}
-
 export interface ComposeFileInput {
 	readonly image: ImageRef
 	readonly hostPort: number
@@ -24,16 +17,6 @@ export interface ComposeFileInput {
 
 export function formatImageRef(image: ImageRef): string {
 	return `${image.registry}/${image.repository}:${image.tag}`
-}
-
-export function computeHostPort(envName: string): number {
-	const offset = ENV_PORT_OFFSET[envName]
-	if (offset === undefined) {
-		throw new Error(
-			`Unknown environment "${envName}" for host port computation`,
-		)
-	}
-	return HOST_PORT_BASE + offset
 }
 
 interface ComposeConfig {

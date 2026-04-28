@@ -4,7 +4,6 @@ import { parse } from 'yaml'
 
 import {
 	CONTAINER_PORT,
-	computeHostPort,
 	formatImageRef,
 	renderComposeFile,
 } from './compose-file.ts'
@@ -44,22 +43,6 @@ describe('formatImageRef', () => {
 				tag: 'v1.2.3',
 			}),
 		).toBe('ghcr.io/org/team/service:v1.2.3')
-	})
-})
-
-describe('computeHostPort', () => {
-	it('returns 8080 for production', () => {
-		expect(computeHostPort('production')).toBe(8080)
-	})
-
-	it('returns 8081 for development', () => {
-		expect(computeHostPort('development')).toBe(8081)
-	})
-
-	it('throws on unknown environment', () => {
-		expect(() => computeHostPort('staging')).toThrow(
-			'Unknown environment "staging" for host port computation',
-		)
 	})
 })
 
