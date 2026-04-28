@@ -1,0 +1,56 @@
+---
+import CloudflareProjectGroupCard from '@/components/dashboard/CloudflareProjectGroupCard.astro'
+import EmptyListMessage from '@/components/dashboard/EmptyListMessage.astro'
+import LoadStateBanner from '@/components/dashboard/LoadStateBanner.astro'
+import SectionHeader from '@/components/dashboard/SectionHeader.astro'
+import StatCard from '@/components/dashboard/StatCard.astro'
+import { resolveCloudflareClient } from '@/lib/adapters/cloudflare/accounts.ts'
+import { listPagesEntries } from '@/lib/adapters/cloudflare/list-pages-entries.ts'
+import { loadPageState } from '@/lib/adapters/load-page-state.ts'
+import { groupPagesProjects } from '@/lib/domain/cloudflare/project-group.ts'
+
+const state = await loadPageState('cloudflare.projects.page', async () => {
+	const client = await resolveCloudflareClient()
+	return listPagesEntries({ client })
+})
+
+const groups = state.kind === 'ok' ? groupPagesProjects(state.data) : []
+---
+
+<section class="space-y-6">
+	<div class="flex items-end justify-between gap-4">
+		<SectionHeader kicker="Cloudflare" title="Pages projects" />
+		<a
+			href="/cloudflare"
+			class="font-mono text-xs uppercase tracking-wider text-base-500 transition-colors hover:text-base-900"
+		>
+			Open →
+		</a>
+	</div>
+
+	<div class="grid grid-cols-1 gap-4 sm:grid-cols-1">
+		<StatCard
+			label="Cloudflare projects"
+			value={state.kind === 'ok' ? groups.length : '—'}
+			hint="Pages logical groups"
+		/>
+	</div>
+
+	{
+		state.kind === 'ok' && groups.length > 0 && (
+			<div class="grid gap-5 lg:grid-cols-2">
+				{groups.map((group) => (
+					<CloudflareProjectGroupCard group={group} />
+				))}
+			</div>
+		)
+	}
+
+	{
+		state.kind === 'ok' && groups.length === 0 && (
+			<EmptyListMessage message="No Pages project found in this account." />
+		)
+	}
+
+	<LoadStateBanner state={state} upstreamLabel="Cloudflare API error" />
+</section>

@@ -33,16 +33,18 @@
     "preview": "astro preview"
   },
   "dependencies": {
-    "@astrojs/node": "^9.5.5",
+    "@astrojs/node": "^10.0.6",
+    "@epic-web/cachified": "^5.6.2",
     "@js-temporal/polyfill": "^0.5.1",
     "@nextnode-solutions/brand-assets": "workspace:*",
     "@nextnode-solutions/logger": "workspace:*",
     "@tailwindcss/vite": "^4.2.2",
-    "astro": "^5.18.1",
+    "astro": "^6.1.9",
+    "lru-cache": "^11.3.5",
     "tailwindcss": "^4.2.2"
   },
   "devDependencies": {
-    "@astrojs/check": "^0.9.4",
+    "@astrojs/check": "^0.9.8",
     "@nextnode-solutions/standards": "workspace:*",
     "@typescript/native-preview": "7.0.0-dev.20260407.1",
     "@vitest/coverage-v8": "^3.0.0",

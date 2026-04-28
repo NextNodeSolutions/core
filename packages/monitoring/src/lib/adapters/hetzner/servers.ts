@@ -1,3 +1,4 @@
+import { keyedMemoizeAsync } from '@/lib/adapters/cache.ts'
 import { hetznerGet } from '@/lib/adapters/hetzner/client.ts'
 import {
 	parseVpsArchitecture,
@@ -167,6 +168,12 @@ const parseServerList = (
 	return data.servers.map(parseServer)
 }
 
+// VPS state changes rarely (create/destroy/reboot are operator-driven and
+// confirm-gated). 30 s strikes the balance between snappy navigation and
+// the operator seeing a freshly-destroyed server disappear soon after.
+const SERVER_LIST_TTL_MS = 30_000
+const SERVER_BY_NAME_TTL_MS = 30_000
+
 /**
  * List every Hetzner server reachable by the given token.
  *
@@ -174,13 +181,23 @@ const parseServerList = (
  * under the Hetzner default per-page cap. If the fleet grows past one
  * page, switch to iterating `meta.pagination.next_page`.
  */
-export const listServers = async (
+const fetchServerList = async (
 	token: string,
 ): Promise<ReadonlyArray<HetznerVps>> => {
 	const context = 'Hetzner servers list'
 	const data = await hetznerGet('/servers', token, context)
 	return parseServerList(data, context)
 }
+
+const memoizedListServers = keyedMemoizeAsync(
+	SERVER_LIST_TTL_MS,
+	(token: string) => token,
+	fetchServerList,
+)
+
+export const listServers = (
+	token: string,
+): Promise<ReadonlyArray<HetznerVps>> => memoizedListServers(token)
 
 /**
  * Fetch a single Hetzner server by name.
@@ -189,16 +206,27 @@ export const listServers = async (
  * `/servers?name=<name>`, which returns a list filtered server-side. Names
  * are unique within a project, so we expect zero or one match.
  */
-export const getServerByName = async (
-	token: string,
-	name: string,
-): Promise<HetznerVps | null> => {
-	const context = `Hetzner server "${name}"`
+const fetchServerByName = async (args: {
+	token: string
+	name: string
+}): Promise<HetznerVps | null> => {
+	const context = `Hetzner server "${args.name}"`
 	const data = await hetznerGet(
-		`/servers?name=${encodeURIComponent(name)}`,
-		token,
+		`/servers?name=${encodeURIComponent(args.name)}`,
+		args.token,
 		context,
 	)
 	const servers = parseServerList(data, context)
 	return servers[0] ?? null
 }
+
+const memoizedGetServerByName = keyedMemoizeAsync(
+	SERVER_BY_NAME_TTL_MS,
+	(args: { token: string; name: string }) => `${args.token} ${args.name}`,
+	fetchServerByName,
+)
+
+export const getServerByName = (
+	token: string,
+	name: string,
+): Promise<HetznerVps | null> => memoizedGetServerByName({ token, name })

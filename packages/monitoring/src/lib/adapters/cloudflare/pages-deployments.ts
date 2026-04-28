@@ -1,3 +1,4 @@
+import { keyedMemoizeAsync } from '@/lib/adapters/cache.ts'
 import { apiGet, extractArrayResult } from '@/lib/adapters/cloudflare/client.ts'
 import type { CloudflareClient } from '@/lib/adapters/cloudflare/client.ts'
 import {
@@ -108,10 +109,15 @@ export interface ListPagesDeploymentsOptions {
 	readonly limit: number
 }
 
+// Deployments are the most dynamic CF data — a build can finish during the
+// dashboard session. Keep TTL short so refreshing the page surfaces new
+// deployments quickly while still collapsing duplicate concurrent renders.
+const PAGES_DEPLOYMENTS_TTL_MS = 15_000
+
 // Cloudflare returns deployments newest-first; the dashboard only ever needs a
 // bounded "recent deployments" slice, so this fetches page 1 with `per_page =
 // limit` rather than auto-paginating the full history.
-export const listPagesDeployments = async ({
+const fetchPagesDeployments = async ({
 	client,
 	projectName,
 	limit,
@@ -128,3 +134,15 @@ export const listPagesDeployments = async ({
 	const result = extractArrayResult(data, context)
 	return result.map(parsePagesDeployment)
 }
+
+const memoizedListPagesDeployments = keyedMemoizeAsync(
+	PAGES_DEPLOYMENTS_TTL_MS,
+	({ client, projectName, limit }: ListPagesDeploymentsOptions) =>
+		`${client.accountId} ${projectName} ${String(limit)}`,
+	fetchPagesDeployments,
+)
+
+export const listPagesDeployments = (
+	options: ListPagesDeploymentsOptions,
+): Promise<ReadonlyArray<CloudflarePagesDeployment>> =>
+	memoizedListPagesDeployments(options)

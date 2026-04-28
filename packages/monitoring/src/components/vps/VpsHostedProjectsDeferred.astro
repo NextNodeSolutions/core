@@ -1,0 +1,38 @@
+---
+import LoadStateBanner from '@/components/dashboard/LoadStateBanner.astro'
+import VpsHostedProjects from '@/components/vps/VpsHostedProjects.astro'
+import { resolveCloudflareClient } from '@/lib/adapters/cloudflare/accounts.ts'
+import { listDnsMatchesForVps } from '@/lib/adapters/cloudflare/vps-dns.ts'
+import { ENV_KEYS, getEnv } from '@/lib/adapters/env.ts'
+import { loadPageState } from '@/lib/adapters/load-page-state.ts'
+import { getTailnetIpByHostname } from '@/lib/adapters/tailscale/oauth.ts'
+import { groupDnsMatchesByHostname } from '@/lib/domain/cloudflare/vps-hosted-project.ts'
+
+interface Props {
+	slug: string
+	publicIpv4: string | null
+	publicIpv6: string | null
+}
+
+const { slug, publicIpv4, publicIpv6 } = Astro.props
+
+const dnsState = await loadPageState(`cloudflare.dns.vps.${slug}`, async () => {
+	const client = await resolveCloudflareClient()
+	const tailscaleSecret = getEnv(ENV_KEYS.TS_OAUTH_SECRET)
+	const tailnetIp = tailscaleSecret
+		? await getTailnetIpByHostname(tailscaleSecret, slug)
+		: null
+	const matches = await listDnsMatchesForVps({
+		client,
+		publicIpv4,
+		publicIpv6,
+		tailnetIp,
+	})
+	return groupDnsMatchesByHostname(matches)
+})
+
+const hostedProjects = dnsState.kind === 'ok' ? dnsState.data : null
+---
+
+{hostedProjects && <VpsHostedProjects projects={hostedProjects} />}
+<LoadStateBanner state={dnsState} upstreamLabel="Cloudflare DNS error" />

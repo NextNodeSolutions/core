@@ -1,19 +1,10 @@
 ---
-import EmptyListMessage from '@/components/dashboard/EmptyListMessage.astro'
-import LoadStateBanner from '@/components/dashboard/LoadStateBanner.astro'
 import SectionHeader from '@/components/dashboard/SectionHeader.astro'
+import Skeleton from '@/components/dashboard/Skeleton.astro'
+import VpsFleetSection from '@/components/vps/VpsFleetSection.astro'
 import DashboardLayout from '@/layouts/DashboardLayout.astro'
-import { ENV_KEYS, requireEnv } from '@/lib/adapters/env.ts'
-import { listServers } from '@/lib/adapters/hetzner/servers.ts'
-import { loadPageState } from '@/lib/adapters/load-page-state.ts'
-import { vpsDetailPath } from '@/lib/domain/hetzner/vps-routes.ts'
 
 export const prerender = false
-
-const state = await loadPageState('hetzner.servers.page', () => {
-	const token = requireEnv(ENV_KEYS.HETZNER_API_TOKEN)
-	return listServers(token)
-})
 ---
 
 <DashboardLayout
@@ -26,77 +17,7 @@ const state = await loadPageState('hetzner.servers.page', () => {
 		description="Every Hetzner server reachable with the current API token. All traffic reaches these hosts through Tailscale."
 	/>
 
-	{
-		state.kind === 'ok' && state.data.length > 0 && (
-			<ul class="mt-8 divide-y divide-base-100 overflow-hidden rounded-2xl border border-base-100 bg-white shadow-subtle">
-				{state.data.map((server) => (
-					<li>
-						<a
-							href={vpsDetailPath(server.name)}
-							class="group flex flex-wrap items-center gap-4 px-6 py-5 transition-colors hover:bg-base-50"
-						>
-							<div class="min-w-0 flex-1">
-								<h3 class="font-display text-base font-semibold text-base-900">
-									{server.name}
-								</h3>
-								<p class="mt-1 font-mono text-xs text-base-500 truncate">
-									{server.ipv4 ?? 'no public ipv4'}
-								</p>
-							</div>
-
-							<dl class="flex items-center gap-6 text-xs">
-								<div>
-									<dt class="font-mono text-[10px] uppercase tracking-wider text-base-500">
-										Status
-									</dt>
-									<dd class="mt-1 font-mono text-base-900 capitalize">
-										{server.status}
-									</dd>
-								</div>
-								<div>
-									<dt class="font-mono text-[10px] uppercase tracking-wider text-base-500">
-										Type
-									</dt>
-									<dd class="mt-1 font-mono text-base-900">
-										{server.serverType.name}
-									</dd>
-								</div>
-								<div>
-									<dt class="font-mono text-[10px] uppercase tracking-wider text-base-500">
-										Location
-									</dt>
-									<dd class="mt-1 font-mono text-base-900">
-										{server.location.name}
-									</dd>
-								</div>
-								<div>
-									<dt class="font-mono text-[10px] uppercase tracking-wider text-base-500">
-										ID
-									</dt>
-									<dd class="mt-1 font-mono text-base-900">
-										{server.id}
-									</dd>
-								</div>
-							</dl>
-
-							<span
-								aria-hidden="true"
-								class="text-base-400 transition-all group-hover:text-accent-700 group-hover:translate-x-0.5"
-							>
-								→
-							</span>
-						</a>
-					</li>
-				))}
-			</ul>
-		)
-	}
-
-	{
-		state.kind === 'ok' && state.data.length === 0 && (
-			<EmptyListMessage message="No Hetzner server found for this token." />
-		)
-	}
-
-	<LoadStateBanner state={state} upstreamLabel="Hetzner API error" />
+	<VpsFleetSection server:defer>
+		<Skeleton slot="fallback" rows={5} class="mt-8" />
+	</VpsFleetSection>
 </DashboardLayout>
