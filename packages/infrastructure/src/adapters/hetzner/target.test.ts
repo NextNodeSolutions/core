@@ -980,6 +980,68 @@ describe('HetznerVpsTarget', () => {
 			).rejects.toThrow('SSH write failed')
 			expect(mockSession.close).toHaveBeenCalled()
 		})
+
+		describe('host port allocation', () => {
+			it('persists a fresh allocation under the existing ETag', async () => {
+				const putSpy = vi.spyOn(mockStateStore, 'put')
+				seedState()
+
+				const target = new HetznerVpsTarget(TARGET_CONFIG)
+				await target.deploy('acme-web', DEPLOY_INPUT, DEPLOY_ENV)
+
+				expect(putSpy).toHaveBeenCalledWith(
+					'hetzner/acme-web.json',
+					expect.stringContaining('"hostPorts":{"acme-web":8080}'),
+					'etag-1',
+				)
+				putSpy.mockRestore()
+			})
+
+			it('reuses the same port on redeploy and skips state write', async () => {
+				seedState({
+					...CONVERGED_STATE,
+					hostPorts: { 'acme-web': 8080 },
+				})
+				const putSpy = vi.spyOn(mockStateStore, 'put')
+
+				const target = new HetznerVpsTarget(TARGET_CONFIG)
+				await target.deploy('acme-web', DEPLOY_INPUT, DEPLOY_ENV)
+
+				expect(putSpy).not.toHaveBeenCalled()
+				putSpy.mockRestore()
+			})
+
+			it('allocates a distinct port for a second project on the same VPS', async () => {
+				const { createSshSession: mockedSsh } =
+					await import('./ssh/session.ts')
+				const mockSession = createMockSession()
+				seedState({
+					...CONVERGED_STATE,
+					hostPorts: { 'first-project': 8080 },
+				})
+				vi.mocked(mockedSsh).mockResolvedValueOnce(mockSession)
+
+				const target = new HetznerVpsTarget(TARGET_CONFIG)
+				await target.deploy('second-project', DEPLOY_INPUT, DEPLOY_ENV)
+
+				expect(mockSession.writeFile).toHaveBeenCalledWith(
+					'/opt/apps/second-project/production/compose.yaml',
+					expect.stringContaining('127.0.0.1:8081:3000'),
+				)
+
+				const persisted: unknown = JSON.parse(
+					fakeR2State.get('hetzner/acme-web.json')!,
+				)
+				expect(persisted).toEqual(
+					expect.objectContaining({
+						hostPorts: {
+							'first-project': 8080,
+							'second-project': 8081,
+						},
+					}),
+				)
+			})
+		})
 	})
 
 	describe('reconcileDns', () => {
