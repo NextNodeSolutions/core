@@ -1,23 +1,44 @@
 /**
  * Async memoization with TTL + in-flight request dedup.
  *
- * The monitoring app re-fetches the same upstream data on every navigation
- * (Hetzner servers, Cloudflare projects, Tailscale devices). Wrapping each
- * fetcher in `memoizeAsync` (or `keyedMemoizeAsync` for argument-dependent
- * fetchers) collapses redundant work:
+ * Thin wrapper over `@epic-web/cachified` (semantics) backed by `lru-cache`
+ * (bounded memory). The monitoring app re-fetches the same upstream data on
+ * every navigation (Hetzner servers, Cloudflare projects, Tailscale devices);
+ * `cachified` collapses the redundant work:
  *
- * - **TTL cache**: a successful fetch is reused until `expiresAt`. Failed
+ * - **TTL cache**: a successful fetch is reused until `ttlMs` elapses. Failed
  *   fetches are NEVER cached — the next call retries fresh.
  * - **In-flight dedup**: when two callers ask for the same key while a fetch
  *   is in flight, the second one awaits the first instead of duplicating it.
  *
  * Each memoized function is its own closure-scoped cache, so type safety is
- * preserved end-to-end without `as` assertions.
+ * preserved end-to-end.
  */
 
-interface CacheEntry<T> {
-	readonly value: T
-	readonly expiresAt: number
+import { cachified } from '@epic-web/cachified'
+import type { Cache, CacheEntry } from '@epic-web/cachified'
+import { LRUCache } from 'lru-cache'
+
+const DEFAULT_MAX_ENTRIES = 1000
+const SINGLETON_KEY = 'value'
+
+interface BackedCache<Value> {
+	readonly cache: Cache<Value>
+	readonly clear: () => void
+}
+
+const createLRUBackedCache = <Value>(max: number): BackedCache<Value> => {
+	const lru = new LRUCache<string, CacheEntry<Value>>({ max })
+	const cache: Cache<Value> = {
+		get: key => lru.get(key),
+		set: (key, value) => {
+			lru.set(key, value)
+		},
+		delete: key => {
+			lru.delete(key)
+		},
+	}
+	return { cache, clear: () => lru.clear() }
 }
 
 export interface MemoizedAsync<T> {
@@ -29,31 +50,18 @@ export const memoizeAsync = <T>(
 	ttlMs: number,
 	fetcher: () => Promise<T>,
 ): MemoizedAsync<T> => {
-	let entry: CacheEntry<T> | null = null
-	let inFlight: Promise<T> | null = null
+	const { cache } = createLRUBackedCache<T>(1)
 
-	const get = async (): Promise<T> => {
-		const now = Date.now()
-		if (entry && entry.expiresAt > now) return entry.value
-		if (inFlight) return inFlight
-		const promise = fetcher().then(
-			value => {
-				entry = { value, expiresAt: Date.now() + ttlMs }
-				inFlight = null
-				return value
-			},
-			(error: unknown) => {
-				inFlight = null
-				throw error
-			},
-		)
-		inFlight = promise
-		return promise
-	}
+	const get = (): Promise<T> =>
+		cachified({
+			key: SINGLETON_KEY,
+			cache,
+			ttl: ttlMs,
+			getFreshValue: fetcher,
+		})
 
 	const invalidate = (): void => {
-		entry = null
-		inFlight = null
+		cache.delete(SINGLETON_KEY)
 	}
 
 	return Object.assign(get, { invalidate })
@@ -69,40 +77,22 @@ export const keyedMemoizeAsync = <TArgs, TValue>(
 	keyOf: (args: TArgs) => string,
 	fetcher: (args: TArgs) => Promise<TValue>,
 ): KeyedMemoizedAsync<TArgs, TValue> => {
-	const entries = new Map<string, CacheEntry<TValue>>()
-	const inFlight = new Map<string, Promise<TValue>>()
+	const { cache, clear } = createLRUBackedCache<TValue>(DEFAULT_MAX_ENTRIES)
 
-	const get = async (args: TArgs): Promise<TValue> => {
-		const key = keyOf(args)
-		const now = Date.now()
-		const existing = entries.get(key)
-		if (existing && existing.expiresAt > now) return existing.value
-		const pending = inFlight.get(key)
-		if (pending) return pending
-		const promise = fetcher(args).then(
-			value => {
-				entries.set(key, { value, expiresAt: Date.now() + ttlMs })
-				inFlight.delete(key)
-				return value
-			},
-			(error: unknown) => {
-				inFlight.delete(key)
-				throw error
-			},
-		)
-		inFlight.set(key, promise)
-		return promise
-	}
+	const get = (args: TArgs): Promise<TValue> =>
+		cachified({
+			key: keyOf(args),
+			cache,
+			ttl: ttlMs,
+			getFreshValue: () => fetcher(args),
+		})
 
 	const invalidate = (args?: TArgs): void => {
 		if (args === undefined) {
-			entries.clear()
-			inFlight.clear()
+			clear()
 			return
 		}
-		const key = keyOf(args)
-		entries.delete(key)
-		inFlight.delete(key)
+		cache.delete(keyOf(args))
 	}
 
 	return Object.assign(get, { invalidate })
