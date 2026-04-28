@@ -107,6 +107,7 @@ export async function freshProvision(
 		phase: 'created',
 		serverId,
 		publicIp,
+		hostPorts: {},
 	})
 	logger.info(
 		`State written: phase=created for VPS "${vpsName}" (server ${serverId})`,
@@ -132,6 +133,7 @@ export async function freshProvision(
 			publicIp,
 			tailnetIp,
 			sshHostKeyFingerprint,
+			hostPorts: {},
 		},
 		createdEtag,
 	)
@@ -155,6 +157,7 @@ export async function freshProvision(
 					publicIp,
 					tailnetIp,
 					sshHostKeyFingerprint,
+					hostPorts: {},
 				},
 				provisionedEtag,
 			),
@@ -211,6 +214,7 @@ export async function resumeFromState(
 					publicIp: state.publicIp,
 					tailnetIp: state.tailnetIp,
 					sshHostKeyFingerprint: state.sshHostKeyFingerprint,
+					hostPorts: state.hostPorts,
 				},
 				etag,
 			),
@@ -248,6 +252,7 @@ async function resumeFromCreated(
 			publicIp: state.publicIp,
 			tailnetIp,
 			sshHostKeyFingerprint,
+			hostPorts: state.hostPorts,
 		},
 		etag,
 	)
@@ -274,6 +279,7 @@ async function resumeFromCreated(
 					publicIp: state.publicIp,
 					tailnetIp,
 					sshHostKeyFingerprint,
+					hostPorts: state.hostPorts,
 				},
 				provisionedEtag,
 			),
@@ -289,6 +295,7 @@ async function convergeAndWriteState(
 		publicIp: string
 		tailnetIp: string
 		sshHostKeyFingerprint?: string | undefined
+		hostPorts: Readonly<Record<string, number>>
 	},
 	etag: string,
 ): Promise<ResourceOutcome> {
@@ -314,6 +321,7 @@ async function convergeAndWriteState(
 			tailnetIp: state.tailnetIp,
 			convergedAt: new Date().toISOString(),
 			sshHostKeyFingerprint: state.sshHostKeyFingerprint,
+			hostPorts: state.hostPorts,
 		},
 		etag,
 	)
@@ -382,6 +390,7 @@ async function attachToExistingVps(
 		phase: 'created',
 		serverId: server.serverId,
 		publicIp: server.publicIp,
+		hostPorts: {},
 	})
 	logger.info(
 		`State seeded: phase=created for attached VPS "${vpsName}" (server ${server.serverId})`,
@@ -407,6 +416,7 @@ async function attachToExistingVps(
 			publicIp: server.publicIp,
 			tailnetIp,
 			sshHostKeyFingerprint,
+			hostPorts: {},
 		},
 		createdEtag,
 	)
@@ -433,6 +443,7 @@ async function attachToExistingVps(
 					publicIp: server.publicIp,
 					tailnetIp,
 					sshHostKeyFingerprint,
+					hostPorts: {},
 				},
 				provisionedEtag,
 			),

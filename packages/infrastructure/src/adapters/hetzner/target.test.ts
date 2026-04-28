@@ -198,6 +198,7 @@ const CONVERGED_STATE: HcloudVpsState = {
 	publicIp: '1.2.3.4',
 	tailnetIp: '100.74.91.126',
 	convergedAt: '2026-04-17T10:00:00.000Z',
+	hostPorts: {},
 }
 
 function seedState(state: HcloudVpsState = CONVERGED_STATE): void {
@@ -560,6 +561,7 @@ describe('HetznerVpsTarget', () => {
 					phase: 'created',
 					serverId: 42,
 					publicIp: '1.2.3.4',
+					hostPorts: {},
 				})
 			})
 		})
@@ -572,6 +574,7 @@ describe('HetznerVpsTarget', () => {
 					phase: 'created',
 					serverId: 42,
 					publicIp: '1.2.3.4',
+					hostPorts: {},
 				})
 
 				const target = new HetznerVpsTarget(TARGET_CONFIG)
@@ -587,6 +590,7 @@ describe('HetznerVpsTarget', () => {
 					phase: 'created',
 					serverId: 42,
 					publicIp: '1.2.3.4',
+					hostPorts: {},
 				})
 
 				const target = new HetznerVpsTarget(TARGET_CONFIG)
@@ -600,6 +604,7 @@ describe('HetznerVpsTarget', () => {
 					phase: 'created',
 					serverId: 42,
 					publicIp: '1.2.3.4',
+					hostPorts: {},
 				})
 
 				const target = new HetznerVpsTarget(TARGET_CONFIG)
@@ -628,6 +633,7 @@ describe('HetznerVpsTarget', () => {
 					serverId: 42,
 					publicIp: '1.2.3.4',
 					tailnetIp: '100.74.91.126',
+					hostPorts: {},
 				})
 
 				const target = new HetznerVpsTarget(TARGET_CONFIG)
@@ -643,6 +649,7 @@ describe('HetznerVpsTarget', () => {
 					serverId: 42,
 					publicIp: '1.2.3.4',
 					tailnetIp: '100.74.91.126',
+					hostPorts: {},
 				})
 
 				const target = new HetznerVpsTarget(TARGET_CONFIG)
@@ -809,6 +816,7 @@ describe('HetznerVpsTarget', () => {
 				phase: 'created',
 				serverId: 42,
 				publicIp: '1.2.3.4',
+				hostPorts: {},
 			})
 
 			const target = new HetznerVpsTarget(TARGET_CONFIG)
