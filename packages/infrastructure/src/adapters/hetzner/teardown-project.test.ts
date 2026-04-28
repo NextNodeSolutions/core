@@ -1,7 +1,10 @@
+import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { SshSession } from './ssh/session.types.ts'
+import type { HcloudConvergedState } from './state/types.ts'
 import {
+	releaseProjectHostPort,
 	teardownProjectCaddyRoute,
 	teardownProjectContainer,
 } from './teardown-project.ts'
@@ -29,6 +32,29 @@ function createMockSession(): SshSession {
 		readFile: vi.fn(async () => null),
 		close: vi.fn(),
 		hostKeyFingerprint: 'test-fingerprint',
+	}
+}
+
+function createMockR2(): ObjectStoreClient {
+	return {
+		get: vi.fn(),
+		put: vi.fn(async () => 'new-etag'),
+		delete: vi.fn(),
+		exists: vi.fn(),
+		deleteByPrefix: vi.fn(),
+	}
+}
+
+function buildConvergedState(
+	hostPorts: Record<string, number>,
+): HcloudConvergedState {
+	return {
+		phase: 'converged',
+		serverId: 42,
+		publicIp: '1.2.3.4',
+		tailnetIp: '100.64.0.1',
+		convergedAt: '2026-04-17T10:00:00.000Z',
+		hostPorts,
 	}
 }
 
@@ -255,5 +281,72 @@ describe('teardownProjectCaddyRoute', () => {
 		expect(session.exec).toHaveBeenCalledWith(
 			'caddy reload --config /etc/caddy/config.json',
 		)
+	})
+})
+
+describe('releaseProjectHostPort', () => {
+	it('reports no port allocated when project has no entry (idempotent)', async () => {
+		const r2 = createMockR2()
+		const state = buildConvergedState({ 'other-project': 8080 })
+
+		const outcome = await releaseProjectHostPort(
+			r2,
+			'nn-prod',
+			'acme-web',
+			state,
+			'etag-1',
+		)
+
+		expect(outcome).toEqual({ handled: false, detail: 'no port allocated' })
+		expect(r2.put).not.toHaveBeenCalled()
+	})
+
+	it('removes the project entry and persists state under the ETag lock', async () => {
+		const r2 = createMockR2()
+		const state = buildConvergedState({ 'acme-web': 8080 })
+
+		const outcome = await releaseProjectHostPort(
+			r2,
+			'nn-prod',
+			'acme-web',
+			state,
+			'etag-1',
+		)
+
+		expect(outcome).toEqual({ handled: true, detail: 'port 8080 released' })
+		expect(r2.put).toHaveBeenCalledTimes(1)
+		const [key, body, ifMatch] = vi.mocked(r2.put).mock.calls[0]!
+		expect(key).toBe('hetzner/nn-prod.json')
+		expect(ifMatch).toBe('etag-1')
+		const persisted: unknown = JSON.parse(body)
+		expect(persisted).toMatchObject({
+			phase: 'converged',
+			hostPorts: {},
+		})
+	})
+
+	it('preserves sibling project ports when releasing one project', async () => {
+		const r2 = createMockR2()
+		const state = buildConvergedState({
+			'acme-web': 8080,
+			'other-project': 8081,
+		})
+
+		const outcome = await releaseProjectHostPort(
+			r2,
+			'nn-prod',
+			'acme-web',
+			state,
+			'etag-1',
+		)
+
+		expect(outcome.handled).toBe(true)
+		const [, body] = vi.mocked(r2.put).mock.calls[0]!
+		expect(JSON.parse(body)).toMatchObject({
+			hostPorts: { 'other-project': 8081 },
+		})
+		expect(JSON.parse(body)).not.toMatchObject({
+			hostPorts: { 'acme-web': expect.anything() },
+		})
 	})
 })

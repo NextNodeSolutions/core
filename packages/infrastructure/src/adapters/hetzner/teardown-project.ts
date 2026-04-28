@@ -14,6 +14,11 @@ import { createLogger } from '@nextnode-solutions/logger'
 import { CADDY_CONFIG_PATH } from './constants.ts'
 import type { SshSession } from './ssh/session.types.ts'
 import { shellEscape } from './ssh/shell-escape.ts'
+import { writeState } from './state/read-write.ts'
+import type {
+	HcloudConvergedState,
+	HcloudProvisionedState,
+} from './state/types.ts'
 
 const logger = createLogger()
 
@@ -146,6 +151,40 @@ export async function teardownProjectCerts(
 		handled: deletedCount > 0,
 		detail: `${String(deletedCount)} cert object(s) deleted`,
 	}
+}
+
+/**
+ * Free the project's allocated host port back into the pool by removing
+ * its entry from the persisted `state.hostPorts` map under the same R2
+ * ETag lock used during provisioning, so a future deploy of a different
+ * project on this VPS can reuse the freed port.
+ *
+ * Idempotent: returns `not allocated` when the project has no entry.
+ */
+export async function releaseProjectHostPort(
+	r2: ObjectStoreClient,
+	vpsName: string,
+	projectName: string,
+	state: HcloudProvisionedState | HcloudConvergedState,
+	etag: string,
+): Promise<ResourceOutcome> {
+	const port = state.hostPorts[projectName]
+	if (port === undefined) {
+		return { handled: false, detail: 'no port allocated' }
+	}
+	const remaining: Record<string, number> = {}
+	for (const [project, allocated] of Object.entries(state.hostPorts)) {
+		if (project !== projectName) remaining[project] = allocated
+	}
+	const updated: HcloudProvisionedState | HcloudConvergedState = {
+		...state,
+		hostPorts: remaining,
+	}
+	await writeState(r2, vpsName, updated, etag)
+	logger.info(
+		`Released host port ${String(port)} for "${projectName}" on VPS "${vpsName}"`,
+	)
+	return { handled: true, detail: `port ${String(port)} released` }
 }
 
 /**

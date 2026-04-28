@@ -1,7 +1,6 @@
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
 import { executeHandlers } from '#/domain/deploy/execute-handlers.ts'
-import type { ResourceOutcome } from '#/domain/deploy/resource-outcome.ts'
 import type { TeardownResult } from '#/domain/deploy/teardown-result.ts'
 import type { TeardownTarget } from '#/domain/deploy/teardown-target.ts'
 import type { DnsClient } from '#/domain/dns/client.ts'
@@ -19,7 +18,9 @@ import { CADDY_CONFIG_PATH } from './constants.ts'
 import { createSshSession } from './ssh/session.ts'
 import type { SshSession } from './ssh/session.types.ts'
 import { readState } from './state/read-write.ts'
+import type { HcloudConvergedState } from './state/types.ts'
 import {
+	releaseProjectHostPort,
 	teardownProjectCaddyRoute,
 	teardownProjectCerts,
 	teardownProjectContainer,
@@ -171,15 +172,21 @@ async function teardownProject(
 		)
 	}
 
+	const convergedState: HcloudConvergedState = existing.state
 	const session = await createSshSession({
-		host: existing.state.tailnetIp,
+		host: convergedState.tailnetIp,
 		username: 'deploy',
 		privateKey: ctx.deployPrivateKey,
-		expectedHostKeyFingerprint: existing.state.sshHostKeyFingerprint,
+		expectedHostKeyFingerprint: convergedState.sshHostKeyFingerprint,
 	})
 
 	try {
-		return await teardownProjectWithSession(ctx, session, start)
+		return await teardownProjectWithSession(
+			ctx,
+			session,
+			{ state: convergedState, etag: existing.etag },
+			start,
+		)
 	} finally {
 		session.close()
 	}
@@ -188,6 +195,7 @@ async function teardownProject(
 async function teardownProjectWithSession(
 	ctx: HetznerTeardownContext,
 	session: SshSession,
+	existing: { state: HcloudConvergedState; etag: string },
 	startMs: number,
 ): Promise<TeardownResult> {
 	const projectHostname = ctx.domain
@@ -207,7 +215,14 @@ async function teardownProjectWithSession(
 		certs: () =>
 			teardownProjectCerts(ctx.certsR2, ctx.vpsName, projectHostname),
 		dns: () => teardownProjectDns(projectHostname, ctx.dns),
-		state: () => skipSharedState(),
+		state: () =>
+			releaseProjectHostPort(
+				ctx.r2,
+				ctx.vpsName,
+				ctx.projectName,
+				existing.state,
+				existing.etag,
+			),
 	})
 
 	logger.info(
@@ -220,10 +235,4 @@ async function teardownProjectWithSession(
 		outcome,
 		durationMs: Date.now() - startMs,
 	}
-}
-
-// State is keyed by VPS name and shared across every project on the same
-// VPS. Per-project teardown leaves the state intact.
-function skipSharedState(): ResourceOutcome {
-	return { handled: false, detail: 'shared with VPS — kept' }
 }
