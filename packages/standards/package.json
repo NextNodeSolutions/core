@@ -1,6 +1,6 @@
 {
   "name": "@nextnode-solutions/standards",
-  "version": "1.9.3",
+  "version": "1.0.0",
   "description": "Centralized development standards for NextNode projects: oxlint, oxfmt, TypeScript, Tailwind, Vitest, commitlint",
   "keywords": [
     "commitlint",
