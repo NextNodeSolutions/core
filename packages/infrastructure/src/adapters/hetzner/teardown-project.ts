@@ -170,6 +170,9 @@ export async function releaseProjectHostPort(
 ): Promise<ResourceOutcome> {
 	const port = state.hostPorts[projectName]
 	if (port === undefined) {
+		logger.info(
+			`No host port to release for "${projectName}" on VPS "${vpsName}" (already absent)`,
+		)
 		return { handled: false, detail: 'no port allocated' }
 	}
 	const remaining: Record<string, number> = {}
