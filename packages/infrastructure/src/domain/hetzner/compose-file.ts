@@ -10,6 +10,11 @@ import { stringify } from 'yaml'
  */
 export const CONTAINER_PORT = 3000
 
+/**
+ * A Docker named volume managed by the Docker daemon on the VPS local SSD
+ * (under `/var/lib/docker/volumes/...`). NOT a Hetzner Block Volume —
+ * Hetzner Volumes are not used by default (see `docs/infra-topology.md`).
+ */
 export interface ComposeVolume {
 	readonly name: string
 	readonly mount: string
@@ -41,26 +46,22 @@ interface ComposeConfig {
 }
 
 export function renderComposeFile(input: ComposeFileInput): string {
-	const volumes =
-		input.volumes !== undefined && input.volumes.length > 0
-			? input.volumes
-			: undefined
+	const volumes = input.volumes?.length ? input.volumes : undefined
 
-	const app: ComposeService = {
-		image: formatImageRef(input.image),
-		restart: 'unless-stopped',
-		env_file: ['.env'],
-		ports: [`127.0.0.1:${input.hostPort}:${CONTAINER_PORT}`],
-		...(volumes && {
-			volumes: volumes.map(v => `${v.name}:${v.mount}`),
-		}),
-	}
-
-	const emptyMount: Record<string, never> = {}
 	const config: ComposeConfig = {
-		services: { app },
+		services: {
+			app: {
+				image: formatImageRef(input.image),
+				restart: 'unless-stopped',
+				env_file: ['.env'],
+				ports: [`127.0.0.1:${input.hostPort}:${CONTAINER_PORT}`],
+				...(volumes && {
+					volumes: volumes.map(v => `${v.name}:${v.mount}`),
+				}),
+			},
+		},
 		...(volumes && {
-			volumes: Object.fromEntries(volumes.map(v => [v.name, emptyMount])),
+			volumes: Object.fromEntries(volumes.map(v => [v.name, {}])),
 		}),
 	}
 
