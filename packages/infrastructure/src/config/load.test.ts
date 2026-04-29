@@ -99,6 +99,7 @@ describe('parseConfig', () => {
 				vps: null,
 				volumes: [],
 				hetzner: { serverType: 'cpx22', location: 'nbg1' },
+				image: { source: 'build' },
 			})
 		})
 
@@ -705,6 +706,7 @@ describe('parseConfig', () => {
 				vps: 'monitor-vps',
 				volumes: [],
 				hetzner: { serverType: 'cx23', location: 'nbg1' },
+				image: { source: 'build' },
 			})
 		})
 
@@ -949,7 +951,177 @@ describe('parseConfig', () => {
 				vps: null,
 				volumes: [{ name: 'data', mount: '/var/lib/app' }],
 				hetzner: { serverType: 'cpx22', location: 'nbg1' },
+				image: { source: 'build' },
 			})
+		})
+	})
+
+	describe('deploy.image', () => {
+		it('defaults image source to "build" when not provided', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok || result.config.deploy === false) return
+			if (result.config.deploy.target !== 'hetzner-vps') return
+
+			expect(result.config.deploy.image).toEqual({ source: 'build' })
+		})
+
+		it('accepts explicit source = "build"', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: { image: { source: 'build' } },
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok || result.config.deploy === false) return
+			if (result.config.deploy.target !== 'hetzner-vps') return
+
+			expect(result.config.deploy.image).toEqual({ source: 'build' })
+		})
+
+		it('accepts upstream source with a ref', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: {
+					image: {
+						source: 'upstream',
+						ref: 'docker.n8n.io/n8nio/n8n:1.85.0',
+					},
+				},
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok || result.config.deploy === false) return
+			if (result.config.deploy.target !== 'hetzner-vps') return
+
+			expect(result.config.deploy.image).toEqual({
+				source: 'upstream',
+				ref: 'docker.n8n.io/n8nio/n8n:1.85.0',
+			})
+		})
+
+		it('rejects upstream source without a ref', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: { image: { source: 'upstream' } },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'deploy.image.ref is required and must be a non-empty string when deploy.image.source = "upstream"',
+			)
+		})
+
+		it('rejects upstream source with empty-string ref', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: { image: { source: 'upstream', ref: '' } },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'deploy.image.ref is required and must be a non-empty string when deploy.image.source = "upstream"',
+			)
+		})
+
+		it('rejects ref alongside build source', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: { image: { source: 'build', ref: 'something' } },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'deploy.image.ref is only allowed when deploy.image.source = "upstream"',
+			)
+		})
+
+		it('rejects unknown source values', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: { image: { source: 'pull' } },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'deploy.image.source must be one of: build, upstream',
+			)
+		})
+
+		it('rejects non-table image value', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: { image: 'upstream' },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain('[deploy.image] must be a table')
+		})
+
+		it('rejects [deploy.image] for cloudflare-pages targets', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-site',
+					type: 'static',
+					domain: 'my-site.example.com',
+				},
+				deploy: {
+					target: 'cloudflare-pages',
+					image: { source: 'upstream', ref: 'foo' },
+				},
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'[deploy.image] is not supported with deploy target "cloudflare-pages"',
+			)
 		})
 	})
 
@@ -975,6 +1147,7 @@ describe('parseConfig', () => {
 				vps: null,
 				volumes: [],
 				hetzner: { serverType: 'cpx22', location: 'nbg1' },
+				image: { source: 'build' },
 			})
 		})
 
@@ -1035,6 +1208,7 @@ describe('parseConfig', () => {
 				vps: null,
 				volumes: [],
 				hetzner: { serverType: 'cax11', location: 'fsn1' },
+				image: { source: 'build' },
 			})
 		})
 
@@ -1056,6 +1230,7 @@ describe('parseConfig', () => {
 				vps: null,
 				volumes: [],
 				hetzner: { serverType: 'cx23', location: 'nbg1' },
+				image: { source: 'build' },
 			})
 		})
 
@@ -1078,6 +1253,7 @@ describe('parseConfig', () => {
 				vps: null,
 				volumes: [],
 				hetzner: { serverType: 'cx23', location: 'nbg1' },
+				image: { source: 'build' },
 			})
 		})
 
@@ -1100,6 +1276,7 @@ describe('parseConfig', () => {
 				vps: null,
 				volumes: [],
 				hetzner: { serverType: 'cpx22', location: 'nbg1' },
+				image: { source: 'build' },
 			})
 		})
 
@@ -1231,6 +1408,7 @@ describe('parseConfig', () => {
 				vps: null,
 				volumes: [],
 				hetzner: { serverType: 'cpx22', location: 'nbg1' },
+				image: { source: 'build' },
 			})
 		})
 	})

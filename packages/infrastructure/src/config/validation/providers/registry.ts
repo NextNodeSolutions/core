@@ -1,4 +1,5 @@
 import type {
+	DeployImageConfig,
 	DeploySection,
 	DeployTargetType,
 	DeployVolume,
@@ -19,6 +20,7 @@ export interface DeployProviderValidator {
 		secrets: ReadonlyArray<string>,
 		vps: string | null,
 		volumes: ReadonlyArray<DeployVolume>,
+		image: DeployImageConfig,
 	): DeployProviderResult
 }
 

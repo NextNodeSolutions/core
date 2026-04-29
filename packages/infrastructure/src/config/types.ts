@@ -110,6 +110,26 @@ interface BaseDeploySection {
 export interface HetznerVpsDeploySection extends BaseDeploySection {
 	readonly target: 'hetzner-vps'
 	readonly hetzner: HetznerDeployConfig
+	readonly image: DeployImageConfig
+}
+
+export const DEPLOY_IMAGE_SOURCES = ['build', 'upstream'] as const
+export type DeployImageSource = (typeof DEPLOY_IMAGE_SOURCES)[number]
+
+export type DeployImageConfig =
+	| { readonly source: 'build' }
+	| { readonly source: 'upstream'; readonly ref: string }
+
+export const DEFAULT_DEPLOY_IMAGE: DeployImageConfig = { source: 'build' }
+
+const DEPLOY_IMAGE_SOURCE_SET: ReadonlySet<string> = new Set(
+	DEPLOY_IMAGE_SOURCES,
+)
+
+export function isDeployImageSource(
+	value: unknown,
+): value is DeployImageSource {
+	return typeof value === 'string' && DEPLOY_IMAGE_SOURCE_SET.has(value)
 }
 
 export interface CloudflarePagesDeploySection extends BaseDeploySection {

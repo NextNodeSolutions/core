@@ -1,13 +1,17 @@
 import type {
+	DeployImageConfig,
 	DeploySection,
 	DeployTargetType,
 	DeployVolume,
 	DeployableProjectType,
 } from '#/config/types.ts'
 import {
+	DEFAULT_DEPLOY_IMAGE,
 	DEFAULT_DEPLOY_TARGETS,
+	DEPLOY_IMAGE_SOURCES,
 	DEPLOY_TARGETS,
 	KEBAB_IDENTIFIER_PATTERN,
+	isDeployImageSource,
 	isDeployTarget,
 	isRecord,
 } from '#/config/types.ts'
@@ -81,6 +85,56 @@ function validateVolumes(deployRecord: Record<string, unknown>): {
 	return { errors, volumes }
 }
 
+function validateImage(deployRecord: Record<string, unknown>): {
+	errors: string[]
+	image: DeployImageConfig
+} {
+	const raw = deployRecord['image']
+	if (raw === undefined) return { errors: [], image: DEFAULT_DEPLOY_IMAGE }
+	if (!isRecord(raw)) {
+		return {
+			errors: ['[deploy.image] must be a table'],
+			image: DEFAULT_DEPLOY_IMAGE,
+		}
+	}
+
+	const rawSource = raw['source']
+	if (rawSource !== undefined && !isDeployImageSource(rawSource)) {
+		return {
+			errors: [
+				`deploy.image.source must be one of: ${DEPLOY_IMAGE_SOURCES.join(', ')}`,
+			],
+			image: DEFAULT_DEPLOY_IMAGE,
+		}
+	}
+
+	const source = rawSource ?? 'build'
+
+	if (source === 'build') {
+		if (raw['ref'] !== undefined) {
+			return {
+				errors: [
+					'deploy.image.ref is only allowed when deploy.image.source = "upstream"',
+				],
+				image: DEFAULT_DEPLOY_IMAGE,
+			}
+		}
+		return { errors: [], image: { source: 'build' } }
+	}
+
+	const rawRef = raw['ref']
+	if (typeof rawRef !== 'string' || rawRef === '') {
+		return {
+			errors: [
+				'deploy.image.ref is required and must be a non-empty string when deploy.image.source = "upstream"',
+			],
+			image: DEFAULT_DEPLOY_IMAGE,
+		}
+	}
+
+	return { errors: [], image: { source: 'upstream', ref: rawRef } }
+}
+
 function validateVps(deployRecord: Record<string, unknown>): {
 	errors: string[]
 	vps: string | null
@@ -127,12 +181,16 @@ export function validateDeploySection(
 	const volumesResult = validateVolumes(deployRecord)
 	errors.push(...volumesResult.errors)
 
+	const imageResult = validateImage(deployRecord)
+	errors.push(...imageResult.errors)
+
 	const provider = DEPLOY_PROVIDER_VALIDATORS[target]
 	const providerResult = provider.validate(
 		deployRecord,
 		secretsResult.secrets,
 		vpsResult.vps,
 		volumesResult.volumes,
+		imageResult.image,
 	)
 	errors.push(...providerResult.errors)
 

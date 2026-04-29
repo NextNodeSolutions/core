@@ -19,6 +19,7 @@ export const APP_WITH_DOMAIN: DeployableConfig = {
 		secrets: [],
 		vps: null,
 		volumes: [],
+		image: { source: 'build' },
 	},
 }
 
@@ -41,6 +42,7 @@ export const APP_WITH_SECRETS: DeployableConfig = {
 		secrets: ['DATABASE_URL'],
 		vps: null,
 		volumes: [],
+		image: { source: 'build' },
 	},
 }
 
