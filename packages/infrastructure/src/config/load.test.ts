@@ -97,6 +97,7 @@ describe('parseConfig', () => {
 				target: 'hetzner-vps',
 				secrets: [],
 				vps: null,
+				volumes: [],
 				hetzner: { serverType: 'cpx22', location: 'nbg1' },
 			})
 		})
@@ -702,6 +703,7 @@ describe('parseConfig', () => {
 				target: 'hetzner-vps',
 				secrets: [],
 				vps: 'monitor-vps',
+				volumes: [],
 				hetzner: { serverType: 'cx23', location: 'nbg1' },
 			})
 		})
@@ -742,6 +744,7 @@ describe('parseConfig', () => {
 				target: 'cloudflare-pages',
 				secrets: [],
 				vps: null,
+				volumes: [],
 				hetzner: undefined,
 			})
 		})
@@ -759,6 +762,7 @@ describe('parseConfig', () => {
 				target: 'cloudflare-pages',
 				secrets: ['RESEND_API_KEY', 'SUPABASE_URL'],
 				vps: null,
+				volumes: [],
 				hetzner: undefined,
 			})
 		})
@@ -792,6 +796,163 @@ describe('parseConfig', () => {
 		})
 	})
 
+	describe('deploy.volumes', () => {
+		it('defaults volumes to an empty array when not provided', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok || result.config.deploy === false) return
+
+			expect(result.config.deploy.volumes).toEqual([])
+		})
+
+		it('parses [deploy.volumes] aliases into a sorted volume list', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: {
+					volumes: { data: '/var/lib/app', cache: '/var/cache/app' },
+				},
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok || result.config.deploy === false) return
+
+			expect(result.config.deploy.volumes).toEqual([
+				{ name: 'data', mount: '/var/lib/app' },
+				{ name: 'cache', mount: '/var/cache/app' },
+			])
+		})
+
+		it('rejects a non-table volumes value', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: { volumes: ['data'] },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'[deploy.volumes] must be a table mapping alias to mount path',
+			)
+		})
+
+		it('rejects a non-string mount path (missing path)', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: { volumes: { data: 42 } },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'deploy.volumes.data must be a non-empty absolute mount path',
+			)
+		})
+
+		it('rejects an empty mount path', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: { volumes: { data: '' } },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'deploy.volumes.data must be a non-empty absolute mount path',
+			)
+		})
+
+		it('rejects a relative mount path', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: { volumes: { data: 'var/lib/app' } },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'deploy.volumes.data must be an absolute path (got "var/lib/app")',
+			)
+		})
+
+		it('rejects an invalid alias', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: { volumes: { 'BAD ALIAS': '/var/lib/app' } },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toEqual(
+				expect.arrayContaining([
+					expect.stringContaining(
+						'deploy.volumes alias "BAD ALIAS" must be lowercase alphanumeric',
+					),
+				]),
+			)
+		})
+
+		it('flows volumes through the validated hetzner-vps deploy section', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: {
+					volumes: { data: '/var/lib/app' },
+					hetzner: { server_type: 'cpx22', location: 'nbg1' },
+				},
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok) return
+
+			expect(result.config.deploy).toEqual({
+				target: 'hetzner-vps',
+				secrets: [],
+				vps: null,
+				volumes: [{ name: 'data', mount: '/var/lib/app' }],
+				hetzner: { serverType: 'cpx22', location: 'nbg1' },
+			})
+		})
+	})
+
 	describe('deploy target', () => {
 		it('infers hetzner-vps for app type with valid hetzner config', () => {
 			const result = parseConfig({
@@ -812,6 +973,7 @@ describe('parseConfig', () => {
 				target: 'hetzner-vps',
 				secrets: [],
 				vps: null,
+				volumes: [],
 				hetzner: { serverType: 'cpx22', location: 'nbg1' },
 			})
 		})
@@ -828,6 +990,7 @@ describe('parseConfig', () => {
 				target: 'cloudflare-pages',
 				secrets: [],
 				vps: null,
+				volumes: [],
 				hetzner: undefined,
 			})
 		})
@@ -845,6 +1008,7 @@ describe('parseConfig', () => {
 				target: 'cloudflare-pages',
 				secrets: [],
 				vps: null,
+				volumes: [],
 				hetzner: undefined,
 			})
 		})
@@ -869,6 +1033,7 @@ describe('parseConfig', () => {
 				target: 'hetzner-vps',
 				secrets: [],
 				vps: null,
+				volumes: [],
 				hetzner: { serverType: 'cax11', location: 'fsn1' },
 			})
 		})
@@ -889,6 +1054,7 @@ describe('parseConfig', () => {
 				target: 'hetzner-vps',
 				secrets: [],
 				vps: null,
+				volumes: [],
 				hetzner: { serverType: 'cx23', location: 'nbg1' },
 			})
 		})
@@ -910,6 +1076,7 @@ describe('parseConfig', () => {
 				target: 'hetzner-vps',
 				secrets: [],
 				vps: null,
+				volumes: [],
 				hetzner: { serverType: 'cx23', location: 'nbg1' },
 			})
 		})
@@ -931,6 +1098,7 @@ describe('parseConfig', () => {
 				target: 'hetzner-vps',
 				secrets: [],
 				vps: null,
+				volumes: [],
 				hetzner: { serverType: 'cpx22', location: 'nbg1' },
 			})
 		})
@@ -1061,6 +1229,7 @@ describe('parseConfig', () => {
 				target: 'hetzner-vps',
 				secrets: ['DATABASE_URL', 'REDIS_URL'],
 				vps: null,
+				volumes: [],
 				hetzner: { serverType: 'cpx22', location: 'nbg1' },
 			})
 		})

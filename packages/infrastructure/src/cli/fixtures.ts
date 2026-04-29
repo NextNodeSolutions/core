@@ -18,6 +18,7 @@ export const APP_WITH_DOMAIN: DeployableConfig = {
 		hetzner: { serverType: 'cx23', location: 'nbg1' },
 		secrets: [],
 		vps: null,
+		volumes: [],
 	},
 }
 
@@ -39,6 +40,7 @@ export const APP_WITH_SECRETS: DeployableConfig = {
 		hetzner: { serverType: 'cx23', location: 'nbg1' },
 		secrets: ['DATABASE_URL'],
 		vps: null,
+		volumes: [],
 	},
 }
 
@@ -55,7 +57,7 @@ export const STATIC_WITH_DOMAIN: DeployableConfig = {
 	package: false,
 	environment: { development: true },
 	services: {},
-	deploy: { target: 'cloudflare-pages', secrets: [], vps: null },
+	deploy: { target: 'cloudflare-pages', secrets: [], vps: null, volumes: [] },
 }
 
 export const STATIC_NO_DOMAIN: DeployableConfig = {
@@ -71,7 +73,7 @@ export const STATIC_NO_DOMAIN: DeployableConfig = {
 	package: false,
 	environment: { development: true },
 	services: {},
-	deploy: { target: 'cloudflare-pages', secrets: [], vps: null },
+	deploy: { target: 'cloudflare-pages', secrets: [], vps: null, volumes: [] },
 }
 
 export const STATIC_WITH_SECRETS: DeployableConfig = {
@@ -91,6 +93,7 @@ export const STATIC_WITH_SECRETS: DeployableConfig = {
 		target: 'cloudflare-pages',
 		secrets: ['RESEND_API_KEY'],
 		vps: null,
+		volumes: [],
 	},
 }
 
@@ -111,5 +114,6 @@ export const STATIC_WITH_MISSING_SECRET: DeployableConfig = {
 		target: 'cloudflare-pages',
 		secrets: ['MISSING_KEY'],
 		vps: null,
+		volumes: [],
 	},
 }

@@ -90,12 +90,21 @@ export interface EnvironmentSection {
 	readonly development: boolean
 }
 
+// A named volume the deployable wants mounted at runtime. Currently only
+// honored by the hetzner-vps target (mapped to a Docker named volume on the
+// VPS local SSD); cloudflare-pages ignores the field.
+export interface DeployVolume {
+	readonly name: string
+	readonly mount: string
+}
+
 interface BaseDeploySection {
 	readonly secrets: ReadonlyArray<string>
 	// Override the VPS hostname this project deploys onto. When `null`, the
 	// CLI resolves a shared default per environment (see resolveVpsName).
 	// Only consumed by the hetzner-vps target; cloudflare-pages ignores it.
 	readonly vps: string | null
+	readonly volumes: ReadonlyArray<DeployVolume>
 }
 
 export interface HetznerVpsDeploySection extends BaseDeploySection {

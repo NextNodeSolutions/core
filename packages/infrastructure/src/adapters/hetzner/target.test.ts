@@ -176,6 +176,7 @@ const CREDENTIALS = {
 const TARGET_CONFIG = {
 	vpsName: 'acme-web',
 	hetzner: HETZNER_CONFIG,
+	volumes: [],
 	infraStorage: STORAGE_CONFIG,
 	stateStore: mockStateStore,
 	certsStore: mockCertsStore,

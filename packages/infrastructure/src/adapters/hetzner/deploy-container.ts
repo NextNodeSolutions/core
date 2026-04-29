@@ -1,3 +1,4 @@
+import type { DeployVolume } from '#/config/types.ts'
 import type {
 	ContainerDeployedEnvironment,
 	DeployEnv,
@@ -29,6 +30,7 @@ export interface DeployContainerInput {
 	readonly secrets: Readonly<Record<string, string>>
 	readonly image: ImageRef
 	readonly registryToken: string
+	readonly volumes: ReadonlyArray<DeployVolume>
 }
 
 export interface DeployContainerResult {
@@ -56,7 +58,11 @@ export async function deployContainer(
 	await session.writeFile(`${envDir}/.env`, formatComposeEnv(allEnv))
 	await session.writeFile(
 		`${envDir}/compose.yaml`,
-		renderComposeFile({ image: input.image, hostPort }),
+		renderComposeFile({
+			image: input.image,
+			hostPort,
+			volumes: input.volumes,
+		}),
 	)
 
 	await loginToRegistry(session, input.image.registry, input.registryToken)

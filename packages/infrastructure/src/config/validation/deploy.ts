@@ -1,11 +1,13 @@
 import type {
 	DeploySection,
 	DeployTargetType,
+	DeployVolume,
 	DeployableProjectType,
 } from '#/config/types.ts'
 import {
 	DEFAULT_DEPLOY_TARGETS,
 	DEPLOY_TARGETS,
+	KEBAB_IDENTIFIER_PATTERN,
 	isDeployTarget,
 	isRecord,
 } from '#/config/types.ts'
@@ -37,6 +39,46 @@ function validateSecrets(deployRecord: Record<string, unknown>): {
 		}
 	}
 	return { errors: [], secrets: rawSecrets }
+}
+
+function validateVolumes(deployRecord: Record<string, unknown>): {
+	errors: string[]
+	volumes: ReadonlyArray<DeployVolume>
+} {
+	const raw = deployRecord['volumes']
+	if (raw === undefined) return { errors: [], volumes: [] }
+	if (!isRecord(raw)) {
+		return {
+			errors: [
+				'[deploy.volumes] must be a table mapping alias to mount path',
+			],
+			volumes: [],
+		}
+	}
+	const errors: string[] = []
+	const volumes: DeployVolume[] = []
+	for (const [name, value] of Object.entries(raw)) {
+		if (!KEBAB_IDENTIFIER_PATTERN.test(name)) {
+			errors.push(
+				`deploy.volumes alias "${name}" must be lowercase alphanumeric with dashes only (pattern: ${KEBAB_IDENTIFIER_PATTERN.source})`,
+			)
+			continue
+		}
+		if (typeof value !== 'string' || value === '') {
+			errors.push(
+				`deploy.volumes.${name} must be a non-empty absolute mount path`,
+			)
+			continue
+		}
+		if (!value.startsWith('/')) {
+			errors.push(
+				`deploy.volumes.${name} must be an absolute path (got "${value}")`,
+			)
+			continue
+		}
+		volumes.push({ name, mount: value })
+	}
+	return { errors, volumes }
 }
 
 function validateVps(deployRecord: Record<string, unknown>): {
@@ -82,11 +124,15 @@ export function validateDeploySection(
 	const vpsResult = validateVps(deployRecord)
 	errors.push(...vpsResult.errors)
 
+	const volumesResult = validateVolumes(deployRecord)
+	errors.push(...volumesResult.errors)
+
 	const provider = DEPLOY_PROVIDER_VALIDATORS[target]
 	const providerResult = provider.validate(
 		deployRecord,
 		secretsResult.secrets,
 		vpsResult.vps,
+		volumesResult.volumes,
 	)
 	errors.push(...providerResult.errors)
 
