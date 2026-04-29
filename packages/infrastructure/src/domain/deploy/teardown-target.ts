@@ -31,7 +31,6 @@ export function parseTeardownWithVolumes(raw: string | undefined): boolean {
 	)
 }
 
-// Reject teardown options that don't apply to the project's deploy kind.
 // Static deploys (Cloudflare Pages) have no VPS to scope to and no volumes
 // to wipe; only container deploys (Hetzner VPS) honor those options.
 export function validateTeardownOptions(

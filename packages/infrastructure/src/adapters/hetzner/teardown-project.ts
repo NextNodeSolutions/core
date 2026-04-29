@@ -164,14 +164,9 @@ export async function teardownProjectCerts(
 	}
 }
 
-/**
- * Free the project's allocated host port back into the pool by removing
- * its entry from the persisted `state.hostPorts` map under the same R2
- * ETag lock used during provisioning, so a future deploy of a different
- * project on this VPS can reuse the freed port.
- *
- * Idempotent: returns `not allocated` when the project has no entry.
- */
+// Re-uses the R2 ETag from the caller's read so a concurrent deploy that
+// allocated a port on this VPS will lose the write race instead of silently
+// overwriting our release.
 export async function releaseProjectHostPort(
 	r2: ObjectStoreClient,
 	vpsName: string,
@@ -186,10 +181,7 @@ export async function releaseProjectHostPort(
 		)
 		return { handled: false, detail: 'no port allocated' }
 	}
-	const remaining: Record<string, number> = {}
-	for (const [project, allocated] of Object.entries(state.hostPorts)) {
-		if (project !== projectName) remaining[project] = allocated
-	}
+	const { [projectName]: _released, ...remaining } = state.hostPorts
 	const updated: HcloudProvisionedState | HcloudConvergedState = {
 		...state,
 		hostPorts: remaining,
