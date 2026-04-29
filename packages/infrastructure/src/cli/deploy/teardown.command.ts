@@ -5,6 +5,7 @@ import { buildTeardownSummary } from '#/domain/deploy/teardown-summary.ts'
 import {
 	parseTeardownTarget,
 	parseTeardownWithVolumes,
+	validateTeardownOptions,
 } from '#/domain/deploy/teardown-target.ts'
 import { resolveEnvironment } from '#/domain/environment.ts'
 import { createLogger } from '@nextnode-solutions/logger'
@@ -23,6 +24,7 @@ export async function teardownCommand(config: DeployableConfig): Promise<void> {
 	const withVolumes = parseTeardownWithVolumes(
 		getEnv('TEARDOWN_WITH_VOLUMES'),
 	)
+	validateTeardownOptions(config.project.type, teardownTarget, withVolumes)
 	const infraStorage = await loadInfraStorageForConfig(config)
 	const target = buildRuntimeTarget(config, environment, infraStorage)
 
