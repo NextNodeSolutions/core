@@ -94,4 +94,81 @@ describe('renderComposeFile', () => {
 			'registry.example.com/team/app:v2.0.0',
 		)
 	})
+
+	it('omits volumes keys when no volumes are provided', () => {
+		const result = renderComposeFile({ image: IMAGE, hostPort: 8080 })
+		const parsed = parse(result)
+
+		expect(parsed.services.app).not.toHaveProperty('volumes')
+		expect(parsed).not.toHaveProperty('volumes')
+	})
+
+	it('omits volumes keys when an empty volumes array is provided', () => {
+		const result = renderComposeFile({
+			image: IMAGE,
+			hostPort: 8080,
+			volumes: [],
+		})
+		const parsed = parse(result)
+
+		expect(parsed.services.app).not.toHaveProperty('volumes')
+		expect(parsed).not.toHaveProperty('volumes')
+	})
+
+	it('renders the same YAML with no volumes as without the field', () => {
+		const without = renderComposeFile({ image: IMAGE, hostPort: 8080 })
+		const withEmpty = renderComposeFile({
+			image: IMAGE,
+			hostPort: 8080,
+			volumes: [],
+		})
+
+		expect(withEmpty).toBe(without)
+	})
+
+	it('emits service.volumes mounts and a top-level named volume when provided', () => {
+		const result = renderComposeFile({
+			image: IMAGE,
+			hostPort: 8080,
+			volumes: [{ name: 'data', mount: '/var/lib/app' }],
+		})
+		const parsed = parse(result)
+
+		expect(parsed.services.app.volumes).toEqual(['data:/var/lib/app'])
+		expect(parsed.volumes).toEqual({ data: {} })
+	})
+
+	it('emits multiple volumes preserving order', () => {
+		const result = renderComposeFile({
+			image: IMAGE,
+			hostPort: 8080,
+			volumes: [
+				{ name: 'data', mount: '/var/lib/app' },
+				{ name: 'cache', mount: '/var/cache/app' },
+			],
+		})
+		const parsed = parse(result)
+
+		expect(parsed.services.app.volumes).toEqual([
+			'data:/var/lib/app',
+			'cache:/var/cache/app',
+		])
+		expect(parsed.volumes).toEqual({ data: {}, cache: {} })
+	})
+
+	it('keeps image, restart, env_file, and ports unchanged when volumes are added', () => {
+		const result = renderComposeFile({
+			image: IMAGE,
+			hostPort: 8080,
+			volumes: [{ name: 'data', mount: '/var/lib/app' }],
+		})
+		const parsed = parse(result)
+
+		expect(parsed.services.app.image).toBe('ghcr.io/acme/web:sha-abc123')
+		expect(parsed.services.app.restart).toBe('unless-stopped')
+		expect(parsed.services.app.env_file).toEqual(['.env'])
+		expect(parsed.services.app.ports).toEqual([
+			`127.0.0.1:8080:${CONTAINER_PORT}`,
+		])
+	})
 })
