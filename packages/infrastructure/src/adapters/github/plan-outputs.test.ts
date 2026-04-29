@@ -105,8 +105,76 @@ describe('writePlanOutputs', () => {
 			{ id: 'test', name: 'Test', cmd: 'pnpm test' },
 		])
 		expect(output).toBe(
-			`quality_matrix=${matrixJson}\nproject_name=my-app\nproject_type=app\nproject_filter=\npublish=false\ndevelopment_enabled=true\nhas_prod_gate=false\nhas_domain=false\ndomain=\nbuild_directory=apps/landing/dist\npackage_dir=apps/landing\n`,
+			`quality_matrix=${matrixJson}\nproject_name=my-app\nproject_type=app\nproject_filter=\npublish=false\ndevelopment_enabled=true\nhas_prod_gate=false\nhas_domain=false\ndomain=\nbuild_directory=apps/landing/dist\npackage_dir=apps/landing\nimage_source=build\nupstream_image_ref=\n`,
 		)
+	})
+
+	it('writes image_source=upstream and upstream_image_ref for upstream images', () => {
+		const config: NextNodeConfig = {
+			...APP_CONFIG,
+			deploy: {
+				target: 'hetzner-vps',
+				secrets: [],
+				vps: null,
+				volumes: [],
+				hetzner: { serverType: 'cpx22', location: 'nbg1' },
+				image: {
+					source: 'upstream',
+					ref: 'ghcr.io/acme/web:v1.2.3',
+				},
+			},
+		}
+
+		writePlanOutputs({
+			config,
+			pagesProjectName: 'my-app',
+			tasks: [],
+			buildDirectory: 'dist',
+			packageDir: '.',
+		})
+
+		const output = readFileSync(outputFile, 'utf-8')
+		expect(output).toContain('image_source=upstream\n')
+		expect(output).toContain('upstream_image_ref=ghcr.io/acme/web:v1.2.3\n')
+	})
+
+	it('writes empty image outputs for non-deployable projects', () => {
+		writePlanOutputs({
+			config: PACKAGE_CONFIG,
+			pagesProjectName: 'my-lib',
+			tasks: [],
+			buildDirectory: 'dist',
+			packageDir: '.',
+		})
+
+		const output = readFileSync(outputFile, 'utf-8')
+		expect(output).toContain('image_source=\n')
+		expect(output).toContain('upstream_image_ref=\n')
+	})
+
+	it('writes empty image outputs for cloudflare-pages deploys', () => {
+		const config: NextNodeConfig = {
+			...APP_CONFIG,
+			project: { ...APP_CONFIG.project, type: 'static' },
+			deploy: {
+				target: 'cloudflare-pages',
+				secrets: [],
+				vps: null,
+				volumes: [],
+			},
+		}
+
+		writePlanOutputs({
+			config,
+			pagesProjectName: 'my-site',
+			tasks: [],
+			buildDirectory: 'dist',
+			packageDir: '.',
+		})
+
+		const output = readFileSync(outputFile, 'utf-8')
+		expect(output).toContain('image_source=\n')
+		expect(output).toContain('upstream_image_ref=\n')
 	})
 
 	it('uses pagesProjectName as the project_name output (dev env)', () => {
