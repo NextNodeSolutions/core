@@ -180,8 +180,11 @@ export class HetznerVpsTarget implements DeployTarget {
 			)
 		}
 
-		const hostPort = allocateHostPort(existing.state.hostPorts, projectName)
-		if (existing.state.hostPorts[projectName] === undefined) {
+		const { port: hostPort, allocated } = allocateHostPort(
+			existing.state.hostPorts,
+			projectName,
+		)
+		if (allocated) {
 			const updated: HcloudProvisionedState | HcloudConvergedState = {
 				...existing.state,
 				hostPorts: {
