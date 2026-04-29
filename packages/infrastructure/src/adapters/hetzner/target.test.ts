@@ -1151,6 +1151,7 @@ describe('HetznerVpsTarget', () => {
 				'acme-web',
 				'acme-web.example.com',
 				'vps',
+				false,
 			)
 			const result = requireVpsScope(raw)
 
@@ -1167,7 +1168,12 @@ describe('HetznerVpsTarget', () => {
 			const target = new HetznerVpsTarget(TARGET_CONFIG)
 
 			await expect(
-				target.teardown('acme-web', 'acme-web.example.com', 'vps'),
+				target.teardown(
+					'acme-web',
+					'acme-web.example.com',
+					'vps',
+					false,
+				),
 			).rejects.toThrow(/no R2 state found/)
 		})
 
@@ -1180,6 +1186,7 @@ describe('HetznerVpsTarget', () => {
 					'acme-web',
 					'acme-web.example.com',
 					'vps',
+					false,
 				),
 			)
 
@@ -1195,7 +1202,7 @@ describe('HetznerVpsTarget', () => {
 				domain: 'acme-web.example.com',
 			})
 			const result = requireVpsScope(
-				await target.teardown('acme-web', undefined, 'vps'),
+				await target.teardown('acme-web', undefined, 'vps', false),
 			)
 
 			expect(result.outcome.dns.handled).toBe(false)
@@ -1207,7 +1214,12 @@ describe('HetznerVpsTarget', () => {
 			seedState()
 
 			const target = new HetznerVpsTarget(TARGET_CONFIG)
-			await target.teardown('acme-web', 'acme-web.example.com', 'vps')
+			await target.teardown(
+				'acme-web',
+				'acme-web.example.com',
+				'vps',
+				false,
+			)
 
 			expect(fakeR2State.has('hetzner/acme-web.json')).toBe(false)
 		})
@@ -1221,6 +1233,7 @@ describe('HetznerVpsTarget', () => {
 					'acme-web',
 					'acme-web.example.com',
 					'vps',
+					false,
 				),
 			)
 

@@ -42,6 +42,7 @@ export interface HetznerTeardownContext {
 	readonly vpsName: string
 	readonly domain: string | undefined
 	readonly target: TeardownTarget
+	readonly withVolumes: boolean
 	readonly environment: AppEnvironment
 	readonly internal: boolean
 	readonly hcloudToken: string
@@ -204,7 +205,12 @@ async function teardownProjectWithSession(
 
 	const outcome = await executeHandlers(VPS_PROJECT_MANAGED_RESOURCES, {
 		container: () =>
-			teardownProjectContainer(session, ctx.projectName, ctx.environment),
+			teardownProjectContainer(
+				session,
+				ctx.projectName,
+				ctx.environment,
+				ctx.withVolumes,
+			),
 		caddy: () =>
 			teardownProjectCaddyRoute(session, projectHostname, {
 				vpsName: ctx.vpsName,

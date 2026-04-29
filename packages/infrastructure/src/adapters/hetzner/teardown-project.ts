@@ -34,8 +34,10 @@ export interface TeardownCaddyContext {
 }
 
 /**
- * Stop and remove the project's docker-compose stack, then delete the bind
- * mount that holds its compose.yaml, .env, and any volume data.
+ * Stop and remove the project's docker-compose stack and the bind mount
+ * holding its compose.yaml + .env. Docker named volumes (the local-SSD hot
+ * cache for stateful apps — PGDATA, app working state) are PRESERVED by
+ * default; pass `withVolumes: true` to wipe them too.
  *
  * Safe to run when the stack was never deployed — missing compose file is
  * reported as `not deployed` rather than an error.
@@ -44,6 +46,7 @@ export async function teardownProjectContainer(
 	session: SshSession,
 	projectName: string,
 	environment: AppEnvironment,
+	withVolumes: boolean,
 ): Promise<ResourceOutcome> {
 	const silo = computeSilo(projectName, environment)
 	const envDir = `/opt/apps/${projectName}/${environment}`
@@ -54,12 +57,20 @@ export async function teardownProjectContainer(
 		return { handled: false, detail: 'not deployed' }
 	}
 
+	const downFlags = withVolumes ? '-v --remove-orphans' : '--remove-orphans'
 	await session.exec(
-		`docker compose -p ${shellEscape(silo.id)} -f ${shellEscape(composeFile)} down -v --remove-orphans`,
+		`docker compose -p ${shellEscape(silo.id)} -f ${shellEscape(composeFile)} down ${downFlags}`,
 	)
 	await session.exec(`rm -rf ${shellEscape(envDir)}`)
-	logger.info(`Container stack ${silo.id} removed`)
-	return { handled: true, detail: 'stack and bind mount removed' }
+	logger.info(
+		`Container stack ${silo.id} removed (volumes ${withVolumes ? 'wiped' : 'preserved'})`,
+	)
+	return {
+		handled: true,
+		detail: withVolumes
+			? 'stack, bind mount, and volumes removed'
+			: 'stack and bind mount removed (volumes preserved)',
+	}
 }
 
 /**

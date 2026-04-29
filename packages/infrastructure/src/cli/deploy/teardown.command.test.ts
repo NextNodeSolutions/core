@@ -119,6 +119,7 @@ describe('teardownCommand - hetzner dispatch', () => {
 			'my-app',
 			'example.com',
 			'project',
+			false,
 		)
 	})
 
@@ -143,6 +144,38 @@ describe('teardownCommand - hetzner dispatch', () => {
 			'my-app',
 			'example.com',
 			'vps',
+			false,
+		)
+	})
+
+	it('passes TEARDOWN_WITH_VOLUMES=true through to the Hetzner target', async () => {
+		vi.stubEnv('TEARDOWN_WITH_VOLUMES', 'true')
+		mockHetznerTeardown.mockResolvedValue({
+			kind: 'vps',
+			scope: 'project',
+			outcome: {
+				container: {
+					handled: true,
+					detail: 'stack, bind mount, and volumes removed',
+				},
+				caddy: {
+					handled: true,
+					detail: 'route removed, Caddy reloaded',
+				},
+				certs: { handled: false, detail: '0 cert object(s) deleted' },
+				dns: { handled: true, detail: '1 record(s) deleted' },
+				state: { handled: true, detail: 'deleted' },
+			},
+			durationMs: 1234,
+		})
+
+		await teardownCommand(APP_WITH_DOMAIN)
+
+		expect(mockHetznerTeardown).toHaveBeenCalledWith(
+			'my-app',
+			'example.com',
+			'project',
+			true,
 		)
 	})
 
@@ -151,6 +184,14 @@ describe('teardownCommand - hetzner dispatch', () => {
 
 		await expect(teardownCommand(APP_WITH_DOMAIN)).rejects.toThrow(
 			/Invalid TEARDOWN_TARGET "full"/,
+		)
+	})
+
+	it('fails loud on an unknown TEARDOWN_WITH_VOLUMES value', async () => {
+		vi.stubEnv('TEARDOWN_WITH_VOLUMES', 'yes')
+
+		await expect(teardownCommand(APP_WITH_DOMAIN)).rejects.toThrow(
+			/Invalid TEARDOWN_WITH_VOLUMES "yes"/,
 		)
 	})
 })
@@ -188,6 +229,7 @@ describe('teardownCommand - cloudflare pages dispatch', () => {
 			'my-site',
 			'example.com',
 			'project',
+			false,
 		)
 	})
 })

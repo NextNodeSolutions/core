@@ -158,10 +158,16 @@ export class CloudflarePagesTarget implements DeployTarget {
 		projectName: string,
 		domain: string | undefined,
 		target: TeardownTarget,
+		withVolumes: boolean,
 	): Promise<TeardownResult> {
 		if (target !== 'project') {
 			throw new Error(
 				`TEARDOWN_TARGET="${target}" is not supported for Cloudflare Pages projects — only "project" scope exists`,
+			)
+		}
+		if (withVolumes) {
+			throw new Error(
+				'TEARDOWN_WITH_VOLUMES=true is not supported for Cloudflare Pages projects — static deploys have no volumes',
 			)
 		}
 		const start = Date.now()

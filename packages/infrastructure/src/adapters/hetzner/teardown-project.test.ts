@@ -70,13 +70,14 @@ describe('teardownProjectContainer', () => {
 			session,
 			'acme-web',
 			'production',
+			false,
 		)
 
 		expect(outcome).toEqual({ handled: false, detail: 'not deployed' })
 		expect(session.exec).not.toHaveBeenCalled()
 	})
 
-	it('runs docker compose down and removes the bind mount when compose exists', async () => {
+	it('preserves volumes by default (no -v flag) when compose exists', async () => {
 		const session = createMockSession()
 		vi.mocked(session.readFile).mockResolvedValueOnce('services: {}')
 
@@ -84,16 +85,34 @@ describe('teardownProjectContainer', () => {
 			session,
 			'acme-web',
 			'production',
+			false,
 		)
 
 		expect(outcome.handled).toBe(true)
+		expect(outcome.detail).toContain('volumes preserved')
 		expect(session.exec).toHaveBeenCalledWith(
-			expect.stringContaining(
-				"docker compose -p 'acme-web-production' -f '/opt/apps/acme-web/production/compose.yaml' down -v --remove-orphans",
-			),
+			"docker compose -p 'acme-web-production' -f '/opt/apps/acme-web/production/compose.yaml' down --remove-orphans",
 		)
 		expect(session.exec).toHaveBeenCalledWith(
 			"rm -rf '/opt/apps/acme-web/production'",
+		)
+	})
+
+	it('wipes volumes (-v flag) only when withVolumes=true', async () => {
+		const session = createMockSession()
+		vi.mocked(session.readFile).mockResolvedValueOnce('services: {}')
+
+		const outcome = await teardownProjectContainer(
+			session,
+			'acme-web',
+			'production',
+			true,
+		)
+
+		expect(outcome.handled).toBe(true)
+		expect(outcome.detail).toContain('volumes removed')
+		expect(session.exec).toHaveBeenCalledWith(
+			"docker compose -p 'acme-web-production' -f '/opt/apps/acme-web/production/compose.yaml' down -v --remove-orphans",
 		)
 	})
 })

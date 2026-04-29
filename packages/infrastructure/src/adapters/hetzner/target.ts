@@ -267,12 +267,14 @@ export class HetznerVpsTarget implements DeployTarget {
 		projectName: string,
 		domain: string | undefined,
 		target: TeardownTarget,
+		withVolumes: boolean,
 	): Promise<TeardownResult> {
 		return runHetznerTeardown({
 			projectName,
 			vpsName: this.config.vpsName,
 			domain,
 			target,
+			withVolumes,
 			environment: this.config.environment,
 			internal: this.config.internal,
 			hcloudToken: this.config.credentials.hcloudToken,

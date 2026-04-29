@@ -134,6 +134,7 @@ export interface DeployTarget {
 		projectName: string,
 		domain: string | undefined,
 		target: TeardownTarget,
+		withVolumes: boolean,
 	): Promise<TeardownResult>
 	describe?(projectName: string): Promise<TargetState | null>
 }
