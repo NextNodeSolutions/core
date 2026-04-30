@@ -31,6 +31,8 @@ jobs:
             has_prod_gate: ${{ steps.plan.outputs.has_prod_gate }}
             has_domain: ${{ steps.plan.outputs.has_domain }}
             package_dir: ${{ steps.plan.outputs.package_dir }}
+            image_source: ${{ steps.plan.outputs.image_source }}
+            upstream_image_ref: ${{ steps.plan.outputs.upstream_image_ref }}
         steps:
             - uses: NextNodeSolutions/core/.github/actions/setup@main
               with:
@@ -133,6 +135,7 @@ jobs:
     build-image:
         name: Build image
         needs: [plan, quality]
+        if: needs.plan.outputs.image_source == 'build'
         env:
             PACKAGE_DIR: ${{ needs.plan.outputs.package_dir }}
         runs-on: ubuntu-latest
@@ -175,6 +178,7 @@ jobs:
     deploy:
         name: Deploy
         needs: [plan, provision, build-image]
+        if: ${{ !cancelled() && !failure() }}
         runs-on: ubuntu-latest
         environment:
             name: ${{ inputs.environment }}
@@ -204,6 +208,6 @@ jobs:
                   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
                   R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
                   R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-                  IMAGE_REF: ${{ needs.build-image.outputs.image_ref }}
+                  IMAGE_REF: ${{ needs.build-image.outputs.image_ref || needs.plan.outputs.upstream_image_ref }}
                   GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   ALL_SECRETS: ${{ toJSON(secrets) }}

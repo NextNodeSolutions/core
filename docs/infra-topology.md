@@ -2,6 +2,17 @@
 
 Reference architecture for NextNode project deployments. Covers VPS layout, Supabase services, Postgres, object storage, and backup strategy.
 
+## Glossary — "volume"
+
+In NextNode infra docs and code, **"volume" always means a Docker named volume**
+(managed by the Docker daemon, stored on the VPS local SSD under
+`/var/lib/docker/volumes/...`). It is **never** a Hetzner Block Volume.
+
+Hetzner Block Volumes are not used by default (see "Why no Hetzner Volumes by
+default" below). When this doc, the code, or any spec needs to refer to a
+Hetzner Block Volume, it spells it out as **"Hetzner Volume"** or **"Hetzner
+Block Volume"**.
+
 ## Principles
 
 - **Stateless apps, durable data on R2** — any VPS can be destroyed and rebuilt; state lives in R2 (WAL streams, logical dumps, uploads).

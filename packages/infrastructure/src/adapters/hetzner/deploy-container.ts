@@ -1,3 +1,4 @@
+import type { DeployVolume } from '#/config/types.ts'
 import type {
 	ContainerDeployedEnvironment,
 	DeployEnv,
@@ -8,7 +9,6 @@ import type { CaddyUpstream } from '#/domain/hetzner/caddy-config.ts'
 import { formatComposeEnv } from '#/domain/hetzner/compose-env.ts'
 import {
 	CONTAINER_PORT,
-	computeHostPort,
 	renderComposeFile,
 } from '#/domain/hetzner/compose-file.ts'
 import { computeSilo } from '#/domain/hetzner/env-silo.ts'
@@ -25,10 +25,12 @@ export interface DeployContainerInput {
 	readonly projectName: string
 	readonly environment: AppEnvironment
 	readonly hostname: string
+	readonly hostPort: number
 	readonly env: DeployEnv
 	readonly secrets: Readonly<Record<string, string>>
 	readonly image: ImageRef
-	readonly registryToken: string
+	readonly registryToken: string | undefined
+	readonly volumes: ReadonlyArray<DeployVolume>
 }
 
 export interface DeployContainerResult {
@@ -41,7 +43,7 @@ export async function deployContainer(
 	input: DeployContainerInput,
 ): Promise<DeployContainerResult> {
 	const silo = computeSilo(input.projectName, input.environment)
-	const hostPort = computeHostPort(input.environment)
+	const hostPort = input.hostPort
 	const envDir = `/opt/apps/${input.projectName}/${input.environment}`
 	const envDirQ = shellEscape(envDir)
 	const siloIdQ = shellEscape(silo.id)
@@ -56,10 +58,20 @@ export async function deployContainer(
 	await session.writeFile(`${envDir}/.env`, formatComposeEnv(allEnv))
 	await session.writeFile(
 		`${envDir}/compose.yaml`,
-		renderComposeFile({ image: input.image, hostPort }),
+		renderComposeFile({
+			image: input.image,
+			hostPort,
+			volumes: input.volumes,
+		}),
 	)
 
-	await loginToRegistry(session, input.image.registry, input.registryToken)
+	if (input.registryToken !== undefined) {
+		await loginToRegistry(
+			session,
+			input.image.registry,
+			input.registryToken,
+		)
+	}
 
 	await session.exec(`docker compose -p ${siloIdQ} -f ${composeFileQ} pull`)
 	await session.exec(

@@ -48,7 +48,9 @@ const HETZNER_CONFIG: HetznerDeployableConfig = {
 		target: 'hetzner-vps',
 		secrets: [],
 		vps: null,
+		volumes: [],
 		hetzner: { serverType: 'cpx22', location: 'nbg1' },
+		image: { source: 'build' },
 	},
 	services: {},
 }
@@ -241,6 +243,31 @@ describe('createHetznerTarget', () => {
 
 		expect(HetznerVpsTarget).toHaveBeenCalledWith(
 			expect.objectContaining({ cloudflareApiToken: 'cf-token' }),
+		)
+	})
+
+	it('passes deploy.volumes through to the target config', async () => {
+		stubHetznerEnv()
+
+		const { HetznerVpsTarget } =
+			await import('#/adapters/hetzner/target.ts')
+
+		createHetznerTarget(
+			{
+				...HETZNER_CONFIG,
+				deploy: {
+					...HETZNER_CONFIG.deploy,
+					volumes: [{ name: 'data', mount: '/var/lib/app' }],
+				},
+			},
+			'production',
+			FAKE_INFRA_STORAGE,
+		)
+
+		expect(HetznerVpsTarget).toHaveBeenCalledWith(
+			expect.objectContaining({
+				volumes: [{ name: 'data', mount: '/var/lib/app' }],
+			}),
 		)
 	})
 

@@ -22,6 +22,7 @@ const createdState = {
 	phase: 'created' as const,
 	serverId: 123,
 	publicIp: '1.2.3.4',
+	hostPorts: {},
 }
 
 const provisionedState = {
@@ -29,6 +30,7 @@ const provisionedState = {
 	serverId: 123,
 	publicIp: '1.2.3.4',
 	tailnetIp: '100.74.91.126',
+	hostPorts: {},
 }
 
 const convergedState = {
@@ -37,6 +39,7 @@ const convergedState = {
 	publicIp: '1.2.3.4',
 	tailnetIp: '100.74.91.126',
 	convergedAt: '2026-04-17T10:00:00.000Z',
+	hostPorts: {},
 }
 
 let r2: ObjectStoreClient
@@ -267,6 +270,132 @@ describe('writeState', () => {
 		).rejects.toBeInstanceOf(EtagMismatchError)
 
 		expect(r2.put).toHaveBeenCalledTimes(1)
+	})
+})
+
+describe('hostPorts', () => {
+	it('defaults to {} when reading legacy created state without hostPorts', async () => {
+		vi.mocked(r2.get).mockResolvedValue({
+			body: JSON.stringify({
+				phase: 'created',
+				serverId: 7,
+				publicIp: '1.2.3.4',
+			}),
+			etag: '"e"',
+		})
+
+		const result = await readState(r2, 'acme-web')
+
+		expect(result?.state).toStrictEqual({
+			phase: 'created',
+			serverId: 7,
+			publicIp: '1.2.3.4',
+			hostPorts: {},
+		})
+	})
+
+	it('defaults to {} when reading legacy provisioned state without hostPorts', async () => {
+		vi.mocked(r2.get).mockResolvedValue({
+			body: JSON.stringify({
+				phase: 'provisioned',
+				serverId: 7,
+				publicIp: '1.2.3.4',
+				tailnetIp: '100.1.2.3',
+			}),
+			etag: '"e"',
+		})
+
+		const result = await readState(r2, 'acme-web')
+
+		expect(result?.state).toStrictEqual({
+			phase: 'provisioned',
+			serverId: 7,
+			publicIp: '1.2.3.4',
+			tailnetIp: '100.1.2.3',
+			hostPorts: {},
+		})
+	})
+
+	it('defaults to {} when reading legacy converged state without hostPorts', async () => {
+		vi.mocked(r2.get).mockResolvedValue({
+			body: JSON.stringify({
+				phase: 'converged',
+				serverId: 7,
+				publicIp: '1.2.3.4',
+				tailnetIp: '100.1.2.3',
+				convergedAt: '2026-04-17T10:00:00.000Z',
+			}),
+			etag: '"e"',
+		})
+
+		const result = await readState(r2, 'acme-web')
+
+		expect(result?.state).toStrictEqual({
+			phase: 'converged',
+			serverId: 7,
+			publicIp: '1.2.3.4',
+			tailnetIp: '100.1.2.3',
+			convergedAt: '2026-04-17T10:00:00.000Z',
+			hostPorts: {},
+		})
+	})
+
+	it('round-trips a populated hostPorts map across write + read', async () => {
+		const populated = {
+			phase: 'converged' as const,
+			serverId: 7,
+			publicIp: '1.2.3.4',
+			tailnetIp: '100.1.2.3',
+			convergedAt: '2026-04-17T10:00:00.000Z',
+			hostPorts: { 'acme-web': 8080, 'beta-app': 8081 },
+		}
+		const stored: Record<string, string> = {}
+		vi.mocked(r2.put).mockImplementation(async (key, body) => {
+			stored[key] = body
+			return '"etag-2"'
+		})
+		vi.mocked(r2.get).mockImplementation(async key => {
+			const body = stored[key]
+			if (body === undefined) return null
+			return { body, etag: '"etag-2"' }
+		})
+
+		await writeState(r2, 'acme-web', populated)
+		const result = await readState(r2, 'acme-web')
+
+		expect(result?.state).toStrictEqual(populated)
+	})
+
+	it('throws when hostPorts is not an object', async () => {
+		vi.mocked(r2.get).mockResolvedValue({
+			body: JSON.stringify({
+				phase: 'created',
+				serverId: 7,
+				publicIp: '1.2.3.4',
+				hostPorts: 'nope',
+			}),
+			etag: '"e"',
+		})
+
+		await expect(readState(r2, 'acme-web')).rejects.toThrow(
+			/hostPorts must be an object/,
+		)
+	})
+
+	it('throws when a hostPorts entry is not an integer', async () => {
+		vi.mocked(r2.get).mockResolvedValue({
+			body: JSON.stringify({
+				phase: 'created',
+				serverId: 7,
+				publicIp: '1.2.3.4',
+				hostPorts: { 'acme-web': '8080' },
+			}),
+			etag: '"e"',
+		})
+
+		await expect(readState(r2, 'acme-web')).rejects.toThrow(
+			/hostPorts\.acme-web must be an integer/,
+		)
 	})
 })
 

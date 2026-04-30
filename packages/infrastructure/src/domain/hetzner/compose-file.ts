@@ -10,44 +10,44 @@ import { stringify } from 'yaml'
  */
 export const CONTAINER_PORT = 3000
 
-const HOST_PORT_BASE = 8080
-
-const ENV_PORT_OFFSET: Readonly<Record<string, number>> = {
-	production: 0,
-	development: 1,
+/**
+ * A Docker named volume managed by the Docker daemon on the VPS local SSD
+ * (under `/var/lib/docker/volumes/...`). NOT a Hetzner Block Volume —
+ * Hetzner Volumes are not used by default (see `docs/infra-topology.md`).
+ */
+export interface ComposeVolume {
+	readonly name: string
+	readonly mount: string
 }
 
 export interface ComposeFileInput {
 	readonly image: ImageRef
 	readonly hostPort: number
+	readonly volumes?: ReadonlyArray<ComposeVolume>
 }
 
 export function formatImageRef(image: ImageRef): string {
 	return `${image.registry}/${image.repository}:${image.tag}`
 }
 
-export function computeHostPort(envName: string): number {
-	const offset = ENV_PORT_OFFSET[envName]
-	if (offset === undefined) {
-		throw new Error(
-			`Unknown environment "${envName}" for host port computation`,
-		)
-	}
-	return HOST_PORT_BASE + offset
+interface ComposeService {
+	readonly image: string
+	readonly restart: string
+	readonly env_file: ReadonlyArray<string>
+	readonly ports: ReadonlyArray<string>
+	readonly volumes?: ReadonlyArray<string>
 }
 
 interface ComposeConfig {
 	readonly services: {
-		readonly app: {
-			readonly image: string
-			readonly restart: string
-			readonly env_file: ReadonlyArray<string>
-			readonly ports: ReadonlyArray<string>
-		}
+		readonly app: ComposeService
 	}
+	readonly volumes?: Readonly<Record<string, Record<string, never>>>
 }
 
 export function renderComposeFile(input: ComposeFileInput): string {
+	const volumes = input.volumes?.length ? input.volumes : undefined
+
 	const config: ComposeConfig = {
 		services: {
 			app: {
@@ -55,8 +55,14 @@ export function renderComposeFile(input: ComposeFileInput): string {
 				restart: 'unless-stopped',
 				env_file: ['.env'],
 				ports: [`127.0.0.1:${input.hostPort}:${CONTAINER_PORT}`],
+				...(volumes && {
+					volumes: volumes.map(v => `${v.name}:${v.mount}`),
+				}),
 			},
 		},
+		...(volumes && {
+			volumes: Object.fromEntries(volumes.map(v => [v.name, {}])),
+		}),
 	}
 
 	return stringify(config, { lineWidth: 0 })

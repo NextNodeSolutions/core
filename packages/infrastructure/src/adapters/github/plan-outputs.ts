@@ -42,6 +42,22 @@ export function writePlanOutputs({
 	writeOutput('build_directory', buildDirectory)
 	writeOutput('package_dir', packageDir)
 
+	const { source, ref } = resolveImageOutputs(config)
+	writeOutput('image_source', source)
+	writeOutput('upstream_image_ref', ref)
+
 	logger.info(`Quality matrix: ${matrixJson}`)
 	logger.info('Plan outputs written to GITHUB_OUTPUT')
+}
+
+function resolveImageOutputs(config: NextNodeConfig): {
+	readonly source: string
+	readonly ref: string
+} {
+	if (config.deploy === false) return { source: '', ref: '' }
+	if (config.deploy.target !== 'hetzner-vps') return { source: '', ref: '' }
+	const { image } = config.deploy
+	if (image.source === 'upstream')
+		return { source: 'upstream', ref: image.ref }
+	return { source: 'build', ref: '' }
 }

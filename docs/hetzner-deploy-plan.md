@@ -1,9 +1,13 @@
 # Hetzner Deploy v1 — Plan
 
+> **Terminology**: every mention of "volume" in this plan refers to a **Docker
+> named volume** (Docker daemon, VPS local SSD). Hetzner Block Volumes are not
+> used by default — see `docs/infra-topology.md` for the rationale.
+
 ## 0. Mental model
 
 - Deploy unit = `(project, environment)`. One VPS hosts one project, multiple envs.
-- Envs are **inviolable app-layer silos** (separate networks, volumes, compose projects, containers, secrets). Host-layer agents (Caddy, Vector, Docker daemon) are shared with strict per-env config.
+- Envs are **inviolable app-layer silos** (separate networks, Docker named volumes, compose projects, containers, secrets). Host-layer agents (Caddy, Vector, Docker daemon) are shared with strict per-env config.
 - `DeployTarget` interface in domain, provider adapters in adapters. Adding ECS later = new adapter, zero CLI change.
 - Same Docker image sha reused across envs with different env vars.
 - Budget: 3 min hot path, ~5 min cold path.
@@ -161,7 +165,7 @@ Per `(project, env)`, computed by pure `env-silo.ts`:
 | Network | `<project>-<env>_default` | `acme-web-dev_default` |
 | Subnet | `10.<hash(project)>.<env_index * 16>.0/24` | `10.47.0.0/24` |
 | Base path | `/opt/apps/<project>/<env>/` | `/opt/apps/acme-web/dev/` |
-| Volume prefix | `<project>-<env>_` | `acme-web-dev_postgres-data` |
+| Docker named-volume prefix | `<project>-<env>_` | `acme-web-dev_postgres-data` |
 | R2 cert path | `r2://nextnode-certs/<project>/<env>/` | — |
 | Vector tag | `environment=<env>` | `environment=dev` |
 

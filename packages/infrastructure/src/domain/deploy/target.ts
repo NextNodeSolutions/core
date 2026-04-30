@@ -57,7 +57,7 @@ export function buildDeployEnv(
 export interface DeployInput {
 	readonly secrets: Readonly<Record<string, string>>
 	readonly image?: ImageRef
-	readonly registryToken?: string
+	readonly registryToken: string | undefined
 }
 
 interface BaseDeployedEnvironment {
@@ -134,6 +134,7 @@ export interface DeployTarget {
 		projectName: string,
 		domain: string | undefined,
 		target: TeardownTarget,
+		withVolumes: boolean,
 	): Promise<TeardownResult>
 	describe?(projectName: string): Promise<TargetState | null>
 }

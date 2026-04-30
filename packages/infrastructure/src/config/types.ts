@@ -90,17 +90,54 @@ export interface EnvironmentSection {
 	readonly development: boolean
 }
 
+// A named volume the deployable wants mounted at runtime. Currently only
+// honored by the hetzner-vps target (mapped to a Docker named volume on the
+// VPS local SSD); cloudflare-pages ignores the field.
+export interface DeployVolume {
+	readonly name: string
+	readonly mount: string
+}
+
 interface BaseDeploySection {
 	readonly secrets: ReadonlyArray<string>
 	// Override the VPS hostname this project deploys onto. When `null`, the
 	// CLI resolves a shared default per environment (see resolveVpsName).
 	// Only consumed by the hetzner-vps target; cloudflare-pages ignores it.
 	readonly vps: string | null
+	readonly volumes: ReadonlyArray<DeployVolume>
 }
 
 export interface HetznerVpsDeploySection extends BaseDeploySection {
 	readonly target: 'hetzner-vps'
 	readonly hetzner: HetznerDeployConfig
+	readonly image: DeployImageConfig
+}
+
+export const DEPLOY_IMAGE_SOURCES = ['build', 'upstream'] as const
+export type DeployImageSource = (typeof DEPLOY_IMAGE_SOURCES)[number]
+
+// `registryAuthSecret` is the NAME of a GitHub secret whose value holds the
+// registry token used to `docker login` before pulling. Optional: omitted
+// for public upstream images. Build images always log in to GHCR with the
+// workflow's GITHUB_TOKEN, so this field is upstream-only.
+export type DeployImageConfig =
+	| { readonly source: 'build' }
+	| {
+			readonly source: 'upstream'
+			readonly ref: string
+			readonly registryAuthSecret?: string
+	  }
+
+export const DEFAULT_DEPLOY_IMAGE: DeployImageConfig = { source: 'build' }
+
+const DEPLOY_IMAGE_SOURCE_SET: ReadonlySet<string> = new Set(
+	DEPLOY_IMAGE_SOURCES,
+)
+
+export function isDeployImageSource(
+	value: unknown,
+): value is DeployImageSource {
+	return typeof value === 'string' && DEPLOY_IMAGE_SOURCE_SET.has(value)
 }
 
 export interface CloudflarePagesDeploySection extends BaseDeploySection {

@@ -1,4 +1,4 @@
-import type { HetznerVpsDeploySection } from '#/config/types.ts'
+import type { DeployVolume, HetznerVpsDeploySection } from '#/config/types.ts'
 import { buildR2CaddyBinding } from '#/domain/cloudflare/r2/caddy-binding.ts'
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
@@ -19,6 +19,7 @@ import { extractUpstreams } from '#/domain/hetzner/caddy-config.ts'
 import { CADDY_ENV_PATH, renderCaddyEnv } from '#/domain/hetzner/caddy-env.ts'
 import { buildCaddyForProject } from '#/domain/hetzner/caddy-for-project.ts'
 import { computeVpsDnsRecords } from '#/domain/hetzner/dns-records.ts'
+import { allocateHostPort } from '#/domain/hetzner/host-port.ts'
 import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
 import type { TailnetClient } from '#/domain/tailnet/client.ts'
 import { createLogger } from '@nextnode-solutions/logger'
@@ -27,7 +28,11 @@ import { CADDY_CONFIG_PATH } from './constants.ts'
 import { deployContainer } from './deploy-container.ts'
 import { freshProvision, resumeFromState } from './provision/ensure-infra.ts'
 import { createSshSession } from './ssh/session.ts'
-import { readState } from './state/read-write.ts'
+import { readState, writeState } from './state/read-write.ts'
+import type {
+	HcloudConvergedState,
+	HcloudProvisionedState,
+} from './state/types.ts'
 import { runHetznerTeardown } from './teardown.ts'
 
 const logger = createLogger()
@@ -47,6 +52,7 @@ export interface HetznerVectorConfig {
 export interface HetznerVpsTargetConfig {
 	readonly vpsName: string
 	readonly hetzner: HetznerVpsDeploySection['hetzner']
+	readonly volumes: ReadonlyArray<DeployVolume>
 	readonly infraStorage: InfraStorageRuntimeConfig
 	readonly stateStore: ObjectStoreClient
 	readonly certsStore: ObjectStoreClient
@@ -174,6 +180,21 @@ export class HetznerVpsTarget implements DeployTarget {
 			)
 		}
 
+		const { port: hostPort, allocated } = allocateHostPort(
+			existing.state.hostPorts,
+			projectName,
+		)
+		if (allocated) {
+			const updated: HcloudProvisionedState | HcloudConvergedState = {
+				...existing.state,
+				hostPorts: {
+					...existing.state.hostPorts,
+					[projectName]: hostPort,
+				},
+			}
+			await writeState(this.r2, vpsName, updated, existing.etag)
+		}
+
 		const session = await createSshSession({
 			host: existing.state.tailnetIp,
 			username: 'deploy',
@@ -186,10 +207,12 @@ export class HetznerVpsTarget implements DeployTarget {
 				projectName,
 				environment: this.config.environment,
 				hostname,
+				hostPort,
 				env,
 				secrets: input.secrets,
 				image: input.image,
-				registryToken: input.registryToken!,
+				registryToken: input.registryToken,
+				volumes: this.config.volumes,
 			})
 
 			// Multi-tenant Caddy: read the existing config, drop any prior
@@ -247,12 +270,14 @@ export class HetznerVpsTarget implements DeployTarget {
 		projectName: string,
 		domain: string | undefined,
 		target: TeardownTarget,
+		withVolumes: boolean,
 	): Promise<TeardownResult> {
 		return runHetznerTeardown({
 			projectName,
 			vpsName: this.config.vpsName,
 			domain,
 			target,
+			withVolumes,
 			environment: this.config.environment,
 			internal: this.config.internal,
 			hcloudToken: this.config.credentials.hcloudToken,

@@ -158,12 +158,10 @@ export class CloudflarePagesTarget implements DeployTarget {
 		projectName: string,
 		domain: string | undefined,
 		target: TeardownTarget,
+		withVolumes: boolean,
 	): Promise<TeardownResult> {
-		if (target !== 'project') {
-			throw new Error(
-				`TEARDOWN_TARGET="${target}" is not supported for Cloudflare Pages projects — only "project" scope exists`,
-			)
-		}
+		void target
+		void withVolumes
 		const start = Date.now()
 		const pagesProjectName = computePagesProjectName(
 			projectName,

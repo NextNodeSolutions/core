@@ -66,11 +66,38 @@ function requireBase(
 	return { serverId: data.serverId, publicIp: data.publicIp }
 }
 
+function parseHostPorts(
+	data: Record<string, unknown>,
+	key: string,
+): Readonly<Record<string, number>> {
+	const raw = data.hostPorts
+	if (raw === undefined) return {}
+	if (!isRecord(raw)) {
+		throw new Error(
+			`Invalid state at "${key}": hostPorts must be an object`,
+		)
+	}
+	const result: Record<string, number> = {}
+	for (const [project, port] of Object.entries(raw)) {
+		if (typeof port !== 'number' || !Number.isInteger(port)) {
+			throw new Error(
+				`Invalid state at "${key}": hostPorts.${project} must be an integer`,
+			)
+		}
+		result[project] = port
+	}
+	return result
+}
+
 function parseCreated(
 	data: Record<string, unknown>,
 	key: string,
 ): HcloudCreatedState {
-	return { phase: 'created', ...requireBase(data, key) }
+	return {
+		phase: 'created',
+		...requireBase(data, key),
+		hostPorts: parseHostPorts(data, key),
+	}
 }
 
 function parseProvisioned(
@@ -81,7 +108,12 @@ function parseProvisioned(
 	if (typeof data.tailnetIp !== 'string') {
 		throw new Error(`Invalid state at "${key}": missing tailnetIp`)
 	}
-	return { phase: 'provisioned', ...base, tailnetIp: data.tailnetIp }
+	return {
+		phase: 'provisioned',
+		...base,
+		tailnetIp: data.tailnetIp,
+		hostPorts: parseHostPorts(data, key),
+	}
 }
 
 function parseConverged(
@@ -100,6 +132,7 @@ function parseConverged(
 		...base,
 		tailnetIp: data.tailnetIp,
 		convergedAt: data.convergedAt,
+		hostPorts: parseHostPorts(data, key),
 	}
 }
 

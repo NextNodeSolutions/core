@@ -14,6 +14,11 @@ import { createLogger } from '@nextnode-solutions/logger'
 import { CADDY_CONFIG_PATH } from './constants.ts'
 import type { SshSession } from './ssh/session.types.ts'
 import { shellEscape } from './ssh/shell-escape.ts'
+import { writeState } from './state/read-write.ts'
+import type {
+	HcloudConvergedState,
+	HcloudProvisionedState,
+} from './state/types.ts'
 
 const logger = createLogger()
 
@@ -29,8 +34,10 @@ export interface TeardownCaddyContext {
 }
 
 /**
- * Stop and remove the project's docker-compose stack, then delete the bind
- * mount that holds its compose.yaml, .env, and any volume data.
+ * Stop and remove the project's docker-compose stack and the bind mount
+ * holding its compose.yaml + .env. Docker named volumes (the local-SSD hot
+ * cache for stateful apps — PGDATA, app working state) are PRESERVED by
+ * default; pass `withVolumes: true` to wipe them too.
  *
  * Safe to run when the stack was never deployed — missing compose file is
  * reported as `not deployed` rather than an error.
@@ -39,6 +46,7 @@ export async function teardownProjectContainer(
 	session: SshSession,
 	projectName: string,
 	environment: AppEnvironment,
+	withVolumes: boolean,
 ): Promise<ResourceOutcome> {
 	const silo = computeSilo(projectName, environment)
 	const envDir = `/opt/apps/${projectName}/${environment}`
@@ -49,12 +57,20 @@ export async function teardownProjectContainer(
 		return { handled: false, detail: 'not deployed' }
 	}
 
+	const downFlags = withVolumes ? '-v --remove-orphans' : '--remove-orphans'
 	await session.exec(
-		`docker compose -p ${shellEscape(silo.id)} -f ${shellEscape(composeFile)} down -v --remove-orphans`,
+		`docker compose -p ${shellEscape(silo.id)} -f ${shellEscape(composeFile)} down ${downFlags}`,
 	)
 	await session.exec(`rm -rf ${shellEscape(envDir)}`)
-	logger.info(`Container stack ${silo.id} removed`)
-	return { handled: true, detail: 'stack and bind mount removed' }
+	logger.info(
+		`Container stack ${silo.id} removed (volumes ${withVolumes ? 'wiped' : 'preserved'})`,
+	)
+	return {
+		handled: true,
+		detail: withVolumes
+			? 'stack, bind mount, and volumes removed'
+			: 'stack and bind mount removed (volumes preserved)',
+	}
 }
 
 /**
@@ -146,6 +162,35 @@ export async function teardownProjectCerts(
 		handled: deletedCount > 0,
 		detail: `${String(deletedCount)} cert object(s) deleted`,
 	}
+}
+
+// Re-uses the R2 ETag from the caller's read so a concurrent deploy that
+// allocated a port on this VPS will lose the write race instead of silently
+// overwriting our release.
+export async function releaseProjectHostPort(
+	r2: ObjectStoreClient,
+	vpsName: string,
+	projectName: string,
+	state: HcloudProvisionedState | HcloudConvergedState,
+	etag: string,
+): Promise<ResourceOutcome> {
+	const port = state.hostPorts[projectName]
+	if (port === undefined) {
+		logger.info(
+			`No host port to release for "${projectName}" on VPS "${vpsName}" (already absent)`,
+		)
+		return { handled: false, detail: 'no port allocated' }
+	}
+	const { [projectName]: _released, ...remaining } = state.hostPorts
+	const updated: HcloudProvisionedState | HcloudConvergedState = {
+		...state,
+		hostPorts: remaining,
+	}
+	await writeState(r2, vpsName, updated, etag)
+	logger.info(
+		`Released host port ${String(port)} for "${projectName}" on VPS "${vpsName}"`,
+	)
+	return { handled: true, detail: `port ${String(port)} released` }
 }
 
 /**

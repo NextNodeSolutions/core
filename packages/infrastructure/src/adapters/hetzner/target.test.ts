@@ -176,6 +176,7 @@ const CREDENTIALS = {
 const TARGET_CONFIG = {
 	vpsName: 'acme-web',
 	hetzner: HETZNER_CONFIG,
+	volumes: [],
 	infraStorage: STORAGE_CONFIG,
 	stateStore: mockStateStore,
 	certsStore: mockCertsStore,
@@ -198,6 +199,7 @@ const CONVERGED_STATE: HcloudVpsState = {
 	publicIp: '1.2.3.4',
 	tailnetIp: '100.74.91.126',
 	convergedAt: '2026-04-17T10:00:00.000Z',
+	hostPorts: {},
 }
 
 function seedState(state: HcloudVpsState = CONVERGED_STATE): void {
@@ -560,6 +562,7 @@ describe('HetznerVpsTarget', () => {
 					phase: 'created',
 					serverId: 42,
 					publicIp: '1.2.3.4',
+					hostPorts: {},
 				})
 			})
 		})
@@ -572,6 +575,7 @@ describe('HetznerVpsTarget', () => {
 					phase: 'created',
 					serverId: 42,
 					publicIp: '1.2.3.4',
+					hostPorts: {},
 				})
 
 				const target = new HetznerVpsTarget(TARGET_CONFIG)
@@ -587,6 +591,7 @@ describe('HetznerVpsTarget', () => {
 					phase: 'created',
 					serverId: 42,
 					publicIp: '1.2.3.4',
+					hostPorts: {},
 				})
 
 				const target = new HetznerVpsTarget(TARGET_CONFIG)
@@ -600,6 +605,7 @@ describe('HetznerVpsTarget', () => {
 					phase: 'created',
 					serverId: 42,
 					publicIp: '1.2.3.4',
+					hostPorts: {},
 				})
 
 				const target = new HetznerVpsTarget(TARGET_CONFIG)
@@ -628,6 +634,7 @@ describe('HetznerVpsTarget', () => {
 					serverId: 42,
 					publicIp: '1.2.3.4',
 					tailnetIp: '100.74.91.126',
+					hostPorts: {},
 				})
 
 				const target = new HetznerVpsTarget(TARGET_CONFIG)
@@ -643,6 +650,7 @@ describe('HetznerVpsTarget', () => {
 					serverId: 42,
 					publicIp: '1.2.3.4',
 					tailnetIp: '100.74.91.126',
+					hostPorts: {},
 				})
 
 				const target = new HetznerVpsTarget(TARGET_CONFIG)
@@ -809,6 +817,7 @@ describe('HetznerVpsTarget', () => {
 				phase: 'created',
 				serverId: 42,
 				publicIp: '1.2.3.4',
+				hostPorts: {},
 			})
 
 			const target = new HetznerVpsTarget(TARGET_CONFIG)
@@ -876,6 +885,39 @@ describe('HetznerVpsTarget', () => {
 				'/opt/apps/acme-web/production/compose.yaml',
 				expect.stringContaining('127.0.0.1:8080:3000'),
 			)
+		})
+
+		it('logs into the registry with the provided token before pulling', async () => {
+			const { createSshSession: mockedSsh } =
+				await import('./ssh/session.ts')
+			const mockSession = createMockSession()
+			seedState()
+			vi.mocked(mockedSsh).mockResolvedValueOnce(mockSession)
+
+			const target = new HetznerVpsTarget(TARGET_CONFIG)
+			await target.deploy('acme-web', DEPLOY_INPUT, DEPLOY_ENV)
+
+			expect(mockSession.execWithStdin).toHaveBeenCalledWith(
+				expect.stringContaining('docker login'),
+				'ghs_fake_token',
+			)
+		})
+
+		it('skips registry login when no token is provided (public upstream image)', async () => {
+			const { createSshSession: mockedSsh } =
+				await import('./ssh/session.ts')
+			const mockSession = createMockSession()
+			seedState()
+			vi.mocked(mockedSsh).mockResolvedValueOnce(mockSession)
+
+			const target = new HetznerVpsTarget(TARGET_CONFIG)
+			await target.deploy(
+				'acme-web',
+				{ ...DEPLOY_INPUT, registryToken: undefined },
+				DEPLOY_ENV,
+			)
+
+			expect(mockSession.execWithStdin).not.toHaveBeenCalled()
 		})
 
 		it('runs docker compose pull and up', async () => {
@@ -971,6 +1013,68 @@ describe('HetznerVpsTarget', () => {
 				target.deploy('acme-web', DEPLOY_INPUT, DEPLOY_ENV),
 			).rejects.toThrow('SSH write failed')
 			expect(mockSession.close).toHaveBeenCalled()
+		})
+
+		describe('host port allocation', () => {
+			it('persists a fresh allocation under the existing ETag', async () => {
+				const putSpy = vi.spyOn(mockStateStore, 'put')
+				seedState()
+
+				const target = new HetznerVpsTarget(TARGET_CONFIG)
+				await target.deploy('acme-web', DEPLOY_INPUT, DEPLOY_ENV)
+
+				expect(putSpy).toHaveBeenCalledWith(
+					'hetzner/acme-web.json',
+					expect.stringContaining('"hostPorts":{"acme-web":8080}'),
+					'etag-1',
+				)
+				putSpy.mockRestore()
+			})
+
+			it('reuses the same port on redeploy and skips state write', async () => {
+				seedState({
+					...CONVERGED_STATE,
+					hostPorts: { 'acme-web': 8080 },
+				})
+				const putSpy = vi.spyOn(mockStateStore, 'put')
+
+				const target = new HetznerVpsTarget(TARGET_CONFIG)
+				await target.deploy('acme-web', DEPLOY_INPUT, DEPLOY_ENV)
+
+				expect(putSpy).not.toHaveBeenCalled()
+				putSpy.mockRestore()
+			})
+
+			it('allocates a distinct port for a second project on the same VPS', async () => {
+				const { createSshSession: mockedSsh } =
+					await import('./ssh/session.ts')
+				const mockSession = createMockSession()
+				seedState({
+					...CONVERGED_STATE,
+					hostPorts: { 'first-project': 8080 },
+				})
+				vi.mocked(mockedSsh).mockResolvedValueOnce(mockSession)
+
+				const target = new HetznerVpsTarget(TARGET_CONFIG)
+				await target.deploy('second-project', DEPLOY_INPUT, DEPLOY_ENV)
+
+				expect(mockSession.writeFile).toHaveBeenCalledWith(
+					'/opt/apps/second-project/production/compose.yaml',
+					expect.stringContaining('127.0.0.1:8081:3000'),
+				)
+
+				const persisted: unknown = JSON.parse(
+					fakeR2State.get('hetzner/acme-web.json')!,
+				)
+				expect(persisted).toEqual(
+					expect.objectContaining({
+						hostPorts: {
+							'first-project': 8080,
+							'second-project': 8081,
+						},
+					}),
+				)
+			})
 		})
 	})
 
@@ -1080,6 +1184,7 @@ describe('HetznerVpsTarget', () => {
 				'acme-web',
 				'acme-web.example.com',
 				'vps',
+				false,
 			)
 			const result = requireVpsScope(raw)
 
@@ -1096,7 +1201,12 @@ describe('HetznerVpsTarget', () => {
 			const target = new HetznerVpsTarget(TARGET_CONFIG)
 
 			await expect(
-				target.teardown('acme-web', 'acme-web.example.com', 'vps'),
+				target.teardown(
+					'acme-web',
+					'acme-web.example.com',
+					'vps',
+					false,
+				),
 			).rejects.toThrow(/no R2 state found/)
 		})
 
@@ -1109,6 +1219,7 @@ describe('HetznerVpsTarget', () => {
 					'acme-web',
 					'acme-web.example.com',
 					'vps',
+					false,
 				),
 			)
 
@@ -1124,7 +1235,7 @@ describe('HetznerVpsTarget', () => {
 				domain: 'acme-web.example.com',
 			})
 			const result = requireVpsScope(
-				await target.teardown('acme-web', undefined, 'vps'),
+				await target.teardown('acme-web', undefined, 'vps', false),
 			)
 
 			expect(result.outcome.dns.handled).toBe(false)
@@ -1136,7 +1247,12 @@ describe('HetznerVpsTarget', () => {
 			seedState()
 
 			const target = new HetznerVpsTarget(TARGET_CONFIG)
-			await target.teardown('acme-web', 'acme-web.example.com', 'vps')
+			await target.teardown(
+				'acme-web',
+				'acme-web.example.com',
+				'vps',
+				false,
+			)
 
 			expect(fakeR2State.has('hetzner/acme-web.json')).toBe(false)
 		})
@@ -1150,6 +1266,7 @@ describe('HetznerVpsTarget', () => {
 					'acme-web',
 					'acme-web.example.com',
 					'vps',
+					false,
 				),
 			)
 

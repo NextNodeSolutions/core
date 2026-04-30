@@ -1,4 +1,9 @@
-import type { DeploySection, DeployTargetType } from '#/config/types.ts'
+import type {
+	DeployImageConfig,
+	DeploySection,
+	DeployTargetType,
+	DeployVolume,
+} from '#/config/types.ts'
 
 import { cloudflarePages } from './cloudflare-pages.ts'
 import { hetznerVps } from './hetzner.ts'
@@ -14,6 +19,8 @@ export interface DeployProviderValidator {
 		deployRecord: Record<string, unknown>,
 		secrets: ReadonlyArray<string>,
 		vps: string | null,
+		volumes: ReadonlyArray<DeployVolume>,
+		image: DeployImageConfig,
 	): DeployProviderResult
 }
 

@@ -4,6 +4,11 @@
 **Owner**: infra
 **Supersedes**: current single-service `renderComposeFile` in `src/domain/hetzner/compose-file.ts`
 
+> **Terminology**: throughout this spec, "volume" always means a **Docker named
+> volume** (managed by the Docker daemon on the VPS local SSD). Hetzner Block
+> Volumes are **not** used by default — see `docs/infra-topology.md` for the
+> rationale and the escape-hatch criteria.
+
 ---
 
 ## 1. Goal

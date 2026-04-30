@@ -97,7 +97,9 @@ describe('parseConfig', () => {
 				target: 'hetzner-vps',
 				secrets: [],
 				vps: null,
+				volumes: [],
 				hetzner: { serverType: 'cpx22', location: 'nbg1' },
+				image: { source: 'build' },
 			})
 		})
 
@@ -702,7 +704,9 @@ describe('parseConfig', () => {
 				target: 'hetzner-vps',
 				secrets: [],
 				vps: 'monitor-vps',
+				volumes: [],
 				hetzner: { serverType: 'cx23', location: 'nbg1' },
+				image: { source: 'build' },
 			})
 		})
 
@@ -742,6 +746,7 @@ describe('parseConfig', () => {
 				target: 'cloudflare-pages',
 				secrets: [],
 				vps: null,
+				volumes: [],
 				hetzner: undefined,
 			})
 		})
@@ -759,6 +764,7 @@ describe('parseConfig', () => {
 				target: 'cloudflare-pages',
 				secrets: ['RESEND_API_KEY', 'SUPABASE_URL'],
 				vps: null,
+				volumes: [],
 				hetzner: undefined,
 			})
 		})
@@ -792,6 +798,407 @@ describe('parseConfig', () => {
 		})
 	})
 
+	describe('deploy.volumes', () => {
+		it('defaults volumes to an empty array when not provided', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok || result.config.deploy === false) return
+
+			expect(result.config.deploy.volumes).toEqual([])
+		})
+
+		it('parses [deploy.volumes] aliases into a sorted volume list', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: {
+					volumes: { data: '/var/lib/app', cache: '/var/cache/app' },
+				},
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok || result.config.deploy === false) return
+
+			expect(result.config.deploy.volumes).toEqual([
+				{ name: 'data', mount: '/var/lib/app' },
+				{ name: 'cache', mount: '/var/cache/app' },
+			])
+		})
+
+		it('rejects a non-table volumes value', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: { volumes: ['data'] },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'[deploy.volumes] must be a table mapping alias to mount path',
+			)
+		})
+
+		it('rejects a non-string mount path (missing path)', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: { volumes: { data: 42 } },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'deploy.volumes.data must be a non-empty absolute mount path',
+			)
+		})
+
+		it('rejects an empty mount path', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: { volumes: { data: '' } },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'deploy.volumes.data must be a non-empty absolute mount path',
+			)
+		})
+
+		it('rejects a relative mount path', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: { volumes: { data: 'var/lib/app' } },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'deploy.volumes.data must be an absolute path (got "var/lib/app")',
+			)
+		})
+
+		it('rejects an invalid alias', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: { volumes: { 'BAD ALIAS': '/var/lib/app' } },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toEqual(
+				expect.arrayContaining([
+					expect.stringContaining(
+						'deploy.volumes alias "BAD ALIAS" must be lowercase alphanumeric',
+					),
+				]),
+			)
+		})
+
+		it('flows volumes through the validated hetzner-vps deploy section', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: {
+					volumes: { data: '/var/lib/app' },
+					hetzner: { server_type: 'cpx22', location: 'nbg1' },
+				},
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok) return
+
+			expect(result.config.deploy).toEqual({
+				target: 'hetzner-vps',
+				secrets: [],
+				vps: null,
+				volumes: [{ name: 'data', mount: '/var/lib/app' }],
+				hetzner: { serverType: 'cpx22', location: 'nbg1' },
+				image: { source: 'build' },
+			})
+		})
+	})
+
+	describe('deploy.image', () => {
+		it('defaults image source to "build" when not provided', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok || result.config.deploy === false) return
+			if (result.config.deploy.target !== 'hetzner-vps') return
+
+			expect(result.config.deploy.image).toEqual({ source: 'build' })
+		})
+
+		it('accepts explicit source = "build"', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: { image: { source: 'build' } },
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok || result.config.deploy === false) return
+			if (result.config.deploy.target !== 'hetzner-vps') return
+
+			expect(result.config.deploy.image).toEqual({ source: 'build' })
+		})
+
+		it('accepts upstream source with a ref', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: {
+					image: {
+						source: 'upstream',
+						ref: 'docker.n8n.io/n8nio/n8n:1.85.0',
+					},
+				},
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok || result.config.deploy === false) return
+			if (result.config.deploy.target !== 'hetzner-vps') return
+
+			expect(result.config.deploy.image).toEqual({
+				source: 'upstream',
+				ref: 'docker.n8n.io/n8nio/n8n:1.85.0',
+			})
+		})
+
+		it('rejects upstream source without a ref', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: { image: { source: 'upstream' } },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'deploy.image.ref is required and must be a non-empty string when deploy.image.source = "upstream"',
+			)
+		})
+
+		it('rejects upstream source with empty-string ref', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: { image: { source: 'upstream', ref: '' } },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'deploy.image.ref is required and must be a non-empty string when deploy.image.source = "upstream"',
+			)
+		})
+
+		it('rejects ref alongside build source', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: { image: { source: 'build', ref: 'something' } },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'deploy.image.ref is only allowed when deploy.image.source = "upstream"',
+			)
+		})
+
+		it('rejects unknown source values', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: { image: { source: 'pull' } },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'deploy.image.source must be one of: build, upstream',
+			)
+		})
+
+		it('rejects non-table image value', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: { image: 'upstream' },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain('[deploy.image] must be a table')
+		})
+
+		it('rejects [deploy.image] for cloudflare-pages targets', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-site',
+					type: 'static',
+					domain: 'my-site.example.com',
+				},
+				deploy: {
+					target: 'cloudflare-pages',
+					image: { source: 'upstream', ref: 'foo' },
+				},
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'[deploy.image] is not supported with deploy target "cloudflare-pages"',
+			)
+		})
+
+		it('accepts registry_auth_secret on upstream source', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: {
+					image: {
+						source: 'upstream',
+						ref: 'docker.io/private/app:1.0',
+						registry_auth_secret: 'DOCKERHUB_TOKEN',
+					},
+				},
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok || result.config.deploy === false) return
+			if (result.config.deploy.target !== 'hetzner-vps') return
+
+			expect(result.config.deploy.image).toEqual({
+				source: 'upstream',
+				ref: 'docker.io/private/app:1.0',
+				registryAuthSecret: 'DOCKERHUB_TOKEN',
+			})
+		})
+
+		it('rejects registry_auth_secret on build source', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: {
+					image: {
+						source: 'build',
+						registry_auth_secret: 'DOCKERHUB_TOKEN',
+					},
+				},
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'deploy.image.registry_auth_secret is only allowed when deploy.image.source = "upstream"',
+			)
+		})
+
+		it('rejects empty-string registry_auth_secret', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: {
+					image: {
+						source: 'upstream',
+						ref: 'docker.io/private/app:1.0',
+						registry_auth_secret: '',
+					},
+				},
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'deploy.image.registry_auth_secret must be a non-empty string',
+			)
+		})
+	})
+
 	describe('deploy target', () => {
 		it('infers hetzner-vps for app type with valid hetzner config', () => {
 			const result = parseConfig({
@@ -812,7 +1219,9 @@ describe('parseConfig', () => {
 				target: 'hetzner-vps',
 				secrets: [],
 				vps: null,
+				volumes: [],
 				hetzner: { serverType: 'cpx22', location: 'nbg1' },
+				image: { source: 'build' },
 			})
 		})
 
@@ -828,6 +1237,7 @@ describe('parseConfig', () => {
 				target: 'cloudflare-pages',
 				secrets: [],
 				vps: null,
+				volumes: [],
 				hetzner: undefined,
 			})
 		})
@@ -845,6 +1255,7 @@ describe('parseConfig', () => {
 				target: 'cloudflare-pages',
 				secrets: [],
 				vps: null,
+				volumes: [],
 				hetzner: undefined,
 			})
 		})
@@ -869,7 +1280,9 @@ describe('parseConfig', () => {
 				target: 'hetzner-vps',
 				secrets: [],
 				vps: null,
+				volumes: [],
 				hetzner: { serverType: 'cax11', location: 'fsn1' },
+				image: { source: 'build' },
 			})
 		})
 
@@ -889,7 +1302,9 @@ describe('parseConfig', () => {
 				target: 'hetzner-vps',
 				secrets: [],
 				vps: null,
+				volumes: [],
 				hetzner: { serverType: 'cx23', location: 'nbg1' },
+				image: { source: 'build' },
 			})
 		})
 
@@ -910,7 +1325,9 @@ describe('parseConfig', () => {
 				target: 'hetzner-vps',
 				secrets: [],
 				vps: null,
+				volumes: [],
 				hetzner: { serverType: 'cx23', location: 'nbg1' },
+				image: { source: 'build' },
 			})
 		})
 
@@ -931,7 +1348,9 @@ describe('parseConfig', () => {
 				target: 'hetzner-vps',
 				secrets: [],
 				vps: null,
+				volumes: [],
 				hetzner: { serverType: 'cpx22', location: 'nbg1' },
+				image: { source: 'build' },
 			})
 		})
 
@@ -1061,7 +1480,9 @@ describe('parseConfig', () => {
 				target: 'hetzner-vps',
 				secrets: ['DATABASE_URL', 'REDIS_URL'],
 				vps: null,
+				volumes: [],
 				hetzner: { serverType: 'cpx22', location: 'nbg1' },
+				image: { source: 'build' },
 			})
 		})
 	})
