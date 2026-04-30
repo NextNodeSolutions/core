@@ -16,6 +16,8 @@ import {
 const { utils: sshUtils } = ssh2
 
 import {
+	APP_UPSTREAM_PRIVATE,
+	APP_UPSTREAM_PUBLIC,
 	APP_WITH_DOMAIN,
 	APP_WITH_SECRETS,
 	STATIC_NO_DOMAIN,
@@ -359,6 +361,46 @@ describe('deployCommand', () => {
 
 			await expect(deployCommand(APP_WITH_DOMAIN)).rejects.toThrow(
 				'Invalid image ref',
+			)
+		})
+
+		it('passes registryToken=undefined for public upstream images', async () => {
+			vi.stubEnv('IMAGE_REF', 'docker.io/library/nginx:1.27')
+			vi.stubEnv('GHCR_TOKEN', '')
+
+			await deployCommand(APP_UPSTREAM_PUBLIC)
+
+			expect(mockHetznerDeploy).toHaveBeenCalledWith(
+				'my-app',
+				expect.objectContaining({ registryToken: undefined }),
+				{ SITE_URL: 'https://example.com' },
+			)
+		})
+
+		it('resolves registryToken from ALL_SECRETS for private upstream images', async () => {
+			vi.stubEnv('IMAGE_REF', 'docker.io/private/app:1.0')
+			vi.stubEnv('GHCR_TOKEN', '')
+			vi.stubEnv(
+				'ALL_SECRETS',
+				JSON.stringify({ DOCKERHUB_TOKEN: 'dckr_pat_xyz' }),
+			)
+
+			await deployCommand(APP_UPSTREAM_PRIVATE)
+
+			expect(mockHetznerDeploy).toHaveBeenCalledWith(
+				'my-app',
+				expect.objectContaining({ registryToken: 'dckr_pat_xyz' }),
+				{ SITE_URL: 'https://example.com' },
+			)
+		})
+
+		it('throws when registry_auth_secret is missing from ALL_SECRETS', async () => {
+			vi.stubEnv('IMAGE_REF', 'docker.io/private/app:1.0')
+			vi.stubEnv('GHCR_TOKEN', '')
+			vi.stubEnv('ALL_SECRETS', JSON.stringify({}))
+
+			await expect(deployCommand(APP_UPSTREAM_PRIVATE)).rejects.toThrow(
+				'Secret "DOCKERHUB_TOKEN" declared in deploy.image.registry_auth_secret but not found',
 			)
 		})
 	})

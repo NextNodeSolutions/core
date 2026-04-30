@@ -29,7 +29,7 @@ export interface DeployContainerInput {
 	readonly env: DeployEnv
 	readonly secrets: Readonly<Record<string, string>>
 	readonly image: ImageRef
-	readonly registryToken: string
+	readonly registryToken: string | undefined
 	readonly volumes: ReadonlyArray<DeployVolume>
 }
 
@@ -65,7 +65,13 @@ export async function deployContainer(
 		}),
 	)
 
-	await loginToRegistry(session, input.image.registry, input.registryToken)
+	if (input.registryToken !== undefined) {
+		await loginToRegistry(
+			session,
+			input.image.registry,
+			input.registryToken,
+		)
+	}
 
 	await session.exec(`docker compose -p ${siloIdQ} -f ${composeFileQ} pull`)
 	await session.exec(

@@ -211,7 +211,7 @@ export class HetznerVpsTarget implements DeployTarget {
 				env,
 				secrets: input.secrets,
 				image: input.image,
-				registryToken: input.registryToken!,
+				registryToken: input.registryToken,
 				volumes: this.config.volumes,
 			})
 

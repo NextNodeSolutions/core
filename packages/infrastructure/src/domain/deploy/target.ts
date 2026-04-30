@@ -57,7 +57,7 @@ export function buildDeployEnv(
 export interface DeployInput {
 	readonly secrets: Readonly<Record<string, string>>
 	readonly image?: ImageRef
-	readonly registryToken?: string
+	readonly registryToken: string | undefined
 }
 
 interface BaseDeployedEnvironment {

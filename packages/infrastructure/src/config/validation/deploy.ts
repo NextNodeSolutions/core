@@ -119,6 +119,14 @@ function validateImage(deployRecord: Record<string, unknown>): {
 				image: DEFAULT_DEPLOY_IMAGE,
 			}
 		}
+		if (raw['registry_auth_secret'] !== undefined) {
+			return {
+				errors: [
+					'deploy.image.registry_auth_secret is only allowed when deploy.image.source = "upstream"',
+				],
+				image: DEFAULT_DEPLOY_IMAGE,
+			}
+		}
 		return { errors: [], image: { source: 'build' } }
 	}
 
@@ -132,7 +140,30 @@ function validateImage(deployRecord: Record<string, unknown>): {
 		}
 	}
 
-	return { errors: [], image: { source: 'upstream', ref: rawRef } }
+	const rawAuth = raw['registry_auth_secret']
+	if (
+		rawAuth !== undefined &&
+		(typeof rawAuth !== 'string' || rawAuth === '')
+	) {
+		return {
+			errors: [
+				'deploy.image.registry_auth_secret must be a non-empty string',
+			],
+			image: DEFAULT_DEPLOY_IMAGE,
+		}
+	}
+
+	return {
+		errors: [],
+		image:
+			rawAuth === undefined
+				? { source: 'upstream', ref: rawRef }
+				: {
+						source: 'upstream',
+						ref: rawRef,
+						registryAuthSecret: rawAuth,
+					},
+	}
 }
 
 function validateVps(deployRecord: Record<string, unknown>): {

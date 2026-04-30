@@ -116,9 +116,17 @@ export interface HetznerVpsDeploySection extends BaseDeploySection {
 export const DEPLOY_IMAGE_SOURCES = ['build', 'upstream'] as const
 export type DeployImageSource = (typeof DEPLOY_IMAGE_SOURCES)[number]
 
+// `registryAuthSecret` is the NAME of a GitHub secret whose value holds the
+// registry token used to `docker login` before pulling. Optional: omitted
+// for public upstream images. Build images always log in to GHCR with the
+// workflow's GITHUB_TOKEN, so this field is upstream-only.
 export type DeployImageConfig =
 	| { readonly source: 'build' }
-	| { readonly source: 'upstream'; readonly ref: string }
+	| {
+			readonly source: 'upstream'
+			readonly ref: string
+			readonly registryAuthSecret?: string
+	  }
 
 export const DEFAULT_DEPLOY_IMAGE: DeployImageConfig = { source: 'build' }
 

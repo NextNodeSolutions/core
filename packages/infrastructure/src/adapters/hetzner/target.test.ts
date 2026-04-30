@@ -887,6 +887,39 @@ describe('HetznerVpsTarget', () => {
 			)
 		})
 
+		it('logs into the registry with the provided token before pulling', async () => {
+			const { createSshSession: mockedSsh } =
+				await import('./ssh/session.ts')
+			const mockSession = createMockSession()
+			seedState()
+			vi.mocked(mockedSsh).mockResolvedValueOnce(mockSession)
+
+			const target = new HetznerVpsTarget(TARGET_CONFIG)
+			await target.deploy('acme-web', DEPLOY_INPUT, DEPLOY_ENV)
+
+			expect(mockSession.execWithStdin).toHaveBeenCalledWith(
+				expect.stringContaining('docker login'),
+				'ghs_fake_token',
+			)
+		})
+
+		it('skips registry login when no token is provided (public upstream image)', async () => {
+			const { createSshSession: mockedSsh } =
+				await import('./ssh/session.ts')
+			const mockSession = createMockSession()
+			seedState()
+			vi.mocked(mockedSsh).mockResolvedValueOnce(mockSession)
+
+			const target = new HetznerVpsTarget(TARGET_CONFIG)
+			await target.deploy(
+				'acme-web',
+				{ ...DEPLOY_INPUT, registryToken: undefined },
+				DEPLOY_ENV,
+			)
+
+			expect(mockSession.execWithStdin).not.toHaveBeenCalled()
+		})
+
 		it('runs docker compose pull and up', async () => {
 			const { createSshSession: mockedSsh } =
 				await import('./ssh/session.ts')

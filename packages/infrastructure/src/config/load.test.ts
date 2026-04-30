@@ -1123,6 +1123,80 @@ describe('parseConfig', () => {
 				'[deploy.image] is not supported with deploy target "cloudflare-pages"',
 			)
 		})
+
+		it('accepts registry_auth_secret on upstream source', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: {
+					image: {
+						source: 'upstream',
+						ref: 'docker.io/private/app:1.0',
+						registry_auth_secret: 'DOCKERHUB_TOKEN',
+					},
+				},
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok || result.config.deploy === false) return
+			if (result.config.deploy.target !== 'hetzner-vps') return
+
+			expect(result.config.deploy.image).toEqual({
+				source: 'upstream',
+				ref: 'docker.io/private/app:1.0',
+				registryAuthSecret: 'DOCKERHUB_TOKEN',
+			})
+		})
+
+		it('rejects registry_auth_secret on build source', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: {
+					image: {
+						source: 'build',
+						registry_auth_secret: 'DOCKERHUB_TOKEN',
+					},
+				},
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'deploy.image.registry_auth_secret is only allowed when deploy.image.source = "upstream"',
+			)
+		})
+
+		it('rejects empty-string registry_auth_secret', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+				deploy: {
+					image: {
+						source: 'upstream',
+						ref: 'docker.io/private/app:1.0',
+						registry_auth_secret: '',
+					},
+				},
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'deploy.image.registry_auth_secret must be a non-empty string',
+			)
+		})
 	})
 
 	describe('deploy target', () => {

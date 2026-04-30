@@ -6,7 +6,10 @@ import { writeEnvVar, writeSecret } from '#/adapters/github/env.ts'
 import { writeSummary } from '#/adapters/github/output.ts'
 import { getEnv, requireEnv } from '#/cli/env.ts'
 import { resolveServices } from '#/cli/services/resolve.ts'
-import type { DeployableConfig } from '#/config/types.ts'
+import type {
+	DeployableConfig,
+	HetznerDeployableConfig,
+} from '#/config/types.ts'
 import { isHetznerDeployableConfig } from '#/config/types.ts'
 import { buildDeploySummary } from '#/domain/deploy/deploy-summary.ts'
 import { parseImageRef } from '#/domain/deploy/image-ref.ts'
@@ -75,10 +78,26 @@ function buildDeployInput(
 		return {
 			secrets,
 			image: parseImageRef(requireEnv('IMAGE_REF')),
-			registryToken: requireEnv('GHCR_TOKEN'),
+			registryToken: resolveRegistryToken(config),
 		}
 	}
-	return { secrets }
+	return { secrets, registryToken: undefined }
+}
+
+function resolveRegistryToken(
+	config: HetznerDeployableConfig,
+): string | undefined {
+	const image = config.deploy.image
+	if (image.source === 'build') return requireEnv('GHCR_TOKEN')
+	if (image.registryAuthSecret === undefined) return undefined
+	const allSecrets = parseAllSecrets(requireEnv('ALL_SECRETS'))
+	const value = allSecrets[image.registryAuthSecret]
+	if (value === undefined) {
+		throw new Error(
+			`Secret "${image.registryAuthSecret}" declared in deploy.image.registry_auth_secret but not found in GitHub Secrets`,
+		)
+	}
+	return value
 }
 
 function loadDeclaredSecrets(
