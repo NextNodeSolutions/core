@@ -152,17 +152,20 @@ export interface R2ServiceConfig {
 	readonly buckets: ReadonlyArray<string>
 }
 
+export type PostgresServiceConfig = Record<string, never>
+
 /**
  * Single source of truth for the set of supported backing services. Adding
  * a new service means appending its name here AND adding its config type
  * to `ServiceConfigByName` — TypeScript will then force every service-aware
  * site (validators, `hasAnyService`, future routers) to handle it.
  */
-export const SERVICE_NAMES = ['r2'] as const
+export const SERVICE_NAMES = ['r2', 'postgres'] as const
 export type ServiceName = (typeof SERVICE_NAMES)[number]
 
 export interface ServiceConfigByName {
 	readonly r2: R2ServiceConfig
+	readonly postgres: PostgresServiceConfig
 }
 
 export type ServicesConfig = {
@@ -179,6 +182,7 @@ export const SERVICE_REQUIRES_INFRA_STORAGE: {
 	readonly [K in ServiceName]: boolean
 } = {
 	r2: true,
+	postgres: true,
 }
 
 export const KEBAB_IDENTIFIER_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/
