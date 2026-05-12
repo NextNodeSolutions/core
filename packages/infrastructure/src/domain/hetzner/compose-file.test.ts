@@ -1,4 +1,8 @@
 import type { ImageRef } from '#/domain/deploy/target.ts'
+import {
+	POSTGRES_DATA_DIR,
+	POSTGRES_DATA_VOLUME,
+} from '#/domain/services/postgres.ts'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 
@@ -170,5 +174,66 @@ describe('renderComposeFile', () => {
 		expect(parsed.services.app.ports).toEqual([
 			`127.0.0.1:8080:${CONTAINER_PORT}`,
 		])
+	})
+
+	it('emits a postgres sidecar when services.postgres.mode is embedded', () => {
+		const result = renderComposeFile({
+			image: IMAGE,
+			hostPort: 8080,
+			postgres: { mode: 'embedded', version: '17.2' },
+		})
+		const parsed = parse(result)
+
+		expect(parsed.services.postgres).toEqual({
+			image: 'postgres:17.2',
+			restart: 'unless-stopped',
+			env_file: ['.env'],
+			volumes: [`${POSTGRES_DATA_VOLUME}:${POSTGRES_DATA_DIR}`],
+			healthcheck: {
+				test: ['CMD-SHELL', 'pg_isready -U postgres'],
+				interval: '10s',
+				timeout: '5s',
+				retries: 5,
+			},
+		})
+		expect(parsed.volumes).toEqual({ [POSTGRES_DATA_VOLUME]: {} })
+	})
+
+	it('does not expose postgres on a host port', () => {
+		const result = renderComposeFile({
+			image: IMAGE,
+			hostPort: 8080,
+			postgres: { mode: 'embedded', version: '17' },
+		})
+		const parsed = parse(result)
+
+		expect(parsed.services.postgres).not.toHaveProperty('ports')
+	})
+
+	it('omits the postgres sidecar when mode is external', () => {
+		const result = renderComposeFile({
+			image: IMAGE,
+			hostPort: 8080,
+			postgres: { mode: 'external', version: '17' },
+		})
+		const parsed = parse(result)
+
+		expect(parsed.services).not.toHaveProperty('postgres')
+		expect(parsed).not.toHaveProperty('volumes')
+	})
+
+	it('merges the postgres-data volume with user-declared volumes', () => {
+		const result = renderComposeFile({
+			image: IMAGE,
+			hostPort: 8080,
+			volumes: [{ name: 'app-data', mount: '/var/lib/app' }],
+			postgres: { mode: 'embedded', version: '17' },
+		})
+		const parsed = parse(result)
+
+		expect(parsed.volumes).toEqual({
+			'app-data': {},
+			[POSTGRES_DATA_VOLUME]: {},
+		})
 	})
 })

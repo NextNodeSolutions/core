@@ -1,4 +1,11 @@
+import type { PostgresServiceConfig } from '#/config/types.ts'
 import type { ImageRef } from '#/domain/deploy/target.ts'
+import type { PostgresSidecarService } from '#/domain/services/postgres.ts'
+import {
+	POSTGRES_DATA_VOLUME,
+	POSTGRES_SIDECAR_SERVICE_NAME,
+	buildPostgresSidecar,
+} from '#/domain/services/postgres.ts'
 import { stringify } from 'yaml'
 
 /**
@@ -24,6 +31,7 @@ export interface ComposeFileInput {
 	readonly image: ImageRef
 	readonly hostPort: number
 	readonly volumes?: ReadonlyArray<ComposeVolume>
+	readonly postgres?: PostgresServiceConfig
 }
 
 export function formatImageRef(image: ImageRef): string {
@@ -41,12 +49,31 @@ interface ComposeService {
 interface ComposeConfig {
 	readonly services: {
 		readonly app: ComposeService
+		readonly [POSTGRES_SIDECAR_SERVICE_NAME]?: PostgresSidecarService
 	}
 	readonly volumes?: Readonly<Record<string, Record<string, never>>>
 }
 
+function buildTopLevelVolumes(
+	userVolumes: ReadonlyArray<ComposeVolume> = [],
+	includePostgres: boolean,
+): Record<string, Record<string, never>> | undefined {
+	const result: Record<string, Record<string, never>> = {}
+	for (const v of userVolumes) result[v.name] = {}
+	if (includePostgres) result[POSTGRES_DATA_VOLUME] = {}
+	return Object.keys(result).length ? result : undefined
+}
+
 export function renderComposeFile(input: ComposeFileInput): string {
-	const volumes = input.volumes?.length ? input.volumes : undefined
+	const userVolumes = input.volumes?.length ? input.volumes : undefined
+	const postgresSidecar = input.postgres
+		? buildPostgresSidecar(input.postgres)
+		: null
+
+	const topLevelVolumes = buildTopLevelVolumes(
+		userVolumes,
+		postgresSidecar !== null,
+	)
 
 	const config: ComposeConfig = {
 		services: {
@@ -55,14 +82,15 @@ export function renderComposeFile(input: ComposeFileInput): string {
 				restart: 'unless-stopped',
 				env_file: ['.env'],
 				ports: [`127.0.0.1:${input.hostPort}:${CONTAINER_PORT}`],
-				...(volumes && {
-					volumes: volumes.map(v => `${v.name}:${v.mount}`),
+				...(userVolumes && {
+					volumes: userVolumes.map(v => `${v.name}:${v.mount}`),
 				}),
 			},
+			...(postgresSidecar && {
+				[POSTGRES_SIDECAR_SERVICE_NAME]: postgresSidecar,
+			}),
 		},
-		...(volumes && {
-			volumes: Object.fromEntries(volumes.map(v => [v.name, {}])),
-		}),
+		...(topLevelVolumes && { volumes: topLevelVolumes }),
 	}
 
 	return stringify(config, { lineWidth: 0 })
