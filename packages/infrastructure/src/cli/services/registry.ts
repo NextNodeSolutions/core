@@ -3,10 +3,10 @@ import type { ServiceName } from '#/config/types.ts'
 import { r2ServiceDefinition } from './r2/r2.service.ts'
 import type { ServiceDefinition } from './service.ts'
 
-// Postgres is registered but not yet implemented. The validator stub lands
-// in P3-02 and the sidecar provisioning in P3-03; until then `services.postgres`
-// is always undefined and `build` returns null. A non-undefined config means
-// a later task wired the validator without wiring this build — fail loudly.
+// Postgres validation landed in P3-02, so `services.postgres` may now be
+// defined. Sidecar provisioning lands in P3-03 — until that ships, any
+// non-undefined config has gotten ahead of the implementation and must
+// fail loudly rather than silently skip the service.
 const postgresServiceDefinition: ServiceDefinition<'postgres'> = {
 	name: 'postgres',
 	build(services) {

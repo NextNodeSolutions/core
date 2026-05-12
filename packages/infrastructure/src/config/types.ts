@@ -152,7 +152,18 @@ export interface R2ServiceConfig {
 	readonly buckets: ReadonlyArray<string>
 }
 
-export type PostgresServiceConfig = Record<string, never>
+export const POSTGRES_MODES = ['embedded', 'external'] as const
+export type PostgresMode = (typeof POSTGRES_MODES)[number]
+
+// Major (`16`) or major.minor (`17.2`) — matches the official Docker tag
+// shapes we support pinning against. `latest` is intentionally rejected:
+// deploys must be reproducible across replays of the same SHA.
+export const POSTGRES_VERSION_PATTERN = /^\d+(\.\d+)?$/
+
+export interface PostgresServiceConfig {
+	readonly mode: PostgresMode
+	readonly version: string
+}
 
 /**
  * Single source of truth for the set of supported backing services. Adding
@@ -236,6 +247,11 @@ export type ParseConfigResult =
 
 const PROJECT_TYPE_SET: ReadonlySet<string> = new Set(PROJECT_TYPES)
 const DEPLOY_TARGET_SET: ReadonlySet<string> = new Set(DEPLOY_TARGETS)
+const POSTGRES_MODE_SET: ReadonlySet<string> = new Set(POSTGRES_MODES)
+
+export function isPostgresMode(value: unknown): value is PostgresMode {
+	return typeof value === 'string' && POSTGRES_MODE_SET.has(value)
+}
 
 export function isBoolean(value: unknown): value is boolean {
 	return typeof value === 'boolean'

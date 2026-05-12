@@ -1,11 +1,17 @@
-import type { R2ServiceConfig, ServicesConfig } from '#/config/types.ts'
+import type {
+	PostgresServiceConfig,
+	R2ServiceConfig,
+	ServicesConfig,
+} from '#/config/types.ts'
 import { isRecord, SERVICE_NAMES } from '#/config/types.ts'
 
 import type { ValidationResult } from './result.ts'
+import { validatePostgresService } from './services/postgres.ts'
 import { validateR2Service } from './services/r2.ts'
 
 interface MutableServicesConfig {
 	r2?: R2ServiceConfig
+	postgres?: PostgresServiceConfig
 }
 
 /**
@@ -30,6 +36,15 @@ export function validateServicesSection(
 			errors.push(...r2Result.errors)
 		} else {
 			services.r2 = r2Result.section
+		}
+	}
+
+	if (raw['postgres'] !== undefined) {
+		const postgresResult = validatePostgresService(raw['postgres'])
+		if (!postgresResult.ok) {
+			errors.push(...postgresResult.errors)
+		} else {
+			services.postgres = postgresResult.section
 		}
 	}
 
