@@ -18,6 +18,8 @@ const IMAGE: ImageRef = {
 	tag: 'sha-abc123',
 }
 
+const PROJECT_NAME = 'acme-web'
+
 describe('CONTAINER_PORT', () => {
 	it('is the single source of truth for the app listening port', () => {
 		expect(CONTAINER_PORT).toBe(3000)
@@ -52,7 +54,11 @@ describe('formatImageRef', () => {
 
 describe('renderComposeFile', () => {
 	it('produces valid compose YAML with image and port mapping', () => {
-		const result = renderComposeFile({ image: IMAGE, hostPort: 8080 })
+		const result = renderComposeFile({
+			image: IMAGE,
+			hostPort: 8080,
+			projectName: PROJECT_NAME,
+		})
 		const parsed = parse(result)
 
 		expect(parsed).toEqual({
@@ -68,14 +74,22 @@ describe('renderComposeFile', () => {
 	})
 
 	it('binds to 127.0.0.1 only', () => {
-		const result = renderComposeFile({ image: IMAGE, hostPort: 8081 })
+		const result = renderComposeFile({
+			image: IMAGE,
+			hostPort: 8081,
+			projectName: PROJECT_NAME,
+		})
 		const parsed = parse(result)
 
 		expect(parsed.services.app.ports[0]).toMatch(/^127\.0\.0\.1:8081:/)
 	})
 
 	it('uses CONTAINER_PORT as the container-side port', () => {
-		const result = renderComposeFile({ image: IMAGE, hostPort: 8080 })
+		const result = renderComposeFile({
+			image: IMAGE,
+			hostPort: 8080,
+			projectName: PROJECT_NAME,
+		})
 		const parsed = parse(result)
 
 		expect(parsed.services.app.ports[0]).toBe(
@@ -91,6 +105,7 @@ describe('renderComposeFile', () => {
 				tag: 'v2.0.0',
 			},
 			hostPort: 8080,
+			projectName: PROJECT_NAME,
 		})
 		const parsed = parse(result)
 
@@ -100,7 +115,11 @@ describe('renderComposeFile', () => {
 	})
 
 	it('omits volumes keys when no volumes are provided', () => {
-		const result = renderComposeFile({ image: IMAGE, hostPort: 8080 })
+		const result = renderComposeFile({
+			image: IMAGE,
+			hostPort: 8080,
+			projectName: PROJECT_NAME,
+		})
 		const parsed = parse(result)
 
 		expect(parsed.services.app).not.toHaveProperty('volumes')
@@ -112,6 +131,7 @@ describe('renderComposeFile', () => {
 			image: IMAGE,
 			hostPort: 8080,
 			volumes: [],
+			projectName: PROJECT_NAME,
 		})
 		const parsed = parse(result)
 
@@ -120,11 +140,16 @@ describe('renderComposeFile', () => {
 	})
 
 	it('renders the same YAML with no volumes as without the field', () => {
-		const without = renderComposeFile({ image: IMAGE, hostPort: 8080 })
+		const without = renderComposeFile({
+			image: IMAGE,
+			hostPort: 8080,
+			projectName: PROJECT_NAME,
+		})
 		const withEmpty = renderComposeFile({
 			image: IMAGE,
 			hostPort: 8080,
 			volumes: [],
+			projectName: PROJECT_NAME,
 		})
 
 		expect(withEmpty).toBe(without)
@@ -135,6 +160,7 @@ describe('renderComposeFile', () => {
 			image: IMAGE,
 			hostPort: 8080,
 			volumes: [{ name: 'data', mount: '/var/lib/app' }],
+			projectName: PROJECT_NAME,
 		})
 		const parsed = parse(result)
 
@@ -150,6 +176,7 @@ describe('renderComposeFile', () => {
 				{ name: 'data', mount: '/var/lib/app' },
 				{ name: 'cache', mount: '/var/cache/app' },
 			],
+			projectName: PROJECT_NAME,
 		})
 		const parsed = parse(result)
 
@@ -165,6 +192,7 @@ describe('renderComposeFile', () => {
 			image: IMAGE,
 			hostPort: 8080,
 			volumes: [{ name: 'data', mount: '/var/lib/app' }],
+			projectName: PROJECT_NAME,
 		})
 		const parsed = parse(result)
 
@@ -181,6 +209,7 @@ describe('renderComposeFile', () => {
 			image: IMAGE,
 			hostPort: 8080,
 			postgres: { mode: 'embedded', version: '17.2' },
+			projectName: PROJECT_NAME,
 		})
 		const parsed = parse(result)
 
@@ -190,7 +219,7 @@ describe('renderComposeFile', () => {
 			env_file: ['.env'],
 			volumes: [`${POSTGRES_DATA_VOLUME}:${POSTGRES_DATA_DIR}`],
 			healthcheck: {
-				test: ['CMD-SHELL', 'pg_isready -U postgres'],
+				test: ['CMD-SHELL', 'pg_isready -U acme_web -d acme_web'],
 				interval: '10s',
 				timeout: '5s',
 				retries: 5,
@@ -204,6 +233,7 @@ describe('renderComposeFile', () => {
 			image: IMAGE,
 			hostPort: 8080,
 			postgres: { mode: 'embedded', version: '17' },
+			projectName: PROJECT_NAME,
 		})
 		const parsed = parse(result)
 
@@ -215,6 +245,7 @@ describe('renderComposeFile', () => {
 			image: IMAGE,
 			hostPort: 8080,
 			postgres: { mode: 'external', version: '17' },
+			projectName: PROJECT_NAME,
 		})
 		const parsed = parse(result)
 
@@ -228,6 +259,7 @@ describe('renderComposeFile', () => {
 			hostPort: 8080,
 			volumes: [{ name: 'app-data', mount: '/var/lib/app' }],
 			postgres: { mode: 'embedded', version: '17' },
+			projectName: PROJECT_NAME,
 		})
 		const parsed = parse(result)
 

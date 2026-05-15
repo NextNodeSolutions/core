@@ -20,13 +20,18 @@ export interface Service {
 
 /**
  * `infraStorage` is nullable because not every service needs it; each
- * factory validates the preconditions it actually requires.
+ * factory validates the preconditions it actually requires. `repoSecrets`
+ * is the parsed `ALL_SECRETS` GitHub Secrets payload — services that
+ * need user-provided credentials (e.g. postgres `DATABASE_URL` /
+ * `POSTGRES_PASSWORD`) read from here. Always defined (`{}` when the
+ * env var is absent) so factories never need to null-check.
  */
 export interface ServiceFactoryContext {
 	readonly projectName: string
 	readonly environment: AppEnvironment
 	readonly cfToken: string
 	readonly infraStorage: InfraStorageRuntimeConfig | null
+	readonly repoSecrets: Readonly<Record<string, string>>
 }
 
 export interface ServiceDefinition<K extends ServiceName = ServiceName> {

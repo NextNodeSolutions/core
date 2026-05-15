@@ -7,6 +7,7 @@ import { resolveEnvironment } from '#/domain/environment.ts'
 
 import { buildRuntimeTarget } from './build-runtime-target.ts'
 import { ensureInfraStorageForConfig } from './load-infra-storage.ts'
+import { readRepoSecrets } from './secrets.ts'
 
 export async function provisionCommand(
 	config: DeployableConfig,
@@ -16,6 +17,7 @@ export async function provisionCommand(
 		getEnv('PIPELINE_ENVIRONMENT'),
 	)
 	const cfToken = requireEnv('CLOUDFLARE_API_TOKEN')
+	const repoSecrets = readRepoSecrets()
 
 	const infraStorage = await ensureInfraStorageForConfig(config, cfToken)
 
@@ -27,6 +29,7 @@ export async function provisionCommand(
 		environment,
 		cfToken,
 		infraStorage,
+		repoSecrets,
 	})
 	await Promise.all(services.map(service => service.provision()))
 

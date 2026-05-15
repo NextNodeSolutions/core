@@ -1,5 +1,7 @@
 import type { PostgresServiceConfig } from '#/config/types.ts'
 
+import type { ServiceEnv } from './service.ts'
+
 /**
  * Compose service name for the embedded postgres sidecar. Co-located in
  * the same docker network as the app, reachable as `postgres:5432` —
@@ -7,6 +9,21 @@ import type { PostgresServiceConfig } from '#/config/types.ts'
  * the VPS unless the app explicitly proxies it.
  */
 export const POSTGRES_SIDECAR_SERVICE_NAME = 'postgres'
+
+export const POSTGRES_SIDECAR_PORT = 5432
+
+/**
+ * Project-scoped database role and database name. The official postgres
+ * image's entrypoint reads `POSTGRES_USER` / `POSTGRES_DB` / `POSTGRES_PASSWORD`
+ * from the env at first boot and runs `initdb` to create exactly one
+ * superuser-owned database. We name both after the project (dashes mapped
+ * to underscores so unquoted SQL stays valid) instead of falling back to
+ * the image default `postgres/postgres`, so the role + DB are unambiguous
+ * in pg_dump output, `psql \du`, and monitoring labels.
+ */
+export function postgresProjectIdentifier(projectName: string): string {
+	return projectName.replaceAll('-', '_')
+}
 
 /**
  * Named docker volume holding the postgres data directory. Lives on the
@@ -44,19 +61,74 @@ export interface PostgresSidecarService {
  */
 export function buildPostgresSidecar(
 	config: PostgresServiceConfig,
+	projectName: string,
 ): PostgresSidecarService | null {
 	if (config.mode !== 'embedded') return null
 
+	const id = postgresProjectIdentifier(projectName)
 	return {
 		image: `postgres:${config.version}`,
 		restart: 'unless-stopped',
 		env_file: ['.env'],
 		volumes: [`${POSTGRES_DATA_VOLUME}:${POSTGRES_DATA_DIR}`],
 		healthcheck: {
-			test: ['CMD-SHELL', 'pg_isready -U postgres'],
+			test: ['CMD-SHELL', `pg_isready -U ${id} -d ${id}`],
 			interval: '10s',
 			timeout: '5s',
 			retries: 5,
 		},
+	}
+}
+
+/**
+ * Compose the `DATABASE_URL` the app uses to reach the embedded sidecar.
+ * The host is the docker compose service name (`postgres`), reachable on
+ * the project's internal network only — never via a host port binding.
+ */
+export function buildPostgresEmbeddedDatabaseUrl(
+	projectName: string,
+	password: string,
+): string {
+	const id = postgresProjectIdentifier(projectName)
+	return `postgres://${id}:${password}@${POSTGRES_SIDECAR_SERVICE_NAME}:${String(POSTGRES_SIDECAR_PORT)}/${id}`
+}
+
+/**
+ * Embedded-mode env contributions. The sidecar reads `POSTGRES_USER`,
+ * `POSTGRES_DB`, and `POSTGRES_PASSWORD` from `.env` at first boot to run
+ * `initdb`; the app reads `DATABASE_URL` to connect. User and DB names are
+ * derived from the project, not secrets, so they travel on the public
+ * channel — only the password and the URL (which embeds the password) are
+ * masked.
+ */
+export function buildPostgresEmbeddedEnv(
+	projectName: string,
+	password: string,
+): ServiceEnv {
+	const id = postgresProjectIdentifier(projectName)
+	return {
+		public: {
+			POSTGRES_USER: id,
+			POSTGRES_DB: id,
+		},
+		secret: {
+			POSTGRES_PASSWORD: password,
+			DATABASE_URL: buildPostgresEmbeddedDatabaseUrl(
+				projectName,
+				password,
+			),
+		},
+	}
+}
+
+/**
+ * External-mode env contributions. The user owns the database; we only
+ * pass the URL through to the app so the rest of the deploy pipeline
+ * (e.g. migrate) does not have to re-read secrets independently.
+ */
+export function buildPostgresExternalEnv(databaseUrl: string): ServiceEnv {
+	return {
+		public: {},
+		secret: { DATABASE_URL: databaseUrl },
 	}
 }

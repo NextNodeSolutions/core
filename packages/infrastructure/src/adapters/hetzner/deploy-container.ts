@@ -62,6 +62,7 @@ export async function deployContainer(
 			image: input.image,
 			hostPort,
 			volumes: input.volumes,
+			projectName: input.projectName,
 		}),
 	)
 

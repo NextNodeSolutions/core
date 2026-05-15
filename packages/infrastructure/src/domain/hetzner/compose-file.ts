@@ -32,6 +32,7 @@ export interface ComposeFileInput {
 	readonly hostPort: number
 	readonly volumes?: ReadonlyArray<ComposeVolume>
 	readonly postgres?: PostgresServiceConfig
+	readonly projectName: string
 }
 
 export function formatImageRef(image: ImageRef): string {
@@ -67,7 +68,7 @@ function buildTopLevelVolumes(
 export function renderComposeFile(input: ComposeFileInput): string {
 	const userVolumes = input.volumes?.length ? input.volumes : undefined
 	const postgresSidecar = input.postgres
-		? buildPostgresSidecar(input.postgres)
+		? buildPostgresSidecar(input.postgres, input.projectName)
 		: null
 
 	const topLevelVolumes = buildTopLevelVolumes(

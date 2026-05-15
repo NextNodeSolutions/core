@@ -26,6 +26,7 @@ const CTX: ServiceFactoryContext = {
 	environment: 'production',
 	cfToken: 'cf-token',
 	infraStorage: INFRA_STORAGE,
+	repoSecrets: {},
 }
 
 const CONFIG: R2ServiceConfig = {
