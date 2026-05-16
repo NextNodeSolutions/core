@@ -262,7 +262,59 @@ describe('renderComposeFile', () => {
 		const parsed = parse(result)
 
 		expect(parsed.services).not.toHaveProperty('postgres')
+		expect(parsed.services).not.toHaveProperty('postgres-backup')
 		expect(parsed).not.toHaveProperty('volumes')
+	})
+
+	it('emits a postgres-backup sidecar when postgres is embedded', () => {
+		const result = renderComposeFile({
+			image: IMAGE,
+			hostPort: 8080,
+			postgres: {
+				mode: 'embedded',
+				version: '17.2',
+				migrationsFolder: undefined,
+			},
+			projectName: PROJECT_NAME,
+		})
+		const parsed = parse(result)
+
+		expect(parsed.services['postgres-backup']).toEqual({
+			image: 'eeshugerman/postgres-backup-s3:17',
+			restart: 'unless-stopped',
+			depends_on: ['postgres'],
+			environment: {
+				SCHEDULE: '@daily',
+				BACKUP_KEEP_DAYS: '0',
+				S3_REGION: 'auto',
+				S3_ACCESS_KEY_ID: '${R2_ACCESS_KEY_ID}',
+				S3_SECRET_ACCESS_KEY: '${R2_SECRET_ACCESS_KEY}',
+				S3_ENDPOINT: '${R2_ENDPOINT}',
+				S3_BUCKET: 'nn-backups-acme-web',
+				S3_PREFIX: 'postgres',
+				S3_S3V4: 'yes',
+				POSTGRES_HOST: 'postgres',
+				POSTGRES_DATABASE: 'acme_web',
+				POSTGRES_USER: 'acme_web',
+				POSTGRES_PASSWORD: '${POSTGRES_PASSWORD}',
+			},
+		})
+	})
+
+	it('does not expose postgres-backup on a host port', () => {
+		const result = renderComposeFile({
+			image: IMAGE,
+			hostPort: 8080,
+			postgres: {
+				mode: 'embedded',
+				version: '17',
+				migrationsFolder: undefined,
+			},
+			projectName: PROJECT_NAME,
+		})
+		const parsed = parse(result)
+
+		expect(parsed.services['postgres-backup']).not.toHaveProperty('ports')
 	})
 
 	it('merges the postgres-data volume with user-declared volumes', () => {

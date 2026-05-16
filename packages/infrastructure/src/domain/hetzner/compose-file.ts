@@ -1,9 +1,14 @@
 import type { PostgresServiceConfig } from '#/config/types.ts'
 import type { ImageRef } from '#/domain/deploy/target.ts'
-import type { PostgresSidecarService } from '#/domain/services/postgres.ts'
+import type {
+	PostgresBackupSidecarService,
+	PostgresSidecarService,
+} from '#/domain/services/postgres.ts'
 import {
+	POSTGRES_BACKUP_SERVICE_NAME,
 	POSTGRES_DATA_VOLUME,
 	POSTGRES_SIDECAR_SERVICE_NAME,
+	buildPostgresBackupSidecar,
 	buildPostgresSidecar,
 } from '#/domain/services/postgres.ts'
 import { stringify } from 'yaml'
@@ -51,6 +56,7 @@ interface ComposeConfig {
 	readonly services: {
 		readonly app: ComposeService
 		readonly [POSTGRES_SIDECAR_SERVICE_NAME]?: PostgresSidecarService
+		readonly [POSTGRES_BACKUP_SERVICE_NAME]?: PostgresBackupSidecarService
 	}
 	readonly volumes?: Readonly<Record<string, Record<string, never>>>
 }
@@ -69,6 +75,9 @@ export function renderComposeFile(input: ComposeFileInput): string {
 	const userVolumes = input.volumes?.length ? input.volumes : undefined
 	const postgresSidecar = input.postgres
 		? buildPostgresSidecar(input.postgres, input.projectName)
+		: null
+	const postgresBackupSidecar = input.postgres
+		? buildPostgresBackupSidecar(input.postgres, input.projectName)
 		: null
 
 	const topLevelVolumes = buildTopLevelVolumes(
@@ -89,6 +98,9 @@ export function renderComposeFile(input: ComposeFileInput): string {
 			},
 			...(postgresSidecar && {
 				[POSTGRES_SIDECAR_SERVICE_NAME]: postgresSidecar,
+			}),
+			...(postgresBackupSidecar && {
+				[POSTGRES_BACKUP_SERVICE_NAME]: postgresBackupSidecar,
 			}),
 		},
 		...(topLevelVolumes && { volumes: topLevelVolumes }),

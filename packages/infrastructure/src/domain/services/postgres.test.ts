@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+	POSTGRES_BACKUP_PREFIX,
+	POSTGRES_BACKUP_SCHEDULE,
 	POSTGRES_DATA_DIR,
 	POSTGRES_DATA_VOLUME,
+	POSTGRES_SIDECAR_SERVICE_NAME,
+	buildPostgresBackupSidecar,
 	buildPostgresEmbeddedDatabaseUrl,
 	buildPostgresEmbeddedEnv,
 	buildPostgresExternalEnv,
 	buildPostgresSidecar,
+	postgresBackupBucketName,
 	postgresProjectIdentifier,
 } from './postgres.ts'
 
@@ -99,6 +104,94 @@ describe('buildPostgresExternalEnv', () => {
 			secret: {
 				DATABASE_URL: 'postgres://user:pw@db.example.com:5432/app',
 			},
+		})
+	})
+})
+
+describe('postgresBackupBucketName', () => {
+	it('namespaces backups under nn-backups-<project>', () => {
+		expect(postgresBackupBucketName('acme-web')).toBe('nn-backups-acme-web')
+	})
+})
+
+describe('buildPostgresBackupSidecar', () => {
+	it('returns null when mode is external (user-owned DB)', () => {
+		const result = buildPostgresBackupSidecar(
+			{ mode: 'external', version: '17.2', migrationsFolder: undefined },
+			'acme-web',
+		)
+
+		expect(result).toBeNull()
+	})
+
+	it('builds an eeshugerman/postgres-backup-s3 sidecar pinned to the postgres major', () => {
+		const result = buildPostgresBackupSidecar(
+			{ mode: 'embedded', version: '17.2', migrationsFolder: undefined },
+			'acme-web',
+		)
+
+		expect(result).not.toBeNull()
+		if (result === null) return
+		expect(result.image).toBe('eeshugerman/postgres-backup-s3:17')
+		expect(result.restart).toBe('unless-stopped')
+		expect(result.depends_on).toEqual([POSTGRES_SIDECAR_SERVICE_NAME])
+	})
+
+	it('pins the image to a bare major when version is already major-only', () => {
+		const result = buildPostgresBackupSidecar(
+			{ mode: 'embedded', version: '16', migrationsFolder: undefined },
+			'acme-web',
+		)
+
+		expect(result?.image).toBe('eeshugerman/postgres-backup-s3:16')
+	})
+
+	it('renames the project-level R2 creds to the S3_* names the image expects via compose interpolation', () => {
+		const result = buildPostgresBackupSidecar(
+			{ mode: 'embedded', version: '17.2', migrationsFolder: undefined },
+			'acme-web',
+		)
+
+		expect(result?.environment).toMatchObject({
+			S3_ACCESS_KEY_ID: '${R2_ACCESS_KEY_ID}',
+			S3_SECRET_ACCESS_KEY: '${R2_SECRET_ACCESS_KEY}',
+			S3_ENDPOINT: '${R2_ENDPOINT}',
+			S3_REGION: 'auto',
+			S3_S3V4: 'yes',
+		})
+	})
+
+	it('targets the project-scoped R2 bucket under the postgres prefix', () => {
+		const result = buildPostgresBackupSidecar(
+			{ mode: 'embedded', version: '17.2', migrationsFolder: undefined },
+			'acme-web',
+		)
+
+		expect(result?.environment['S3_BUCKET']).toBe('nn-backups-acme-web')
+		expect(result?.environment['S3_PREFIX']).toBe(POSTGRES_BACKUP_PREFIX)
+	})
+
+	it('runs the dump on the canonical daily schedule with retention disabled (handled separately)', () => {
+		const result = buildPostgresBackupSidecar(
+			{ mode: 'embedded', version: '17.2', migrationsFolder: undefined },
+			'acme-web',
+		)
+
+		expect(result?.environment['SCHEDULE']).toBe(POSTGRES_BACKUP_SCHEDULE)
+		expect(result?.environment['BACKUP_KEEP_DAYS']).toBe('0')
+	})
+
+	it('connects to the in-network postgres sidecar with the project-scoped role+db', () => {
+		const result = buildPostgresBackupSidecar(
+			{ mode: 'embedded', version: '17.2', migrationsFolder: undefined },
+			'acme-web',
+		)
+
+		expect(result?.environment).toMatchObject({
+			POSTGRES_HOST: POSTGRES_SIDECAR_SERVICE_NAME,
+			POSTGRES_DATABASE: 'acme_web',
+			POSTGRES_USER: 'acme_web',
+			POSTGRES_PASSWORD: '${POSTGRES_PASSWORD}',
 		})
 	})
 })

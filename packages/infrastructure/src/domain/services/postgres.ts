@@ -132,3 +132,84 @@ export function buildPostgresExternalEnv(databaseUrl: string): ServiceEnv {
 		secret: { DATABASE_URL: databaseUrl },
 	}
 }
+
+/**
+ * Compose service name for the backup sidecar. Lives in the same docker
+ * network as the embedded postgres, reaches it as `postgres:5432`.
+ */
+export const POSTGRES_BACKUP_SERVICE_NAME = 'postgres-backup'
+
+/**
+ * Cron schedule string consumed by the backup image. `@daily` runs once
+ * per day at 00:00 UTC inside the sidecar. Plenty granular for the MVP;
+ * a config field for it would be premature.
+ */
+export const POSTGRES_BACKUP_SCHEDULE = '@daily'
+
+/**
+ * R2 bucket name for the project's postgres dumps. The bucket is project-
+ * scoped (one per app) and lives outside the `[services.r2]` bucket list
+ * on purpose — backups are infrastructure, not application data, and the
+ * provisioning of this bucket is owned by the deploy pipeline rather than
+ * declared per project.
+ */
+export function postgresBackupBucketName(projectName: string): string {
+	return `nn-backups-${projectName}`
+}
+
+/**
+ * S3 key prefix under which the sidecar puts each dump. Each file is
+ * named `<timestamp>.dump` by the backup image, so the full key looks like
+ * `s3://nn-backups-<project>/postgres/2026-05-16T03-00-00Z.dump`.
+ */
+export const POSTGRES_BACKUP_PREFIX = 'postgres'
+
+export interface PostgresBackupSidecarService {
+	readonly image: string
+	readonly restart: string
+	readonly depends_on: ReadonlyArray<string>
+	readonly environment: Readonly<Record<string, string>>
+}
+
+/**
+ * Build the compose sidecar definition for the daily postgres backup to
+ * R2. Returns `null` when `mode = external` — the user owns the database
+ * and is responsible for their own backups.
+ *
+ * Image is `eeshugerman/postgres-backup-s3` pinned to the postgres major
+ * tag (`16`, `17`, ...). It reads `S3_*` + `POSTGRES_*` env vars and runs
+ * `pg_dump` on the configured `SCHEDULE`. R2 credentials come from the
+ * project's `[services.r2]` block (the `R2_*` env vars are already written
+ * to `.env` by the deploy pipeline), renamed to `S3_*` via compose YAML
+ * interpolation so the image sees the names it expects.
+ */
+export function buildPostgresBackupSidecar(
+	config: PostgresServiceConfig,
+	projectName: string,
+): PostgresBackupSidecarService | null {
+	if (config.mode !== 'embedded') return null
+
+	const id = postgresProjectIdentifier(projectName)
+	const majorVersion = config.version.split('.')[0] ?? config.version
+
+	return {
+		image: `eeshugerman/postgres-backup-s3:${majorVersion}`,
+		restart: 'unless-stopped',
+		depends_on: [POSTGRES_SIDECAR_SERVICE_NAME],
+		environment: {
+			SCHEDULE: POSTGRES_BACKUP_SCHEDULE,
+			BACKUP_KEEP_DAYS: '0',
+			S3_REGION: 'auto',
+			S3_ACCESS_KEY_ID: '${R2_ACCESS_KEY_ID}',
+			S3_SECRET_ACCESS_KEY: '${R2_SECRET_ACCESS_KEY}',
+			S3_ENDPOINT: '${R2_ENDPOINT}',
+			S3_BUCKET: postgresBackupBucketName(projectName),
+			S3_PREFIX: POSTGRES_BACKUP_PREFIX,
+			S3_S3V4: 'yes',
+			POSTGRES_HOST: POSTGRES_SIDECAR_SERVICE_NAME,
+			POSTGRES_DATABASE: id,
+			POSTGRES_USER: id,
+			POSTGRES_PASSWORD: '${POSTGRES_PASSWORD}',
+		},
+	}
+}
