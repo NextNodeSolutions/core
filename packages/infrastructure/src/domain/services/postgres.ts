@@ -164,6 +164,131 @@ export function postgresBackupBucketName(projectName: string): string {
  */
 export const POSTGRES_BACKUP_PREFIX = 'postgres'
 
+/**
+ * Retention policy bucket sizes — keep the 7 most-recent distinct UTC days,
+ * the 4 most-recent ISO-week buckets (Monday-aligned), and the 3 most-recent
+ * UTC month buckets. Older snapshots are pruned. Buckets overlap on the
+ * newest snapshot (one dump satisfies day + week + month), so the worst-case
+ * upper bound is 7 + 4 + 3 = 14 — but with dense daily data the realized
+ * count is typically lower because the most-recent weekly and the two most-
+ * recent monthly buckets overlap the 7-day window.
+ */
+export const POSTGRES_BACKUP_RETENTION_DAILY = 7
+export const POSTGRES_BACKUP_RETENTION_WEEKLY = 4
+export const POSTGRES_BACKUP_RETENTION_MONTHLY = 3
+
+/**
+ * Pattern of dumps emitted by `eeshugerman/postgres-backup-s3`. The image
+ * names each file `<ISO timestamp with hyphens>.dump`; the prefix is the
+ * `S3_PREFIX` we hand the sidecar (see `POSTGRES_BACKUP_PREFIX`), and the
+ * timestamp format is the image's own — not under our control. The regex
+ * is derived from the constant so changes to the prefix propagate.
+ */
+const POSTGRES_BACKUP_KEY_PATTERN = new RegExp(
+	`^${POSTGRES_BACKUP_PREFIX}/(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2})-(\\d{2})-(\\d{2})Z\\.dump$`,
+)
+
+export interface PostgresBackupSnapshot {
+	readonly key: string
+	readonly timestamp: Date
+}
+
+/**
+ * Parse an R2 object key emitted by the backup sidecar into a snapshot.
+ * Returns `null` when the key does not match the expected pattern — callers
+ * filter unknown keys out so retention only ever prunes objects we own.
+ *
+ * The backup image names dumps `<ISO timestamp with hyphens>.dump` because
+ * S3 keys cannot contain colons, so we rebuild a real ISO-8601 string
+ * (`T03-00-00Z` → `T03:00:00Z`) before parsing.
+ *
+ * `new Date(iso)` silently rolls impossible-but-in-range dates over
+ * (Feb 30 → Mar 2, Apr 31 → May 1). We round-trip the parsed Date back to
+ * ISO and reject any key whose timestamp does not match the original — this
+ * is what prevents a malformed (or hand-crafted) key from being classified
+ * into a bucket it does not belong to and displacing a real snapshot.
+ */
+export function parsePostgresBackupKey(
+	key: string,
+): PostgresBackupSnapshot | null {
+	const match = POSTGRES_BACKUP_KEY_PATTERN.exec(key)
+	if (match === null) return null
+	const [, year, month, day, hour, minute, second] = match
+	const iso = `${year!}-${month!}-${day!}T${hour!}:${minute!}:${second!}Z`
+	const date = new Date(iso)
+	if (Number.isNaN(date.getTime())) return null
+	if (date.toISOString() !== `${iso.slice(0, -1)}.000Z`) return null
+	return { key, timestamp: date }
+}
+
+const MS_PER_DAY = 86_400_000
+const DAYS_PER_WEEK = 7
+const SUNDAY_OFFSET_FROM_MONDAY = 6
+const ISO_DATE_LENGTH = 10
+const ISO_YEAR_MONTH_LENGTH = 7
+
+function dayBucketKey(d: Date): string {
+	return d.toISOString().slice(0, ISO_DATE_LENGTH)
+}
+
+function weekBucketKey(d: Date): string {
+	const utcMidnight = Date.UTC(
+		d.getUTCFullYear(),
+		d.getUTCMonth(),
+		d.getUTCDate(),
+	)
+	// Monday-aligned: ISO weekday is 1 (Mon) … 7 (Sun); JS getUTCDay() is
+	// 0 (Sun) … 6 (Sat). `(day + 6) % 7` yields 0 when Monday and 6 when
+	// Sunday, which is the offset back to the week's Monday.
+	const offsetToMonday =
+		(new Date(utcMidnight).getUTCDay() + SUNDAY_OFFSET_FROM_MONDAY) %
+		DAYS_PER_WEEK
+	const monday = new Date(utcMidnight - offsetToMonday * MS_PER_DAY)
+	return monday.toISOString().slice(0, ISO_DATE_LENGTH)
+}
+
+function monthBucketKey(d: Date): string {
+	return d.toISOString().slice(0, ISO_YEAR_MONTH_LENGTH)
+}
+
+/**
+ * Select which postgres backup snapshots to prune under the GFS retention
+ * policy (7 daily / 4 weekly / 3 monthly). The newest snapshot in each of
+ * the 7 most-recent UTC days is kept; same for the 4 most-recent ISO weeks
+ * and the 3 most-recent UTC months. A single dump can satisfy multiple
+ * buckets — the union of kept keys is preserved, and the complement is
+ * returned as the prune set in input order.
+ *
+ * Pure: no IO, no clock reads. The caller hands a snapshot list (already
+ * listed from R2) and gets back the subset to delete. Trigger and IO live
+ * in the cli/adapter layers.
+ */
+export function selectPostgresBackupsToPrune(
+	snapshots: ReadonlyArray<PostgresBackupSnapshot>,
+): PostgresBackupSnapshot[] {
+	const sortedDesc = snapshots.toSorted(
+		(a, b) => b.timestamp.getTime() - a.timestamp.getTime(),
+	)
+
+	const keep = new Set<string>()
+	const fill = (bucketKey: (d: Date) => string, capacity: number): void => {
+		const seen = new Set<string>()
+		for (const snap of sortedDesc) {
+			if (seen.size >= capacity) return
+			const k = bucketKey(snap.timestamp)
+			if (seen.has(k)) continue
+			seen.add(k)
+			keep.add(snap.key)
+		}
+	}
+
+	fill(dayBucketKey, POSTGRES_BACKUP_RETENTION_DAILY)
+	fill(weekBucketKey, POSTGRES_BACKUP_RETENTION_WEEKLY)
+	fill(monthBucketKey, POSTGRES_BACKUP_RETENTION_MONTHLY)
+
+	return snapshots.filter(s => !keep.has(s.key))
+}
+
 export interface PostgresBackupSidecarService {
 	readonly image: string
 	readonly restart: string

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import type { PostgresBackupSnapshot } from './postgres.ts'
 import {
 	POSTGRES_BACKUP_PREFIX,
 	POSTGRES_BACKUP_SCHEDULE,
@@ -11,8 +12,10 @@ import {
 	buildPostgresEmbeddedEnv,
 	buildPostgresExternalEnv,
 	buildPostgresSidecar,
+	parsePostgresBackupKey,
 	postgresBackupBucketName,
 	postgresProjectIdentifier,
+	selectPostgresBackupsToPrune,
 } from './postgres.ts'
 
 describe('postgresProjectIdentifier', () => {
@@ -193,5 +196,225 @@ describe('buildPostgresBackupSidecar', () => {
 			POSTGRES_USER: 'acme_web',
 			POSTGRES_PASSWORD: '${POSTGRES_PASSWORD}',
 		})
+	})
+})
+
+describe('parsePostgresBackupKey', () => {
+	it('parses a valid sidecar-emitted key into a snapshot with a UTC timestamp', () => {
+		expect(
+			parsePostgresBackupKey('postgres/2026-05-16T03-00-00Z.dump'),
+		).toEqual({
+			key: 'postgres/2026-05-16T03-00-00Z.dump',
+			timestamp: new Date('2026-05-16T03:00:00.000Z'),
+		})
+	})
+
+	it('returns null when the key is not under the postgres prefix', () => {
+		expect(
+			parsePostgresBackupKey('certs/2026-05-16T03-00-00Z.dump'),
+		).toBeNull()
+	})
+
+	it('returns null when the key extension is not .dump', () => {
+		expect(
+			parsePostgresBackupKey('postgres/2026-05-16T03-00-00Z.sql'),
+		).toBeNull()
+	})
+
+	it('returns null when the timestamp is structurally invalid', () => {
+		expect(
+			parsePostgresBackupKey('postgres/2026-13-99T03-00-00Z.dump'),
+		).toBeNull()
+	})
+
+	it('returns null for impossible-but-in-range dates that JS Date silently rolls over', () => {
+		// `new Date('2026-02-30T03:00:00Z')` returns Mar 2 instead of NaN —
+		// without the round-trip check this would land in the wrong bucket
+		// and could prune a real Mar 2 snapshot.
+		expect(
+			parsePostgresBackupKey('postgres/2026-02-30T03-00-00Z.dump'),
+		).toBeNull()
+		expect(
+			parsePostgresBackupKey('postgres/2026-04-31T03-00-00Z.dump'),
+		).toBeNull()
+	})
+
+	it('returns null for keys with trailing junk after the .dump extension', () => {
+		expect(
+			parsePostgresBackupKey('postgres/2026-05-16T03-00-00Z.dump.bak'),
+		).toBeNull()
+	})
+
+	it('returns null for keys nested under an additional sub-prefix', () => {
+		expect(
+			parsePostgresBackupKey('postgres/sub/2026-05-16T03-00-00Z.dump'),
+		).toBeNull()
+	})
+})
+
+function snap(iso: string): PostgresBackupSnapshot {
+	return { key: iso, timestamp: new Date(iso) }
+}
+
+describe('selectPostgresBackupsToPrune', () => {
+	it('returns an empty prune set for an empty input', () => {
+		expect(selectPostgresBackupsToPrune([])).toEqual([])
+	})
+
+	it('keeps a lone snapshot — daily, weekly and monthly buckets collapse onto it', () => {
+		const only = snap('2026-05-16T03:00:00Z')
+		expect(selectPostgresBackupsToPrune([only])).toEqual([])
+	})
+
+	it('keeps only the newest snapshot when several dumps share the same UTC day', () => {
+		const oldest = snap('2026-05-16T01:00:00Z')
+		const middle = snap('2026-05-16T12:00:00Z')
+		const newest = snap('2026-05-16T23:00:00Z')
+
+		const prune = selectPostgresBackupsToPrune([oldest, middle, newest])
+
+		expect(prune).toEqual([oldest, middle])
+	})
+
+	it('preserves the input order in the returned prune set', () => {
+		const a = snap('2026-05-10T00:00:00Z')
+		const b = snap('2026-05-10T06:00:00Z')
+		const c = snap('2026-05-10T12:00:00Z')
+
+		const prune = selectPostgresBackupsToPrune([b, a, c])
+
+		expect(prune).toEqual([b, a])
+	})
+
+	it('keeps the 7 most-recent daily buckets and prunes older days when only one dump exists per day', () => {
+		const dumps = [
+			snap('2026-05-06T12:00:00Z'),
+			snap('2026-05-07T12:00:00Z'),
+			snap('2026-05-08T12:00:00Z'),
+			snap('2026-05-09T12:00:00Z'),
+			snap('2026-05-10T12:00:00Z'),
+			snap('2026-05-11T12:00:00Z'),
+			snap('2026-05-12T12:00:00Z'),
+			snap('2026-05-13T12:00:00Z'),
+			snap('2026-05-14T12:00:00Z'),
+			snap('2026-05-15T12:00:00Z'),
+		]
+
+		const prune = selectPostgresBackupsToPrune(dumps)
+
+		expect(prune).toEqual([
+			snap('2026-05-06T12:00:00Z'),
+			snap('2026-05-07T12:00:00Z'),
+			snap('2026-05-08T12:00:00Z'),
+		])
+	})
+
+	it('places a Sunday-night dump and the following Monday-morning dump in distinct weekly buckets', () => {
+		// 2026-05-17 is a Sunday (ISO week of Monday 2026-05-11),
+		// 2026-05-18 is the next Monday (ISO week of Monday 2026-05-18).
+		const sunday = snap('2026-05-17T23:59:00Z')
+		const monday = snap('2026-05-18T00:01:00Z')
+
+		const prune = selectPostgresBackupsToPrune([sunday, monday])
+
+		expect(prune).toEqual([])
+	})
+
+	it('places a dump on the last day of a month and one on the first day of the next month in distinct monthly buckets', () => {
+		const jan31 = snap('2026-01-31T23:59:00Z')
+		const feb01 = snap('2026-02-01T00:01:00Z')
+
+		const prune = selectPostgresBackupsToPrune([jan31, feb01])
+
+		expect(prune).toEqual([])
+	})
+
+	it('promotes mid-week dumps as weekly representatives once they fall outside the daily window', () => {
+		// One dump per day from 2026-04-20 (Mon) through 2026-05-17 (Sun).
+		// Daily window keeps the 7 most-recent days: 2026-05-11..2026-05-17.
+		// Beyond that, the 4 most-recent ISO weekly buckets (Mon-aligned)
+		// pick their newest in-data dump:
+		//   week of 2026-05-11 — newest: 2026-05-17 (already kept daily)
+		//   week of 2026-05-04 — newest: 2026-05-10
+		//   week of 2026-04-27 — newest: 2026-05-03
+		//   week of 2026-04-20 — newest: 2026-04-26
+		// Monthly buckets pick their newest in-data dump:
+		//   2026-05 — newest: 2026-05-17 (already kept daily)
+		//   2026-04 — newest: 2026-04-30
+		const dumps: PostgresBackupSnapshot[] = []
+		for (let day = 20; day <= 30; day++) {
+			dumps.push(
+				snap(`2026-04-${String(day).padStart(2, '0')}T12:00:00Z`),
+			)
+		}
+		for (let day = 1; day <= 17; day++) {
+			dumps.push(
+				snap(`2026-05-${String(day).padStart(2, '0')}T12:00:00Z`),
+			)
+		}
+
+		const prune = selectPostgresBackupsToPrune(dumps)
+		const prunedDates = prune.map(s =>
+			s.timestamp.toISOString().slice(0, 10),
+		)
+
+		expect(prunedDates).toEqual([
+			'2026-04-20',
+			'2026-04-21',
+			'2026-04-22',
+			'2026-04-23',
+			'2026-04-24',
+			'2026-04-25',
+			// 2026-04-26 kept as weekly bucket Mon Apr 20
+			'2026-04-27',
+			'2026-04-28',
+			'2026-04-29',
+			// 2026-04-30 kept as monthly bucket 2026-04
+			'2026-05-01',
+			'2026-05-02',
+			// 2026-05-03 kept as weekly bucket Mon Apr 27
+			'2026-05-04',
+			'2026-05-05',
+			'2026-05-06',
+			'2026-05-07',
+			'2026-05-08',
+			'2026-05-09',
+			// 2026-05-10 kept as weekly bucket Mon May 4
+			// 2026-05-11..17 kept as the 7-daily window
+		])
+	})
+
+	it('groups Thu Dec 31 and Fri Jan 1 in the same ISO week even though they straddle the year boundary', () => {
+		// 2026-12-28 is a Monday, so the ISO week of `Mon 2026-12-28`
+		// includes Thu Dec 31 2026 AND Fri Jan 1 2027. Same weekly bucket;
+		// different monthly buckets (2026-12 vs 2027-01).
+		const dec31 = snap('2026-12-31T12:00:00Z')
+		const jan01 = snap('2027-01-01T12:00:00Z')
+
+		// Both fall inside the 7-day window, so both are kept via the
+		// daily fill alone — the weekly bucket only matters once they age
+		// out. Mix in older dumps so weekly + monthly buckets are exercised.
+		const dec28 = snap('2026-12-28T12:00:00Z') // Mon of the same ISO week
+		const dec27 = snap('2026-12-27T12:00:00Z') // Sun, previous ISO week
+
+		const prune = selectPostgresBackupsToPrune([dec27, dec28, dec31, jan01])
+
+		// All four are within the daily window — nothing pruned.
+		expect(prune).toEqual([])
+	})
+
+	it('treats a future-dated dump as the most-recent (algorithm uses snapshot timestamps, never wall-clock time)', () => {
+		// The retention function is pure — no clock parameter. A
+		// clock-skewed dump from "the future" wins the most-recent slot
+		// and can displace a present-day dump from being a bucket
+		// representative. Pin this behavior so a future refactor doesn't
+		// quietly start filtering future timestamps.
+		const future = snap('2099-01-01T00:00:00Z')
+		const today = snap('2026-05-16T00:00:00Z')
+		const yesterday = snap('2026-05-15T00:00:00Z')
+
+		const prune = selectPostgresBackupsToPrune([yesterday, today, future])
+
+		expect(prune).toEqual([])
 	})
 })
