@@ -27,7 +27,7 @@ describe('postgresProjectIdentifier', () => {
 describe('buildPostgresSidecar', () => {
 	it('returns a sidecar spec when mode is embedded', () => {
 		const result = buildPostgresSidecar(
-			{ mode: 'embedded', version: '17.2' },
+			{ mode: 'embedded', version: '17.2', migrationsFolder: undefined },
 			'acme-web',
 		)
 
@@ -47,7 +47,7 @@ describe('buildPostgresSidecar', () => {
 
 	it('returns null when mode is external', () => {
 		const result = buildPostgresSidecar(
-			{ mode: 'external', version: '16' },
+			{ mode: 'external', version: '16', migrationsFolder: undefined },
 			'acme-web',
 		)
 
@@ -56,7 +56,7 @@ describe('buildPostgresSidecar', () => {
 
 	it('threads the major-only version into the image tag', () => {
 		const result = buildPostgresSidecar(
-			{ mode: 'embedded', version: '16' },
+			{ mode: 'embedded', version: '16', migrationsFolder: undefined },
 			'acme-web',
 		)
 

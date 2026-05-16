@@ -14,7 +14,48 @@ describe('validatePostgresService', () => {
 		expect(result.section).toEqual({
 			mode: 'embedded',
 			version: '17.2',
+			migrationsFolder: undefined,
 		})
+	})
+
+	it('parses an explicit migrations_folder override', () => {
+		const result = validatePostgresService({
+			mode: 'embedded',
+			version: '17.2',
+			migrations_folder: 'src/db/migrations',
+		})
+
+		expect(result.ok).toBe(true)
+		if (!result.ok) return
+		expect(result.section.migrationsFolder).toBe('src/db/migrations')
+	})
+
+	it('rejects an empty migrations_folder string', () => {
+		const result = validatePostgresService({
+			mode: 'embedded',
+			version: '17.2',
+			migrations_folder: '',
+		})
+
+		expect(result.ok).toBe(false)
+		if (result.ok) return
+		expect(result.errors).toContain(
+			'services.postgres.migrations_folder must be a non-empty string when set',
+		)
+	})
+
+	it('rejects a non-string migrations_folder', () => {
+		const result = validatePostgresService({
+			mode: 'embedded',
+			version: '17.2',
+			migrations_folder: 42,
+		})
+
+		expect(result.ok).toBe(false)
+		if (result.ok) return
+		expect(result.errors).toContain(
+			'services.postgres.migrations_folder must be a non-empty string when set',
+		)
 	})
 
 	it('parses a valid external config', () => {

@@ -3,6 +3,7 @@ import { createLogger } from '@nextnode-solutions/logger'
 import { computeImageRefCommand } from './cli/deploy/compute-image-ref.command.ts'
 import { deployCommand } from './cli/deploy/deploy.command.ts'
 import { dnsCommand } from './cli/deploy/dns.command.ts'
+import { migrateCommand } from './cli/deploy/migrate.command.ts'
 import { provisionCommand } from './cli/deploy/provision.command.ts'
 import { seoGuardCommand } from './cli/deploy/seo-guard.command.ts'
 import { teardownGuardCommand } from './cli/deploy/teardown-guard.command.ts'
@@ -30,6 +31,7 @@ const PLAN_COMMANDS: Record<string, ConfigCommand> = {
 
 const DEPLOY_COMMANDS: Record<string, DeployCommand> = {
 	provision: provisionCommand,
+	migrate: migrateCommand,
 	deploy: deployCommand,
 	dns: dnsCommand,
 	teardown: teardownCommand,

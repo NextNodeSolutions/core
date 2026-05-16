@@ -16,12 +16,15 @@ export function validatePostgresService(
 
 	const modeResult = validateMode(raw['mode'])
 	const versionResult = validateVersion(raw['version'])
+	const migrationsFolderResult = validateMigrationsFolder(
+		raw['migrations_folder'],
+	)
 
-	if (!modeResult.ok || !versionResult.ok) {
+	if (!modeResult.ok || !versionResult.ok || !migrationsFolderResult.ok) {
 		return {
 			ok: false,
-			errors: [modeResult, versionResult].flatMap(r =>
-				r.ok ? [] : r.errors,
+			errors: [modeResult, versionResult, migrationsFolderResult].flatMap(
+				r => (r.ok ? [] : r.errors),
 			),
 		}
 	}
@@ -31,6 +34,7 @@ export function validatePostgresService(
 		section: {
 			mode: modeResult.section,
 			version: versionResult.section,
+			migrationsFolder: migrationsFolderResult.section,
 		},
 	}
 }
@@ -59,6 +63,21 @@ function validateVersion(raw: unknown): ValidationResult<string> {
 			ok: false,
 			errors: [
 				`services.postgres.version "${raw}" must match pattern ${POSTGRES_VERSION_PATTERN.source} (e.g. "16" or "17.2")`,
+			],
+		}
+	}
+	return { ok: true, section: raw }
+}
+
+function validateMigrationsFolder(
+	raw: unknown,
+): ValidationResult<string | undefined> {
+	if (raw === undefined) return { ok: true, section: undefined }
+	if (typeof raw !== 'string' || raw === '') {
+		return {
+			ok: false,
+			errors: [
+				'services.postgres.migrations_folder must be a non-empty string when set',
 			],
 		}
 	}

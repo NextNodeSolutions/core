@@ -19,8 +19,16 @@ function makeCtx(
 	}
 }
 
-const EMBEDDED: PostgresServiceConfig = { mode: 'embedded', version: '17.2' }
-const EXTERNAL: PostgresServiceConfig = { mode: 'external', version: '17.2' }
+const EMBEDDED: PostgresServiceConfig = {
+	mode: 'embedded',
+	version: '17.2',
+	migrationsFolder: undefined,
+}
+const EXTERNAL: PostgresServiceConfig = {
+	mode: 'external',
+	version: '17.2',
+	migrationsFolder: undefined,
+}
 
 describe('createPostgresService', () => {
 	it('exposes the service under the "postgres" name', () => {

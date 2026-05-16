@@ -208,7 +208,11 @@ describe('renderComposeFile', () => {
 		const result = renderComposeFile({
 			image: IMAGE,
 			hostPort: 8080,
-			postgres: { mode: 'embedded', version: '17.2' },
+			postgres: {
+				mode: 'embedded',
+				version: '17.2',
+				migrationsFolder: undefined,
+			},
 			projectName: PROJECT_NAME,
 		})
 		const parsed = parse(result)
@@ -232,7 +236,11 @@ describe('renderComposeFile', () => {
 		const result = renderComposeFile({
 			image: IMAGE,
 			hostPort: 8080,
-			postgres: { mode: 'embedded', version: '17' },
+			postgres: {
+				mode: 'embedded',
+				version: '17',
+				migrationsFolder: undefined,
+			},
 			projectName: PROJECT_NAME,
 		})
 		const parsed = parse(result)
@@ -244,7 +252,11 @@ describe('renderComposeFile', () => {
 		const result = renderComposeFile({
 			image: IMAGE,
 			hostPort: 8080,
-			postgres: { mode: 'external', version: '17' },
+			postgres: {
+				mode: 'external',
+				version: '17',
+				migrationsFolder: undefined,
+			},
 			projectName: PROJECT_NAME,
 		})
 		const parsed = parse(result)
@@ -258,7 +270,11 @@ describe('renderComposeFile', () => {
 			image: IMAGE,
 			hostPort: 8080,
 			volumes: [{ name: 'app-data', mount: '/var/lib/app' }],
-			postgres: { mode: 'embedded', version: '17' },
+			postgres: {
+				mode: 'embedded',
+				version: '17',
+				migrationsFolder: undefined,
+			},
 			projectName: PROJECT_NAME,
 		})
 		const parsed = parse(result)

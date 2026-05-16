@@ -163,6 +163,9 @@ export const POSTGRES_VERSION_PATTERN = /^\d+(\.\d+)?$/
 export interface PostgresServiceConfig {
 	readonly mode: PostgresMode
 	readonly version: string
+	// Drizzle migrations folder relative to nextnode.toml. Defaults to
+	// "drizzle" (drizzle-kit's own default `out` value) when omitted.
+	readonly migrationsFolder: string | undefined
 }
 
 /**
