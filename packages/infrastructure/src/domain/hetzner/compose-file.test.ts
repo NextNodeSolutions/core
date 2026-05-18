@@ -210,7 +210,6 @@ describe('renderComposeFile', () => {
 			hostPort: 8080,
 			postgres: {
 				mode: 'embedded',
-				version: '17.2',
 				migrationsFolder: undefined,
 			},
 			projectName: PROJECT_NAME,
@@ -218,7 +217,7 @@ describe('renderComposeFile', () => {
 		const parsed = parse(result)
 
 		expect(parsed.services.postgres).toEqual({
-			image: 'postgres:17.2',
+			image: 'postgres:18',
 			restart: 'unless-stopped',
 			env_file: ['.env'],
 			volumes: [`${POSTGRES_DATA_VOLUME}:${POSTGRES_DATA_DIR}`],
@@ -238,7 +237,6 @@ describe('renderComposeFile', () => {
 			hostPort: 8080,
 			postgres: {
 				mode: 'embedded',
-				version: '17',
 				migrationsFolder: undefined,
 			},
 			projectName: PROJECT_NAME,
@@ -254,7 +252,6 @@ describe('renderComposeFile', () => {
 			hostPort: 8080,
 			postgres: {
 				mode: 'external',
-				version: '17',
 				migrationsFolder: undefined,
 			},
 			projectName: PROJECT_NAME,
@@ -272,7 +269,6 @@ describe('renderComposeFile', () => {
 			hostPort: 8080,
 			postgres: {
 				mode: 'embedded',
-				version: '17.2',
 				migrationsFolder: undefined,
 			},
 			projectName: PROJECT_NAME,
@@ -280,7 +276,7 @@ describe('renderComposeFile', () => {
 		const parsed = parse(result)
 
 		expect(parsed.services['postgres-backup']).toEqual({
-			image: 'eeshugerman/postgres-backup-s3:17',
+			image: 'ghcr.io/solectrus/postgres-s3-backup:18',
 			restart: 'unless-stopped',
 			depends_on: ['postgres'],
 			environment: {
@@ -307,7 +303,6 @@ describe('renderComposeFile', () => {
 			hostPort: 8080,
 			postgres: {
 				mode: 'embedded',
-				version: '17',
 				migrationsFolder: undefined,
 			},
 			projectName: PROJECT_NAME,
@@ -324,7 +319,6 @@ describe('renderComposeFile', () => {
 			volumes: [{ name: 'app-data', mount: '/var/lib/app' }],
 			postgres: {
 				mode: 'embedded',
-				version: '17',
 				migrationsFolder: undefined,
 			},
 			projectName: PROJECT_NAME,

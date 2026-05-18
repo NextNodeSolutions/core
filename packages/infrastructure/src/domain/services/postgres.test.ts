@@ -12,9 +12,13 @@ import {
 	buildPostgresEmbeddedEnv,
 	buildPostgresExternalEnv,
 	buildPostgresSidecar,
+	ensurePostgresRestoreConfirmed,
 	parsePostgresBackupKey,
+	parsePostgresRestoreArgs,
 	postgresBackupBucketName,
 	postgresProjectIdentifier,
+	redactPostgresPassword,
+	selectPostgresBackupForRestore,
 	selectPostgresBackupsToPrune,
 } from './postgres.ts'
 
@@ -33,15 +37,15 @@ describe('postgresProjectIdentifier', () => {
 })
 
 describe('buildPostgresSidecar', () => {
-	it('returns a sidecar spec when mode is embedded', () => {
+	it('returns a sidecar spec pinned to NEXTNODE_POSTGRES_VERSION when mode is embedded', () => {
 		const result = buildPostgresSidecar(
-			{ mode: 'embedded', version: '17.2', migrationsFolder: undefined },
+			{ mode: 'embedded', migrationsFolder: undefined },
 			'acme-web',
 		)
 
 		expect(result).not.toBeNull()
 		if (result === null) return
-		expect(result.image).toBe('postgres:17.2')
+		expect(result.image).toBe('postgres:18')
 		expect(result.restart).toBe('unless-stopped')
 		expect(result.env_file).toEqual(['.env'])
 		expect(result.volumes).toEqual([
@@ -55,20 +59,11 @@ describe('buildPostgresSidecar', () => {
 
 	it('returns null when mode is external', () => {
 		const result = buildPostgresSidecar(
-			{ mode: 'external', version: '16', migrationsFolder: undefined },
+			{ mode: 'external', migrationsFolder: undefined },
 			'acme-web',
 		)
 
 		expect(result).toBeNull()
-	})
-
-	it('threads the major-only version into the image tag', () => {
-		const result = buildPostgresSidecar(
-			{ mode: 'embedded', version: '16', migrationsFolder: undefined },
-			'acme-web',
-		)
-
-		expect(result?.image).toBe('postgres:16')
 	})
 })
 
@@ -120,38 +115,29 @@ describe('postgresBackupBucketName', () => {
 describe('buildPostgresBackupSidecar', () => {
 	it('returns null when mode is external (user-owned DB)', () => {
 		const result = buildPostgresBackupSidecar(
-			{ mode: 'external', version: '17.2', migrationsFolder: undefined },
+			{ mode: 'external', migrationsFolder: undefined },
 			'acme-web',
 		)
 
 		expect(result).toBeNull()
 	})
 
-	it('builds an eeshugerman/postgres-backup-s3 sidecar pinned to the postgres major', () => {
+	it('builds a solectrus/postgres-s3-backup sidecar pinned to NEXTNODE_POSTGRES_VERSION', () => {
 		const result = buildPostgresBackupSidecar(
-			{ mode: 'embedded', version: '17.2', migrationsFolder: undefined },
+			{ mode: 'embedded', migrationsFolder: undefined },
 			'acme-web',
 		)
 
 		expect(result).not.toBeNull()
 		if (result === null) return
-		expect(result.image).toBe('eeshugerman/postgres-backup-s3:17')
+		expect(result.image).toBe('ghcr.io/solectrus/postgres-s3-backup:18')
 		expect(result.restart).toBe('unless-stopped')
 		expect(result.depends_on).toEqual([POSTGRES_SIDECAR_SERVICE_NAME])
 	})
 
-	it('pins the image to a bare major when version is already major-only', () => {
-		const result = buildPostgresBackupSidecar(
-			{ mode: 'embedded', version: '16', migrationsFolder: undefined },
-			'acme-web',
-		)
-
-		expect(result?.image).toBe('eeshugerman/postgres-backup-s3:16')
-	})
-
 	it('renames the project-level R2 creds to the S3_* names the image expects via compose interpolation', () => {
 		const result = buildPostgresBackupSidecar(
-			{ mode: 'embedded', version: '17.2', migrationsFolder: undefined },
+			{ mode: 'embedded', migrationsFolder: undefined },
 			'acme-web',
 		)
 
@@ -166,7 +152,7 @@ describe('buildPostgresBackupSidecar', () => {
 
 	it('targets the project-scoped R2 bucket under the postgres prefix', () => {
 		const result = buildPostgresBackupSidecar(
-			{ mode: 'embedded', version: '17.2', migrationsFolder: undefined },
+			{ mode: 'embedded', migrationsFolder: undefined },
 			'acme-web',
 		)
 
@@ -176,7 +162,7 @@ describe('buildPostgresBackupSidecar', () => {
 
 	it('runs the dump on the canonical daily schedule with retention disabled (handled separately)', () => {
 		const result = buildPostgresBackupSidecar(
-			{ mode: 'embedded', version: '17.2', migrationsFolder: undefined },
+			{ mode: 'embedded', migrationsFolder: undefined },
 			'acme-web',
 		)
 
@@ -186,7 +172,7 @@ describe('buildPostgresBackupSidecar', () => {
 
 	it('connects to the in-network postgres sidecar with the project-scoped role+db', () => {
 		const result = buildPostgresBackupSidecar(
-			{ mode: 'embedded', version: '17.2', migrationsFolder: undefined },
+			{ mode: 'embedded', migrationsFolder: undefined },
 			'acme-web',
 		)
 
@@ -202,28 +188,43 @@ describe('buildPostgresBackupSidecar', () => {
 describe('parsePostgresBackupKey', () => {
 	it('parses a valid sidecar-emitted key into a snapshot with a UTC timestamp', () => {
 		expect(
-			parsePostgresBackupKey('postgres/2026-05-16T03-00-00Z.dump'),
+			parsePostgresBackupKey(
+				'postgres/acme_web_2026-05-16T03:00:00.dump',
+			),
 		).toEqual({
-			key: 'postgres/2026-05-16T03-00-00Z.dump',
+			key: 'postgres/acme_web_2026-05-16T03:00:00.dump',
 			timestamp: new Date('2026-05-16T03:00:00.000Z'),
 		})
 	})
 
 	it('returns null when the key is not under the postgres prefix', () => {
 		expect(
-			parsePostgresBackupKey('certs/2026-05-16T03-00-00Z.dump'),
+			parsePostgresBackupKey('certs/acme_web_2026-05-16T03:00:00.dump'),
 		).toBeNull()
 	})
 
-	it('returns null when the key extension is not .dump', () => {
+	it('returns null when the database name segment is missing', () => {
 		expect(
-			parsePostgresBackupKey('postgres/2026-05-16T03-00-00Z.sql'),
+			parsePostgresBackupKey('postgres/2026-05-16T03:00:00.dump'),
+		).toBeNull()
+	})
+
+	it('returns null when the key extension is not .dump (e.g. encrypted .gpg variant)', () => {
+		expect(
+			parsePostgresBackupKey(
+				'postgres/acme_web_2026-05-16T03:00:00.dump.gpg',
+			),
+		).toBeNull()
+		expect(
+			parsePostgresBackupKey('postgres/acme_web_2026-05-16T03:00:00.sql'),
 		).toBeNull()
 	})
 
 	it('returns null when the timestamp is structurally invalid', () => {
 		expect(
-			parsePostgresBackupKey('postgres/2026-13-99T03-00-00Z.dump'),
+			parsePostgresBackupKey(
+				'postgres/acme_web_2026-13-99T03:00:00.dump',
+			),
 		).toBeNull()
 	})
 
@@ -232,22 +233,42 @@ describe('parsePostgresBackupKey', () => {
 		// without the round-trip check this would land in the wrong bucket
 		// and could prune a real Mar 2 snapshot.
 		expect(
-			parsePostgresBackupKey('postgres/2026-02-30T03-00-00Z.dump'),
+			parsePostgresBackupKey(
+				'postgres/acme_web_2026-02-30T03:00:00.dump',
+			),
 		).toBeNull()
 		expect(
-			parsePostgresBackupKey('postgres/2026-04-31T03-00-00Z.dump'),
+			parsePostgresBackupKey(
+				'postgres/acme_web_2026-04-31T03:00:00.dump',
+			),
 		).toBeNull()
 	})
 
 	it('returns null for keys with trailing junk after the .dump extension', () => {
 		expect(
-			parsePostgresBackupKey('postgres/2026-05-16T03-00-00Z.dump.bak'),
+			parsePostgresBackupKey(
+				'postgres/acme_web_2026-05-16T03:00:00.dump.bak',
+			),
 		).toBeNull()
 	})
 
 	it('returns null for keys nested under an additional sub-prefix', () => {
 		expect(
-			parsePostgresBackupKey('postgres/sub/2026-05-16T03-00-00Z.dump'),
+			parsePostgresBackupKey(
+				'postgres/sub/acme_web_2026-05-16T03:00:00.dump',
+			),
+		).toBeNull()
+	})
+
+	it('returns null for keys with hyphenated time (old wrong format)', () => {
+		// Guard against regression: prior versions of this regex expected
+		// hyphens in the time segment and a trailing `Z`. The real image
+		// produces colons and no `Z`; reject the old shape so we never
+		// classify a hand-crafted key as a real snapshot.
+		expect(
+			parsePostgresBackupKey(
+				'postgres/acme_web_2026-05-16T03-00-00Z.dump',
+			),
 		).toBeNull()
 	})
 })
@@ -416,5 +437,216 @@ describe('selectPostgresBackupsToPrune', () => {
 		const prune = selectPostgresBackupsToPrune([yesterday, today, future])
 
 		expect(prune).toEqual([])
+	})
+})
+
+describe('selectPostgresBackupForRestore', () => {
+	it('returns null when the snapshot list is empty', () => {
+		expect(
+			selectPostgresBackupForRestore(
+				[],
+				new Date('2026-05-16T00:00:00Z'),
+			),
+		).toBeNull()
+	})
+
+	it('returns null when every snapshot is strictly newer than the target', () => {
+		const snapshots = [
+			snap('2026-05-15T00:00:00Z'),
+			snap('2026-05-16T00:00:00Z'),
+		]
+		expect(
+			selectPostgresBackupForRestore(
+				snapshots,
+				new Date('2026-05-14T23:59:59Z'),
+			),
+		).toBeNull()
+	})
+
+	it('returns the latest snapshot at or before the target when several qualify', () => {
+		const oldest = snap('2026-05-10T00:00:00Z')
+		const middle = snap('2026-05-12T00:00:00Z')
+		const newest = snap('2026-05-14T00:00:00Z')
+		const tooNew = snap('2026-05-16T00:00:00Z')
+
+		const chosen = selectPostgresBackupForRestore(
+			[oldest, tooNew, middle, newest],
+			new Date('2026-05-15T00:00:00Z'),
+		)
+
+		expect(chosen).toEqual(newest)
+	})
+
+	it('treats the target boundary as inclusive', () => {
+		const exact = snap('2026-05-15T00:00:00Z')
+		const before = snap('2026-05-14T00:00:00Z')
+		const after = snap('2026-05-15T00:00:01Z')
+
+		const chosen = selectPostgresBackupForRestore(
+			[before, exact, after],
+			new Date('2026-05-15T00:00:00Z'),
+		)
+
+		expect(chosen).toEqual(exact)
+	})
+
+	it('returns null when the target date is invalid (NaN time)', () => {
+		// `new Date('not-a-date').getTime()` is NaN. A naive `t > targetMs`
+		// comparison would short-circuit to false for every snapshot and
+		// silently pick the first one (or the last, depending on order).
+		// Pin the explicit null so a malformed --at never restores at random.
+		const snapshots = [snap('2026-05-15T00:00:00Z')]
+		expect(
+			selectPostgresBackupForRestore(snapshots, new Date('not-a-date')),
+		).toBeNull()
+	})
+})
+
+describe('parsePostgresRestoreArgs', () => {
+	it('parses --project + --at without --yes (yes defaults to false)', () => {
+		const args = parsePostgresRestoreArgs([
+			'--project',
+			'acme-web',
+			'--at',
+			'2026-05-15T00:00:00Z',
+		])
+		expect(args.project).toBe('acme-web')
+		expect(args.at).toEqual(new Date('2026-05-15T00:00:00Z'))
+		expect(args.yes).toBe(false)
+	})
+
+	it('records --yes when present', () => {
+		const args = parsePostgresRestoreArgs([
+			'--project',
+			'acme-web',
+			'--at',
+			'2026-05-15',
+			'--yes',
+		])
+		expect(args.yes).toBe(true)
+	})
+
+	it('accepts --yes in any position', () => {
+		const args = parsePostgresRestoreArgs([
+			'--yes',
+			'--project',
+			'acme-web',
+			'--at',
+			'2026-05-15',
+		])
+		expect(args.yes).toBe(true)
+		expect(args.project).toBe('acme-web')
+	})
+
+	it('throws when --project is missing', () => {
+		expect(() =>
+			parsePostgresRestoreArgs(['--at', '2026-05-15', '--yes']),
+		).toThrow(/--project/)
+	})
+
+	it('throws when --at is missing', () => {
+		expect(() =>
+			parsePostgresRestoreArgs(['--project', 'acme-web', '--yes']),
+		).toThrow(/--at/)
+	})
+
+	it('throws when --project value is missing', () => {
+		expect(() => parsePostgresRestoreArgs(['--project'])).toThrow()
+	})
+
+	it('throws when --at value is missing', () => {
+		expect(() =>
+			parsePostgresRestoreArgs(['--project', 'acme-web', '--at']),
+		).toThrow()
+	})
+
+	it('throws when --at cannot be parsed as a date', () => {
+		expect(() =>
+			parsePostgresRestoreArgs([
+				'--project',
+				'acme-web',
+				'--at',
+				'not-a-date',
+			]),
+		).toThrow(/valid ISO date/)
+	})
+
+	it('throws on an unknown flag rather than silently ignoring it (a typo of --yes must NOT bypass the gate)', () => {
+		expect(() =>
+			parsePostgresRestoreArgs([
+				'--project',
+				'acme-web',
+				'--at',
+				'2026-05-15',
+				'--ye',
+			]),
+		).toThrow(/unknown option/i)
+	})
+})
+
+describe('ensurePostgresRestoreConfirmed', () => {
+	it('returns without throwing when --yes was passed', () => {
+		expect(() =>
+			ensurePostgresRestoreConfirmed({
+				project: 'acme-web',
+				at: new Date('2026-05-15T00:00:00Z'),
+				yes: true,
+			}),
+		).not.toThrow()
+	})
+
+	it('throws when --yes is missing — the safety gate for the destructive pg_restore --clean', () => {
+		expect(() =>
+			ensurePostgresRestoreConfirmed({
+				project: 'acme-web',
+				at: new Date('2026-05-15T00:00:00Z'),
+				yes: false,
+			}),
+		).toThrow(/--yes/)
+	})
+})
+
+describe('redactPostgresPassword', () => {
+	it('moves the password off the URL and returns it on the side', () => {
+		const result = redactPostgresPassword(
+			'postgres://acme:hunter2@postgres:5432/acme',
+		)
+		expect(result.urlWithoutPassword).toBe(
+			'postgres://acme@postgres:5432/acme',
+		)
+		expect(result.password).toBe('hunter2')
+	})
+
+	it('percent-decodes the password so libpq receives the unescaped value', () => {
+		// `@` and `:` are URL-reserved, so a generator that uses them in
+		// passwords must percent-encode (`%40`, `%3A`). PGPASSWORD must
+		// hold the original byte, not the encoded form, or auth fails.
+		const result = redactPostgresPassword(
+			'postgres://acme:p%40ss%3Aword@postgres:5432/acme',
+		)
+		expect(result.password).toBe('p@ss:word')
+	})
+
+	it('preserves query parameters (e.g. sslmode) on the returned URL', () => {
+		const result = redactPostgresPassword(
+			'postgres://acme:hunter2@db.example.com:5432/acme?sslmode=require',
+		)
+		expect(result.urlWithoutPassword).toBe(
+			'postgres://acme@db.example.com:5432/acme?sslmode=require',
+		)
+	})
+
+	it('returns an empty password when the URL has none', () => {
+		const result = redactPostgresPassword(
+			'postgres://acme@postgres:5432/acme',
+		)
+		expect(result.urlWithoutPassword).toBe(
+			'postgres://acme@postgres:5432/acme',
+		)
+		expect(result.password).toBe('')
+	})
+
+	it('throws on a malformed URL — operator misconfig should fail loud', () => {
+		expect(() => redactPostgresPassword('not a url')).toThrow()
 	})
 })

@@ -1,3 +1,5 @@
+import { parseArgs } from 'node:util'
+
 import type { PostgresServiceConfig } from '#/config/types.ts'
 
 import type { ServiceEnv } from './service.ts'
@@ -11,6 +13,19 @@ import type { ServiceEnv } from './service.ts'
 export const POSTGRES_SIDECAR_SERVICE_NAME = 'postgres'
 
 export const POSTGRES_SIDECAR_PORT = 5432
+
+/**
+ * NextNode-blessed postgres major version. Single source of truth for the
+ * server image (`postgres:<v>`) and the backup sidecar image
+ * (`ghcr.io/solectrus/postgres-s3-backup:<v>`). NextNode runs an
+ * externalized-CTO model — clients don't pick their postgres version, we
+ * pin one across the fleet so upgrades are coordinated and tested. Bump
+ * this single constant to roll out a new major to every NextNode embedded
+ * deploy at the next pipeline run; `mode = "external"` users own their
+ * own DB and are unaffected. Postgres 18 (released Sep 2025) is supported
+ * by the community until Nov 2030.
+ */
+export const NEXTNODE_POSTGRES_VERSION = '18'
 
 /**
  * Project-scoped database role and database name. The official postgres
@@ -67,7 +82,7 @@ export function buildPostgresSidecar(
 
 	const id = postgresProjectIdentifier(projectName)
 	return {
-		image: `postgres:${config.version}`,
+		image: `postgres:${NEXTNODE_POSTGRES_VERSION}`,
 		restart: 'unless-stopped',
 		env_file: ['.env'],
 		volumes: [`${POSTGRES_DATA_VOLUME}:${POSTGRES_DATA_DIR}`],
@@ -158,9 +173,11 @@ export function postgresBackupBucketName(projectName: string): string {
 }
 
 /**
- * S3 key prefix under which the sidecar puts each dump. Each file is
- * named `<timestamp>.dump` by the backup image, so the full key looks like
- * `s3://nn-backups-<project>/postgres/2026-05-16T03-00-00Z.dump`.
+ * S3 key prefix under which the sidecar puts each dump. The image names
+ * each file `<POSTGRES_DATABASE>_<timestamp>.dump` where timestamp is
+ * `date +%Y-%m-%dT%H:%M:%S` (colons, no `Z`, no milliseconds), so the
+ * full key looks like
+ * `s3://nn-backups-<project>/postgres/<project_id>_2026-05-16T03:00:00.dump`.
  */
 export const POSTGRES_BACKUP_PREFIX = 'postgres'
 
@@ -178,14 +195,18 @@ export const POSTGRES_BACKUP_RETENTION_WEEKLY = 4
 export const POSTGRES_BACKUP_RETENTION_MONTHLY = 3
 
 /**
- * Pattern of dumps emitted by `eeshugerman/postgres-backup-s3`. The image
- * names each file `<ISO timestamp with hyphens>.dump`; the prefix is the
- * `S3_PREFIX` we hand the sidecar (see `POSTGRES_BACKUP_PREFIX`), and the
- * timestamp format is the image's own — not under our control. The regex
- * is derived from the constant so changes to the prefix propagate.
+ * Pattern of dumps emitted by `ghcr.io/solectrus/postgres-s3-backup`
+ * (and identically by its `eeshugerman/postgres-backup-s3` ancestor —
+ * solectrus is a drop-in fork). The image names each file
+ * `<POSTGRES_DATABASE>_<timestamp>.dump` where timestamp comes from
+ * `date +%Y-%m-%dT%H:%M:%S` (see `src/backup.sh` upstream) — so colons
+ * in the time, no trailing `Z`, no milliseconds. The database segment is
+ * `postgresProjectIdentifier(projectName)` (lowercase alnum + underscores).
+ * Both formats are the image's own — not under our control — so the
+ * regex must mirror them exactly.
  */
 const POSTGRES_BACKUP_KEY_PATTERN = new RegExp(
-	`^${POSTGRES_BACKUP_PREFIX}/(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2})-(\\d{2})-(\\d{2})Z\\.dump$`,
+	`^${POSTGRES_BACKUP_PREFIX}/[A-Za-z0-9_]+_(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2}):(\\d{2})\\.dump$`,
 )
 
 export interface PostgresBackupSnapshot {
@@ -197,10 +218,6 @@ export interface PostgresBackupSnapshot {
  * Parse an R2 object key emitted by the backup sidecar into a snapshot.
  * Returns `null` when the key does not match the expected pattern — callers
  * filter unknown keys out so retention only ever prunes objects we own.
- *
- * The backup image names dumps `<ISO timestamp with hyphens>.dump` because
- * S3 keys cannot contain colons, so we rebuild a real ISO-8601 string
- * (`T03-00-00Z` → `T03:00:00Z`) before parsing.
  *
  * `new Date(iso)` silently rolls impossible-but-in-range dates over
  * (Feb 30 → Mar 2, Apr 31 → May 1). We round-trip the parsed Date back to
@@ -289,6 +306,123 @@ export function selectPostgresBackupsToPrune(
 	return snapshots.filter(s => !keep.has(s.key))
 }
 
+/**
+ * Select the snapshot whose timestamp is the latest one at or before
+ * `target`. Returns `null` when nothing qualifies (input empty, or every
+ * snapshot is strictly newer than `target`). Any input order is accepted.
+ *
+ * The boundary is inclusive — a snapshot taken at exactly `target` is
+ * eligible. `target` is compared via `getTime()`, so a target with an
+ * invalid date short-circuits to `null` rather than silently selecting
+ * everything (NaN comparisons are always false).
+ */
+export function selectPostgresBackupForRestore(
+	snapshots: ReadonlyArray<PostgresBackupSnapshot>,
+	target: Date,
+): PostgresBackupSnapshot | null {
+	const targetMs = target.getTime()
+	if (Number.isNaN(targetMs)) return null
+	let best: PostgresBackupSnapshot | null = null
+	for (const snap of snapshots) {
+		const t = snap.timestamp.getTime()
+		if (t > targetMs) continue
+		if (best === null || t > best.timestamp.getTime()) best = snap
+	}
+	return best
+}
+
+export interface PostgresRestoreArgs {
+	readonly project: string
+	readonly at: Date
+	readonly yes: boolean
+}
+
+/**
+ * Parse argv flags for `infrastructure restore`. Accepted shape:
+ *
+ *   --project <slug>   (required)
+ *   --at <iso-date>    (required; anything `new Date()` accepts is OK,
+ *                       date-only strings resolve to midnight UTC)
+ *   --yes              (optional boolean; the cli command refuses to run
+ *                       without it because pg_restore --clean is
+ *                       destructive)
+ *
+ * Pure: argv in, args out. The destructive-confirmation policy lives
+ * in `ensurePostgresRestoreConfirmed` — this function only reports
+ * `yes` truthfully.
+ *
+ * Unknown-flag and missing-value rejection comes for free via the
+ * node:util `parseArgs` `strict` default — silently ignoring an
+ * unrecognised flag (e.g. a typo of `--yes`) would defeat the safety
+ * gate, so we lean on the platform parser rather than rolling our own.
+ */
+export function parsePostgresRestoreArgs(
+	argv: ReadonlyArray<string>,
+): PostgresRestoreArgs {
+	const { values } = parseArgs({
+		args: [...argv],
+		options: {
+			project: { type: 'string' },
+			at: { type: 'string' },
+			yes: { type: 'boolean', default: false },
+		},
+	})
+	if (!values.project) {
+		throw new Error('restore: --project <slug> is required')
+	}
+	if (!values.at) {
+		throw new Error('restore: --at <iso-date> is required')
+	}
+	const date = new Date(values.at)
+	if (Number.isNaN(date.getTime())) {
+		throw new Error(`restore: --at "${values.at}" is not a valid ISO date`)
+	}
+	return { project: values.project, at: date, yes: values.yes }
+}
+
+/**
+ * Apply the destructive-confirmation gate for `infrastructure restore`.
+ * pg_restore `--clean` drops the target objects before recreating them,
+ * so we refuse to proceed without an explicit `--yes`. The CLAUDE.md
+ * layering rule keeps this decision in the domain (CLI = orchestration
+ * only) — the cli command just calls this before any IO happens.
+ */
+export function ensurePostgresRestoreConfirmed(
+	args: PostgresRestoreArgs,
+): void {
+	if (args.yes) return
+	throw new Error(
+		'restore is destructive (pg_restore --clean drops + recreates objects). Re-run with --yes to confirm.',
+	)
+}
+
+export interface RedactedPostgresUrl {
+	readonly urlWithoutPassword: string
+	readonly password: string
+}
+
+/**
+ * Split a `postgres://user:pw@host/db?...` URL into the same URL with
+ * the password stripped, plus the password itself. Lets the adapter
+ * pass the password through `PGPASSWORD` (libpq env) instead of argv,
+ * so it stops appearing in `ps aux` / `/proc/<pid>/cmdline`.
+ *
+ * Pure: takes a string, returns two strings. The URL constructor
+ * propagates a `TypeError` for malformed inputs — the adapter does not
+ * try to recover, mismatched DATABASE_URL is an operator misconfig.
+ *
+ * `decodeURIComponent` undoes the percent-encoding `new URL()` retains
+ * on the password component so the unescaped value reaches libpq.
+ */
+export function redactPostgresPassword(
+	databaseUrl: string,
+): RedactedPostgresUrl {
+	const url = new URL(databaseUrl)
+	const password = decodeURIComponent(url.password)
+	url.password = ''
+	return { urlWithoutPassword: url.toString(), password }
+}
+
 export interface PostgresBackupSidecarService {
 	readonly image: string
 	readonly restart: string
@@ -301,11 +435,15 @@ export interface PostgresBackupSidecarService {
  * R2. Returns `null` when `mode = external` — the user owns the database
  * and is responsible for their own backups.
  *
- * Image is `eeshugerman/postgres-backup-s3` pinned to the postgres major
- * tag (`16`, `17`, ...). It reads `S3_*` + `POSTGRES_*` env vars and runs
- * `pg_dump` on the configured `SCHEDULE`. R2 credentials come from the
- * project's `[services.r2]` block (the `R2_*` env vars are already written
- * to `.env` by the deploy pipeline), renamed to `S3_*` via compose YAML
+ * Image is `ghcr.io/solectrus/postgres-s3-backup` pinned to
+ * `NEXTNODE_POSTGRES_VERSION` (kept in sync with the server image so the
+ * bundled `pg_dump` matches the running server major). The solectrus image
+ * is the maintained fork of the now-unmaintained `eeshugerman/postgres-
+ * backup-s3`; it adds support for postgres 17+ and ships an identical
+ * env-var contract (`SCHEDULE`, `S3_*`, `POSTGRES_*`, `sh backup.sh`
+ * triggering an ad-hoc dump). R2 credentials come from the project's
+ * `[services.r2]` block (the `R2_*` env vars are already written to
+ * `.env` by the deploy pipeline), renamed to `S3_*` via compose YAML
  * interpolation so the image sees the names it expects.
  */
 export function buildPostgresBackupSidecar(
@@ -315,10 +453,9 @@ export function buildPostgresBackupSidecar(
 	if (config.mode !== 'embedded') return null
 
 	const id = postgresProjectIdentifier(projectName)
-	const majorVersion = config.version.split('.')[0] ?? config.version
 
 	return {
-		image: `eeshugerman/postgres-backup-s3:${majorVersion}`,
+		image: `ghcr.io/solectrus/postgres-s3-backup:${NEXTNODE_POSTGRES_VERSION}`,
 		restart: 'unless-stopped',
 		depends_on: [POSTGRES_SIDECAR_SERVICE_NAME],
 		environment: {

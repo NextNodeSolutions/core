@@ -155,14 +155,8 @@ export interface R2ServiceConfig {
 export const POSTGRES_MODES = ['embedded', 'external'] as const
 export type PostgresMode = (typeof POSTGRES_MODES)[number]
 
-// Major (`16`) or major.minor (`17.2`) — matches the official Docker tag
-// shapes we support pinning against. `latest` is intentionally rejected:
-// deploys must be reproducible across replays of the same SHA.
-export const POSTGRES_VERSION_PATTERN = /^\d+(\.\d+)?$/
-
 export interface PostgresServiceConfig {
 	readonly mode: PostgresMode
-	readonly version: string
 	// Drizzle migrations folder relative to nextnode.toml. Defaults to
 	// "drizzle" (drizzle-kit's own default `out` value) when omitted.
 	readonly migrationsFolder: string | undefined

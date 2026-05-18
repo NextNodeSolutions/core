@@ -1,10 +1,5 @@
 import type { PostgresMode, PostgresServiceConfig } from '#/config/types.ts'
-import {
-	POSTGRES_MODES,
-	POSTGRES_VERSION_PATTERN,
-	isPostgresMode,
-	isRecord,
-} from '#/config/types.ts'
+import { POSTGRES_MODES, isPostgresMode, isRecord } from '#/config/types.ts'
 import type { ValidationResult } from '#/config/validation/result.ts'
 
 export function validatePostgresService(
@@ -15,16 +10,15 @@ export function validatePostgresService(
 	}
 
 	const modeResult = validateMode(raw['mode'])
-	const versionResult = validateVersion(raw['version'])
 	const migrationsFolderResult = validateMigrationsFolder(
 		raw['migrations_folder'],
 	)
 
-	if (!modeResult.ok || !versionResult.ok || !migrationsFolderResult.ok) {
+	if (!modeResult.ok || !migrationsFolderResult.ok) {
 		return {
 			ok: false,
-			errors: [modeResult, versionResult, migrationsFolderResult].flatMap(
-				r => (r.ok ? [] : r.errors),
+			errors: [modeResult, migrationsFolderResult].flatMap(r =>
+				r.ok ? [] : r.errors,
 			),
 		}
 	}
@@ -33,7 +27,6 @@ export function validatePostgresService(
 		ok: true,
 		section: {
 			mode: modeResult.section,
-			version: versionResult.section,
 			migrationsFolder: migrationsFolderResult.section,
 		},
 	}
@@ -45,24 +38,6 @@ function validateMode(raw: unknown): ValidationResult<PostgresMode> {
 			ok: false,
 			errors: [
 				`services.postgres.mode must be one of: ${POSTGRES_MODES.join(', ')}`,
-			],
-		}
-	}
-	return { ok: true, section: raw }
-}
-
-function validateVersion(raw: unknown): ValidationResult<string> {
-	if (typeof raw !== 'string' || raw === '') {
-		return {
-			ok: false,
-			errors: ['services.postgres.version must be a non-empty string'],
-		}
-	}
-	if (!POSTGRES_VERSION_PATTERN.test(raw)) {
-		return {
-			ok: false,
-			errors: [
-				`services.postgres.version "${raw}" must match pattern ${POSTGRES_VERSION_PATTERN.source} (e.g. "16" or "17.2")`,
 			],
 		}
 	}

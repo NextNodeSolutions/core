@@ -21,12 +21,10 @@ function makeCtx(
 
 const EMBEDDED: PostgresServiceConfig = {
 	mode: 'embedded',
-	version: '17.2',
 	migrationsFolder: undefined,
 }
 const EXTERNAL: PostgresServiceConfig = {
 	mode: 'external',
-	version: '17.2',
 	migrationsFolder: undefined,
 }
 

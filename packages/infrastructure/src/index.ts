@@ -5,6 +5,7 @@ import { deployCommand } from './cli/deploy/deploy.command.ts'
 import { dnsCommand } from './cli/deploy/dns.command.ts'
 import { migrateCommand } from './cli/deploy/migrate.command.ts'
 import { provisionCommand } from './cli/deploy/provision.command.ts'
+import { restoreCommand } from './cli/deploy/restore.command.ts'
 import { seoGuardCommand } from './cli/deploy/seo-guard.command.ts'
 import { teardownGuardCommand } from './cli/deploy/teardown-guard.command.ts'
 import { teardownCommand } from './cli/deploy/teardown.command.ts'
@@ -44,6 +45,7 @@ const STANDALONE_COMMANDS: Record<string, StandaloneCommand> = {
 	'compute-image-ref': computeImageRefCommand,
 	'build-golden-image': buildGoldenImageCommand,
 	recover: recoverCommand,
+	restore: restoreCommand,
 }
 
 const ALL_COMMAND_NAMES = [
