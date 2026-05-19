@@ -7,7 +7,12 @@ import {
 	POSTGRES_BACKUP_PREFIX,
 	parsePostgresBackupKey,
 } from '#/domain/services/postgres.ts'
-import { GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3'
+import {
+	DeleteBucketCommand,
+	DeleteObjectsCommand,
+	GetObjectCommand,
+	ListObjectsV2Command,
+} from '@aws-sdk/client-s3'
 import type { S3Client } from '@aws-sdk/client-s3'
 
 /**
@@ -82,4 +87,50 @@ export async function downloadPostgresBackup(
 		)
 	}
 	await pipeline(body, createWriteStream(destPath))
+}
+
+/**
+ * Empty `bucket` (paginated list + batch delete), then delete the bucket
+ * itself. Used by teardown's --wipe-backups path: the per-project bucket
+ * `nn-backups-<project>` is dedicated to postgres dumps, so wiping it is
+ * equivalent to dropping every snapshot. R2 (like S3) refuses
+ * DeleteBucket on a non-empty bucket — the empty-then-drop sequence is
+ * mandatory, not a courtesy.
+ */
+export async function wipePostgresBackups(
+	s3: S3Client,
+	bucket: string,
+): Promise<void> {
+	let continuationToken: string | undefined
+
+	/* eslint-disable no-await-in-loop -- pagination is intentionally sequential */
+	do {
+		const listResponse = await s3.send(
+			new ListObjectsV2Command({
+				Bucket: bucket,
+				ContinuationToken: continuationToken,
+			}),
+		)
+
+		const keysToDelete: Array<{ Key: string }> = []
+		for (const object of listResponse.Contents ?? []) {
+			if (typeof object.Key === 'string') {
+				keysToDelete.push({ Key: object.Key })
+			}
+		}
+
+		if (keysToDelete.length > 0) {
+			await s3.send(
+				new DeleteObjectsCommand({
+					Bucket: bucket,
+					Delete: { Objects: keysToDelete },
+				}),
+			)
+		}
+
+		continuationToken = listResponse.NextContinuationToken
+	} while (continuationToken !== undefined)
+	/* eslint-enable no-await-in-loop */
+
+	await s3.send(new DeleteBucketCommand({ Bucket: bucket }))
 }
