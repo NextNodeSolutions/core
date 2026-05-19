@@ -64,6 +64,7 @@ export async function deployContainer(
 			hostPort,
 			volumes: input.volumes,
 			projectName: input.projectName,
+			postgres: input.postgres,
 		}),
 	)
 

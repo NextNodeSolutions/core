@@ -58,6 +58,7 @@ describe('renderComposeFile', () => {
 			image: IMAGE,
 			hostPort: 8080,
 			projectName: PROJECT_NAME,
+			postgres: undefined,
 		})
 		const parsed = parse(result)
 
@@ -78,6 +79,7 @@ describe('renderComposeFile', () => {
 			image: IMAGE,
 			hostPort: 8081,
 			projectName: PROJECT_NAME,
+			postgres: undefined,
 		})
 		const parsed = parse(result)
 
@@ -89,6 +91,7 @@ describe('renderComposeFile', () => {
 			image: IMAGE,
 			hostPort: 8080,
 			projectName: PROJECT_NAME,
+			postgres: undefined,
 		})
 		const parsed = parse(result)
 
@@ -106,6 +109,7 @@ describe('renderComposeFile', () => {
 			},
 			hostPort: 8080,
 			projectName: PROJECT_NAME,
+			postgres: undefined,
 		})
 		const parsed = parse(result)
 
@@ -119,6 +123,7 @@ describe('renderComposeFile', () => {
 			image: IMAGE,
 			hostPort: 8080,
 			projectName: PROJECT_NAME,
+			postgres: undefined,
 		})
 		const parsed = parse(result)
 
@@ -132,6 +137,7 @@ describe('renderComposeFile', () => {
 			hostPort: 8080,
 			volumes: [],
 			projectName: PROJECT_NAME,
+			postgres: undefined,
 		})
 		const parsed = parse(result)
 
@@ -144,12 +150,14 @@ describe('renderComposeFile', () => {
 			image: IMAGE,
 			hostPort: 8080,
 			projectName: PROJECT_NAME,
+			postgres: undefined,
 		})
 		const withEmpty = renderComposeFile({
 			image: IMAGE,
 			hostPort: 8080,
 			volumes: [],
 			projectName: PROJECT_NAME,
+			postgres: undefined,
 		})
 
 		expect(withEmpty).toBe(without)
@@ -161,6 +169,7 @@ describe('renderComposeFile', () => {
 			hostPort: 8080,
 			volumes: [{ name: 'data', mount: '/var/lib/app' }],
 			projectName: PROJECT_NAME,
+			postgres: undefined,
 		})
 		const parsed = parse(result)
 
@@ -177,6 +186,7 @@ describe('renderComposeFile', () => {
 				{ name: 'cache', mount: '/var/cache/app' },
 			],
 			projectName: PROJECT_NAME,
+			postgres: undefined,
 		})
 		const parsed = parse(result)
 
@@ -193,6 +203,7 @@ describe('renderComposeFile', () => {
 			hostPort: 8080,
 			volumes: [{ name: 'data', mount: '/var/lib/app' }],
 			projectName: PROJECT_NAME,
+			postgres: undefined,
 		})
 		const parsed = parse(result)
 

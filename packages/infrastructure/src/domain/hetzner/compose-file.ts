@@ -36,7 +36,7 @@ export interface ComposeFileInput {
 	readonly image: ImageRef
 	readonly hostPort: number
 	readonly volumes?: ReadonlyArray<ComposeVolume>
-	readonly postgres?: PostgresServiceConfig
+	readonly postgres: PostgresServiceConfig | undefined
 	readonly projectName: string
 }
 
