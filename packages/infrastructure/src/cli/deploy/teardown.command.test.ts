@@ -148,8 +148,8 @@ describe('teardownCommand - hetzner dispatch', () => {
 		)
 	})
 
-	it('passes TEARDOWN_WITH_VOLUMES=true through to the Hetzner target', async () => {
-		vi.stubEnv('TEARDOWN_WITH_VOLUMES', 'true')
+	it('passes withVolumes=true to the Hetzner target when TEARDOWN_WITH_VOLUMES is set', async () => {
+		vi.stubEnv('TEARDOWN_WITH_VOLUMES', '1')
 		mockHetznerTeardown.mockResolvedValue({
 			kind: 'vps',
 			scope: 'project',
@@ -184,14 +184,6 @@ describe('teardownCommand - hetzner dispatch', () => {
 
 		await expect(teardownCommand(APP_WITH_DOMAIN)).rejects.toThrow(
 			/Invalid TEARDOWN_TARGET "full"/,
-		)
-	})
-
-	it('fails loud on an unknown TEARDOWN_WITH_VOLUMES value', async () => {
-		vi.stubEnv('TEARDOWN_WITH_VOLUMES', 'yes')
-
-		await expect(teardownCommand(APP_WITH_DOMAIN)).rejects.toThrow(
-			/Invalid TEARDOWN_WITH_VOLUMES "yes"/,
 		)
 	})
 })

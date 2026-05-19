@@ -1,10 +1,9 @@
 import { writeSummary } from '#/adapters/github/output.ts'
-import { getEnv } from '#/cli/env.ts'
+import { getEnumEnv, getEnv, isEnvSet } from '#/cli/env.ts'
 import type { DeployableConfig } from '#/config/types.ts'
 import { buildTeardownSummary } from '#/domain/deploy/teardown-summary.ts'
 import {
-	parseTeardownTarget,
-	parseTeardownWithVolumes,
+	TEARDOWN_TARGETS,
 	validateTeardownOptions,
 } from '#/domain/deploy/teardown-target.ts'
 import { resolveEnvironment } from '#/domain/environment.ts'
@@ -20,10 +19,12 @@ export async function teardownCommand(config: DeployableConfig): Promise<void> {
 		config.project.type,
 		getEnv('PIPELINE_ENVIRONMENT'),
 	)
-	const teardownTarget = parseTeardownTarget(getEnv('TEARDOWN_TARGET'))
-	const withVolumes = parseTeardownWithVolumes(
-		getEnv('TEARDOWN_WITH_VOLUMES'),
+	const teardownTarget = getEnumEnv(
+		'TEARDOWN_TARGET',
+		TEARDOWN_TARGETS,
+		'project',
 	)
+	const withVolumes = isEnvSet('TEARDOWN_WITH_VOLUMES')
 	validateTeardownOptions(config.project.type, teardownTarget, withVolumes)
 	const infraStorage = await loadInfraStorageForConfig(config)
 	const target = buildRuntimeTarget(config, environment, infraStorage)
