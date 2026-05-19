@@ -1,0 +1,123 @@
+{
+	"schema_version": "1",
+	"source": {
+		"kind": "interview",
+		"slug": "postgres-mvp-completion",
+		"change_kind": "additive-brownfield"
+	},
+	"target": {
+		"linear_project_hint": "NextNode Infrastructure",
+		"linear_team_hint": "INT",
+		"repo_path_hint": "packages/infrastructure"
+	},
+	"decisions": [
+		{
+			"id": "D1",
+			"theme": "deploy-wiring",
+			"title": "Sidecars postgres rendus dans le compose déployé",
+			"fact": "DeployContainerInput est étendu avec un champ optionnel postgres?: PostgresServiceConfig, propagé depuis DeployableConfig.services.postgres jusqu'à renderComposeFile(). Les sidecars postgres + postgres-backup, jusqu'ici définis en domain mais jamais appelés depuis l'adapter, atteignent désormais le compose.yaml écrit sur la VPS.",
+			"mechanism": "1) Ajouter postgres?: PostgresServiceConfig à DeployContainerInput (adapters/hetzner/deploy-container.ts). 2) HetznerPagesTarget.deploy() lit config.services.postgres et le passe à deployContainer({...,postgres}). 3) renderComposeFile (deploy-container.ts:61) propage input.postgres au domain compose-file.ts qui orchestre déjà buildPostgresSidecar + buildPostgresBackupSidecar. 4) Le yaml rendu contient services.postgres + services.postgres-backup en mode embedded, vide sinon.",
+			"edge": "Touche uniquement HetznerPagesTarget (Cloudflare Pages n'a pas de compose). Le domain compose-file.ts reste inchangé — il était déjà câblé pour consommer input.postgres. Aucun impact sur les projets sans [services.postgres].",
+			"rejected": "Rendre les sidecars depuis le domain à partir d'un services global — le domain n'a pas le contexte « est-ce un déploiement Hetzner » et c'est l'adapter qui owne cette traduction. Garder un opt-in via env var distincte — recrée un couplage implicite qu'on a justement cherché à éviter en passant par la config TOML.",
+			"order": "Premier à coder. Aucun bloquant en amont. Débloque B2 (depends_on), B3 (Tailscale binding), B5 (ensureR2Bucket via provision context).",
+			"verification": "Snapshot test sur renderComposeFile qui assert que services.postgres et services.postgres-backup apparaissent en mode embedded. E2e : après deploy d'un projet [services.postgres], docker compose ps sur la VPS liste les deux sidecars."
+		},
+		{
+			"id": "D2",
+			"theme": "deploy-wiring",
+			"title": "App attend postgres healthy avant de démarrer",
+			"fact": "Le service app dans le compose rendu déclare depends_on: postgres: { condition: service_healthy } en mode embedded. Le healthcheck pg_isready déjà défini dans buildPostgresSidecar sert de signal de readiness — l'app n'ouvre ses connexions qu'après que la DB est effectivement disponible.",
+			"mechanism": "Dans renderComposeFile (domain/hetzner/compose-file.ts), si input.postgres?.mode === 'embedded', injecter depends_on.postgres.condition = 'service_healthy' dans le bloc app. Le healthcheck pg_isready -U <id> -d <id> existe déjà sur le sidecar postgres (compose-file.ts:90-97).",
+			"edge": "Mode embedded uniquement. Mode external = aucun depends_on (la DB est externe, hors du compose). Pas d'impact sur les sidecars sans postgres.",
+			"rejected": "Retry-loop côté app au boot — pousse de la complexité sur l'image utilisateur (couplage). condition: service_started — trop laxiste, postgres ne répond pas encore quand son container est juste « started ».",
+			"order": "Après D1 (sans D1 le sidecar postgres n'existe pas dans le yaml).",
+			"verification": "Snapshot test du compose rendu montre depends_on.postgres.condition === 'service_healthy'. E2e : docker compose up démarre l'app après initdb complet, zéro crash-loop sur première provision."
+		},
+		{
+			"id": "D3",
+			"theme": "migrate-execution",
+			"title": "Migrate tourne sur le runner CI via Tailscale",
+			"fact": "Le sidecar postgres bind son port 5432 sur ${TAILSCALE_IP} (jamais 0.0.0.0). Une nouvelle step Migrate dans deploy.yml run node src/index.ts migrate sur le runner GH Actions, avec DATABASE_URL_MIGRATE pointant sur le hostname tailnet de la VPS — distinct du DATABASE_URL interne (compose hostname) lu par l'app à runtime.",
+			"mechanism": "1) buildPostgresSidecar ajoute ports: ['${TAILSCALE_IP}:5432:5432'] en mode embedded. 2) deploy-container.ts résout TAILSCALE_IP côté VPS via tailscale ip --4, l'écrit dans .env. 3) Nouvelle fonction buildPostgresMigrateDatabaseUrl(vpsHostname, password) → postgres://...@<vps>.<tailnet>:5432/db. 4) postgres.service.ts:loadEnv() ajoute DATABASE_URL_MIGRATE au channel secret. 5) Nouvelle step Migrate dans deploy.yml entre Provision et Deploy, qui setup tailscale-github-action et run node src/index.ts migrate avec DATABASE_URL=${DATABASE_URL_MIGRATE}.",
+			"edge": "In : workflow deploy.yml, sidecar postgres compose def, env wiring de la migrate command. Out : l'app utilisateur conserve son DATABASE_URL interne (compose hostname) — zéro impact runtime. Out : mode external (l'utilisateur fournit son DATABASE_URL, pas de Tailscale binding).",
+			"rejected": "Compose one-shot (docker compose run --rm migrate) — nécessite shipper une image migrate (build + publish) ou pusher les migrations sur la VPS via SSH, plus d'infrastructure pour le même résultat. Init container avec service_completed_successfully — couple l'image utilisateur à notre migrate, sortie du périmètre NextNode.",
+			"order": "Après D1 (sidecar doit exister). Bloque D4 (la stratégie détermine le besoin de wait-loop CI-side).",
+			"verification": "Inspection du compose.yaml rendu : ports contient ${TAILSCALE_IP}:5432:5432. Job deploy.yml log montre Migrate complete entre Provision et Deploy. tailscale netcheck depuis runner → 5432 atteignable ; depuis Internet → 5432 fermé."
+		},
+		{
+			"id": "D4",
+			"theme": "migrate-execution",
+			"title": "Wait-for-tcp côté CI avant drizzle",
+			"fact": "migrate.command.ts attend que le port 5432 du sidecar postgres soit accessible via Tailscale avant d'appeler runDrizzleMigrations. Wait-loop borné à 5 tentatives × 2s = 10s max. drizzle-runner.ts reste un pur adapter (sans retry).",
+			"mechanism": "Nouvelle fonction waitForPostgresTcp(databaseUrl, { maxAttempts: 5, delayMs: 2000 }) dans adapters/postgres/wait-ready.ts. Ouvre une connexion pg.Client en boucle, catch ECONNREFUSED / ECONNRESET et retry. Throw avec message explicite après maxAttempts. migrate.command.ts appelle waitForPostgresTcp(databaseUrl) avant runDrizzleMigrations(...).",
+			"edge": "Touche uniquement migrate.command.ts (CLI layer) et le nouvel adapter wait-ready.ts. drizzle-runner.ts reste inchangé — pas de retry leak qui contaminerait la couche pure.",
+			"rejected": "Pas de wait du tout (compter sur depends_on healthy) — ne marche que si migrate tourne dans le même compose ; vu Q1=(b), migrate tourne en CI, il faut absorber le délai réseau + provision-to-ready. Wait infini — masque les vrais problèmes (postgres mort, mauvais TAILSCALE_IP), timeout dur visible.",
+			"order": "Après D3 (la stratégie de migrate détermine ce besoin).",
+			"verification": "Test adapter sur wait-ready.ts qui simule ECONNREFUSED 3× puis succès → assert resolved. Test qui simule 5 échecs → throw avec message clair pointant DATABASE_URL_MIGRATE."
+		},
+		{
+			"id": "D5",
+			"theme": "backup-r2",
+			"title": "Bucket R2 nn-backups-<project> provisionné automatiquement",
+			"fact": "postgres.service.ts:provision() appelle ensureR2Bucket('nn-backups-<project>') au provision-time chaque fois que [services.postgres].mode === 'embedded'. Idempotent : si le bucket existe déjà, no-op.",
+			"mechanism": "1) ServiceFactoryContext expose le S3Client R2 (ou les credentials pour l'instancier). 2) provision() (aujourd'hui vide ligne 25) appelle ensureR2Bucket(s3, postgresBackupBucketName(projectName)). L'adapter ensureR2Bucket existe déjà dans adapters/cloudflare/r2/buckets.ts. 3) Log explicite « postgres backup bucket nn-backups-X provisioned ».",
+			"edge": "Mode embedded uniquement (external = user owne ses backups). N'affecte pas les buckets [services.r2] déclarés par l'utilisateur (préfixe différent).",
+			"rejected": "Créer le bucket dans cli/deploy/provision.command.ts directement — couplage CLI → spécificité postgres, mauvais séparation. Le service postgres doit owner son propre infra via son provision().",
+			"order": "Indépendant — codable en parallèle de D1. Bloque le premier pg_dump quotidien.",
+			"verification": "Test adapter sur postgres.service.ts:provision() qui stub ensureR2Bucket et asserte l'appel. E2e : après provision d'un projet [services.postgres], wrangler r2 bucket list montre nn-backups-<project>."
+		},
+		{
+			"id": "D6",
+			"theme": "backup-r2",
+			"title": "Token R2 dédié + creds scoped au sidecar backup",
+			"fact": "postgres.service.ts:provision() crée un token R2 scoped read+write sur nn-backups-<project> via Cloudflare API. Les credentials sont persistées dans le ServiceState R2 (infra-state) et lues à loadEnv() pour injecter POSTGRES_BACKUP_R2_ACCESS_KEY_ID, POSTGRES_BACKUP_R2_SECRET_ACCESS_KEY, POSTGRES_BACKUP_R2_ENDPOINT dans le channel secret. Le sidecar buildPostgresBackupSidecar consomme ces noms préfixés via interpolation compose.",
+			"mechanism": "1) provision() (post-bucket de D5) appelle createR2Token(cfToken, { bucket, permissions: ['read', 'write'] }) — pattern de adapters/cloudflare/r2/tokens.ts. 2) Persiste { accessKeyId, secretAccessKey, endpoint } dans le ServiceState. 3) loadEnv() lit ce state et émet les 3 vars préfixées POSTGRES_BACKUP_R2_*. 4) buildPostgresBackupSidecar (domain/services/postgres.ts:449) change ses références ${R2_ACCESS_KEY_ID} → ${POSTGRES_BACKUP_R2_ACCESS_KEY_ID}, idem pour SECRET et ENDPOINT.",
+			"edge": "Mode embedded uniquement. Ne touche pas [services.r2] — un projet peut avoir un bucket R2 utilisateur ET un bucket backup postgres, avec deux tokens distincts. Pas de collision de nom (préfixe POSTGRES_BACKUP_).",
+			"rejected": "Hoister R2 comme infra globale (option b du grilling) — refactor trop large, casse les projets actuels qui déclarent explicitement [services.r2]. Coexistence stricte (option c) — DX merdique, deux déclarations couplées implicitement.",
+			"order": "Après D5 (le bucket doit exister avant de créer un token scoped dessus).",
+			"verification": "Test adapter sur la création du token (stub fetch CF API). E2e : wrangler r2 token list montre un token scoped sur nn-backups-<project>. E2e suivante : dump quotidien réussit, object visible via wrangler r2 object list."
+		},
+		{
+			"id": "D7",
+			"theme": "backup-r2",
+			"title": "Sidecar postgres-prune avec cron quotidien à 01:00 UTC",
+			"fact": "Un second sidecar postgres-prune (image ghcr.io/nextnodesolutions/postgres-prune, base node:24-alpine + infrastructure CLI baked-in) tourne dans le compose à côté de postgres-backup. Son entrypoint cron exécute infrastructure prune-backups --project <name> à 01:00 UTC chaque jour (offset 1h après le @daily dump de Solectrus à 00:00). La commande applique selectPostgresBackupsToPrune et supprime via S3 DeleteObject batch.",
+			"mechanism": "1) Nouvelle commande CLI prune-backups.command.ts dans cli/deploy/, registrée dans index.ts. Argv : --project <slug>. 2) Pipeline : listPostgresBackupSnapshots → selectPostgresBackupsToPrune → deletePostgresBackupSnapshots (nouvel adapter batch DeleteObject dans adapters/r2/backup-store.ts). 3) Nouveau Dockerfile packages/infrastructure/Dockerfile.prune qui copie le CLI + setup busybox crond. 4) Build & publish ghcr.io/nextnodesolutions/postgres-prune:<NEXTNODE_POSTGRES_VERSION> via une GH Action release. 5) buildPostgresPruneSidecar dans domain/services/postgres.ts émet le service compose qui dépend de postgres-backup.",
+			"edge": "Mode embedded uniquement. Pas de modification du sidecar Solectrus existant (qui reste l'image upstream). Le sidecar prune utilise les mêmes creds R2 que D6 (POSTGRES_BACKUP_R2_*).",
+			"rejected": "GH Actions cron scheduled — nouveau workflow à maintenir, plus de surface CI, et un sidecar qui ne dépend que de R2 (pas du compose) c'est plus cohérent. Prune inline dans deploy step — fréquence dépend des deploys, garanties de rétention floues.",
+			"order": "Après D5 + D6 (bucket + creds doivent exister).",
+			"verification": "Test domain sur selectPostgresBackupsToPrune (déjà 223 lignes vertes, à étendre pour l'adapter batch delete). Test adapter sur le batch DeleteObject (stubbed). E2e après 8 jours simulés : 8 dumps présents → après prune, 7 restants (le plus récent satisfait daily + weekly + monthly)."
+		},
+		{
+			"id": "D8",
+			"theme": "secrets-bootstrap",
+			"title": "POSTGRES_PASSWORD auto-généré au premier provision",
+			"fact": "postgres.service.ts:provision() vérifie l'absence du repo secret POSTGRES_PASSWORD. Si absent, génère un 32-byte random (crypto.randomBytes(32).toString('base64url')) et PATCH le repo secret via GitHub API (token GH App). Idempotent : si le secret existe déjà, no-op (jamais regéné automatiquement — rotation = action opérateur explicite).",
+			"mechanism": "1) provision() reçoit ctx.repoSecrets et le GH App token via ServiceFactoryContext. 2) Check ctx.repoSecrets.POSTGRES_PASSWORD. 3) Si absent, password = crypto.randomBytes(32).toString('base64url'). 4) Encrypt avec libsodium-wrappers (pattern GH API). 5) PUT repos/<owner>/<repo>/actions/secrets/POSTGRES_PASSWORD avec encrypted_value. 6) Log « POSTGRES_PASSWORD provisioned (one-shot) ». 7) Le password est aussi exposé dans le ServiceState pour le run en cours (sinon loadEnv() au même run le voit absent).",
+			"edge": "Mode embedded uniquement. Mode external = l'utilisateur fournit DATABASE_URL avec ses propres credentials. Le secret POSTGRES_PASSWORD n'est jamais rotaté automatiquement — la rotation est une action manuelle explicite (CLI rotate-password à venir hors scope).",
+			"rejected": "CLI helper bootstrap-postgres séparé — étape manuelle, friction DX (« je dois lancer quoi avant le premier deploy ? »). Doc only — piège du premier deploy qui throw, mauvaise première impression NextNode pour les PME.",
+			"order": "Après D5 (parallèle de D6 — les trois actions provision postgres groupées dans le même service).",
+			"verification": "Test adapter sur PATCH GH API (stubbed fetch + libsodium). E2e : premier provision sans POSTGRES_PASSWORD → secret créé, deploy suivant passe. E2e : second provision → secret reste inchangé (idempotent)."
+		},
+		{
+			"id": "D9",
+			"theme": "lifecycle",
+			"title": "Teardown --wipe-backups optionnel (bucket préservé par défaut)",
+			"fact": "teardown.command.ts accepte un flag --wipe-backups (booléen, défaut false). Sans le flag, le bucket nn-backups-<project> est préservé après teardown — orphelin volontaire qui sert de filet de sécurité post-incident. Avec --wipe-backups, le bucket et son contenu sont supprimés irréversiblement.",
+			"mechanism": "1) parseTeardownArgs (domain pur) accepte un nouveau flag --wipe-backups. 2) teardown.command.ts propage args.wipeBackups à un nouveau helper wipePostgresBackups(s3, bucketName) dans adapters/r2/backup-store.ts. 3) L'helper batch deleteObjects (paginé pour bucket non vide) puis deleteBucket. 4) Sans le flag : log « preserving backup bucket nn-backups-X (use --wipe-backups to remove) » et continue le teardown. 5) Avec le flag : log « wiping backup bucket nn-backups-X (irreversible) ».",
+			"edge": "In : bucket nn-backups-<project> créé par postgres provision. Out : le volume docker postgres-data continue d'être géré par le flag --with-volumes existant (orthogonal, pas modifié). Out : mode external (pas de bucket NextNode).",
+			"rejected": "Toujours préserver — orphelins inévitables sur le long terme (€ croissant), pas de chemin de cleanup propre. Toujours wipe — catastrophe sur erreur opérateur (mauvais project name, mauvais env), data loss définitif.",
+			"order": "Indépendant. Peut être codé en parallèle de D1-D8.",
+			"verification": "Test adapter sur wipePostgresBackups (stub S3 listObjects + deleteObjects + deleteBucket). Test parsing argv pour --wipe-backups. E2e : teardown sans flag → bucket reste visible dans wrangler r2 bucket list. teardown --wipe-backups → bucket disparaît."
+		}
+	],
+	"open_facts": {
+		"postgres_major": "18",
+		"backup_image_upstream": "ghcr.io/solectrus/postgres-s3-backup",
+		"prune_image_to_publish": "ghcr.io/nextnodesolutions/postgres-prune",
+		"tailscale_binding": "${TAILSCALE_IP}:5432:5432",
+		"bucket_naming": "nn-backups-<project>",
+		"phase_target": "P3-bis (or new P7) following P3 in NextNode Infrastructure project"
+	},
+	"freeform": "Side decision out of interview: supprimer src/cli/deploy/postgres-mvp.smoke.test.ts (committed ead8afe) + test/postgres-roundtrip/ fixtures + section Smoke test du README + cancel INT-547 (Linear, orphan phase)."
+}

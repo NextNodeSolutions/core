@@ -1,0 +1,31 @@
+{
+	"slug": "postgres-mvp-completion",
+	"change_kind": "additive-brownfield",
+	"round": "closure",
+	"round_complete": true,
+	"approval_mode": "approved_fast",
+	"promoted_plan": "docs/plans/2026-05-19-postgres-mvp-completion.html",
+	"backlog_bundle": "docs/interviews/postgres-mvp-completion/backlog-bundle.json",
+	"decisions_count": 9,
+	"comments_count": 0,
+	"branches": [
+		{ "id": "b1", "scope": "in", "resolved": true },
+		{ "id": "b2", "scope": "in", "resolved": true },
+		{ "id": "b3", "scope": "in", "resolved": true },
+		{ "id": "b4", "scope": "in", "resolved": true },
+		{ "id": "b5", "scope": "in", "resolved": true },
+		{ "id": "b6", "scope": "in", "resolved": true },
+		{ "id": "b7", "scope": "in", "resolved": true },
+		{ "id": "b8", "scope": "in", "resolved": true },
+		{ "id": "b9", "scope": "in", "resolved": true },
+		{ "id": "b10", "scope": "out", "resolved": false },
+		{ "id": "o1", "scope": "out", "resolved": false }
+	],
+	"side_decisions": [
+		{
+			"id": "delete-smoke-test",
+			"status": "pending",
+			"action": "rm src/cli/deploy/postgres-mvp.smoke.test.ts + test/postgres-roundtrip/{compose.test.yml,drizzle/} + edit README + cancel INT-547"
+		}
+	]
+}
