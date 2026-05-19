@@ -1,4 +1,4 @@
-import type { DeployVolume } from '#/config/types.ts'
+import type { DeployVolume, PostgresServiceConfig } from '#/config/types.ts'
 import type {
 	ContainerDeployedEnvironment,
 	DeployEnv,
@@ -31,6 +31,7 @@ export interface DeployContainerInput {
 	readonly image: ImageRef
 	readonly registryToken: string | undefined
 	readonly volumes: ReadonlyArray<DeployVolume>
+	readonly postgres?: PostgresServiceConfig
 }
 
 export interface DeployContainerResult {
