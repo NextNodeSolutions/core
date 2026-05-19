@@ -1,7 +1,13 @@
 import type { ServiceFactoryContext } from '#/cli/services/service.ts'
 import type { PostgresServiceConfig } from '#/config/types.ts'
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+const ensureR2BucketMock = vi.hoisted(() => vi.fn())
+
+vi.mock('#/adapters/cloudflare/r2/buckets.ts', () => ({
+	ensureR2Bucket: ensureR2BucketMock,
+}))
 
 import {
 	createPostgresService,
@@ -39,6 +45,10 @@ const EXTERNAL: PostgresServiceConfig = {
 	migrationsFolder: undefined,
 }
 
+afterEach(() => {
+	vi.clearAllMocks()
+})
+
 describe('createPostgresService', () => {
 	it('exposes the service under the "postgres" name', () => {
 		const service = createPostgresService(makeCtx(), EMBEDDED)
@@ -47,7 +57,55 @@ describe('createPostgresService', () => {
 
 	it('provision() is a no-op in external mode (managed db is operator-owned)', async () => {
 		const service = createPostgresService(makeCtx(), EXTERNAL)
-		await expect(service.provision()).resolves.toBeUndefined()
+
+		await service.provision()
+
+		expect(ensureR2BucketMock).not.toHaveBeenCalled()
+	})
+
+	describe('provision() — embedded mode', () => {
+		it('calls ensureR2Bucket once with the derived backup bucket name', async () => {
+			ensureR2BucketMock.mockResolvedValue(true)
+			const service = createPostgresService(makeCtx(), EMBEDDED)
+
+			await service.provision()
+
+			expect(ensureR2BucketMock).toHaveBeenCalledTimes(1)
+			expect(ensureR2BucketMock).toHaveBeenCalledWith({
+				token: 'cf-token',
+				accountId: 'acct',
+				bucketName: 'nn-backups-myapp',
+				locationHint: 'weur',
+			})
+		})
+
+		it('is safe to call multiple times — delegates idempotency to ensureR2Bucket', async () => {
+			ensureR2BucketMock
+				.mockResolvedValueOnce(true)
+				.mockResolvedValueOnce(false)
+			const service = createPostgresService(makeCtx(), EMBEDDED)
+
+			await service.provision()
+			await service.provision()
+
+			expect(ensureR2BucketMock).toHaveBeenCalledTimes(2)
+			expect(ensureR2BucketMock.mock.calls[0]).toEqual([
+				{
+					token: 'cf-token',
+					accountId: 'acct',
+					bucketName: 'nn-backups-myapp',
+					locationHint: 'weur',
+				},
+			])
+			expect(ensureR2BucketMock.mock.calls[1]).toEqual([
+				{
+					token: 'cf-token',
+					accountId: 'acct',
+					bucketName: 'nn-backups-myapp',
+					locationHint: 'weur',
+				},
+			])
+		})
 	})
 
 	describe('embedded mode', () => {
