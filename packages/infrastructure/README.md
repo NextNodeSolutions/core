@@ -25,17 +25,6 @@ Embedded Postgres lifecycle: provision a sidecar in the project's compose stack,
 
 Retention is 7 daily / 4 weekly / 3 monthly UTC buckets, pruned after each backup.
 
-### Smoke test
-
-`src/cli/deploy/postgres-mvp.smoke.test.ts` exercises the full chain end-to-end (provision → migrate → insert → backup → drop → restore → verify) against a local compose stack that swaps R2 for MinIO. Gated on `RUN_SMOKE=1` so it stays out of the default test run.
-
-```bash
-# Prereqs: docker running, pg_restore on PATH (brew install libpq && brew link --force libpq)
-RUN_SMOKE=1 pnpm --filter @nextnode-solutions/infrastructure test postgres-mvp.smoke
-```
-
-The fixture migration in `test/postgres-roundtrip/drizzle/` creates a tiny `t (x int)` table — enough to assert that a row inserted before the backup survives a `DROP TABLE` + restore.
-
 ## Architecture
 
 See `CLAUDE.md` for the strict four-layer architecture (`index.ts` → `cli/` → `domain/` + `adapters/` → `config/`) and the import rules enforced across layers.
