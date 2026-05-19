@@ -31,7 +31,7 @@ export interface DeployContainerInput {
 	readonly image: ImageRef
 	readonly registryToken: string | undefined
 	readonly volumes: ReadonlyArray<DeployVolume>
-	readonly postgres?: PostgresServiceConfig
+	readonly postgres: PostgresServiceConfig | undefined
 }
 
 export interface DeployContainerResult {
