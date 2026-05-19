@@ -1,5 +1,6 @@
 import type { ServiceFactoryContext } from '#/cli/services/service.ts'
 import type { PostgresServiceConfig } from '#/config/types.ts'
+import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -7,14 +8,24 @@ import {
 	postgresServiceDefinition,
 } from './postgres.service.ts'
 
+const INFRA_STORAGE: InfraStorageRuntimeConfig = {
+	accountId: 'acct',
+	endpoint: 'https://r2.example.com',
+	accessKeyId: 'r2-key',
+	secretAccessKey: 'r2-secret',
+	stateBucket: 'nextnode-state',
+	certsBucket: 'nextnode-certs',
+}
+
 function makeCtx(
 	repoSecrets: Readonly<Record<string, string>> = {},
+	infraStorage: InfraStorageRuntimeConfig | null = INFRA_STORAGE,
 ): ServiceFactoryContext {
 	return {
 		projectName: 'myapp',
 		environment: 'production',
 		cfToken: 'cf-token',
-		infraStorage: null,
+		infraStorage,
 		repoSecrets,
 	}
 }
@@ -34,8 +45,8 @@ describe('createPostgresService', () => {
 		expect(service.name).toBe('postgres')
 	})
 
-	it('provision() is a no-op (sidecar comes up via docker compose on deploy)', async () => {
-		const service = createPostgresService(makeCtx(), EMBEDDED)
+	it('provision() is a no-op in external mode (managed db is operator-owned)', async () => {
+		const service = createPostgresService(makeCtx(), EXTERNAL)
 		await expect(service.provision()).resolves.toBeUndefined()
 	})
 

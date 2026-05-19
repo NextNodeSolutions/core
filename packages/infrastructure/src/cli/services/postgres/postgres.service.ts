@@ -1,14 +1,20 @@
+import { ensureR2Bucket } from '#/adapters/cloudflare/r2/buckets.ts'
 import type {
 	Service,
 	ServiceDefinition,
 	ServiceFactoryContext,
 } from '#/cli/services/service.ts'
 import type { PostgresServiceConfig } from '#/config/types.ts'
+import { R2_BUCKET_LOCATION_HINT } from '#/config/types.ts'
 import {
 	buildPostgresEmbeddedEnv,
 	buildPostgresExternalEnv,
+	postgresBackupBucketName,
 } from '#/domain/services/postgres.ts'
 import type { ServiceEnv } from '#/domain/services/service.ts'
+import { createLogger } from '@nextnode-solutions/logger'
+
+const logger = createLogger()
 
 export const POSTGRES_PASSWORD_SECRET = 'POSTGRES_PASSWORD'
 export const POSTGRES_DATABASE_URL_SECRET = 'DATABASE_URL'
@@ -17,12 +23,33 @@ export function createPostgresService(
 	ctx: ServiceFactoryContext,
 	config: PostgresServiceConfig,
 ): Service {
+	if (config.mode === 'external') {
+		return {
+			name: 'postgres',
+			provision: async (): Promise<void> => {},
+			loadEnv: async (): Promise<ServiceEnv> =>
+				Promise.resolve(loadPostgresEnv(ctx, config)),
+		}
+	}
+
+	if (ctx.infraStorage === null) {
+		throw new Error(
+			'postgres service (embedded mode): infra storage (state bucket) must be loaded by the caller — caller invariant broken',
+		)
+	}
+	const accountId = ctx.infraStorage.accountId
 	return {
 		name: 'postgres',
-		// Provisioning lives in P3-05 (migrate command). Embedded sidecar
-		// state is created on the VPS at deploy time by docker compose, so
-		// there is nothing to ensure here today.
-		provision: async (): Promise<void> => {},
+		async provision(): Promise<void> {
+			const bucketName = postgresBackupBucketName(ctx.projectName)
+			await ensureR2Bucket({
+				token: ctx.cfToken,
+				accountId,
+				bucketName,
+				locationHint: R2_BUCKET_LOCATION_HINT,
+			})
+			logger.info(`postgres backup bucket ${bucketName} provisioned`)
+		},
 		loadEnv: async (): Promise<ServiceEnv> =>
 			Promise.resolve(loadPostgresEnv(ctx, config)),
 	}
