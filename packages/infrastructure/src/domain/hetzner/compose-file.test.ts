@@ -342,3 +342,48 @@ describe('renderComposeFile', () => {
 		})
 	})
 })
+
+describe('renderComposeFile - postgres service wiring', () => {
+	const baseInput = {
+		image: IMAGE,
+		hostPort: 8080,
+		projectName: PROJECT_NAME,
+	} as const
+
+	it('renders both postgres and postgres-backup sidecars in embedded mode', () => {
+		const result = renderComposeFile({
+			...baseInput,
+			postgres: { mode: 'embedded', migrationsFolder: undefined },
+		})
+		const parsed = parse(result)
+
+		expect(Object.keys(parsed.services)).toEqual([
+			'app',
+			'postgres',
+			'postgres-backup',
+		])
+		expect(parsed.volumes).toEqual({ [POSTGRES_DATA_VOLUME]: {} })
+	})
+
+	it('renders no postgres-related services or volumes when postgres config is undefined', () => {
+		const result = renderComposeFile({
+			...baseInput,
+			postgres: undefined,
+		})
+		const parsed = parse(result)
+
+		expect(Object.keys(parsed.services)).toEqual(['app'])
+		expect(parsed).not.toHaveProperty('volumes')
+	})
+
+	it('renders no postgres sidecars when postgres mode is external', () => {
+		const result = renderComposeFile({
+			...baseInput,
+			postgres: { mode: 'external', migrationsFolder: undefined },
+		})
+		const parsed = parse(result)
+
+		expect(Object.keys(parsed.services)).toEqual(['app'])
+		expect(parsed).not.toHaveProperty('volumes')
+	})
+})
