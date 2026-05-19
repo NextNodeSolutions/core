@@ -20,11 +20,19 @@ export interface Service {
 
 /**
  * `infraStorage` is nullable because not every service needs it; each
- * factory validates the preconditions it actually requires. `repoSecrets`
- * is the parsed `ALL_SECRETS` GitHub Secrets payload — services that
- * need user-provided credentials (e.g. postgres `DATABASE_URL` /
- * `POSTGRES_PASSWORD`) read from here. Always defined (`{}` when the
- * env var is absent) so factories never need to null-check.
+ * factory validates the preconditions it actually requires. It carries
+ * the R2 credentials usable by services that provision their own infra
+ * — `accessKeyId` / `secretAccessKey` / `endpoint` to instantiate an
+ * S3 client against R2, and `accountId` to call the Cloudflare R2 REST
+ * API (e.g. `ensureR2Bucket`). The R2 service uses both shapes; the
+ * upcoming postgres service uses `accountId` + `cfToken` at provision
+ * time to ensure its `nn-backups-<project>` backup bucket.
+ *
+ * `repoSecrets` is the parsed `ALL_SECRETS` GitHub Secrets payload —
+ * services that need user-provided credentials (e.g. postgres
+ * `DATABASE_URL` / `POSTGRES_PASSWORD`) read from here. Always defined
+ * (`{}` when the env var is absent) so factories never need to
+ * null-check.
  */
 export interface ServiceFactoryContext {
 	readonly projectName: string

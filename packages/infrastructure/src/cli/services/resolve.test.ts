@@ -72,4 +72,24 @@ describe('resolveServices', () => {
 			'r2 service: infra storage (state bucket) must be loaded by the caller — caller invariant broken',
 		)
 	})
+
+	it('threads infra storage credentials through to the postgres service when declared', () => {
+		const configWithPostgres: DeployableConfig = {
+			...APP_WITH_DOMAIN,
+			services: {
+				postgres: { mode: 'embedded', migrationsFolder: undefined },
+			},
+		}
+
+		const services = resolveServices({
+			config: configWithPostgres,
+			environment: 'production',
+			cfToken: 'cf-token',
+			infraStorage: INFRA_STORAGE,
+			repoSecrets: { POSTGRES_PASSWORD: 's3cret' },
+		})
+
+		expect(services).toHaveLength(1)
+		expect(services[0]?.name).toBe('postgres')
+	})
 })
