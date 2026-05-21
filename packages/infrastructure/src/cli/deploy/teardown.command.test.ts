@@ -12,6 +12,7 @@ import {
 const { utils: sshUtils } = ssh2
 
 import { APP_WITH_DOMAIN, STATIC_WITH_DOMAIN } from '#/cli/fixtures.ts'
+import type { DeployableConfig } from '#/config/types.ts'
 
 import { teardownCommand } from './teardown.command.ts'
 
@@ -25,6 +26,33 @@ vi.mock(import('#/cli/r2/load-runtime.ts'), async () => ({
 		stateBucket: 'nextnode-state',
 		certsBucket: 'nextnode-certs',
 	})),
+}))
+
+// Mock wipePostgresBackups adapter (network boundary: R2 ListObjectsV2 +
+// DeleteObjects + DeleteBucket). Hoisted so vi.mock can reach it.
+const { mockWipePostgresBackups } = vi.hoisted(() => ({
+	mockWipePostgresBackups: vi.fn(),
+}))
+vi.mock(import('#/adapters/r2/backup-store.ts'), () => ({
+	wipePostgresBackups: mockWipePostgresBackups,
+}))
+
+// Mock createLogger so we can assert on the preserve/wipe info lines
+// emitted by the postgres teardown branch. Existing tests don't assert on
+// logs - this mock keeps them green while letting the new tests verify
+// which branch ran.
+const { mockLoggerInfo } = vi.hoisted(() => ({
+	mockLoggerInfo: vi.fn(),
+}))
+vi.mock('@nextnode-solutions/logger', () => ({
+	createLogger: () => ({
+		info: mockLoggerInfo,
+		debug: vi.fn(),
+		warn: vi.fn(),
+		error: vi.fn(),
+		child: vi.fn(),
+		dispose: vi.fn(),
+	}),
 }))
 
 // Mock HetznerVpsTarget class (network boundary: SSH, R2, Hetzner Cloud API)
@@ -222,6 +250,77 @@ describe('teardownCommand - cloudflare pages dispatch', () => {
 			'example.com',
 			'project',
 			false,
+		)
+	})
+})
+
+describe('teardownCommand - postgres backup wipe', () => {
+	let testPrivateKey: string
+
+	const APP_WITH_POSTGRES: DeployableConfig = {
+		...APP_WITH_DOMAIN,
+		services: {
+			postgres: { mode: 'embedded', migrationsFolder: undefined },
+		},
+	}
+
+	beforeAll(() => {
+		testPrivateKey = sshUtils.generateKeyPairSync('ed25519').private
+	})
+
+	beforeEach(() => {
+		vi.stubEnv('PIPELINE_ENVIRONMENT', 'production')
+		vi.stubEnv('CLOUDFLARE_API_TOKEN', 'cf-token')
+		vi.stubEnv('HETZNER_API_TOKEN', 'hcloud-token')
+		vi.stubEnv(
+			'DEPLOY_SSH_PRIVATE_KEY_B64',
+			Buffer.from(testPrivateKey).toString('base64'),
+		)
+		vi.stubEnv('TAILSCALE_AUTH_KEY', 'tskey-auth-test')
+		vi.stubEnv('GITHUB_STEP_SUMMARY', tmpSummaryFile())
+
+		mockHetznerTeardown.mockResolvedValue({
+			kind: 'vps',
+			scope: 'project',
+			outcome: {
+				container: { handled: true, detail: 'stack removed' },
+				caddy: { handled: true, detail: 'route removed' },
+				certs: { handled: false, detail: '0 cert object(s) deleted' },
+				dns: { handled: true, detail: '1 record(s) deleted' },
+				state: { handled: true, detail: 'deleted' },
+			},
+			durationMs: 1234,
+		})
+	})
+
+	afterEach(() => {
+		vi.unstubAllEnvs()
+		vi.unstubAllGlobals()
+		vi.restoreAllMocks()
+		mockHetznerTeardown.mockReset()
+		mockWipePostgresBackups.mockReset()
+		mockLoggerInfo.mockClear()
+	})
+
+	it('preserves the backup bucket when TEARDOWN_WIPE_BACKUPS is unset', async () => {
+		await teardownCommand(APP_WITH_POSTGRES)
+
+		expect(mockWipePostgresBackups).not.toHaveBeenCalled()
+		expect(mockLoggerInfo).toHaveBeenCalledWith(
+			'Preserving backup bucket "nn-backups-my-app" (use --wipe-backups to remove).',
+		)
+	})
+
+	it('wipes the backup bucket exactly once when TEARDOWN_WIPE_BACKUPS is set', async () => {
+		vi.stubEnv('TEARDOWN_WIPE_BACKUPS', '1')
+
+		await teardownCommand(APP_WITH_POSTGRES)
+
+		expect(mockWipePostgresBackups).toHaveBeenCalledTimes(1)
+		const [, bucketArg] = mockWipePostgresBackups.mock.calls[0] ?? []
+		expect(bucketArg).toBe('nn-backups-my-app')
+		expect(mockLoggerInfo).toHaveBeenCalledWith(
+			'Wiping backup bucket "nn-backups-my-app" (irreversible)...',
 		)
 	})
 })
