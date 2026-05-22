@@ -152,17 +152,28 @@ export interface R2ServiceConfig {
 	readonly buckets: ReadonlyArray<string>
 }
 
+export const POSTGRES_MODES = ['embedded', 'external'] as const
+export type PostgresMode = (typeof POSTGRES_MODES)[number]
+
+export interface PostgresServiceConfig {
+	readonly mode: PostgresMode
+	// Drizzle migrations folder relative to nextnode.toml. Defaults to
+	// "drizzle" (drizzle-kit's own default `out` value) when omitted.
+	readonly migrationsFolder: string | undefined
+}
+
 /**
  * Single source of truth for the set of supported backing services. Adding
  * a new service means appending its name here AND adding its config type
  * to `ServiceConfigByName` — TypeScript will then force every service-aware
  * site (validators, `hasAnyService`, future routers) to handle it.
  */
-export const SERVICE_NAMES = ['r2'] as const
+export const SERVICE_NAMES = ['r2', 'postgres'] as const
 export type ServiceName = (typeof SERVICE_NAMES)[number]
 
 export interface ServiceConfigByName {
 	readonly r2: R2ServiceConfig
+	readonly postgres: PostgresServiceConfig
 }
 
 export type ServicesConfig = {
@@ -179,6 +190,7 @@ export const SERVICE_REQUIRES_INFRA_STORAGE: {
 	readonly [K in ServiceName]: boolean
 } = {
 	r2: true,
+	postgres: true,
 }
 
 export const KEBAB_IDENTIFIER_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/
@@ -232,6 +244,11 @@ export type ParseConfigResult =
 
 const PROJECT_TYPE_SET: ReadonlySet<string> = new Set(PROJECT_TYPES)
 const DEPLOY_TARGET_SET: ReadonlySet<string> = new Set(DEPLOY_TARGETS)
+const POSTGRES_MODE_SET: ReadonlySet<string> = new Set(POSTGRES_MODES)
+
+export function isPostgresMode(value: unknown): value is PostgresMode {
+	return typeof value === 'string' && POSTGRES_MODE_SET.has(value)
+}
 
 export function isBoolean(value: unknown): value is boolean {
 	return typeof value === 'boolean'

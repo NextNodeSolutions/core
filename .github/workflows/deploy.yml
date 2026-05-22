@@ -21,6 +21,14 @@ permissions:
     actions: read
     packages: write
 
+# Serialise deploys per (config, environment). Two pushes to the same
+# project's environment queue rather than racing — protects DB migrations
+# and traffic swap from concurrent runs without needing a Postgres
+# advisory lock in the migrate command.
+concurrency:
+    group: deploy-${{ inputs.config_file }}-${{ inputs.environment }}
+    cancel-in-progress: false
+
 jobs:
     plan:
         name: Plan

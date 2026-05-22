@@ -34,6 +34,7 @@ export function createHetznerTarget(
 		vpsName,
 		hetzner: config.deploy.hetzner,
 		volumes: config.deploy.volumes,
+		postgres: config.services.postgres,
 		infraStorage,
 		stateStore: new R2Client({
 			endpoint: infraStorage.endpoint,

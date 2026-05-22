@@ -102,6 +102,17 @@ vi.mock(import('./ssh/session.ts'), async importOriginal => {
 	}
 })
 
+// Spy on deployContainer while delegating to the real implementation, so
+// existing tests (which assert session.writeFile / session.exec side effects)
+// still see real work happen.
+vi.mock(import('./deploy-container.ts'), async importOriginal => {
+	const actual = await importOriginal()
+	return {
+		...actual,
+		deployContainer: vi.fn(actual.deployContainer),
+	}
+})
+
 // Mock converge (CLI orchestrator boundary)
 vi.mock('../../cli/hetzner/converge.ts', () => ({
 	converge: vi.fn(async () => undefined),
@@ -177,6 +188,7 @@ const TARGET_CONFIG = {
 	vpsName: 'acme-web',
 	hetzner: HETZNER_CONFIG,
 	volumes: [],
+	postgres: undefined,
 	infraStorage: STORAGE_CONFIG,
 	stateStore: mockStateStore,
 	certsStore: mockCertsStore,
@@ -1013,6 +1025,47 @@ describe('HetznerVpsTarget', () => {
 				target.deploy('acme-web', DEPLOY_INPUT, DEPLOY_ENV),
 			).rejects.toThrow('SSH write failed')
 			expect(mockSession.close).toHaveBeenCalled()
+		})
+
+		describe('postgres propagation', () => {
+			it('forwards config.services.postgres to deployContainer', async () => {
+				const { deployContainer: spiedDeploy } =
+					await import('./deploy-container.ts')
+				vi.mocked(spiedDeploy).mockClear()
+				seedState()
+
+				const postgres = {
+					mode: 'embedded' as const,
+					migrationsFolder: undefined,
+				}
+				const target = new HetznerVpsTarget({
+					...TARGET_CONFIG,
+					postgres,
+				})
+				await target.deploy('acme-web', DEPLOY_INPUT, DEPLOY_ENV)
+
+				expect(spiedDeploy).toHaveBeenCalledTimes(1)
+				expect(spiedDeploy).toHaveBeenCalledWith(
+					expect.anything(),
+					expect.objectContaining({ postgres }),
+				)
+			})
+
+			it('forwards undefined when no postgres service is configured', async () => {
+				const { deployContainer: spiedDeploy } =
+					await import('./deploy-container.ts')
+				vi.mocked(spiedDeploy).mockClear()
+				seedState()
+
+				const target = new HetznerVpsTarget(TARGET_CONFIG)
+				await target.deploy('acme-web', DEPLOY_INPUT, DEPLOY_ENV)
+
+				expect(spiedDeploy).toHaveBeenCalledTimes(1)
+				expect(spiedDeploy).toHaveBeenCalledWith(
+					expect.anything(),
+					expect.objectContaining({ postgres: undefined }),
+				)
+			})
 		})
 
 		describe('host port allocation', () => {

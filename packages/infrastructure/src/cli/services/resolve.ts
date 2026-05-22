@@ -10,6 +10,7 @@ export interface ResolveServicesInput {
 	readonly environment: AppEnvironment
 	readonly cfToken: string
 	readonly infraStorage: InfraStorageRuntimeConfig | null
+	readonly repoSecrets: Readonly<Record<string, string>>
 }
 
 export function resolveServices(
@@ -20,6 +21,7 @@ export function resolveServices(
 		environment: input.environment,
 		cfToken: input.cfToken,
 		infraStorage: input.infraStorage,
+		repoSecrets: input.repoSecrets,
 	}
 	const services: Service[] = []
 	for (const definition of Object.values(SERVICE_DEFINITIONS)) {

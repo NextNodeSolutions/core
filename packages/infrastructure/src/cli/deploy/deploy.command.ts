@@ -21,7 +21,7 @@ import { mergeServiceEnvs } from '#/domain/services/service.ts'
 
 import { buildRuntimeTarget } from './build-runtime-target.ts'
 import { loadInfraStorageForConfig } from './load-infra-storage.ts'
-import { parseAllSecrets, pickSecrets } from './secrets.ts'
+import { pickSecrets, readRepoSecrets } from './secrets.ts'
 
 export async function deployCommand(config: DeployableConfig): Promise<void> {
 	const environment = resolveEnvironment(
@@ -29,6 +29,7 @@ export async function deployCommand(config: DeployableConfig): Promise<void> {
 		getEnv('PIPELINE_ENVIRONMENT'),
 	)
 	const cfToken = requireEnv('CLOUDFLARE_API_TOKEN')
+	const repoSecrets = readRepoSecrets()
 
 	const infraStorage = await loadInfraStorageForConfig(config)
 	const target = buildRuntimeTarget(config, environment, infraStorage)
@@ -38,6 +39,7 @@ export async function deployCommand(config: DeployableConfig): Promise<void> {
 		environment,
 		cfToken,
 		infraStorage,
+		repoSecrets,
 	})
 
 	const targetEnv = await target.contributeEnv(config.project.name)
@@ -46,7 +48,7 @@ export async function deployCommand(config: DeployableConfig): Promise<void> {
 	)
 	const userSecretsEnv: ServiceEnv = {
 		public: {},
-		secret: loadDeclaredSecrets(config.deploy.secrets),
+		secret: pickSecrets(repoSecrets, config.deploy.secrets),
 	}
 	const merged = mergeServiceEnvs([targetEnv, servicesEnv, userSecretsEnv])
 
@@ -61,7 +63,7 @@ export async function deployCommand(config: DeployableConfig): Promise<void> {
 	)
 
 	const env = buildDeployEnv(merged.public)
-	const input = buildDeployInput(config, merged.secret)
+	const input = buildDeployInput(config, merged.secret, repoSecrets)
 	const result = await target.deploy(config.project.name, input, env)
 
 	writeSummary(buildDeploySummary(result, target.name))
@@ -73,12 +75,13 @@ export async function deployCommand(config: DeployableConfig): Promise<void> {
 function buildDeployInput(
 	config: DeployableConfig,
 	secrets: Readonly<Record<string, string>>,
+	repoSecrets: Readonly<Record<string, string>>,
 ): DeployInput {
 	if (isHetznerDeployableConfig(config)) {
 		return {
 			secrets,
 			image: parseImageRef(requireEnv('IMAGE_REF')),
-			registryToken: resolveRegistryToken(config),
+			registryToken: resolveRegistryToken(config, repoSecrets),
 		}
 	}
 	return { secrets, registryToken: undefined }
@@ -86,24 +89,16 @@ function buildDeployInput(
 
 function resolveRegistryToken(
 	config: HetznerDeployableConfig,
+	repoSecrets: Readonly<Record<string, string>>,
 ): string | undefined {
 	const image = config.deploy.image
 	if (image.source === 'build') return requireEnv('GHCR_TOKEN')
 	if (image.registryAuthSecret === undefined) return undefined
-	const allSecrets = parseAllSecrets(requireEnv('ALL_SECRETS'))
-	const value = allSecrets[image.registryAuthSecret]
+	const value = repoSecrets[image.registryAuthSecret]
 	if (value === undefined) {
 		throw new Error(
 			`Secret "${image.registryAuthSecret}" declared in deploy.image.registry_auth_secret but not found in GitHub Secrets`,
 		)
 	}
 	return value
-}
-
-function loadDeclaredSecrets(
-	declared: ReadonlyArray<string>,
-): Record<string, string> {
-	if (declared.length === 0) return {}
-	const allSecrets = parseAllSecrets(requireEnv('ALL_SECRETS'))
-	return pickSecrets(allSecrets, declared)
 }

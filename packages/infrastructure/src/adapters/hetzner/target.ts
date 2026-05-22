@@ -1,4 +1,8 @@
-import type { DeployVolume, HetznerVpsDeploySection } from '#/config/types.ts'
+import type {
+	DeployVolume,
+	HetznerVpsDeploySection,
+	PostgresServiceConfig,
+} from '#/config/types.ts'
 import { buildR2CaddyBinding } from '#/domain/cloudflare/r2/caddy-binding.ts'
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
@@ -53,6 +57,7 @@ export interface HetznerVpsTargetConfig {
 	readonly vpsName: string
 	readonly hetzner: HetznerVpsDeploySection['hetzner']
 	readonly volumes: ReadonlyArray<DeployVolume>
+	readonly postgres: PostgresServiceConfig | undefined
 	readonly infraStorage: InfraStorageRuntimeConfig
 	readonly stateStore: ObjectStoreClient
 	readonly certsStore: ObjectStoreClient
@@ -213,6 +218,7 @@ export class HetznerVpsTarget implements DeployTarget {
 				image: input.image,
 				registryToken: input.registryToken,
 				volumes: this.config.volumes,
+				postgres: this.config.postgres,
 			})
 
 			// Multi-tenant Caddy: read the existing config, drop any prior
