@@ -605,9 +605,12 @@ footer.foot {
 <div class="wrap">
 
 <header class="header">
-  <div class="eyebrow">Decision Record · Postgres migrations · 2026-05-24</div>
+  <div class="eyebrow">Decision Record · Postgres migrations · 2026-05-24 (v1, deprecated)</div>
   <h1>Migration sidecar vs migration dans l'entrypoint app</h1>
   <div class="prompt-box">« Wtf pourquoi un migrate sidecar ? C'est normal toute cette complexité pour une bdd ? »</div>
+  <div style="margin-top: 16px; padding: 14px 18px; border: 1px solid var(--np-edit-border); background: var(--np-edit-bg); color: var(--np-edit-text); border-radius: var(--np-radius); border-left: 4px solid var(--np-warn); font-size: 14px;">
+    <strong>⚠ Deprecated 2026-05-24 (16h45)</strong> — Ce record recommande « entrypoint app » mais l'audit suivant a révélé du code half-built (<code>migrate.command.ts</code> orphelin) qui ouvre une 3<sup>e</sup> voie meilleure : <strong>SSH-orchestrated migrate</strong>. Voir <a href="./2026-05-24-postgres-migrations-path-a.html" style="color: var(--np-edit-text); text-decoration: underline;"><code>2026-05-24-postgres-migrations-path-a.html</code></a>.
+  </div>
 </header>
 
 <div class="tldr">
