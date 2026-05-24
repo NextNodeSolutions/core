@@ -260,7 +260,11 @@ describe('teardownCommand - postgres backup wipe', () => {
 	const APP_WITH_POSTGRES: DeployableConfig = {
 		...APP_WITH_DOMAIN,
 		services: {
-			postgres: { mode: 'embedded', migrationsFolder: undefined },
+			postgres: {
+				mode: 'embedded',
+				migrationsFolder: undefined,
+				migrateCommand: undefined,
+			},
 		},
 	}
 

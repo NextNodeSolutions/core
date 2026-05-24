@@ -12,6 +12,8 @@ import type {
 	DeployInput,
 	DeployResult,
 	DeployTarget,
+	MigrateInput,
+	MigrateResult,
 	ProvisionResult,
 	StaticDeployedEnvironment,
 	TargetEnv,
@@ -152,6 +154,13 @@ export class CloudflarePagesTarget implements DeployTarget {
 			deployedEnvironments: [deployed],
 			durationMs: Date.now() - start,
 		}
+	}
+
+	runMigrate(input: MigrateInput): Promise<MigrateResult> {
+		void input
+		throw new Error(
+			`runMigrate is not applicable to ${this.name}: schema migrations require a runtime database, which Cloudflare Pages does not host. Configure a container-based target if your app needs a postgres migration step.`,
+		)
 	}
 
 	async teardown(

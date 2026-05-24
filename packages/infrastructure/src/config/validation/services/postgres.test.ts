@@ -11,6 +11,7 @@ describe('validatePostgresService', () => {
 		expect(result.section).toEqual({
 			mode: 'embedded',
 			migrationsFolder: undefined,
+			migrateCommand: undefined,
 		})
 	})
 
@@ -48,6 +49,43 @@ describe('validatePostgresService', () => {
 		if (result.ok) return
 		expect(result.errors).toContain(
 			'services.postgres.migrations_folder must be a non-empty string when set',
+		)
+	})
+
+	it('parses an explicit migrate_command override', () => {
+		const result = validatePostgresService({
+			mode: 'embedded',
+			migrate_command: 'pnpm prisma migrate deploy',
+		})
+
+		expect(result.ok).toBe(true)
+		if (!result.ok) return
+		expect(result.section.migrateCommand).toBe('pnpm prisma migrate deploy')
+	})
+
+	it('rejects an empty migrate_command string', () => {
+		const result = validatePostgresService({
+			mode: 'embedded',
+			migrate_command: '',
+		})
+
+		expect(result.ok).toBe(false)
+		if (result.ok) return
+		expect(result.errors).toContain(
+			'services.postgres.migrate_command must be a non-empty string when set',
+		)
+	})
+
+	it('rejects a non-string migrate_command', () => {
+		const result = validatePostgresService({
+			mode: 'embedded',
+			migrate_command: 42,
+		})
+
+		expect(result.ok).toBe(false)
+		if (result.ok) return
+		expect(result.errors).toContain(
+			'services.postgres.migrate_command must be a non-empty string when set',
 		)
 	})
 

@@ -39,7 +39,11 @@ describe('postgresProjectIdentifier', () => {
 describe('buildPostgresSidecar', () => {
 	it('returns a sidecar spec pinned to NEXTNODE_POSTGRES_VERSION when mode is embedded', () => {
 		const result = buildPostgresSidecar(
-			{ mode: 'embedded', migrationsFolder: undefined },
+			{
+				mode: 'embedded',
+				migrationsFolder: undefined,
+				migrateCommand: undefined,
+			},
 			'acme-web',
 		)
 
@@ -59,7 +63,11 @@ describe('buildPostgresSidecar', () => {
 
 	it('returns null when mode is external', () => {
 		const result = buildPostgresSidecar(
-			{ mode: 'external', migrationsFolder: undefined },
+			{
+				mode: 'external',
+				migrationsFolder: undefined,
+				migrateCommand: undefined,
+			},
 			'acme-web',
 		)
 
@@ -115,7 +123,11 @@ describe('postgresBackupBucketName', () => {
 describe('buildPostgresBackupSidecar', () => {
 	it('returns null when mode is external (user-owned DB)', () => {
 		const result = buildPostgresBackupSidecar(
-			{ mode: 'external', migrationsFolder: undefined },
+			{
+				mode: 'external',
+				migrationsFolder: undefined,
+				migrateCommand: undefined,
+			},
 			'acme-web',
 		)
 
@@ -124,7 +136,11 @@ describe('buildPostgresBackupSidecar', () => {
 
 	it('builds a solectrus/postgres-s3-backup sidecar pinned to NEXTNODE_POSTGRES_VERSION', () => {
 		const result = buildPostgresBackupSidecar(
-			{ mode: 'embedded', migrationsFolder: undefined },
+			{
+				mode: 'embedded',
+				migrationsFolder: undefined,
+				migrateCommand: undefined,
+			},
 			'acme-web',
 		)
 
@@ -137,7 +153,11 @@ describe('buildPostgresBackupSidecar', () => {
 
 	it('renames the project-level R2 creds to the S3_* names the image expects via compose interpolation', () => {
 		const result = buildPostgresBackupSidecar(
-			{ mode: 'embedded', migrationsFolder: undefined },
+			{
+				mode: 'embedded',
+				migrationsFolder: undefined,
+				migrateCommand: undefined,
+			},
 			'acme-web',
 		)
 
@@ -152,7 +172,11 @@ describe('buildPostgresBackupSidecar', () => {
 
 	it('targets the project-scoped R2 bucket under the postgres prefix', () => {
 		const result = buildPostgresBackupSidecar(
-			{ mode: 'embedded', migrationsFolder: undefined },
+			{
+				mode: 'embedded',
+				migrationsFolder: undefined,
+				migrateCommand: undefined,
+			},
 			'acme-web',
 		)
 
@@ -162,7 +186,11 @@ describe('buildPostgresBackupSidecar', () => {
 
 	it('runs the dump on the canonical daily schedule with retention disabled (handled separately)', () => {
 		const result = buildPostgresBackupSidecar(
-			{ mode: 'embedded', migrationsFolder: undefined },
+			{
+				mode: 'embedded',
+				migrationsFolder: undefined,
+				migrateCommand: undefined,
+			},
 			'acme-web',
 		)
 
@@ -172,7 +200,11 @@ describe('buildPostgresBackupSidecar', () => {
 
 	it('connects to the in-network postgres sidecar with the project-scoped role+db', () => {
 		const result = buildPostgresBackupSidecar(
-			{ mode: 'embedded', migrationsFolder: undefined },
+			{
+				mode: 'embedded',
+				migrationsFolder: undefined,
+				migrateCommand: undefined,
+			},
 			'acme-web',
 		)
 

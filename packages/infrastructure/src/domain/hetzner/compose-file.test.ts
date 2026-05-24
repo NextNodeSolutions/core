@@ -222,6 +222,7 @@ describe('renderComposeFile', () => {
 			postgres: {
 				mode: 'embedded',
 				migrationsFolder: undefined,
+				migrateCommand: undefined,
 			},
 			projectName: PROJECT_NAME,
 		})
@@ -249,6 +250,7 @@ describe('renderComposeFile', () => {
 			postgres: {
 				mode: 'embedded',
 				migrationsFolder: undefined,
+				migrateCommand: undefined,
 			},
 			projectName: PROJECT_NAME,
 		})
@@ -264,6 +266,7 @@ describe('renderComposeFile', () => {
 			postgres: {
 				mode: 'external',
 				migrationsFolder: undefined,
+				migrateCommand: undefined,
 			},
 			projectName: PROJECT_NAME,
 		})
@@ -281,6 +284,7 @@ describe('renderComposeFile', () => {
 			postgres: {
 				mode: 'embedded',
 				migrationsFolder: undefined,
+				migrateCommand: undefined,
 			},
 			projectName: PROJECT_NAME,
 		})
@@ -315,6 +319,7 @@ describe('renderComposeFile', () => {
 			postgres: {
 				mode: 'embedded',
 				migrationsFolder: undefined,
+				migrateCommand: undefined,
 			},
 			projectName: PROJECT_NAME,
 		})
@@ -331,6 +336,7 @@ describe('renderComposeFile', () => {
 			postgres: {
 				mode: 'embedded',
 				migrationsFolder: undefined,
+				migrateCommand: undefined,
 			},
 			projectName: PROJECT_NAME,
 		})
@@ -353,7 +359,11 @@ describe('renderComposeFile - postgres service wiring', () => {
 	it('renders both postgres and postgres-backup sidecars in embedded mode', () => {
 		const result = renderComposeFile({
 			...baseInput,
-			postgres: { mode: 'embedded', migrationsFolder: undefined },
+			postgres: {
+				mode: 'embedded',
+				migrationsFolder: undefined,
+				migrateCommand: undefined,
+			},
 		})
 		const parsed = parse(result)
 
@@ -379,7 +389,11 @@ describe('renderComposeFile - postgres service wiring', () => {
 	it('renders no postgres sidecars when postgres mode is external', () => {
 		const result = renderComposeFile({
 			...baseInput,
-			postgres: { mode: 'external', migrationsFolder: undefined },
+			postgres: {
+				mode: 'external',
+				migrationsFolder: undefined,
+				migrateCommand: undefined,
+			},
 		})
 		const parsed = parse(result)
 
@@ -390,7 +404,11 @@ describe('renderComposeFile - postgres service wiring', () => {
 	it('declares app depends_on postgres service_healthy when postgres is embedded', () => {
 		const result = renderComposeFile({
 			...baseInput,
-			postgres: { mode: 'embedded', migrationsFolder: undefined },
+			postgres: {
+				mode: 'embedded',
+				migrationsFolder: undefined,
+				migrateCommand: undefined,
+			},
 		})
 		const parsed = parse(result)
 
@@ -402,7 +420,11 @@ describe('renderComposeFile - postgres service wiring', () => {
 	it('omits app depends_on when postgres mode is external', () => {
 		const result = renderComposeFile({
 			...baseInput,
-			postgres: { mode: 'external', migrationsFolder: undefined },
+			postgres: {
+				mode: 'external',
+				migrationsFolder: undefined,
+				migrateCommand: undefined,
+			},
 		})
 		const parsed = parse(result)
 

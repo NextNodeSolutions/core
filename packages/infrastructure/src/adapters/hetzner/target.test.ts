@@ -1037,6 +1037,7 @@ describe('HetznerVpsTarget', () => {
 				const postgres = {
 					mode: 'embedded' as const,
 					migrationsFolder: undefined,
+					migrateCommand: undefined,
 				}
 				const target = new HetznerVpsTarget({
 					...TARGET_CONFIG,

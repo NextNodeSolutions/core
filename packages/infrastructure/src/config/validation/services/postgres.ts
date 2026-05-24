@@ -13,13 +13,20 @@ export function validatePostgresService(
 	const migrationsFolderResult = validateMigrationsFolder(
 		raw['migrations_folder'],
 	)
+	const migrateCommandResult = validateMigrateCommand(raw['migrate_command'])
 
-	if (!modeResult.ok || !migrationsFolderResult.ok) {
+	if (
+		!modeResult.ok ||
+		!migrationsFolderResult.ok ||
+		!migrateCommandResult.ok
+	) {
 		return {
 			ok: false,
-			errors: [modeResult, migrationsFolderResult].flatMap(r =>
-				r.ok ? [] : r.errors,
-			),
+			errors: [
+				modeResult,
+				migrationsFolderResult,
+				migrateCommandResult,
+			].flatMap(r => (r.ok ? [] : r.errors)),
 		}
 	}
 
@@ -28,6 +35,7 @@ export function validatePostgresService(
 		section: {
 			mode: modeResult.section,
 			migrationsFolder: migrationsFolderResult.section,
+			migrateCommand: migrateCommandResult.section,
 		},
 	}
 }
@@ -53,6 +61,21 @@ function validateMigrationsFolder(
 			ok: false,
 			errors: [
 				'services.postgres.migrations_folder must be a non-empty string when set',
+			],
+		}
+	}
+	return { ok: true, section: raw }
+}
+
+function validateMigrateCommand(
+	raw: unknown,
+): ValidationResult<string | undefined> {
+	if (raw === undefined) return { ok: true, section: undefined }
+	if (typeof raw !== 'string' || raw === '') {
+		return {
+			ok: false,
+			errors: [
+				'services.postgres.migrate_command must be a non-empty string when set',
 			],
 		}
 	}

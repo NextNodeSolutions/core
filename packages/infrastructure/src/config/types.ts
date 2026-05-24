@@ -160,6 +160,11 @@ export interface PostgresServiceConfig {
 	// Drizzle migrations folder relative to nextnode.toml. Defaults to
 	// "drizzle" (drizzle-kit's own default `out` value) when omitted.
 	readonly migrationsFolder: string | undefined
+	// Shell command run inside the ephemeral migrate container on the VPS.
+	// Defaults to `node scripts/migrate.js` (the NextNode app template's
+	// drizzle-orm runtime migrator). Override for non-Drizzle stacks
+	// (e.g. `pnpm prisma migrate deploy`).
+	readonly migrateCommand: string | undefined
 }
 
 /**
