@@ -44,12 +44,17 @@ export function formatImageRef(image: ImageRef): string {
 	return `${image.registry}/${image.repository}:${image.tag}`
 }
 
+interface ComposeServiceDependency {
+	readonly condition: 'service_healthy'
+}
+
 interface ComposeService {
 	readonly image: string
 	readonly restart: string
 	readonly env_file: ReadonlyArray<string>
 	readonly ports: ReadonlyArray<string>
 	readonly volumes?: ReadonlyArray<string>
+	readonly depends_on?: Readonly<Record<string, ComposeServiceDependency>>
 }
 
 interface ComposeConfig {
@@ -94,6 +99,13 @@ export function renderComposeFile(input: ComposeFileInput): string {
 				ports: [`127.0.0.1:${input.hostPort}:${CONTAINER_PORT}`],
 				...(userVolumes && {
 					volumes: userVolumes.map(v => `${v.name}:${v.mount}`),
+				}),
+				...(postgresSidecar && {
+					depends_on: {
+						[POSTGRES_SIDECAR_SERVICE_NAME]: {
+							condition: 'service_healthy',
+						},
+					},
 				}),
 			},
 			...(postgresSidecar && {
