@@ -386,4 +386,26 @@ describe('renderComposeFile - postgres service wiring', () => {
 		expect(Object.keys(parsed.services)).toEqual(['app'])
 		expect(parsed).not.toHaveProperty('volumes')
 	})
+
+	it('declares app depends_on postgres service_healthy when postgres is embedded', () => {
+		const result = renderComposeFile({
+			...baseInput,
+			postgres: { mode: 'embedded', migrationsFolder: undefined },
+		})
+		const parsed = parse(result)
+
+		expect(parsed.services.app.depends_on).toEqual({
+			postgres: { condition: 'service_healthy' },
+		})
+	})
+
+	it('omits app depends_on when postgres mode is external', () => {
+		const result = renderComposeFile({
+			...baseInput,
+			postgres: { mode: 'external', migrationsFolder: undefined },
+		})
+		const parsed = parse(result)
+
+		expect(parsed.services.app).not.toHaveProperty('depends_on')
+	})
 })
