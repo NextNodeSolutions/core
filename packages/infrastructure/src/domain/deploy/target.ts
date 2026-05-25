@@ -158,6 +158,19 @@ export interface DeployTarget {
 		env: DeployEnv,
 	): Promise<DeployResult>
 	/**
+	 * Phase 1 of a Path A rollout: prepare the env + compose files on the
+	 * target, pull the image, and bring the database service up to
+	 * healthy. Called by `migrate-remote` BEFORE `runMigrate` so the
+	 * migrate container has both a reachable postgres (via the project's
+	 * docker network) and an env file on disk (for `--env-file`). For
+	 * static targets, throw "not applicable" — no DB to bring up.
+	 */
+	prepareRollout(
+		projectName: string,
+		input: DeployInput,
+		env: DeployEnv,
+	): Promise<void>
+	/**
 	 * Run database schema migrations against the target. For Hetzner VPS,
 	 * spawns an ephemeral migrate container inside the project's docker
 	 * network (postgres reachable at its compose service name, never

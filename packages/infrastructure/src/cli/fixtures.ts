@@ -73,6 +73,64 @@ export const APP_UPSTREAM_PRIVATE: DeployableConfig = {
 	},
 }
 
+export const APP_WITH_POSTGRES: DeployableConfig = {
+	project: {
+		type: 'app',
+		name: 'my-app',
+		domain: 'example.com',
+		redirectDomains: [],
+		filter: false,
+		internal: false,
+	},
+	scripts: { lint: 'lint', test: 'test', build: 'build' },
+	package: false,
+	environment: { development: true },
+	services: {
+		postgres: {
+			mode: 'embedded',
+			migrationsFolder: undefined,
+			migrateCommand: undefined,
+		},
+	},
+	deploy: {
+		target: 'hetzner-vps',
+		hetzner: { serverType: 'cx23', location: 'nbg1' },
+		secrets: [],
+		vps: null,
+		volumes: [],
+		image: { source: 'build' },
+	},
+}
+
+export const APP_WITH_POSTGRES_CUSTOM_MIGRATE: DeployableConfig = {
+	project: {
+		type: 'app',
+		name: 'my-app',
+		domain: 'example.com',
+		redirectDomains: [],
+		filter: false,
+		internal: false,
+	},
+	scripts: { lint: 'lint', test: 'test', build: 'build' },
+	package: false,
+	environment: { development: true },
+	services: {
+		postgres: {
+			mode: 'embedded',
+			migrationsFolder: undefined,
+			migrateCommand: 'pnpm prisma migrate deploy',
+		},
+	},
+	deploy: {
+		target: 'hetzner-vps',
+		hetzner: { serverType: 'cx23', location: 'nbg1' },
+		secrets: [],
+		vps: null,
+		volumes: [],
+		image: { source: 'build' },
+	},
+}
+
 export const APP_WITH_SECRETS: DeployableConfig = {
 	project: {
 		type: 'app',

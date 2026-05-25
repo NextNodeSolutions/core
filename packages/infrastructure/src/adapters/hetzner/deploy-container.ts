@@ -64,20 +64,65 @@ export interface BringUpInput {
 }
 
 /**
- * Orchestrate a full container deploy: prepare files + login + pull, then
- * stage the bring-up as `bringUpDb` → `bringUpApp`. The staging matters
- * because Path A schema migrations run between the two phases at the
- * pipeline level — postgres must be healthy before migrate starts, and
- * the app must rotate only after migrate succeeds. When postgres is
- * absent the staging collapses cleanly: phase 1 is a no-op and phase 2
- * brings up `app` via the original full `up -d --remove-orphans`.
+ * Orchestrate a full container deploy: prepare files + login + pull +
+ * bringUpDb, then bringUpApp. The staging matters because Path A schema
+ * migrations run between the two phases at the pipeline level — postgres
+ * must be healthy before migrate starts, and the app must rotate only
+ * after migrate succeeds. When postgres is absent the staging collapses
+ * cleanly: phase 1's bringUpDb is a no-op and phase 2 brings up `app`.
+ *
+ * Idempotent re-execution: when migrate-remote already ran phase 1 in a
+ * prior GH Actions job, calling this from the deploy job re-writes the
+ * same env+compose files (deterministic), re-pulls the same image (cache
+ * hit), and re-asserts postgres health (already healthy → instant `--wait`
+ * return). The only non-trivial work then is the `app` rotation.
  */
 export async function deployContainer(
 	session: SshSession,
 	input: DeployContainerInput,
 ): Promise<DeployContainerResult> {
+	await stageRollout(session, input)
+	await bringUpApp(session, {
+		projectName: input.projectName,
+		environment: input.environment,
+		postgres: input.postgres,
+	})
+
 	const silo = computeSilo(input.projectName, input.environment)
-	const hostPort = input.hostPort
+	logger.info(`Deployed ${silo.id} on port ${input.hostPort}`)
+
+	return {
+		upstream: {
+			hostname: input.hostname,
+			dial: `localhost:${input.hostPort}`,
+		},
+		deployed: {
+			kind: 'container',
+			name: input.environment,
+			imageRef: input.image,
+			url: input.env.SITE_URL,
+			deployedAt: new Date(),
+		},
+	}
+}
+
+/**
+ * Phase 1 in full: write the env + compose files, login to the registry
+ * if needed, pull the app image, and bring postgres + postgres-backup up
+ * to healthy. The migrate-remote CLI command calls this directly (then
+ * runs migrate inside an ephemeral container joined to the same docker
+ * network); the deploy CLI command reaches it via `deployContainer`.
+ *
+ * Writing the env file here (not later) matters: the migrate container
+ * uses `--env-file` to pick up `DATABASE_URL` and any user secrets, so
+ * the file must exist on disk BEFORE migrate runs — even if the app
+ * itself hasn't rotated yet.
+ */
+export async function stageRollout(
+	session: SshSession,
+	input: DeployContainerInput,
+): Promise<void> {
+	const silo = computeSilo(input.projectName, input.environment)
 	const envDir = `/opt/apps/${input.projectName}/${input.environment}`
 	const envDirQ = shellEscape(envDir)
 	const composeFileQ = shellEscape(`${envDir}/compose.yaml`)
@@ -94,7 +139,7 @@ export async function deployContainer(
 		`${envDir}/compose.yaml`,
 		renderComposeFile({
 			image: input.image,
-			hostPort,
+			hostPort: input.hostPort,
 			volumes: input.volumes,
 			projectName: input.projectName,
 			postgres: input.postgres,
@@ -111,29 +156,11 @@ export async function deployContainer(
 
 	await session.exec(`docker compose -p ${siloIdQ} -f ${composeFileQ} pull`)
 
-	const bringUp: BringUpInput = {
+	await bringUpDb(session, {
 		projectName: input.projectName,
 		environment: input.environment,
 		postgres: input.postgres,
-	}
-	await bringUpDb(session, bringUp)
-	await bringUpApp(session, bringUp)
-
-	logger.info(`Deployed ${silo.id} on port ${hostPort}`)
-
-	return {
-		upstream: {
-			hostname: input.hostname,
-			dial: `localhost:${hostPort}`,
-		},
-		deployed: {
-			kind: 'container',
-			name: input.environment,
-			imageRef: input.image,
-			url: input.env.SITE_URL,
-			deployedAt: new Date(),
-		},
-	}
+	})
 }
 
 /**

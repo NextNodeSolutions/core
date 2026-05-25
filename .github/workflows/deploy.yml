@@ -38,6 +38,7 @@ jobs:
             project_name: ${{ steps.plan.outputs.project_name }}
             has_prod_gate: ${{ steps.plan.outputs.has_prod_gate }}
             has_domain: ${{ steps.plan.outputs.has_domain }}
+            has_postgres: ${{ steps.plan.outputs.has_postgres }}
             package_dir: ${{ steps.plan.outputs.package_dir }}
             image_source: ${{ steps.plan.outputs.image_source }}
             upstream_image_ref: ${{ steps.plan.outputs.upstream_image_ref }}
@@ -183,9 +184,48 @@ jobs:
                       app.cache-from=type=gha,scope=app
                       app.cache-to=type=gha,scope=app,mode=max
 
+    migrate:
+        name: Migrate
+        needs: [plan, provision, build-image]
+        # Path A: postgres healthy → migrate → app rotation. Skipped when
+        # the project has no `[services.postgres]` so the cost (one
+        # ephemeral container roundtrip on the VPS) is only paid where
+        # a schema actually exists.
+        if: ${{ !cancelled() && !failure() && needs.plan.outputs.has_postgres == 'true' }}
+        runs-on: ubuntu-latest
+        steps:
+            - uses: NextNodeSolutions/core/.github/actions/setup@main
+              with:
+                  infra: 'true'
+                  deps: 'false'
+
+            - name: Connect runner to tailnet
+              uses: tailscale/github-action@v4
+              with:
+                  oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+                  oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+                  tags: tag:ci
+
+            - name: Migrate remote
+              run: node src/index.ts migrate-remote
+              working-directory: .infra/packages/infrastructure
+              env:
+                  PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
+                  PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
+                  HETZNER_API_TOKEN: ${{ secrets.HETZNER_API_TOKEN }}
+                  DEPLOY_SSH_PRIVATE_KEY_B64: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY_B64 }}
+                  TAILSCALE_AUTH_KEY: ${{ secrets.TS_OAUTH_SECRET }}
+                  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+                  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+                  R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+                  R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+                  IMAGE_REF: ${{ needs.build-image.outputs.image_ref || needs.plan.outputs.upstream_image_ref }}
+                  GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  ALL_SECRETS: ${{ toJSON(secrets) }}
+
     deploy:
         name: Deploy
-        needs: [plan, provision, build-image]
+        needs: [plan, provision, build-image, migrate]
         if: ${{ !cancelled() && !failure() }}
         runs-on: ubuntu-latest
         environment:

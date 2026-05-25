@@ -156,6 +156,19 @@ export class CloudflarePagesTarget implements DeployTarget {
 		}
 	}
 
+	prepareRollout(
+		projectName: string,
+		input: DeployInput,
+		env: DeployEnv,
+	): Promise<void> {
+		void projectName
+		void input
+		void env
+		throw new Error(
+			`prepareRollout is not applicable to ${this.name}: Cloudflare Pages has no database to stage before migrate. Configure a container-based target if your app needs a postgres migration step.`,
+		)
+	}
+
 	runMigrate(input: MigrateInput): Promise<MigrateResult> {
 		void input
 		throw new Error(

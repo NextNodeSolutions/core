@@ -105,7 +105,7 @@ describe('writePlanOutputs', () => {
 			{ id: 'test', name: 'Test', cmd: 'pnpm test' },
 		])
 		expect(output).toBe(
-			`quality_matrix=${matrixJson}\nproject_name=my-app\nproject_type=app\nproject_filter=\npublish=false\ndevelopment_enabled=true\nhas_prod_gate=false\nhas_domain=false\ndomain=\nbuild_directory=apps/landing/dist\npackage_dir=apps/landing\nimage_source=build\nupstream_image_ref=\n`,
+			`quality_matrix=${matrixJson}\nproject_name=my-app\nproject_type=app\nproject_filter=\npublish=false\ndevelopment_enabled=true\nhas_prod_gate=false\nhas_domain=false\nhas_postgres=false\ndomain=\nbuild_directory=apps/landing/dist\npackage_dir=apps/landing\nimage_source=build\nupstream_image_ref=\n`,
 		)
 	})
 
@@ -136,6 +136,30 @@ describe('writePlanOutputs', () => {
 		const output = readFileSync(outputFile, 'utf-8')
 		expect(output).toContain('image_source=upstream\n')
 		expect(output).toContain('upstream_image_ref=ghcr.io/acme/web:v1.2.3\n')
+	})
+
+	it('writes has_postgres=true when [services.postgres] is configured', () => {
+		const config: NextNodeConfig = {
+			...APP_CONFIG,
+			services: {
+				postgres: {
+					mode: 'embedded',
+					migrationsFolder: undefined,
+					migrateCommand: undefined,
+				},
+			},
+		}
+
+		writePlanOutputs({
+			config,
+			pagesProjectName: 'my-app',
+			tasks: [],
+			buildDirectory: 'dist',
+			packageDir: '.',
+		})
+
+		const output = readFileSync(outputFile, 'utf-8')
+		expect(output).toContain('has_postgres=true\n')
 	})
 
 	it('writes empty image outputs for non-deployable projects', () => {

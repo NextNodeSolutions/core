@@ -38,6 +38,7 @@ export function writePlanOutputs({
 	writeOutput('development_enabled', String(config.environment.development))
 	writeOutput('has_prod_gate', String(hasProdGate(qualityMatrix)))
 	writeOutput('has_domain', String(Boolean(config.project.domain)))
+	writeOutput('has_postgres', String(hasPostgres(config)))
 	writeOutput('domain', config.project.domain ?? '')
 	writeOutput('build_directory', buildDirectory)
 	writeOutput('package_dir', packageDir)
@@ -60,4 +61,14 @@ function resolveImageOutputs(config: NextNodeConfig): {
 	if (image.source === 'upstream')
 		return { source: 'upstream', ref: image.ref }
 	return { source: 'build', ref: '' }
+}
+
+/**
+ * Whether the project declares `[services.postgres]`. Drives the `if:`
+ * on the `migrate` job in `deploy.yml`: postgres-less projects skip
+ * the migrate step entirely so the cost of Path A is only paid when
+ * there is actually a schema to migrate.
+ */
+function hasPostgres(config: NextNodeConfig): boolean {
+	return Boolean(config.services.postgres)
 }
