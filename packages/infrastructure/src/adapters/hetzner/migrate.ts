@@ -2,9 +2,12 @@ import type {
 	ImageRef,
 	MigrateInput,
 	MigrateResult,
+	SnapshotInput,
+	SnapshotResult,
 } from '#/domain/deploy/target.ts'
 import { formatImageRef } from '#/domain/hetzner/compose-file.ts'
 import { computeSilo } from '#/domain/hetzner/env-silo.ts'
+import { POSTGRES_BACKUP_SERVICE_NAME } from '#/domain/services/postgres.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
 import type { SshSession } from './ssh/session.types.ts'
@@ -91,6 +94,86 @@ export async function executeMigrate(
 	const durationMs = Date.now() - start
 	logger.info(
 		`Migrate succeeded for "${input.projectName}" (${input.environment}) in ${String(durationMs)}ms`,
+	)
+	return { durationMs }
+}
+
+export interface SnapshotCommandFields {
+	readonly composeFile: string
+	readonly siloId: string
+	readonly serviceName: string
+	readonly script: string
+}
+
+export interface BuildSnapshotCommandResult {
+	readonly command: string
+	readonly fields: SnapshotCommandFields
+}
+
+/**
+ * Pure command builder. Renders the docker compose invocation that triggers
+ * an ad-hoc dump inside the running backup sidecar:
+ *
+ *   docker compose -p <silo> -f <composeFile> exec -T postgres-backup sh backup.sh
+ *
+ * `exec -T` runs in the existing `postgres-backup` container (already up
+ * via `bringUpDb`), reusing its env (R2 creds, S3_BUCKET, etc.) — no new
+ * container, no fresh credentials. `-T` disables pseudo-TTY allocation
+ * because we are invoked over SSH from a non-interactive runner.
+ */
+export function buildSnapshotCommand(
+	input: SnapshotInput,
+): BuildSnapshotCommandResult {
+	const silo = computeSilo(input.projectName, input.environment)
+	const composeFile = `/opt/apps/${input.projectName}/${input.environment}/compose.yaml`
+
+	const command = [
+		'docker',
+		'compose',
+		'-p',
+		shellEscape(silo.id),
+		'-f',
+		shellEscape(composeFile),
+		'exec',
+		'-T',
+		POSTGRES_BACKUP_SERVICE_NAME,
+		'sh',
+		'backup.sh',
+	].join(' ')
+
+	return {
+		command,
+		fields: {
+			composeFile,
+			siloId: silo.id,
+			serviceName: POSTGRES_BACKUP_SERVICE_NAME,
+			script: 'backup.sh',
+		},
+	}
+}
+
+/**
+ * Trigger the backup sidecar via SSH. Failure modes (non-zero exit,
+ * transport error) propagate as thrown errors — the snapshot is the
+ * rollback safety net for `runMigrate`, so the orchestrator MUST halt
+ * the deploy before migrate runs when this fails. The dump itself is
+ * identified by its timestamped R2 key (written by the sidecar);
+ * `infrastructure restore --at <deploy-time>` picks it without us
+ * having to track the key client-side.
+ */
+export async function executeSnapshot(
+	session: SshSession,
+	input: SnapshotInput,
+): Promise<SnapshotResult> {
+	const start = Date.now()
+	const { command } = buildSnapshotCommand(input)
+	logger.info(
+		`Triggering pre-migrate snapshot for "${input.projectName}" (${input.environment})`,
+	)
+	await session.exec(command)
+	const durationMs = Date.now() - start
+	logger.info(
+		`Pre-migrate snapshot uploaded for "${input.projectName}" (${input.environment}) in ${String(durationMs)}ms`,
 	)
 	return { durationMs }
 }

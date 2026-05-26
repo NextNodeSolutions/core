@@ -1,8 +1,10 @@
+import { writeSummary } from '#/adapters/github/output.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
 
 import type { DeployableConfig } from '#/config/types.ts'
+import { buildMigrateSummary } from '#/domain/deploy/migrate-summary.ts'
 import type { MigrateInput } from '#/domain/deploy/target.ts'
 import { DEFAULT_MIGRATE_COMMAND } from '#/domain/deploy/target.ts'
 
@@ -17,13 +19,18 @@ import { resolveDeployContext } from './resolve-deploy-context.ts'
  * Steps:
  *   1. Stage the rollout on the target — env file, compose file,
  *      registry login, image pull, postgres up + healthy.
- *   2. Run the migrate command in an ephemeral container joined to
+ *   2. Trigger an on-demand snapshot via the backup sidecar so the
+ *      forward-only migration has a known-good restore point. Skipped
+ *      when `[services.postgres].mode = "external"` (user owns backups).
+ *   3. Run the migrate command in an ephemeral container joined to
  *      the project's docker network (postgres reachable internally,
  *      never bound on the host).
  *
- * Skipped (early-exit) when the project does not declare
- * `[services.postgres]`. Adding the snapshot backup step between (1)
- * and (2) is INT-600 / P8-11.
+ * The snapshot is the rollback safety net: a failure there halts the
+ * workflow before migrate runs. A migration failure does NOT delete the
+ * snapshot — it stays in R2 for `infrastructure restore`, which picks
+ * the right dump by timestamp (most-recent ≤ deploy time). Skipped
+ * (early-exit) when the project does not declare `[services.postgres]`.
  */
 export async function migrateRemoteCommand(
 	config: DeployableConfig,
@@ -47,6 +54,18 @@ export async function migrateRemoteCommand(
 
 	await target.prepareRollout(config.project.name, input, env)
 
+	let snapshotDurationMs: number | null = null
+	if (postgres.mode === 'embedded') {
+		const snapshot = await target.runPreMigrateSnapshot({
+			projectName: config.project.name,
+			environment,
+		})
+		snapshotDurationMs = snapshot.durationMs
+		logger.info(
+			`Pre-migrate snapshot for "${config.project.name}" completed in ${String(snapshot.durationMs)}ms`,
+		)
+	}
+
 	const migrateInput: MigrateInput = {
 		projectName: config.project.name,
 		environment,
@@ -57,5 +76,14 @@ export async function migrateRemoteCommand(
 	const result = await target.runMigrate(migrateInput)
 	logger.info(
 		`Migration applied for "${config.project.name}" in ${result.durationMs}ms`,
+	)
+
+	writeSummary(
+		buildMigrateSummary({
+			projectName: config.project.name,
+			environment,
+			migrateDurationMs: result.durationMs,
+			snapshotDurationMs,
+		}),
 	)
 }

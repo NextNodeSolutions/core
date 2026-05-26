@@ -15,6 +15,8 @@ import type {
 	ImageRef,
 	MigrateInput,
 	MigrateResult,
+	SnapshotInput,
+	SnapshotResult,
 	TargetEnv,
 	VpsProvisionResult,
 } from '#/domain/deploy/target.ts'
@@ -33,7 +35,7 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 import { CADDY_CONFIG_PATH } from './constants.ts'
 import { deployContainer, stageRollout } from './deploy-container.ts'
-import { executeMigrate } from './migrate.ts'
+import { executeMigrate, executeSnapshot } from './migrate.ts'
 import { freshProvision, resumeFromState } from './provision/ensure-infra.ts'
 import { createSshSession } from './ssh/session.ts'
 import type { SshSession } from './ssh/session.types.ts'
@@ -290,6 +292,29 @@ export class HetznerVpsTarget implements DeployTarget {
 
 		try {
 			return await executeMigrate(session, input)
+		} finally {
+			session.close()
+		}
+	}
+
+	async runPreMigrateSnapshot(input: SnapshotInput): Promise<SnapshotResult> {
+		const vpsName = this.config.vpsName
+		const existing = await readState(this.r2, vpsName)
+		if (!existing || existing.state.phase === 'created') {
+			throw new Error(
+				`Invariant: expected deployable state for VPS "${vpsName}"`,
+			)
+		}
+
+		const session = await createSshSession({
+			host: existing.state.tailnetIp,
+			username: 'deploy',
+			privateKey: this.config.credentials.deployPrivateKey,
+			expectedHostKeyFingerprint: existing.state.sshHostKeyFingerprint,
+		})
+
+		try {
+			return await executeSnapshot(session, input)
 		} finally {
 			session.close()
 		}

@@ -131,6 +131,26 @@ export interface MigrateResult {
 }
 
 /**
+ * Inputs for the on-demand pre-migrate snapshot. The orchestration knows
+ * project + environment; the silo and compose-file path are derived inside
+ * the adapter — the domain stays free of infra strings.
+ */
+export interface SnapshotInput {
+	readonly projectName: string
+	readonly environment: AppEnvironment
+}
+
+/**
+ * Outcome of a pre-migrate snapshot triggered via the backup sidecar.
+ * Just a wall-clock duration — the dump itself is identified by its
+ * timestamp in R2, and `infrastructure restore --at <deploy-time>` picks
+ * it via `selectPostgresBackupForRestore`. No need to track the key here.
+ */
+export interface SnapshotResult {
+	readonly durationMs: number
+}
+
+/**
  * Default migrate command used when the project does not override
  * `[services.postgres].migrate_command`. Mirrors the NextNode app
  * template's drizzle-orm runtime migrator entrypoint.
@@ -179,6 +199,15 @@ export interface DeployTarget {
 	 * accordingly.
 	 */
 	runMigrate(input: MigrateInput): Promise<MigrateResult>
+	/**
+	 * Trigger an on-demand pre-migrate snapshot via the embedded
+	 * `postgres-backup` sidecar. Called by `migrate-remote` AFTER the DB
+	 * is healthy and BEFORE `runMigrate` runs, so a failed migration has
+	 * a fresh dump to restore from. The sidecar uploads to R2 directly;
+	 * we return the object key so deploy summaries surface it. For static
+	 * targets, throw "not applicable" — no DB to snapshot.
+	 */
+	runPreMigrateSnapshot(input: SnapshotInput): Promise<SnapshotResult>
 	teardown(
 		projectName: string,
 		domain: string | undefined,

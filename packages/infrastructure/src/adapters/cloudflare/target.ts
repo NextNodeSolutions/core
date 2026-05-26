@@ -15,6 +15,8 @@ import type {
 	MigrateInput,
 	MigrateResult,
 	ProvisionResult,
+	SnapshotInput,
+	SnapshotResult,
 	StaticDeployedEnvironment,
 	TargetEnv,
 } from '#/domain/deploy/target.ts'
@@ -173,6 +175,13 @@ export class CloudflarePagesTarget implements DeployTarget {
 		void input
 		throw new Error(
 			`runMigrate is not applicable to ${this.name}: schema migrations require a runtime database, which Cloudflare Pages does not host. Configure a container-based target if your app needs a postgres migration step.`,
+		)
+	}
+
+	runPreMigrateSnapshot(input: SnapshotInput): Promise<SnapshotResult> {
+		void input
+		throw new Error(
+			`runPreMigrateSnapshot is not applicable to ${this.name}: there is no embedded postgres sidecar to snapshot. Configure a container-based target if your app needs a postgres backup step.`,
 		)
 	}
 
