@@ -71,7 +71,7 @@ export interface ProjectSection {
 	readonly name: string
 	readonly type: ProjectType
 	readonly filter: string | false
-	readonly domain: string | undefined
+	readonly domain?: string
 	readonly redirectDomains: ReadonlyArray<string>
 	readonly internal: boolean
 }
@@ -159,7 +159,17 @@ export interface PostgresServiceConfig {
 	readonly mode: PostgresMode
 	// Drizzle migrations folder relative to nextnode.toml. Defaults to
 	// "drizzle" (drizzle-kit's own default `out` value) when omitted.
-	readonly migrationsFolder: string | undefined
+	readonly migrationsFolder?: string
+	// Shell command run inside the ephemeral migrate container on the VPS.
+	// Defaults to `node scripts/migrate.js` (the NextNode app template's
+	// drizzle-orm runtime migrator). Override for non-Drizzle stacks
+	// (e.g. `pnpm prisma migrate deploy`).
+	readonly migrateCommand?: string
+	// Shell command run on the GH runner during the quality stage to
+	// validate the local migrations folder (no DB, pure filesystem check).
+	// CLI default is `pnpm drizzle-kit check`; override for non-Drizzle
+	// stacks (e.g. `pnpm prisma migrate diff --exit-code`).
+	readonly checkCommand?: string
 }
 
 /**

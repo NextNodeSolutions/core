@@ -221,7 +221,6 @@ describe('renderComposeFile', () => {
 			hostPort: 8080,
 			postgres: {
 				mode: 'embedded',
-				migrationsFolder: undefined,
 			},
 			projectName: PROJECT_NAME,
 		})
@@ -248,7 +247,6 @@ describe('renderComposeFile', () => {
 			hostPort: 8080,
 			postgres: {
 				mode: 'embedded',
-				migrationsFolder: undefined,
 			},
 			projectName: PROJECT_NAME,
 		})
@@ -263,7 +261,6 @@ describe('renderComposeFile', () => {
 			hostPort: 8080,
 			postgres: {
 				mode: 'external',
-				migrationsFolder: undefined,
 			},
 			projectName: PROJECT_NAME,
 		})
@@ -280,7 +277,6 @@ describe('renderComposeFile', () => {
 			hostPort: 8080,
 			postgres: {
 				mode: 'embedded',
-				migrationsFolder: undefined,
 			},
 			projectName: PROJECT_NAME,
 		})
@@ -314,7 +310,6 @@ describe('renderComposeFile', () => {
 			hostPort: 8080,
 			postgres: {
 				mode: 'embedded',
-				migrationsFolder: undefined,
 			},
 			projectName: PROJECT_NAME,
 		})
@@ -330,7 +325,6 @@ describe('renderComposeFile', () => {
 			volumes: [{ name: 'app-data', mount: '/var/lib/app' }],
 			postgres: {
 				mode: 'embedded',
-				migrationsFolder: undefined,
 			},
 			projectName: PROJECT_NAME,
 		})
@@ -353,7 +347,9 @@ describe('renderComposeFile - postgres service wiring', () => {
 	it('renders both postgres and postgres-backup sidecars in embedded mode', () => {
 		const result = renderComposeFile({
 			...baseInput,
-			postgres: { mode: 'embedded', migrationsFolder: undefined },
+			postgres: {
+				mode: 'embedded',
+			},
 		})
 		const parsed = parse(result)
 
@@ -379,11 +375,39 @@ describe('renderComposeFile - postgres service wiring', () => {
 	it('renders no postgres sidecars when postgres mode is external', () => {
 		const result = renderComposeFile({
 			...baseInput,
-			postgres: { mode: 'external', migrationsFolder: undefined },
+			postgres: {
+				mode: 'external',
+			},
 		})
 		const parsed = parse(result)
 
 		expect(Object.keys(parsed.services)).toEqual(['app'])
 		expect(parsed).not.toHaveProperty('volumes')
+	})
+
+	it('declares app depends_on postgres service_healthy when postgres is embedded', () => {
+		const result = renderComposeFile({
+			...baseInput,
+			postgres: {
+				mode: 'embedded',
+			},
+		})
+		const parsed = parse(result)
+
+		expect(parsed.services.app.depends_on).toEqual({
+			postgres: { condition: 'service_healthy' },
+		})
+	})
+
+	it('omits app depends_on when postgres mode is external', () => {
+		const result = renderComposeFile({
+			...baseInput,
+			postgres: {
+				mode: 'external',
+			},
+		})
+		const parsed = parse(result)
+
+		expect(parsed.services.app).not.toHaveProperty('depends_on')
 	})
 })

@@ -38,11 +38,9 @@ function makeCtx(
 
 const EMBEDDED: PostgresServiceConfig = {
 	mode: 'embedded',
-	migrationsFolder: undefined,
 }
 const EXTERNAL: PostgresServiceConfig = {
 	mode: 'external',
-	migrationsFolder: undefined,
 }
 
 afterEach(() => {

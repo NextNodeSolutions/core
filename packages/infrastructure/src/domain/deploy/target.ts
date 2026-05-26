@@ -1,3 +1,4 @@
+import type { AppEnvironment } from '#/domain/environment.ts'
 import type { ServiceEnv } from '#/domain/services/service.ts'
 
 import type {
@@ -110,6 +111,52 @@ export interface DeployResult {
 	readonly durationMs: number
 }
 
+/**
+ * Inputs required to run schema migrations against the project's database
+ * on the deploy target. The migrate runs in an ephemeral container built
+ * from the same `image` as the app, joining the project's docker network
+ * so the embedded postgres sidecar resolves at its compose service name.
+ * `migrateCommand` is the shell command the container executes (default
+ * `node scripts/migrate.js`, overridable via `[services.postgres].migrate_command`).
+ */
+export interface MigrateInput {
+	readonly projectName: string
+	readonly image: ImageRef
+	readonly migrateCommand: string
+	readonly environment: AppEnvironment
+}
+
+export interface MigrateResult {
+	readonly durationMs: number
+}
+
+/**
+ * Inputs for the on-demand pre-migrate snapshot. The orchestration knows
+ * project + environment; the silo and compose-file path are derived inside
+ * the adapter — the domain stays free of infra strings.
+ */
+export interface SnapshotInput {
+	readonly projectName: string
+	readonly environment: AppEnvironment
+}
+
+/**
+ * Outcome of a pre-migrate snapshot triggered via the backup sidecar.
+ * Just a wall-clock duration — the dump itself is identified by its
+ * timestamp in R2, and `infrastructure restore --at <deploy-time>` picks
+ * it via `selectPostgresBackupForRestore`. No need to track the key here.
+ */
+export interface SnapshotResult {
+	readonly durationMs: number
+}
+
+/**
+ * Default migrate command used when the project does not override
+ * `[services.postgres].migrate_command`. Mirrors the NextNode app
+ * template's drizzle-orm runtime migrator entrypoint.
+ */
+export const DEFAULT_MIGRATE_COMMAND = 'node scripts/migrate.js'
+
 export interface DeployTarget {
 	readonly name: string
 	/**
@@ -130,6 +177,37 @@ export interface DeployTarget {
 		input: DeployInput,
 		env: DeployEnv,
 	): Promise<DeployResult>
+	/**
+	 * Phase 1 of a Path A rollout: prepare the env + compose files on the
+	 * target, pull the image, and bring the database service up to
+	 * healthy. Called by `migrate-remote` BEFORE `runMigrate` so the
+	 * migrate container has both a reachable postgres (via the project's
+	 * docker network) and an env file on disk (for `--env-file`). For
+	 * static targets, throw "not applicable" — no DB to bring up.
+	 */
+	prepareRollout(
+		projectName: string,
+		input: DeployInput,
+		env: DeployEnv,
+	): Promise<void>
+	/**
+	 * Run database schema migrations against the target. For Hetzner VPS,
+	 * spawns an ephemeral migrate container inside the project's docker
+	 * network (postgres reachable at its compose service name, never
+	 * exposed on the host). For static targets (Cloudflare Pages), this
+	 * is a wiring bug — throw "not applicable" so the caller routes
+	 * accordingly.
+	 */
+	runMigrate(input: MigrateInput): Promise<MigrateResult>
+	/**
+	 * Trigger an on-demand pre-migrate snapshot via the embedded
+	 * `postgres-backup` sidecar. Called by `migrate-remote` AFTER the DB
+	 * is healthy and BEFORE `runMigrate` runs, so a failed migration has
+	 * a fresh dump to restore from. The sidecar uploads to R2 directly;
+	 * we return the object key so deploy summaries surface it. For static
+	 * targets, throw "not applicable" — no DB to snapshot.
+	 */
+	runPreMigrateSnapshot(input: SnapshotInput): Promise<SnapshotResult>
 	teardown(
 		projectName: string,
 		domain: string | undefined,

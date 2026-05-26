@@ -15,6 +15,8 @@ import { buildQualityMatrix } from '#/domain/pipeline/quality-matrix.ts'
 const PROD_GATE_COMMAND =
 	'cd .infra/packages/infrastructure && node src/index.ts prod-gate'
 
+const DEFAULT_DRIZZLE_CHECK_COMMAND = 'pnpm drizzle-kit check'
+
 const DEFAULT_BUILD_OUTPUT = 'dist'
 
 export function planCommand(config: NextNodeConfig): void {
@@ -38,10 +40,15 @@ export function planCommand(config: NextNodeConfig): void {
 	logger.info(`Package dir: ${packageDir}`)
 	logger.info(`Build directory: ${buildDirectory}`)
 
+	const postgres = config.services.postgres
 	const tasks = buildQualityMatrix(config.scripts, config.project, {
 		environment,
 		developmentEnabled: config.environment.development,
 		prodGateCommand: PROD_GATE_COMMAND,
+		...(postgres && {
+			drizzleCheckCommand:
+				postgres.checkCommand ?? DEFAULT_DRIZZLE_CHECK_COMMAND,
+		}),
 	})
 	writePlanOutputs({
 		config,

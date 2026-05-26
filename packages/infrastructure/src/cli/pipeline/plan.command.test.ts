@@ -13,7 +13,6 @@ const PACKAGE_CONFIG: NextNodeConfig = {
 		name: 'my-lib',
 		type: 'package',
 		filter: false,
-		domain: undefined,
 		redirectDomains: [],
 		internal: false,
 	},
@@ -130,6 +129,47 @@ describe('planCommand', () => {
 
 		const output = readFileSync(outputFile, 'utf-8')
 		expect(output).toContain('project_filter=@nextnode-solutions/my-lib\n')
+	})
+
+	it('emits drizzle-check task with the default command when [services.postgres] is configured', () => {
+		const config: NextNodeConfig = {
+			...APP_CONFIG,
+			services: {
+				postgres: {
+					mode: 'embedded',
+				},
+			},
+		}
+
+		planCommand(config)
+
+		const output = readFileSync(outputFile, 'utf-8')
+		expect(output).toContain('"id":"drizzle-check"')
+		expect(output).toContain('"cmd":"pnpm drizzle-kit check"')
+	})
+
+	it('honors the [services.postgres].check_command override', () => {
+		const config: NextNodeConfig = {
+			...APP_CONFIG,
+			services: {
+				postgres: {
+					mode: 'embedded',
+					checkCommand: 'pnpm prisma migrate diff --exit-code',
+				},
+			},
+		}
+
+		planCommand(config)
+
+		const output = readFileSync(outputFile, 'utf-8')
+		expect(output).toContain('"cmd":"pnpm prisma migrate diff --exit-code"')
+	})
+
+	it('omits drizzle-check when [services.postgres] is absent', () => {
+		planCommand(APP_CONFIG)
+
+		const output = readFileSync(outputFile, 'utf-8')
+		expect(output).not.toContain('"id":"drizzle-check"')
 	})
 
 	it('throws when PIPELINE_ENVIRONMENT is missing for app projects', () => {

@@ -12,7 +12,11 @@ import type {
 	DeployInput,
 	DeployResult,
 	DeployTarget,
+	MigrateInput,
+	MigrateResult,
 	ProvisionResult,
+	SnapshotInput,
+	SnapshotResult,
 	StaticDeployedEnvironment,
 	TargetEnv,
 } from '#/domain/deploy/target.ts'
@@ -152,6 +156,33 @@ export class CloudflarePagesTarget implements DeployTarget {
 			deployedEnvironments: [deployed],
 			durationMs: Date.now() - start,
 		}
+	}
+
+	prepareRollout(
+		projectName: string,
+		input: DeployInput,
+		env: DeployEnv,
+	): Promise<void> {
+		void projectName
+		void input
+		void env
+		throw new Error(
+			`prepareRollout is not applicable to ${this.name}: Cloudflare Pages has no database to stage before migrate. Configure a container-based target if your app needs a postgres migration step.`,
+		)
+	}
+
+	runMigrate(input: MigrateInput): Promise<MigrateResult> {
+		void input
+		throw new Error(
+			`runMigrate is not applicable to ${this.name}: schema migrations require a runtime database, which Cloudflare Pages does not host. Configure a container-based target if your app needs a postgres migration step.`,
+		)
+	}
+
+	runPreMigrateSnapshot(input: SnapshotInput): Promise<SnapshotResult> {
+		void input
+		throw new Error(
+			`runPreMigrateSnapshot is not applicable to ${this.name}: there is no embedded postgres sidecar to snapshot. Configure a container-based target if your app needs a postgres backup step.`,
+		)
 	}
 
 	async teardown(

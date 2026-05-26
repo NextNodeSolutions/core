@@ -35,7 +35,6 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1030.0",
     "@nextnode-solutions/logger": "^1.0.0",
-    "drizzle-orm": "^0.36.4",
     "pg": "^8.13.1",
     "smol-toml": "^1.6.1",
     "ssh2": "^1.17.0",

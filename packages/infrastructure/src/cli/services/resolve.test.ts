@@ -77,7 +77,9 @@ describe('resolveServices', () => {
 		const configWithPostgres: DeployableConfig = {
 			...APP_WITH_DOMAIN,
 			services: {
-				postgres: { mode: 'embedded', migrationsFolder: undefined },
+				postgres: {
+					mode: 'embedded',
+				},
 			},
 		}
 

@@ -12,6 +12,11 @@ import type {
 	DeployInput,
 	DeployResult,
 	DeployTarget,
+	ImageRef,
+	MigrateInput,
+	MigrateResult,
+	SnapshotInput,
+	SnapshotResult,
 	TargetEnv,
 	VpsProvisionResult,
 } from '#/domain/deploy/target.ts'
@@ -29,9 +34,11 @@ import type { TailnetClient } from '#/domain/tailnet/client.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
 import { CADDY_CONFIG_PATH } from './constants.ts'
-import { deployContainer } from './deploy-container.ts'
+import { deployContainer, stageRollout } from './deploy-container.ts'
+import { executeMigrate, executeSnapshot } from './migrate.ts'
 import { freshProvision, resumeFromState } from './provision/ensure-infra.ts'
 import { createSshSession } from './ssh/session.ts'
+import type { SshSession } from './ssh/session.types.ts'
 import { readState, writeState } from './state/read-write.ts'
 import type {
 	HcloudConvergedState,
@@ -169,43 +176,10 @@ export class HetznerVpsTarget implements DeployTarget {
 	): Promise<DeployResult> {
 		const start = Date.now()
 		const vpsName = this.config.vpsName
-
-		if (!input.image) {
-			throw new Error('image is required for Hetzner VPS deploys')
-		}
-		const hostname = resolveDeployDomain(
-			this.config.domain,
-			this.config.environment,
-		)
-
-		const existing = await readState(this.r2, vpsName)
-		if (!existing || existing.state.phase === 'created') {
-			throw new Error(
-				`Invariant: expected deployable state for VPS "${vpsName}"`,
-			)
-		}
-
-		const { port: hostPort, allocated } = allocateHostPort(
-			existing.state.hostPorts,
+		const { session, hostname, hostPort } = await this.openRolloutSession(
 			projectName,
+			input,
 		)
-		if (allocated) {
-			const updated: HcloudProvisionedState | HcloudConvergedState = {
-				...existing.state,
-				hostPorts: {
-					...existing.state.hostPorts,
-					[projectName]: hostPort,
-				},
-			}
-			await writeState(this.r2, vpsName, updated, existing.etag)
-		}
-
-		const session = await createSshSession({
-			host: existing.state.tailnetIp,
-			username: 'deploy',
-			privateKey: this.config.credentials.deployPrivateKey,
-			expectedHostKeyFingerprint: existing.state.sshHostKeyFingerprint,
-		})
 
 		try {
 			const { upstream, deployed } = await deployContainer(session, {
@@ -215,7 +189,7 @@ export class HetznerVpsTarget implements DeployTarget {
 				hostPort,
 				env,
 				secrets: input.secrets,
-				image: input.image,
+				image: this.requireImage(input),
 				registryToken: input.registryToken,
 				volumes: this.config.volumes,
 				postgres: this.config.postgres,
@@ -270,6 +244,144 @@ export class HetznerVpsTarget implements DeployTarget {
 		} finally {
 			session.close()
 		}
+	}
+
+	async prepareRollout(
+		projectName: string,
+		input: DeployInput,
+		env: DeployEnv,
+	): Promise<void> {
+		const { session, hostname, hostPort } = await this.openRolloutSession(
+			projectName,
+			input,
+		)
+
+		try {
+			await stageRollout(session, {
+				projectName,
+				environment: this.config.environment,
+				hostname,
+				hostPort,
+				env,
+				secrets: input.secrets,
+				image: this.requireImage(input),
+				registryToken: input.registryToken,
+				volumes: this.config.volumes,
+				postgres: this.config.postgres,
+			})
+		} finally {
+			session.close()
+		}
+	}
+
+	async runMigrate(input: MigrateInput): Promise<MigrateResult> {
+		const vpsName = this.config.vpsName
+		const existing = await readState(this.r2, vpsName)
+		if (!existing || existing.state.phase === 'created') {
+			throw new Error(
+				`Invariant: expected deployable state for VPS "${vpsName}"`,
+			)
+		}
+
+		const session = await createSshSession({
+			host: existing.state.tailnetIp,
+			username: 'deploy',
+			privateKey: this.config.credentials.deployPrivateKey,
+			expectedHostKeyFingerprint: existing.state.sshHostKeyFingerprint,
+		})
+
+		try {
+			return await executeMigrate(session, input)
+		} finally {
+			session.close()
+		}
+	}
+
+	async runPreMigrateSnapshot(input: SnapshotInput): Promise<SnapshotResult> {
+		const vpsName = this.config.vpsName
+		const existing = await readState(this.r2, vpsName)
+		if (!existing || existing.state.phase === 'created') {
+			throw new Error(
+				`Invariant: expected deployable state for VPS "${vpsName}"`,
+			)
+		}
+
+		const session = await createSshSession({
+			host: existing.state.tailnetIp,
+			username: 'deploy',
+			privateKey: this.config.credentials.deployPrivateKey,
+			expectedHostKeyFingerprint: existing.state.sshHostKeyFingerprint,
+		})
+
+		try {
+			return await executeSnapshot(session, input)
+		} finally {
+			session.close()
+		}
+	}
+
+	/**
+	 * Resolve the deploy state (host port + tailnet IP + host key) and
+	 * open an SSH session, in the order both `deploy` and
+	 * `prepareRollout` need it. The host port is allocated lazily
+	 * here: if the project doesn't already have a port mapped on this
+	 * VPS, allocate one and persist via `writeState` BEFORE the SSH work
+	 * begins. Re-entrant: re-running through migrate-remote → deploy in
+	 * the same pipeline reuses the same port because `allocateHostPort`
+	 * is idempotent for already-mapped projects.
+	 */
+	private async openRolloutSession(
+		projectName: string,
+		input: DeployInput,
+	): Promise<{
+		readonly session: SshSession
+		readonly hostname: string
+		readonly hostPort: number
+	}> {
+		this.requireImage(input)
+		const vpsName = this.config.vpsName
+		const hostname = resolveDeployDomain(
+			this.config.domain,
+			this.config.environment,
+		)
+
+		const existing = await readState(this.r2, vpsName)
+		if (!existing || existing.state.phase === 'created') {
+			throw new Error(
+				`Invariant: expected deployable state for VPS "${vpsName}"`,
+			)
+		}
+
+		const { port: hostPort, allocated } = allocateHostPort(
+			existing.state.hostPorts,
+			projectName,
+		)
+		if (allocated) {
+			const updated: HcloudProvisionedState | HcloudConvergedState = {
+				...existing.state,
+				hostPorts: {
+					...existing.state.hostPorts,
+					[projectName]: hostPort,
+				},
+			}
+			await writeState(this.r2, vpsName, updated, existing.etag)
+		}
+
+		const session = await createSshSession({
+			host: existing.state.tailnetIp,
+			username: 'deploy',
+			privateKey: this.config.credentials.deployPrivateKey,
+			expectedHostKeyFingerprint: existing.state.sshHostKeyFingerprint,
+		})
+
+		return { session, hostname, hostPort }
+	}
+
+	private requireImage(input: DeployInput): ImageRef {
+		if (!input.image) {
+			throw new Error('image is required for Hetzner VPS deploys')
+		}
+		return input.image
 	}
 
 	teardown(
