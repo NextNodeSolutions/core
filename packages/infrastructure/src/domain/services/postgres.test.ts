@@ -41,8 +41,6 @@ describe('buildPostgresSidecar', () => {
 		const result = buildPostgresSidecar(
 			{
 				mode: 'embedded',
-				migrationsFolder: undefined,
-				migrateCommand: undefined,
 			},
 			'acme-web',
 		)
@@ -65,8 +63,6 @@ describe('buildPostgresSidecar', () => {
 		const result = buildPostgresSidecar(
 			{
 				mode: 'external',
-				migrationsFolder: undefined,
-				migrateCommand: undefined,
 			},
 			'acme-web',
 		)
@@ -125,8 +121,6 @@ describe('buildPostgresBackupSidecar', () => {
 		const result = buildPostgresBackupSidecar(
 			{
 				mode: 'external',
-				migrationsFolder: undefined,
-				migrateCommand: undefined,
 			},
 			'acme-web',
 		)
@@ -138,8 +132,6 @@ describe('buildPostgresBackupSidecar', () => {
 		const result = buildPostgresBackupSidecar(
 			{
 				mode: 'embedded',
-				migrationsFolder: undefined,
-				migrateCommand: undefined,
 			},
 			'acme-web',
 		)
@@ -155,8 +147,6 @@ describe('buildPostgresBackupSidecar', () => {
 		const result = buildPostgresBackupSidecar(
 			{
 				mode: 'embedded',
-				migrationsFolder: undefined,
-				migrateCommand: undefined,
 			},
 			'acme-web',
 		)
@@ -174,8 +164,6 @@ describe('buildPostgresBackupSidecar', () => {
 		const result = buildPostgresBackupSidecar(
 			{
 				mode: 'embedded',
-				migrationsFolder: undefined,
-				migrateCommand: undefined,
 			},
 			'acme-web',
 		)
@@ -188,8 +176,6 @@ describe('buildPostgresBackupSidecar', () => {
 		const result = buildPostgresBackupSidecar(
 			{
 				mode: 'embedded',
-				migrationsFolder: undefined,
-				migrateCommand: undefined,
 			},
 			'acme-web',
 		)
@@ -202,8 +188,6 @@ describe('buildPostgresBackupSidecar', () => {
 		const result = buildPostgresBackupSidecar(
 			{
 				mode: 'embedded',
-				migrationsFolder: undefined,
-				migrateCommand: undefined,
 			},
 			'acme-web',
 		)

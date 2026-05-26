@@ -13,7 +13,6 @@ const PACKAGE_CONFIG: NextNodeConfig = {
 		name: 'my-lib',
 		type: 'package',
 		filter: false,
-		domain: undefined,
 		redirectDomains: [],
 		internal: false,
 	},
@@ -138,8 +137,6 @@ describe('planCommand', () => {
 			services: {
 				postgres: {
 					mode: 'embedded',
-					migrationsFolder: undefined,
-					migrateCommand: undefined,
 				},
 			},
 		}
@@ -157,8 +154,6 @@ describe('planCommand', () => {
 			services: {
 				postgres: {
 					mode: 'embedded',
-					migrationsFolder: undefined,
-					migrateCommand: undefined,
 					checkCommand: 'pnpm prisma migrate diff --exit-code',
 				},
 			},

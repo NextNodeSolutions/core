@@ -10,7 +10,6 @@ const APP_PROJECT: ProjectSection = {
 	name: 'my-app',
 	type: 'app',
 	filter: false,
-	domain: undefined,
 	redirectDomains: [],
 	internal: false,
 }
@@ -18,7 +17,6 @@ const FILTERED_PROJECT: ProjectSection = {
 	name: 'my-monorepo',
 	type: 'app',
 	filter: '@scope/app',
-	domain: undefined,
 	redirectDomains: [],
 	internal: false,
 }

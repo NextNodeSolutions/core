@@ -10,8 +10,6 @@ describe('validatePostgresService', () => {
 		if (!result.ok) return
 		expect(result.section).toEqual({
 			mode: 'embedded',
-			migrationsFolder: undefined,
-			migrateCommand: undefined,
 		})
 	})
 

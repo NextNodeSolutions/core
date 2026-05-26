@@ -37,8 +37,12 @@ export function validatePostgresService(
 		ok: true,
 		section: {
 			mode: modeResult.section,
-			migrationsFolder: migrationsFolderResult.section,
-			migrateCommand: migrateCommandResult.section,
+			...(migrationsFolderResult.section !== undefined && {
+				migrationsFolder: migrationsFolderResult.section,
+			}),
+			...(migrateCommandResult.section !== undefined && {
+				migrateCommand: migrateCommandResult.section,
+			}),
 			...(checkCommandResult.section !== undefined && {
 				checkCommand: checkCommandResult.section,
 			}),

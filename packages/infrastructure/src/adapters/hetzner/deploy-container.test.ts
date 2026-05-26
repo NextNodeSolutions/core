@@ -16,8 +16,6 @@ afterEach(() => {
 
 const POSTGRES_CONFIG: PostgresServiceConfig = {
 	mode: 'embedded',
-	migrationsFolder: undefined,
-	migrateCommand: undefined,
 }
 
 const BASE_INPUT: BringUpInput = {

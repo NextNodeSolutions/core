@@ -221,8 +221,6 @@ describe('renderComposeFile', () => {
 			hostPort: 8080,
 			postgres: {
 				mode: 'embedded',
-				migrationsFolder: undefined,
-				migrateCommand: undefined,
 			},
 			projectName: PROJECT_NAME,
 		})
@@ -249,8 +247,6 @@ describe('renderComposeFile', () => {
 			hostPort: 8080,
 			postgres: {
 				mode: 'embedded',
-				migrationsFolder: undefined,
-				migrateCommand: undefined,
 			},
 			projectName: PROJECT_NAME,
 		})
@@ -265,8 +261,6 @@ describe('renderComposeFile', () => {
 			hostPort: 8080,
 			postgres: {
 				mode: 'external',
-				migrationsFolder: undefined,
-				migrateCommand: undefined,
 			},
 			projectName: PROJECT_NAME,
 		})
@@ -283,8 +277,6 @@ describe('renderComposeFile', () => {
 			hostPort: 8080,
 			postgres: {
 				mode: 'embedded',
-				migrationsFolder: undefined,
-				migrateCommand: undefined,
 			},
 			projectName: PROJECT_NAME,
 		})
@@ -318,8 +310,6 @@ describe('renderComposeFile', () => {
 			hostPort: 8080,
 			postgres: {
 				mode: 'embedded',
-				migrationsFolder: undefined,
-				migrateCommand: undefined,
 			},
 			projectName: PROJECT_NAME,
 		})
@@ -335,8 +325,6 @@ describe('renderComposeFile', () => {
 			volumes: [{ name: 'app-data', mount: '/var/lib/app' }],
 			postgres: {
 				mode: 'embedded',
-				migrationsFolder: undefined,
-				migrateCommand: undefined,
 			},
 			projectName: PROJECT_NAME,
 		})
@@ -361,8 +349,6 @@ describe('renderComposeFile - postgres service wiring', () => {
 			...baseInput,
 			postgres: {
 				mode: 'embedded',
-				migrationsFolder: undefined,
-				migrateCommand: undefined,
 			},
 		})
 		const parsed = parse(result)
@@ -391,8 +377,6 @@ describe('renderComposeFile - postgres service wiring', () => {
 			...baseInput,
 			postgres: {
 				mode: 'external',
-				migrationsFolder: undefined,
-				migrateCommand: undefined,
 			},
 		})
 		const parsed = parse(result)
@@ -406,8 +390,6 @@ describe('renderComposeFile - postgres service wiring', () => {
 			...baseInput,
 			postgres: {
 				mode: 'embedded',
-				migrationsFolder: undefined,
-				migrateCommand: undefined,
 			},
 		})
 		const parsed = parse(result)
@@ -422,8 +404,6 @@ describe('renderComposeFile - postgres service wiring', () => {
 			...baseInput,
 			postgres: {
 				mode: 'external',
-				migrationsFolder: undefined,
-				migrateCommand: undefined,
 			},
 		})
 		const parsed = parse(result)

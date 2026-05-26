@@ -262,8 +262,6 @@ describe('teardownCommand - postgres backup wipe', () => {
 		services: {
 			postgres: {
 				mode: 'embedded',
-				migrationsFolder: undefined,
-				migrateCommand: undefined,
 			},
 		},
 	}

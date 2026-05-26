@@ -88,8 +88,6 @@ export const APP_WITH_POSTGRES: DeployableConfig = {
 	services: {
 		postgres: {
 			mode: 'embedded',
-			migrationsFolder: undefined,
-			migrateCommand: undefined,
 		},
 	},
 	deploy: {
@@ -117,7 +115,6 @@ export const APP_WITH_POSTGRES_CUSTOM_MIGRATE: DeployableConfig = {
 	services: {
 		postgres: {
 			mode: 'embedded',
-			migrationsFolder: undefined,
 			migrateCommand: 'pnpm prisma migrate deploy',
 		},
 	},
@@ -174,7 +171,6 @@ export const STATIC_NO_DOMAIN: DeployableConfig = {
 	project: {
 		type: 'static',
 		name: 'my-site',
-		domain: undefined,
 		redirectDomains: [],
 		filter: false,
 		internal: false,

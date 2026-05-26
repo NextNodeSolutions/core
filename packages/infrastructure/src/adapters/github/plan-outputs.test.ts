@@ -13,7 +13,6 @@ const APP_CONFIG: NextNodeConfig = {
 		name: 'my-app',
 		type: 'app',
 		filter: false,
-		domain: undefined,
 		redirectDomains: [],
 		internal: false,
 	},
@@ -36,7 +35,6 @@ const PACKAGE_CONFIG: NextNodeConfig = {
 		name: 'my-lib',
 		type: 'package',
 		filter: false,
-		domain: undefined,
 		redirectDomains: [],
 		internal: false,
 	},
@@ -52,7 +50,6 @@ const PUBLISHABLE_CONFIG: NextNodeConfig = {
 		name: 'logger',
 		type: 'package',
 		filter: '@nextnode-solutions/logger',
-		domain: undefined,
 		redirectDomains: [],
 		internal: false,
 	},
@@ -144,8 +141,6 @@ describe('writePlanOutputs', () => {
 			services: {
 				postgres: {
 					mode: 'embedded',
-					migrationsFolder: undefined,
-					migrateCommand: undefined,
 				},
 			},
 		}
@@ -302,7 +297,6 @@ describe('writePlanOutputs', () => {
 				name: 'my-site',
 				type: 'static',
 				filter: false,
-				domain: undefined,
 				redirectDomains: [],
 				internal: false,
 			},

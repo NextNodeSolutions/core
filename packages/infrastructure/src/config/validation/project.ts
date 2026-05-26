@@ -114,7 +114,9 @@ export function validateProjectSection(
 			name: nameResult.name,
 			type,
 			filter: isScriptValue(filter) ? filter : false,
-			domain: domainResult.domain,
+			...(domainResult.domain !== undefined && {
+				domain: domainResult.domain,
+			}),
 			redirectDomains: domainResult.redirectDomains,
 			internal: internal === true,
 		},

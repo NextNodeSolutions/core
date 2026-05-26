@@ -79,8 +79,6 @@ describe('resolveServices', () => {
 			services: {
 				postgres: {
 					mode: 'embedded',
-					migrationsFolder: undefined,
-					migrateCommand: undefined,
 				},
 			},
 		}
