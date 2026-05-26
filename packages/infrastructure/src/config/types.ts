@@ -161,9 +161,10 @@ export interface PostgresServiceConfig {
 	// "drizzle" (drizzle-kit's own default `out` value) when omitted.
 	readonly migrationsFolder?: string
 	// Shell command run inside the ephemeral migrate container on the VPS.
-	// Defaults to `node scripts/migrate.js` (the NextNode app template's
-	// drizzle-orm runtime migrator). Override for non-Drizzle stacks
-	// (e.g. `pnpm prisma migrate deploy`).
+	// Defaults to `pnpm drizzle-kit migrate` (platform-native runner that
+	// reads `drizzle.config.ts` for dialect + `dbCredentials.url`, the app's
+	// config picks up the injected `DATABASE_URL`). Override for non-Drizzle
+	// stacks (e.g. `pnpm prisma migrate deploy`).
 	readonly migrateCommand?: string
 	// Shell command run on the GH runner during the quality stage to
 	// validate the local migrations folder (no DB, pure filesystem check).

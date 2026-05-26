@@ -117,7 +117,7 @@ export interface DeployResult {
  * from the same `image` as the app, joining the project's docker network
  * so the embedded postgres sidecar resolves at its compose service name.
  * `migrateCommand` is the shell command the container executes (default
- * `node scripts/migrate.js`, overridable via `[services.postgres].migrate_command`).
+ * `pnpm drizzle-kit migrate`, overridable via `[services.postgres].migrate_command`).
  */
 export interface MigrateInput {
 	readonly projectName: string
@@ -152,10 +152,13 @@ export interface SnapshotResult {
 
 /**
  * Default migrate command used when the project does not override
- * `[services.postgres].migrate_command`. Mirrors the NextNode app
- * template's drizzle-orm runtime migrator entrypoint.
+ * `[services.postgres].migrate_command`. Uses `drizzle-kit migrate` —
+ * the platform-native runner that reads `drizzle.config.ts` (dialect +
+ * `dbCredentials.url`, which the app's config reads from the injected
+ * `DATABASE_URL` env). Zero app-side boilerplate for the dominant case;
+ * non-Drizzle stacks override the field (e.g. `pnpm prisma migrate deploy`).
  */
-export const DEFAULT_MIGRATE_COMMAND = 'node scripts/migrate.js'
+export const DEFAULT_MIGRATE_COMMAND = 'pnpm drizzle-kit migrate'
 
 export interface DeployTarget {
 	readonly name: string

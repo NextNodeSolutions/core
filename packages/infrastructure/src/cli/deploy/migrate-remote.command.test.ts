@@ -177,7 +177,7 @@ describe('migrateRemoteCommand', () => {
 				repository: 'acme/web',
 				tag: 'sha-abc123',
 			},
-			migrateCommand: 'node scripts/migrate.js',
+			migrateCommand: 'pnpm drizzle-kit migrate',
 		})
 	})
 

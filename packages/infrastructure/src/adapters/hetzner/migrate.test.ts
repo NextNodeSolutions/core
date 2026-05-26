@@ -16,7 +16,7 @@ const IMAGE: ImageRef = {
 const BASE_INPUT: MigrateInput = {
 	projectName: 'acme-web',
 	image: IMAGE,
-	migrateCommand: 'node scripts/migrate.js',
+	migrateCommand: 'pnpm drizzle-kit migrate',
 	environment: 'production',
 }
 
@@ -28,13 +28,13 @@ describe('buildMigrateCommand', () => {
 			"docker run --rm --network 'acme-web-production_default'" +
 				" --env-file '/opt/apps/acme-web/production/.env'" +
 				" 'ghcr.io/nextnodesolutions/acme-web:sha-abc1234'" +
-				" sh -c 'node scripts/migrate.js'",
+				" sh -c 'pnpm drizzle-kit migrate'",
 		)
 		expect(fields).toEqual({
 			network: 'acme-web-production_default',
 			envFile: '/opt/apps/acme-web/production/.env',
 			image: IMAGE,
-			migrateCommand: 'node scripts/migrate.js',
+			migrateCommand: 'pnpm drizzle-kit migrate',
 		})
 	})
 
