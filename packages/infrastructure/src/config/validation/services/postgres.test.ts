@@ -89,6 +89,45 @@ describe('validatePostgresService', () => {
 		)
 	})
 
+	it('parses an explicit check_command override', () => {
+		const result = validatePostgresService({
+			mode: 'embedded',
+			check_command: 'pnpm prisma migrate diff --exit-code',
+		})
+
+		expect(result.ok).toBe(true)
+		if (!result.ok) return
+		expect(result.section.checkCommand).toBe(
+			'pnpm prisma migrate diff --exit-code',
+		)
+	})
+
+	it('rejects an empty check_command string', () => {
+		const result = validatePostgresService({
+			mode: 'embedded',
+			check_command: '',
+		})
+
+		expect(result.ok).toBe(false)
+		if (result.ok) return
+		expect(result.errors).toContain(
+			'services.postgres.check_command must be a non-empty string when set',
+		)
+	})
+
+	it('rejects a non-string check_command', () => {
+		const result = validatePostgresService({
+			mode: 'embedded',
+			check_command: 42,
+		})
+
+		expect(result.ok).toBe(false)
+		if (result.ok) return
+		expect(result.errors).toContain(
+			'services.postgres.check_command must be a non-empty string when set',
+		)
+	})
+
 	it('parses a valid external config', () => {
 		const result = validatePostgresService({ mode: 'external' })
 

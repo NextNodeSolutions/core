@@ -147,6 +147,46 @@ describe('buildQualityMatrix', () => {
 		])
 	})
 
+	describe('drizzle-check', () => {
+		const scripts: ScriptsSection = {
+			lint: 'lint',
+			test: 'test',
+			build: 'build',
+		}
+
+		it('adds drizzle-check task with the injected command when drizzleCheckCommand is set', () => {
+			const tasks = buildQualityMatrix(scripts, APP_PROJECT, {
+				...DEV_PIPELINE,
+				drizzleCheckCommand: 'pnpm drizzle-kit check',
+			})
+
+			expect(tasks).toContainEqual({
+				id: 'drizzle-check',
+				name: 'Drizzle Check',
+				cmd: 'pnpm drizzle-kit check',
+			})
+		})
+
+		it('honors a custom drizzleCheckCommand override', () => {
+			const tasks = buildQualityMatrix(scripts, APP_PROJECT, {
+				...DEV_PIPELINE,
+				drizzleCheckCommand: 'pnpm prisma migrate diff --exit-code',
+			})
+
+			expect(tasks).toContainEqual({
+				id: 'drizzle-check',
+				name: 'Drizzle Check',
+				cmd: 'pnpm prisma migrate diff --exit-code',
+			})
+		})
+
+		it('omits the task when drizzleCheckCommand is undefined', () => {
+			const tasks = buildQualityMatrix(scripts, APP_PROJECT, DEV_PIPELINE)
+
+			expect(tasks.find(t => t.id === 'drizzle-check')).toBeUndefined()
+		})
+	})
+
 	describe('prod-gate', () => {
 		const scripts: ScriptsSection = {
 			lint: 'lint',

@@ -5,6 +5,7 @@ export interface PipelineContext {
 	readonly environment: PipelineEnvironment
 	readonly developmentEnabled: boolean
 	readonly prodGateCommand: string
+	readonly drizzleCheckCommand?: string
 }
 
 export interface QualityTask {
@@ -33,6 +34,14 @@ export function buildQualityMatrix(
 			id: 'test',
 			name: 'Test',
 			cmd: buildCommand(scripts.test, project.filter),
+		})
+	}
+
+	if (pipeline.drizzleCheckCommand) {
+		tasks.push({
+			id: 'drizzle-check',
+			name: 'Drizzle Check',
+			cmd: pipeline.drizzleCheckCommand,
 		})
 	}
 

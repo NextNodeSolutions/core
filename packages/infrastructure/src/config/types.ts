@@ -165,6 +165,11 @@ export interface PostgresServiceConfig {
 	// drizzle-orm runtime migrator). Override for non-Drizzle stacks
 	// (e.g. `pnpm prisma migrate deploy`).
 	readonly migrateCommand: string | undefined
+	// Shell command run on the GH runner during the quality stage to
+	// validate the local migrations folder (no DB, pure filesystem check).
+	// CLI default is `pnpm drizzle-kit check`; override for non-Drizzle
+	// stacks (e.g. `pnpm prisma migrate diff --exit-code`).
+	readonly checkCommand?: string
 }
 
 /**
