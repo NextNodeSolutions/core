@@ -23,13 +23,15 @@ const logger = createLogger()
 const ENV_GITHUB_OWNER = 'GITHUB_REPOSITORY_OWNER'
 const PASSWORD_BYTES = 32
 
-export const POSTGRES_PASSWORD_ENV_SECRET = 'POSTGRES_PASSWORD'
-
 export function generatePgExporterPassword(): string {
 	return randomBytes(PASSWORD_BYTES).toString('base64')
 }
 
 export function generatePostgresPassword(): string {
+	return randomBytes(PASSWORD_BYTES).toString('base64')
+}
+
+export function generateJwtSecret(): string {
 	return randomBytes(PASSWORD_BYTES).toString('base64')
 }
 
@@ -120,14 +122,14 @@ export async function ensurePostgresPasswordSecret(
 	environment: AppEnvironment,
 	adapter: EnvSecretsAdapter = createEnvSecretsAdapter(),
 ): Promise<void> {
-	if (repoSecrets[POSTGRES_PASSWORD_ENV_SECRET]) {
+	if (repoSecrets['POSTGRES_PASSWORD']) {
 		logger.info(
 			`supabase POSTGRES_PASSWORD already in ALL_SECRETS — skipping`,
 		)
 		return
 	}
 	await pushEnvSecret(
-		POSTGRES_PASSWORD_ENV_SECRET,
+		'POSTGRES_PASSWORD',
 		generatePostgresPassword(),
 		owner,
 		repo,
@@ -136,6 +138,37 @@ export async function ensurePostgresPasswordSecret(
 	)
 	logger.info(
 		`supabase POSTGRES_PASSWORD persisted as env-secret on ${owner}/${repo} (${environment})`,
+	)
+}
+
+/**
+ * Same idempotency contract as `ensurePostgresPasswordSecret`. JWT_SECRET
+ * is the HS256 signing key used by gotrue/realtime/storage and to derive
+ * ANON_KEY / SERVICE_ROLE_KEY at deploy time — must stay stable across
+ * deploys, hence the skip-on-present check is load-bearing (rotating
+ * would invalidate every signed token).
+ */
+export async function ensureJwtSecret(
+	repoSecrets: Readonly<Record<string, string>>,
+	owner: string,
+	repo: string,
+	environment: AppEnvironment,
+	adapter: EnvSecretsAdapter = createEnvSecretsAdapter(),
+): Promise<void> {
+	if (repoSecrets['JWT_SECRET']) {
+		logger.info(`supabase JWT_SECRET already in ALL_SECRETS — skipping`)
+		return
+	}
+	await pushEnvSecret(
+		'JWT_SECRET',
+		generateJwtSecret(),
+		owner,
+		repo,
+		environment,
+		adapter,
+	)
+	logger.info(
+		`supabase JWT_SECRET persisted as env-secret on ${owner}/${repo} (${environment})`,
 	)
 }
 
@@ -149,6 +182,12 @@ export function createSupabaseService(ctx: ServiceFactoryContext): Service {
 				ctx.repoSecrets,
 			)
 			await ensurePostgresPasswordSecret(
+				ctx.repoSecrets,
+				ctx.repository.owner,
+				ctx.repository.name,
+				ctx.environment,
+			)
+			await ensureJwtSecret(
 				ctx.repoSecrets,
 				ctx.repository.owner,
 				ctx.repository.name,

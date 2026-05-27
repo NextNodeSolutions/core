@@ -5,8 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
 	createSupabaseService,
+	ensureJwtSecret,
 	ensurePgExporterPasswordSecret,
 	ensurePostgresPasswordSecret,
+	generateJwtSecret,
 	generatePgExporterPassword,
 	generatePostgresPassword,
 	rotatePgExporterPasswordSecret,
@@ -194,6 +196,92 @@ describe('ensurePostgresPasswordSecret', () => {
 
 		await expect(
 			ensurePostgresPasswordSecret(
+				{},
+				'NextNodeSolutions',
+				'core',
+				'production',
+				adapter,
+			),
+		).rejects.toThrow(/gh CLI unavailable/)
+		expect(adapter.setRepoEnvSecret).not.toHaveBeenCalled()
+	})
+})
+
+describe('generateJwtSecret', () => {
+	it('returns a 32-byte secret base64-encoded (44 chars including padding)', () => {
+		const secret = generateJwtSecret()
+		expect(secret).toHaveLength(44)
+		expect(secret).toMatch(/^[A-Za-z0-9+/]+={0,2}$/)
+		expect(Buffer.from(secret, 'base64')).toHaveLength(32)
+	})
+
+	it('produces a different value on each call', () => {
+		expect(generateJwtSecret()).not.toBe(generateJwtSecret())
+	})
+})
+
+describe('ensureJwtSecret', () => {
+	it('skips when JWT_SECRET is already in ALL_SECRETS (no gh call)', async () => {
+		const adapter = makeEnvAdapter()
+
+		await ensureJwtSecret(
+			{ JWT_SECRET: 'existing' },
+			'NextNodeSolutions',
+			'core',
+			'production',
+			adapter,
+		)
+
+		expect(adapter.ghAvailable).not.toHaveBeenCalled()
+		expect(adapter.setRepoEnvSecret).not.toHaveBeenCalled()
+	})
+
+	it('persists a fresh 32-byte b64 secret as an env-secret (repo + env scope, no project suffix)', async () => {
+		const adapter = makeEnvAdapter()
+
+		await ensureJwtSecret(
+			{},
+			'NextNodeSolutions',
+			'core',
+			'production',
+			adapter,
+		)
+
+		expect(adapter.setRepoEnvSecret).toHaveBeenCalledTimes(1)
+		const [name, value, owner, repo, environment] = vi.mocked(
+			adapter.setRepoEnvSecret,
+		).mock.calls[0]!
+		expect(name).toBe('JWT_SECRET')
+		expect(owner).toBe('NextNodeSolutions')
+		expect(repo).toBe('core')
+		expect(environment).toBe('production')
+		expect(value).toHaveLength(44)
+		expect(Buffer.from(value, 'base64')).toHaveLength(32)
+	})
+
+	it('scopes to the development environment when called from a dev deploy', async () => {
+		const adapter = makeEnvAdapter()
+
+		await ensureJwtSecret(
+			{},
+			'NextNodeSolutions',
+			'core',
+			'development',
+			adapter,
+		)
+
+		const [, , , , environment] = vi.mocked(adapter.setRepoEnvSecret).mock
+			.calls[0]!
+		expect(environment).toBe('development')
+	})
+
+	it('throws when gh CLI is unavailable rather than silently dropping the secret', async () => {
+		const adapter = makeEnvAdapter({
+			ghAvailable: vi.fn().mockResolvedValue(false),
+		})
+
+		await expect(
+			ensureJwtSecret(
 				{},
 				'NextNodeSolutions',
 				'core',
