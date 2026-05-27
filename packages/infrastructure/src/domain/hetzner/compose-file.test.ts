@@ -1,5 +1,15 @@
 import type { ImageRef } from '#/domain/deploy/target.ts'
 import {
+	POSTGRES_EXPORTER_DSN_ENV,
+	POSTGRES_EXPORTER_IMAGE,
+	POSTGRES_EXPORTER_PASSWORD_ENV,
+	POSTGRES_EXPORTER_PORT,
+	POSTGRES_EXPORTER_SERVICE_NAME,
+	POSTGRES_EXPORTER_USER,
+	TAILSCALE_IP_ENV,
+	buildPostgresExporterDsn,
+} from '#/domain/services/postgres-exporter.ts'
+import {
 	POSTGRES_DATA_DIR,
 	POSTGRES_DATA_VOLUME,
 } from '#/domain/services/postgres.ts'
@@ -430,7 +440,7 @@ describe('renderComposeFile - supabase service wiring', () => {
 		postgres: undefined,
 	} as const
 
-	it('renders the full self-host stack (db + auth + realtime + storage + kong + studio) when services.supabase is declared', () => {
+	it('renders the full self-host stack (db + auth + realtime + storage + kong + studio) plus the postgres-exporter sidecar when services.supabase is declared', () => {
 		const result = renderComposeFile({
 			...baseInput,
 			supabase: {},
@@ -445,6 +455,7 @@ describe('renderComposeFile - supabase service wiring', () => {
 			'storage',
 			'kong',
 			'studio',
+			POSTGRES_EXPORTER_SERVICE_NAME,
 		])
 	})
 
@@ -573,10 +584,95 @@ describe('renderComposeFile - supabase service wiring', () => {
 			'storage',
 			'kong',
 			'studio',
+			POSTGRES_EXPORTER_SERVICE_NAME,
 		])
 		expect(parsed.volumes).toEqual({
 			[POSTGRES_DATA_VOLUME]: {},
 			[SUPABASE_DB_DATA_VOLUME]: {},
 		})
+	})
+})
+
+describe('renderComposeFile - postgres-exporter sidecar wiring', () => {
+	const baseInput = {
+		image: IMAGE,
+		hostPort: 8080,
+		projectName: PROJECT_NAME,
+		postgres: undefined,
+	} as const
+
+	it('omits the postgres-exporter sidecar when services.supabase is not declared', () => {
+		const result = renderComposeFile(baseInput)
+		const parsed = parse(result)
+
+		expect(parsed.services).not.toHaveProperty(
+			POSTGRES_EXPORTER_SERVICE_NAME,
+		)
+	})
+
+	it('pins the exporter sidecar to the module image constant', () => {
+		const result = renderComposeFile({
+			...baseInput,
+			supabase: {},
+		})
+		const parsed = parse(result)
+
+		expect(parsed.services[POSTGRES_EXPORTER_SERVICE_NAME].image).toBe(
+			POSTGRES_EXPORTER_IMAGE,
+		)
+	})
+
+	it('binds the exporter port to the Tailscale interface via the TAILSCALE_IP env var', () => {
+		const result = renderComposeFile({
+			...baseInput,
+			supabase: {},
+		})
+		const parsed = parse(result)
+
+		expect(parsed.services[POSTGRES_EXPORTER_SERVICE_NAME].ports).toEqual([
+			`\${${TAILSCALE_IP_ENV}}:${String(POSTGRES_EXPORTER_PORT)}:${String(POSTGRES_EXPORTER_PORT)}`,
+		])
+	})
+
+	it('passes the DSN through the documented DATA_SOURCE_NAME env channel', () => {
+		const result = renderComposeFile({
+			...baseInput,
+			supabase: {},
+		})
+		const parsed = parse(result)
+
+		expect(
+			parsed.services[POSTGRES_EXPORTER_SERVICE_NAME].environment[
+				POSTGRES_EXPORTER_DSN_ENV
+			],
+		).toBe(
+			buildPostgresExporterDsn(`\${${POSTGRES_EXPORTER_PASSWORD_ENV}}`),
+		)
+	})
+
+	it('declares the exporter as depending on the supabase db service', () => {
+		const result = renderComposeFile({
+			...baseInput,
+			supabase: {},
+		})
+		const parsed = parse(result)
+
+		expect(
+			parsed.services[POSTGRES_EXPORTER_SERVICE_NAME].depends_on,
+		).toEqual(['db'])
+	})
+
+	it('keeps the exporter authenticated as the postgres_exporter role inside the DSN', () => {
+		const result = renderComposeFile({
+			...baseInput,
+			supabase: {},
+		})
+		const parsed = parse(result)
+
+		const dsn =
+			parsed.services[POSTGRES_EXPORTER_SERVICE_NAME].environment[
+				POSTGRES_EXPORTER_DSN_ENV
+			]
+		expect(dsn).toContain(`${POSTGRES_EXPORTER_USER}:`)
 	})
 })

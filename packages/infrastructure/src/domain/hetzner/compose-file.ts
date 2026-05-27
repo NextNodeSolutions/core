@@ -3,6 +3,11 @@ import type {
 	SupabaseServiceConfig,
 } from '#/config/types.ts'
 import type { ImageRef } from '#/domain/deploy/target.ts'
+import type { PostgresExporterSidecarService } from '#/domain/services/postgres-exporter.ts'
+import {
+	POSTGRES_EXPORTER_SERVICE_NAME,
+	buildPostgresExporterSidecar,
+} from '#/domain/services/postgres-exporter.ts'
 import type {
 	PostgresBackupSidecarService,
 	PostgresSidecarService,
@@ -71,6 +76,7 @@ type ComposeServiceLike =
 	| PostgresSidecarService
 	| PostgresBackupSidecarService
 	| SupabaseService
+	| PostgresExporterSidecarService
 
 interface ComposeConfig {
 	readonly services: Readonly<Record<string, ComposeServiceLike>>
@@ -98,6 +104,9 @@ export function renderComposeFile(input: ComposeFileInput): string {
 		? buildPostgresBackupSidecar(input.postgres, input.projectName)
 		: null
 	const supabaseStack = input.supabase ? buildSupabaseStack() : null
+	const postgresExporterSidecar = input.supabase
+		? buildPostgresExporterSidecar()
+		: null
 
 	const topLevelVolumes = buildTopLevelVolumes(
 		userVolumes,
@@ -130,6 +139,9 @@ export function renderComposeFile(input: ComposeFileInput): string {
 				[POSTGRES_BACKUP_SERVICE_NAME]: postgresBackupSidecar,
 			}),
 			...supabaseStack,
+			...(postgresExporterSidecar && {
+				[POSTGRES_EXPORTER_SERVICE_NAME]: postgresExporterSidecar,
+			}),
 		},
 		...(topLevelVolumes && { volumes: topLevelVolumes }),
 	}
