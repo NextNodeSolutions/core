@@ -27,6 +27,7 @@ describe('resolveServices', () => {
 			resolveServices({
 				config: STATIC_WITH_DOMAIN,
 				environment: 'production',
+				repository: { owner: 'NextNodeSolutions', name: 'core' },
 				cfToken: 'cf-token',
 				infraStorage: null,
 				repoSecrets: {},
@@ -39,6 +40,7 @@ describe('resolveServices', () => {
 			resolveServices({
 				config: APP_WITH_DOMAIN,
 				environment: 'production',
+				repository: { owner: 'NextNodeSolutions', name: 'core' },
 				cfToken: 'cf-token',
 				infraStorage: INFRA_STORAGE,
 				repoSecrets: {},
@@ -50,6 +52,7 @@ describe('resolveServices', () => {
 		const services = resolveServices({
 			config: withR2Service(STATIC_WITH_DOMAIN, ['uploads', 'media']),
 			environment: 'production',
+			repository: { owner: 'NextNodeSolutions', name: 'core' },
 			cfToken: 'cf-token',
 			infraStorage: INFRA_STORAGE,
 			repoSecrets: {},
@@ -64,6 +67,7 @@ describe('resolveServices', () => {
 			resolveServices({
 				config: withR2Service(STATIC_WITH_DOMAIN, ['uploads']),
 				environment: 'production',
+				repository: { owner: 'NextNodeSolutions', name: 'core' },
 				cfToken: 'cf-token',
 				infraStorage: null,
 				repoSecrets: {},
@@ -86,6 +90,7 @@ describe('resolveServices', () => {
 		const services = resolveServices({
 			config: configWithPostgres,
 			environment: 'production',
+			repository: { owner: 'NextNodeSolutions', name: 'core' },
 			cfToken: 'cf-token',
 			infraStorage: INFRA_STORAGE,
 			repoSecrets: { POSTGRES_PASSWORD: 's3cret' },

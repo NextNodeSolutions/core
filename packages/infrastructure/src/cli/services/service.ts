@@ -1,3 +1,4 @@
+import type { GithubRepository } from '#/cli/env.ts'
 import type { ServiceName, ServicesConfig } from '#/config/types.ts'
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
@@ -37,6 +38,7 @@ export interface Service {
 export interface ServiceFactoryContext {
 	readonly projectName: string
 	readonly environment: AppEnvironment
+	readonly repository: GithubRepository
 	readonly cfToken: string
 	readonly infraStorage: InfraStorageRuntimeConfig | null
 	readonly repoSecrets: Readonly<Record<string, string>>

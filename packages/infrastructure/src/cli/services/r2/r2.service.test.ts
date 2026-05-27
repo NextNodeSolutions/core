@@ -24,6 +24,7 @@ const INFRA_STORAGE: InfraStorageRuntimeConfig = {
 const CTX: ServiceFactoryContext = {
 	projectName: 'myapp',
 	environment: 'production',
+	repository: { owner: 'NextNodeSolutions', name: 'core' },
 	cfToken: 'cf-token',
 	infraStorage: INFRA_STORAGE,
 	repoSecrets: {},

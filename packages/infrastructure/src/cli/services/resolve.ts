@@ -1,3 +1,4 @@
+import type { GithubRepository } from '#/cli/env.ts'
 import type { DeployableConfig } from '#/config/types.ts'
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
@@ -8,6 +9,7 @@ import type { Service, ServiceFactoryContext } from './service.ts'
 export interface ResolveServicesInput {
 	readonly config: DeployableConfig
 	readonly environment: AppEnvironment
+	readonly repository: GithubRepository
 	readonly cfToken: string
 	readonly infraStorage: InfraStorageRuntimeConfig | null
 	readonly repoSecrets: Readonly<Record<string, string>>
@@ -19,6 +21,7 @@ export function resolveServices(
 	const ctx: ServiceFactoryContext = {
 		projectName: input.config.project.name,
 		environment: input.environment,
+		repository: input.repository,
 		cfToken: input.cfToken,
 		infraStorage: input.infraStorage,
 		repoSecrets: input.repoSecrets,

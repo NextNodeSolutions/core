@@ -86,6 +86,7 @@ describe('migrateRemoteCommand', () => {
 		vi.stubEnv('PIPELINE_ENVIRONMENT', 'production')
 		vi.stubEnv('CLOUDFLARE_ACCOUNT_ID', 'acct-123')
 		vi.stubEnv('CLOUDFLARE_API_TOKEN', 'cf-token')
+		vi.stubEnv('GITHUB_REPOSITORY', 'NextNodeSolutions/core')
 		vi.stubEnv('HETZNER_API_TOKEN', 'hcloud-token')
 		vi.stubEnv(
 			'DEPLOY_SSH_PRIVATE_KEY_B64',

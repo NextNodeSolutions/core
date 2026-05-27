@@ -30,6 +30,7 @@ function makeCtx(
 	return {
 		projectName: 'myapp',
 		environment: 'production',
+		repository: { owner: 'NextNodeSolutions', name: 'core' },
 		cfToken: 'cf-token',
 		infraStorage,
 		repoSecrets,

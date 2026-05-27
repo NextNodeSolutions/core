@@ -14,6 +14,22 @@ export function requireB64Env(name: string): string {
 	return Buffer.from(requireEnv(name), 'base64').toString('utf8')
 }
 
+export interface GithubRepository {
+	readonly owner: string
+	readonly name: string
+}
+
+export function requireGithubRepository(): GithubRepository {
+	const value = requireEnv('GITHUB_REPOSITORY')
+	const [owner, name] = value.split('/')
+	if (!owner || !name) {
+		throw new Error(
+			`GITHUB_REPOSITORY must be in "owner/repo" format (got "${value}")`,
+		)
+	}
+	return { owner, name }
+}
+
 // Unix env-var idiom: a variable is opt-in by presence, not by "true/false".
 // Set TEARDOWN_WITH_VOLUMES=1 (or anything non-empty) to enable; leave it
 // unset to disable. Same convention as CI, DEBUG, FORCE_COLOR.

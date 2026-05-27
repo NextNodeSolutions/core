@@ -1,3 +1,4 @@
+import type { EnvSecretsAdapter } from '#/adapters/github/env-secrets.ts'
 import type { OrgSecretsAdapter } from '#/adapters/github/org-secrets.ts'
 import type { ServiceFactoryContext } from '#/cli/services/service.ts'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -5,7 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
 	createSupabaseService,
 	ensurePgExporterPasswordSecret,
+	ensurePostgresPasswordSecret,
 	generatePgExporterPassword,
+	generatePostgresPassword,
 	rotatePgExporterPasswordSecret,
 	supabaseServiceDefinition,
 } from './supabase.service.ts'
@@ -17,6 +20,7 @@ function makeCtx(
 	return {
 		projectName,
 		environment: 'production',
+		repository: { owner: 'NextNodeSolutions', name: 'core' },
 		cfToken: 'cf-token',
 		infraStorage: null,
 		repoSecrets,
@@ -29,6 +33,16 @@ function makeAdapter(
 	return {
 		ghAvailable: vi.fn().mockResolvedValue(true),
 		setOrgSecret: vi.fn().mockResolvedValue(undefined),
+		...overrides,
+	}
+}
+
+function makeEnvAdapter(
+	overrides: Partial<EnvSecretsAdapter> = {},
+): EnvSecretsAdapter {
+	return {
+		ghAvailable: vi.fn().mockResolvedValue(true),
+		setRepoEnvSecret: vi.fn().mockResolvedValue(undefined),
 		...overrides,
 	}
 }
@@ -102,6 +116,92 @@ describe('ensurePgExporterPasswordSecret', () => {
 			ensurePgExporterPasswordSecret('myapp', {}, adapter),
 		).rejects.toThrow(/gh CLI unavailable/)
 		expect(adapter.setOrgSecret).not.toHaveBeenCalled()
+	})
+})
+
+describe('generatePostgresPassword', () => {
+	it('returns a 32-byte secret base64-encoded (44 chars including padding)', () => {
+		const password = generatePostgresPassword()
+		expect(password).toHaveLength(44)
+		expect(password).toMatch(/^[A-Za-z0-9+/]+={0,2}$/)
+		expect(Buffer.from(password, 'base64')).toHaveLength(32)
+	})
+
+	it('produces a different value on each call', () => {
+		expect(generatePostgresPassword()).not.toBe(generatePostgresPassword())
+	})
+})
+
+describe('ensurePostgresPasswordSecret', () => {
+	it('skips when POSTGRES_PASSWORD is already in ALL_SECRETS (no gh call)', async () => {
+		const adapter = makeEnvAdapter()
+
+		await ensurePostgresPasswordSecret(
+			{ POSTGRES_PASSWORD: 'existing' },
+			'NextNodeSolutions',
+			'core',
+			'production',
+			adapter,
+		)
+
+		expect(adapter.ghAvailable).not.toHaveBeenCalled()
+		expect(adapter.setRepoEnvSecret).not.toHaveBeenCalled()
+	})
+
+	it('persists a fresh 32-byte b64 password as an env-secret (repo + env scope, no project suffix)', async () => {
+		const adapter = makeEnvAdapter()
+
+		await ensurePostgresPasswordSecret(
+			{},
+			'NextNodeSolutions',
+			'core',
+			'production',
+			adapter,
+		)
+
+		expect(adapter.setRepoEnvSecret).toHaveBeenCalledTimes(1)
+		const [name, value, owner, repo, environment] = vi.mocked(
+			adapter.setRepoEnvSecret,
+		).mock.calls[0]!
+		expect(name).toBe('POSTGRES_PASSWORD')
+		expect(owner).toBe('NextNodeSolutions')
+		expect(repo).toBe('core')
+		expect(environment).toBe('production')
+		expect(value).toHaveLength(44)
+		expect(Buffer.from(value, 'base64')).toHaveLength(32)
+	})
+
+	it('scopes to the development environment when called from a dev deploy', async () => {
+		const adapter = makeEnvAdapter()
+
+		await ensurePostgresPasswordSecret(
+			{},
+			'NextNodeSolutions',
+			'core',
+			'development',
+			adapter,
+		)
+
+		const [, , , , environment] = vi.mocked(adapter.setRepoEnvSecret).mock
+			.calls[0]!
+		expect(environment).toBe('development')
+	})
+
+	it('throws when gh CLI is unavailable rather than silently dropping the password', async () => {
+		const adapter = makeEnvAdapter({
+			ghAvailable: vi.fn().mockResolvedValue(false),
+		})
+
+		await expect(
+			ensurePostgresPasswordSecret(
+				{},
+				'NextNodeSolutions',
+				'core',
+				'production',
+				adapter,
+			),
+		).rejects.toThrow(/gh CLI unavailable/)
+		expect(adapter.setRepoEnvSecret).not.toHaveBeenCalled()
 	})
 })
 
