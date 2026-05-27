@@ -4,7 +4,10 @@ import type {
 	ServiceFactoryContext,
 } from '#/cli/services/service.ts'
 import type { R2ServiceConfig } from '#/config/types.ts'
-import { buildR2ServiceEnv } from '#/domain/services/r2.ts'
+import {
+	buildR2ServiceEnv,
+	computeR2ServiceAliases,
+} from '#/domain/services/r2.ts'
 import type { ServiceEnv } from '#/domain/services/service.ts'
 
 import { ensureR2Service } from './ensure.ts'
@@ -42,11 +45,19 @@ export function createR2Service(
 	}
 }
 
+/**
+ * The R2 service runs whenever any alias is required — either declared
+ * explicitly via `[services.r2]` or pulled in implicitly by another
+ * service (currently `[services.supabase]`, which adds the `backups`
+ * alias). The single token created in `ensureR2Service` covers every
+ * alias, so the implicit and explicit buckets share one credential
+ * lifecycle.
+ */
 export const r2ServiceDefinition: ServiceDefinition<'r2'> = {
 	name: 'r2',
 	build(services, ctx) {
-		const config = services.r2
-		if (config === undefined) return null
-		return createR2Service(ctx, config)
+		const aliases = computeR2ServiceAliases(services)
+		if (aliases.length === 0) return null
+		return createR2Service(ctx, { buckets: aliases })
 	},
 }
