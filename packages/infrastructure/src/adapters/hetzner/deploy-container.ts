@@ -143,6 +143,7 @@ export async function stageRollout(
 			volumes: input.volumes,
 			projectName: input.projectName,
 			postgres: input.postgres,
+			environment: input.environment,
 		}),
 	)
 

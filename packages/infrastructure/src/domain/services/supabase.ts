@@ -92,6 +92,120 @@ export interface SupabaseService {
 
 export type SupabaseStack = Readonly<Record<string, SupabaseService>>
 
+/** Compose service name for the supabase backup sidecar. */
+export const SUPABASE_BACKUP_SERVICE_NAME = 'supabase-backup'
+
+/**
+ * Image the backup sidecar runs. `postgres:17-alpine` ships `pg_dump`
+ * from the same PG 17 family as SUPABASE_POSTGRES_IMAGE — minor mismatches
+ * are tolerated by libpq; major mismatches are not. The alpine variant
+ * keeps the pull small; the entrypoint installs `aws-cli` at startup
+ * (one-shot per container lifetime under `restart: unless-stopped`),
+ * trading a few seconds of cold-start for a smaller base image.
+ */
+export const SUPABASE_BACKUP_IMAGE = 'postgres:17-alpine'
+
+/**
+ * Seconds between successive backups inside the sidecar loop. 86_400 = 24h
+ * = daily. The loop is a plain `while true; … sleep 86400` — adding cron
+ * would require a second process inside the container and another package
+ * install, both for zero functional gain at the daily cadence.
+ */
+export const SUPABASE_BACKUP_INTERVAL_SECONDS = 86_400
+
+/**
+ * Command fragments embedded in the backup script. Kept module-level so
+ * every line in `SUPABASE_BACKUP_SCRIPT` is either a single-quoted string
+ * (pure shell, `${var}` survives untouched) or a template literal that
+ * only carries TS substitutions — no `\${...}` escape juggling anywhere.
+ */
+const PG_DUMP_COMMAND = `pg_dump -h ${SUPABASE_DB_SERVICE_NAME} -U postgres -d ${SUPABASE_DEFAULT_DATABASE}`
+const S3_UPLOAD_COMMAND =
+	'aws s3 cp - "s3://${BUCKET}/${key}" --endpoint-url "${ENDPOINT}"'
+
+/**
+ * Entrypoint shell script the backup sidecar runs. Constant at module load
+ * time: every value that varies per-deploy (project, env, R2 credentials,
+ * bucket, endpoint, postgres password) is read from a shell env var the
+ * `environment:` block populates. Module-level TS constants (db host, db
+ * name, interval seconds) are interpolated once via the command fragments
+ * — no per-call rendering.
+ *
+ * Filename pattern: `pg_dump_<project>_<env>_<YYYYMMDDTHHMMSSZ>.sql.gz`.
+ * The backup tracker (monitoring P4) parses project and env directly from
+ * the key without listing-time lookups.
+ *
+ * Errors do not abort the loop — `pg_dump | gzip | aws s3 cp` runs inside
+ * an `if`, so a transient R2 outage or db blip logs to stderr but the
+ * sidecar tries again the next day. `set -euo pipefail` still propagates
+ * inside the pipeline, so an `aws s3 cp` failure after a successful
+ * `pg_dump` trips the failure branch.
+ */
+const SUPABASE_BACKUP_SCRIPT = [
+	'set -euo pipefail',
+	'apk add --no-cache aws-cli ca-certificates >/dev/null',
+	'while true; do',
+	'  ts=$(date -u +%Y%m%dT%H%M%SZ)',
+	'  key="pg_dump_${PROJECT}_${ENV}_${ts}.sql.gz"',
+	`  if ${PG_DUMP_COMMAND} | gzip | ${S3_UPLOAD_COMMAND}; then`,
+	'    echo "[supabase-backup] uploaded ${key}"',
+	'  else',
+	'    echo "[supabase-backup] backup failed at ${ts}" >&2',
+	'  fi',
+	`  sleep ${String(SUPABASE_BACKUP_INTERVAL_SECONDS)}`,
+	'done',
+	'',
+].join('\n')
+
+export interface SupabaseBackupSidecarService {
+	readonly image: string
+	readonly restart: string
+	readonly depends_on: ReadonlyArray<string>
+	readonly environment: Readonly<Record<string, string>>
+	readonly entrypoint: ReadonlyArray<string>
+}
+
+/**
+ * Build the compose sidecar that takes a daily `pg_dump` of the Supabase
+ * postgres cluster and uploads the gzipped output to the project's R2
+ * `backups` bucket. The bucket is the `backups` alias appended to every
+ * supabase project's `[services.r2]` block (see `appendBackupsR2Alias`);
+ * its physical name + credentials reach the sidecar through the
+ * `BACKUP_R2_*` env vars that P7-13 will populate via
+ * `createSupabaseService.loadEnv()`.
+ *
+ * The image is pinned via SUPABASE_BACKUP_IMAGE (postgres:17-alpine) so
+ * the bundled `pg_dump` matches the running supabase/postgres major.
+ * The `environment:` block bridges JS-time values (project, env) and
+ * compose-interpolation values (R2 + postgres creds) into the shell
+ * env vars `SUPABASE_BACKUP_SCRIPT` reads — keeping the script itself a
+ * module constant.
+ *
+ * Pure: no IO, no env reads. The caller plugs the returned shape into
+ * the compose-file orchestrator.
+ */
+export function buildSupabaseBackupSidecar(
+	projectName: string,
+	environment: string,
+): SupabaseBackupSidecarService {
+	return {
+		image: SUPABASE_BACKUP_IMAGE,
+		restart: 'unless-stopped',
+		depends_on: [SUPABASE_DB_SERVICE_NAME],
+		environment: {
+			AWS_ACCESS_KEY_ID: '${BACKUP_R2_ACCESS_KEY_ID}',
+			AWS_SECRET_ACCESS_KEY: '${BACKUP_R2_SECRET_ACCESS_KEY}',
+			AWS_DEFAULT_REGION: 'auto',
+			PGPASSWORD: '${POSTGRES_PASSWORD}',
+			BUCKET: '${BACKUP_R2_BUCKET}',
+			ENDPOINT: '${BACKUP_R2_ENDPOINT}',
+			PROJECT: projectName,
+			ENV: environment,
+		},
+		entrypoint: ['sh', '-c', SUPABASE_BACKUP_SCRIPT],
+	}
+}
+
 /**
  * Build the Supabase self-host compose stack: db + auth + realtime +
  * storage + kong + studio. Service names match the upstream supabase

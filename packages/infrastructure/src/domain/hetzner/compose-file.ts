@@ -21,12 +21,15 @@ import {
 	buildPostgresSidecar,
 } from '#/domain/services/postgres.ts'
 import type {
+	SupabaseBackupSidecarService,
 	SupabaseService,
 	SupabaseStack,
 } from '#/domain/services/supabase.ts'
 import {
+	SUPABASE_BACKUP_SERVICE_NAME,
 	SUPABASE_DB_DATA_VOLUME,
 	SUPABASE_DB_SERVICE_NAME,
+	buildSupabaseBackupSidecar,
 	buildSupabaseStack,
 } from '#/domain/services/supabase.ts'
 import { stringify } from 'yaml'
@@ -57,6 +60,7 @@ export interface ComposeFileInput {
 	readonly postgres: PostgresServiceConfig | undefined
 	readonly supabase?: SupabaseServiceConfig
 	readonly projectName: string
+	readonly environment: string
 }
 
 export function formatImageRef(image: ImageRef): string {
@@ -81,6 +85,7 @@ type ComposeServiceLike =
 	| PostgresSidecarService
 	| PostgresBackupSidecarService
 	| SupabaseService
+	| SupabaseBackupSidecarService
 	| PostgresExporterSidecarService
 
 interface ComposeConfig {
@@ -116,25 +121,56 @@ function buildTopLevelVolumes(
 	return Object.keys(result).length ? result : undefined
 }
 
+/**
+ * Build the postgres group (sidecar + backup) for the compose file.
+ * Returns `null` when `mode = external` — the build helpers also gate on
+ * mode, so this central check keeps the caller free of the per-sidecar
+ * null fan-out and lets the spread into `services` stay one-liner clean.
+ */
+function buildPostgresServiceGroup(
+	config: PostgresServiceConfig,
+	projectName: string,
+): Readonly<Record<string, ComposeServiceLike>> | null {
+	const sidecar = buildPostgresSidecar(config, projectName)
+	const backup = buildPostgresBackupSidecar(config, projectName)
+	if (sidecar === null || backup === null) return null
+	return {
+		[POSTGRES_SIDECAR_SERVICE_NAME]: sidecar,
+		[POSTGRES_BACKUP_SERVICE_NAME]: backup,
+	}
+}
+
+/**
+ * Build the supabase group (six-service stack + postgres-exporter +
+ * backup sidecar) for the compose file. Always non-null when called —
+ * `[services.supabase]` has no mode switch like postgres does.
+ */
+function buildSupabaseServiceGroup(
+	projectName: string,
+	environment: string,
+): Readonly<Record<string, ComposeServiceLike>> {
+	return {
+		...withPostgresExporterInitMount(buildSupabaseStack()),
+		[POSTGRES_EXPORTER_SERVICE_NAME]: buildPostgresExporterSidecar(),
+		[SUPABASE_BACKUP_SERVICE_NAME]: buildSupabaseBackupSidecar(
+			projectName,
+			environment,
+		),
+	}
+}
+
 export function renderComposeFile(input: ComposeFileInput): string {
 	const userVolumes = input.volumes?.length ? input.volumes : undefined
-	const postgresSidecar = input.postgres
-		? buildPostgresSidecar(input.postgres, input.projectName)
+	const postgres = input.postgres
+		? buildPostgresServiceGroup(input.postgres, input.projectName)
 		: null
-	const postgresBackupSidecar = input.postgres
-		? buildPostgresBackupSidecar(input.postgres, input.projectName)
+	const supabase = input.supabase
+		? buildSupabaseServiceGroup(input.projectName, input.environment)
 		: null
-	const supabaseStack = input.supabase
-		? withPostgresExporterInitMount(buildSupabaseStack())
-		: null
-	const postgresExporterSidecar = input.supabase
-		? buildPostgresExporterSidecar()
-		: null
-
 	const topLevelVolumes = buildTopLevelVolumes(
 		userVolumes,
-		postgresSidecar !== null,
-		supabaseStack !== null,
+		postgres !== null,
+		supabase !== null,
 	)
 
 	const config: ComposeConfig = {
@@ -147,7 +183,7 @@ export function renderComposeFile(input: ComposeFileInput): string {
 				...(userVolumes && {
 					volumes: userVolumes.map(v => `${v.name}:${v.mount}`),
 				}),
-				...(postgresSidecar && {
+				...(postgres && {
 					depends_on: {
 						[POSTGRES_SIDECAR_SERVICE_NAME]: {
 							condition: 'service_healthy',
@@ -155,16 +191,8 @@ export function renderComposeFile(input: ComposeFileInput): string {
 					},
 				}),
 			},
-			...(postgresSidecar && {
-				[POSTGRES_SIDECAR_SERVICE_NAME]: postgresSidecar,
-			}),
-			...(postgresBackupSidecar && {
-				[POSTGRES_BACKUP_SERVICE_NAME]: postgresBackupSidecar,
-			}),
-			...supabaseStack,
-			...(postgresExporterSidecar && {
-				[POSTGRES_EXPORTER_SERVICE_NAME]: postgresExporterSidecar,
-			}),
+			...postgres,
+			...supabase,
 		},
 		...(topLevelVolumes && { volumes: topLevelVolumes }),
 	}
