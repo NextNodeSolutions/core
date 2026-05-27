@@ -1,8 +1,16 @@
 import type { EnvSecretsAdapter } from '#/adapters/github/env-secrets.ts'
 import type { OrgSecretsAdapter } from '#/adapters/github/org-secrets.ts'
 import type { ServiceFactoryContext } from '#/cli/services/service.ts'
+import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
+import type { R2ServiceState } from '#/domain/services/r2.ts'
 import { SUPABASE_KONG_HTTP_PORT } from '#/domain/services/supabase.ts'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const loadR2ServiceMock = vi.hoisted(() => vi.fn())
+
+vi.mock('#/cli/services/r2/load.ts', () => ({
+	loadR2Service: loadR2ServiceMock,
+}))
 
 import {
 	createSupabaseService,
@@ -17,17 +25,34 @@ import {
 	supabaseServiceDefinition,
 } from './supabase.service.ts'
 
+const INFRA_STORAGE: InfraStorageRuntimeConfig = {
+	accountId: 'acct-123',
+	endpoint: 'https://infra.r2.example.com',
+	accessKeyId: 'infra-ak',
+	secretAccessKey: 'infra-sk',
+	stateBucket: 'nextnode-state',
+	certsBucket: 'nextnode-certs',
+}
+
+const R2_STATE: R2ServiceState = {
+	endpoint: 'https://acct-123.r2.cloudflarestorage.com',
+	accessKeyId: 'svc-ak',
+	secretAccessKey: 'svc-sk',
+	buckets: [{ alias: 'backups', name: 'myapp-production-backups' }],
+}
+
 function makeCtx(
 	repoSecrets: Readonly<Record<string, string>> = {},
 	projectName = 'myapp',
 	deployDomain: string | null = 'example.com',
+	infraStorage: InfraStorageRuntimeConfig | null = INFRA_STORAGE,
 ): ServiceFactoryContext {
 	return {
 		projectName,
 		environment: 'production',
 		repository: { owner: 'NextNodeSolutions', name: 'core' },
 		cfToken: 'cf-token',
-		infraStorage: null,
+		infraStorage,
 		repoSecrets,
 		deployDomain,
 	}
@@ -55,6 +80,8 @@ function makeEnvAdapter(
 
 beforeEach(() => {
 	vi.stubEnv('GITHUB_REPOSITORY_OWNER', 'NextNodeOrg')
+	loadR2ServiceMock.mockReset()
+	loadR2ServiceMock.mockResolvedValue(R2_STATE)
 })
 
 afterEach(() => {
@@ -364,6 +391,12 @@ describe('createSupabaseService', () => {
 		expect(createSupabaseService(makeCtx()).name).toBe('supabase')
 	})
 
+	it('throws at construction when infraStorage is null — the R2 state bucket is required to derive BACKUP_R2_* env vars', () => {
+		expect(() =>
+			createSupabaseService(makeCtx({}, 'myapp', 'example.com', null)),
+		).toThrow(/infra storage \(R2 state bucket\) must be loaded/)
+	})
+
 	describe('loadEnv', () => {
 		const ALL_SECRETS = {
 			PG_EXPORTER_PASSWORD_MYAPP: 'pgexp',
@@ -401,6 +434,11 @@ describe('createSupabaseService', () => {
 					DASHBOARD_PASSWORD: 'dash',
 					ANON_KEY: ANON_KEY_FOR_JWT_SECRET_JWT,
 					SERVICE_ROLE_KEY: SERVICE_ROLE_KEY_FOR_JWT_SECRET_JWT,
+					BACKUP_R2_ACCESS_KEY_ID: 'svc-ak',
+					BACKUP_R2_SECRET_ACCESS_KEY: 'svc-sk',
+					BACKUP_R2_ENDPOINT:
+						'https://acct-123.r2.cloudflarestorage.com',
+					BACKUP_R2_BUCKET: 'myapp-production-backups',
 				},
 			})
 		})
@@ -493,6 +531,10 @@ describe('createSupabaseService', () => {
 				DASHBOARD_PASSWORD: 'dash',
 				ANON_KEY: ANON_KEY_FOR_JWT_SECRET_JWT,
 				SERVICE_ROLE_KEY: SERVICE_ROLE_KEY_FOR_JWT_SECRET_JWT,
+				BACKUP_R2_ACCESS_KEY_ID: 'svc-ak',
+				BACKUP_R2_SECRET_ACCESS_KEY: 'svc-sk',
+				BACKUP_R2_ENDPOINT: 'https://acct-123.r2.cloudflarestorage.com',
+				BACKUP_R2_BUCKET: 'myapp-production-backups',
 			})
 		})
 
@@ -601,6 +643,76 @@ describe('createSupabaseService', () => {
 			await expect(service.loadEnv()).rejects.toThrow(
 				/PG_EXPORTER_PASSWORD_MYAPP/,
 			)
+		})
+
+		it('queries loadR2Service with the project + env coordinates from the context', async () => {
+			await createSupabaseService(makeCtx(ALL_SECRETS)).loadEnv()
+
+			expect(loadR2ServiceMock).toHaveBeenCalledTimes(1)
+			expect(loadR2ServiceMock).toHaveBeenCalledWith({
+				infraStorage: INFRA_STORAGE,
+				projectName: 'myapp',
+				environment: 'production',
+			})
+		})
+
+		it('exposes BACKUP_R2_* in the secret channel, sourced from the R2 service state', async () => {
+			const env = await createSupabaseService(
+				makeCtx(ALL_SECRETS),
+			).loadEnv()
+
+			expect(env.secret).toMatchObject({
+				BACKUP_R2_ACCESS_KEY_ID: 'svc-ak',
+				BACKUP_R2_SECRET_ACCESS_KEY: 'svc-sk',
+				BACKUP_R2_ENDPOINT: 'https://acct-123.r2.cloudflarestorage.com',
+				BACKUP_R2_BUCKET: 'myapp-production-backups',
+			})
+		})
+
+		it('derives BACKUP_R2_BUCKET from the backups binding even when other R2 aliases coexist', async () => {
+			loadR2ServiceMock.mockResolvedValue({
+				endpoint: 'https://acct-123.r2.cloudflarestorage.com',
+				accessKeyId: 'svc-ak',
+				secretAccessKey: 'svc-sk',
+				buckets: [
+					{ alias: 'uploads', name: 'myapp-production-uploads' },
+					{ alias: 'media', name: 'myapp-production-media' },
+					{ alias: 'backups', name: 'myapp-production-backups' },
+				],
+			})
+
+			const env = await createSupabaseService(
+				makeCtx(ALL_SECRETS),
+			).loadEnv()
+
+			expect(env.secret['BACKUP_R2_BUCKET']).toBe(
+				'myapp-production-backups',
+			)
+		})
+
+		it('throws when the R2 service state has no "backups" alias — the sidecar would have no bucket to write to', async () => {
+			loadR2ServiceMock.mockResolvedValue({
+				endpoint: 'https://acct-123.r2.cloudflarestorage.com',
+				accessKeyId: 'svc-ak',
+				secretAccessKey: 'svc-sk',
+				buckets: [
+					{ alias: 'uploads', name: 'myapp-production-uploads' },
+				],
+			})
+
+			await expect(
+				createSupabaseService(makeCtx(ALL_SECRETS)).loadEnv(),
+			).rejects.toThrow(/missing the "backups" bucket alias/)
+		})
+
+		it('propagates the loadR2Service rejection when the R2 state cannot be read', async () => {
+			loadR2ServiceMock.mockRejectedValue(
+				new Error('R2 service state not found — run provision'),
+			)
+
+			await expect(
+				createSupabaseService(makeCtx(ALL_SECRETS)).loadEnv(),
+			).rejects.toThrow(/R2 service state not found/)
 		})
 	})
 })

@@ -5,6 +5,7 @@ import type { EnvSecretsAdapter } from '#/adapters/github/env-secrets.ts'
 import { createOrgSecretsAdapter } from '#/adapters/github/org-secrets.ts'
 import type { OrgSecretsAdapter } from '#/adapters/github/org-secrets.ts'
 import { requireEnv } from '#/cli/env.ts'
+import { loadR2Service } from '#/cli/services/r2/load.ts'
 import type {
 	Service,
 	ServiceDefinition,
@@ -21,6 +22,7 @@ import {
 	SUPABASE_DASHBOARD_USERNAME,
 	SUPABASE_JWT_EXPIRY_SECONDS,
 	SUPABASE_KONG_HTTP_PORT,
+	buildSupabaseBackupEnv,
 } from '#/domain/services/supabase.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
@@ -210,6 +212,12 @@ export function requireDashboardPasswordSecret(
 
 export function createSupabaseService(ctx: ServiceFactoryContext): Service {
 	const pgExporterSecretName = pgExporterPasswordSecretName(ctx.projectName)
+	if (ctx.infraStorage === null) {
+		throw new Error(
+			'supabase service: infra storage (R2 state bucket) must be loaded by the caller — supabase reads the R2 service state to derive BACKUP_R2_* env vars for the pg_dump sidecar',
+		)
+	}
+	const infraStorage = ctx.infraStorage
 	return {
 		name: 'supabase',
 		async provision(): Promise<void> {
@@ -296,6 +304,13 @@ export function createSupabaseService(ctx: ServiceFactoryContext): Service {
 					"supabase service: project.domain must be set in nextnode.toml — supabase bakes the resolved domain into gotrue's API_EXTERNAL_URL (magic-link / OAuth callback host) and SITE_URL (default redirect target), so a missing domain breaks the entire auth flow at runtime",
 				)
 			}
+
+			const r2State = await loadR2Service({
+				infraStorage,
+				projectName: ctx.projectName,
+				environment: ctx.environment,
+			})
+			Object.assign(secret, buildSupabaseBackupEnv(r2State))
 
 			// `api.<domain>` is the NextNode convention for the kong API
 			// gateway vhost: app traffic stays on `<domain>`, the supabase

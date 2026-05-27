@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import type { R2ServiceState } from './r2.ts'
 import {
 	SUPABASE_AUTH_IMAGE,
 	SUPABASE_AUTH_SERVICE_NAME,
@@ -19,6 +20,7 @@ import {
 	SUPABASE_STORAGE_SERVICE_NAME,
 	SUPABASE_STUDIO_IMAGE,
 	SUPABASE_STUDIO_SERVICE_NAME,
+	buildSupabaseBackupEnv,
 	buildSupabaseStack,
 } from './supabase.ts'
 
@@ -179,5 +181,53 @@ describe('buildSupabaseStack', () => {
 
 	it('produces deterministic output - two calls return equal stacks', () => {
 		expect(buildSupabaseStack()).toEqual(buildSupabaseStack())
+	})
+})
+
+describe('buildSupabaseBackupEnv', () => {
+	const STATE: R2ServiceState = {
+		endpoint: 'https://acct.r2.cloudflarestorage.com',
+		accessKeyId: 'ak-XXXX',
+		secretAccessKey: 'sk-YYYY',
+		buckets: [
+			{ alias: 'uploads', name: 'myapp-production-uploads' },
+			{ alias: 'backups', name: 'myapp-production-backups' },
+		],
+	}
+
+	it('maps the R2 state credentials + endpoint onto the four BACKUP_R2_* env vars', () => {
+		expect(buildSupabaseBackupEnv(STATE)).toEqual({
+			BACKUP_R2_ACCESS_KEY_ID: 'ak-XXXX',
+			BACKUP_R2_SECRET_ACCESS_KEY: 'sk-YYYY',
+			BACKUP_R2_ENDPOINT: 'https://acct.r2.cloudflarestorage.com',
+			BACKUP_R2_BUCKET: 'myapp-production-backups',
+		})
+	})
+
+	it('throws when the state has no "backups" alias — the supabase sidecar would have no bucket to upload to', () => {
+		expect(() =>
+			buildSupabaseBackupEnv({
+				...STATE,
+				buckets: [{ alias: 'uploads', name: 'myapp-uploads' }],
+			}),
+		).toThrow(/missing the "backups" bucket alias/)
+	})
+
+	it('throws when the state has no buckets at all', () => {
+		expect(() => buildSupabaseBackupEnv({ ...STATE, buckets: [] })).toThrow(
+			/missing the "backups" bucket alias/,
+		)
+	})
+
+	it('selects the backups binding regardless of its position in the list', () => {
+		const env = buildSupabaseBackupEnv({
+			...STATE,
+			buckets: [
+				{ alias: 'backups', name: 'first-bucket' },
+				{ alias: 'uploads', name: 'second-bucket' },
+			],
+		})
+
+		expect(env['BACKUP_R2_BUCKET']).toBe('first-bucket')
 	})
 })

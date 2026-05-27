@@ -1,3 +1,6 @@
+import { R2_BACKUPS_ALIAS } from './r2.ts'
+import type { R2ServiceState } from './r2.ts'
+
 /**
  * Pinned image versions for the NextNode-blessed Supabase self-host stack.
  * Bumping any constant rolls out a new version to every project that
@@ -156,6 +159,36 @@ const SUPABASE_BACKUP_SCRIPT = [
 	'done',
 	'',
 ].join('\n')
+
+/**
+ * Project the R2 service state down to the four `BACKUP_R2_*` env vars the
+ * supabase backup sidecar consumes. Looks up the `backups` alias against
+ * `state.buckets` — `computeR2ServiceAliases` guarantees the alias is
+ * present whenever supabase is declared, so a missing entry means the R2
+ * service state is corrupt and the sidecar would silently no-op against
+ * the wrong bucket; fail loud instead.
+ *
+ * Returned in the secret channel (not split public/secret): keeping all
+ * four vars on the same channel makes the deploy-time merge in
+ * `mergeServiceEnvs` trivially correct, and the bucket name + endpoint
+ * carry no operational value outside the sidecar itself.
+ */
+export function buildSupabaseBackupEnv(
+	state: R2ServiceState,
+): Record<string, string> {
+	const binding = state.buckets.find(b => b.alias === R2_BACKUPS_ALIAS)
+	if (binding === undefined) {
+		throw new Error(
+			`supabase service: R2 service state is missing the "${R2_BACKUPS_ALIAS}" bucket alias — re-run provision so the supabase backup bucket is created`,
+		)
+	}
+	return {
+		BACKUP_R2_ACCESS_KEY_ID: state.accessKeyId,
+		BACKUP_R2_SECRET_ACCESS_KEY: state.secretAccessKey,
+		BACKUP_R2_ENDPOINT: state.endpoint,
+		BACKUP_R2_BUCKET: binding.name,
+	}
+}
 
 export interface SupabaseBackupSidecarService {
 	readonly image: string
