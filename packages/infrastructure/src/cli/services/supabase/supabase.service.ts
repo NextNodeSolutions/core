@@ -195,7 +195,7 @@ export function requireDashboardPasswordSecret(
 }
 
 export function createSupabaseService(ctx: ServiceFactoryContext): Service {
-	const secretName = pgExporterPasswordSecretName(ctx.projectName)
+	const pgExporterSecretName = pgExporterPasswordSecretName(ctx.projectName)
 	return {
 		name: 'supabase',
 		async provision(): Promise<void> {
@@ -223,16 +223,43 @@ export function createSupabaseService(ctx: ServiceFactoryContext): Service {
 			)
 		},
 		async loadEnv(): Promise<ServiceEnv> {
-			const value = ctx.repoSecrets[secretName]
-			if (value === undefined || value === '') {
+			const required: ReadonlyArray<{
+				readonly secretName: string
+				readonly envKey: string
+			}> = [
+				{
+					secretName: pgExporterSecretName,
+					envKey: POSTGRES_EXPORTER_PASSWORD_ENV,
+				},
+				{
+					secretName: 'POSTGRES_PASSWORD',
+					envKey: 'POSTGRES_PASSWORD',
+				},
+				{ secretName: 'JWT_SECRET', envKey: 'JWT_SECRET' },
+				{
+					secretName: 'DASHBOARD_PASSWORD',
+					envKey: 'DASHBOARD_PASSWORD',
+				},
+			]
+
+			const secret: Record<string, string> = {}
+			const missing: string[] = []
+			for (const { secretName, envKey } of required) {
+				const value = ctx.repoSecrets[secretName]
+				if (value === undefined || value === '') {
+					missing.push(secretName)
+					continue
+				}
+				secret[envKey] = value
+			}
+
+			if (missing.length > 0) {
 				throw new Error(
-					`supabase service: GitHub org secret "${secretName}" must be defined — run "provision" first so the password is generated and persisted, then re-trigger the deploy workflow so ALL_SECRETS picks it up`,
+					`supabase service: the following GitHub secrets must be in ALL_SECRETS before deploy can render the supabase compose .env: ${missing.join(', ')} — run "provision" first so the auto-generated ones are pushed and the operator-set DASHBOARD_PASSWORD is verified, then re-trigger the deploy workflow so ALL_SECRETS picks them up`,
 				)
 			}
-			return {
-				public: {},
-				secret: { [POSTGRES_EXPORTER_PASSWORD_ENV]: value },
-			}
+
+			return { public: {}, secret }
 		},
 	}
 }

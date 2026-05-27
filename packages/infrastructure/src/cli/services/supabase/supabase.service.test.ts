@@ -362,43 +362,122 @@ describe('createSupabaseService', () => {
 	})
 
 	describe('loadEnv', () => {
-		it('projects the GitHub org secret into PG_EXPORTER_PASSWORD on the secret channel', async () => {
-			const service = createSupabaseService(
-				makeCtx({ PG_EXPORTER_PASSWORD_MYAPP: 'b64passwd' }),
-			)
+		const ALL_SECRETS = {
+			PG_EXPORTER_PASSWORD_MYAPP: 'pgexp',
+			POSTGRES_PASSWORD: 'pgpass',
+			JWT_SECRET: 'jwt',
+			DASHBOARD_PASSWORD: 'dash',
+		} as const
+
+		it('surfaces all four supabase secrets under their compose .env keys on the secret channel', async () => {
+			const service = createSupabaseService(makeCtx(ALL_SECRETS))
 
 			await expect(service.loadEnv()).resolves.toEqual({
 				public: {},
-				secret: { PG_EXPORTER_PASSWORD: 'b64passwd' },
+				secret: {
+					PG_EXPORTER_PASSWORD: 'pgexp',
+					POSTGRES_PASSWORD: 'pgpass',
+					JWT_SECRET: 'jwt',
+					DASHBOARD_PASSWORD: 'dash',
+				},
 			})
 		})
 
-		it('reads under the project-derived name (kebab → snake-upper)', async () => {
+		it('reads the pg-exporter password under the project-derived name (kebab → snake-upper)', async () => {
 			const service = createSupabaseService(
 				makeCtx(
-					{ PG_EXPORTER_PASSWORD_MY_COOL_APP: 'b64passwd' },
+					{
+						PG_EXPORTER_PASSWORD_MY_COOL_APP: 'pgexp',
+						POSTGRES_PASSWORD: 'pgpass',
+						JWT_SECRET: 'jwt',
+						DASHBOARD_PASSWORD: 'dash',
+					},
 					'my-cool-app',
 				),
 			)
 
 			const env = await service.loadEnv()
-			expect(env.secret).toEqual({ PG_EXPORTER_PASSWORD: 'b64passwd' })
+			expect(env.secret).toEqual({
+				PG_EXPORTER_PASSWORD: 'pgexp',
+				POSTGRES_PASSWORD: 'pgpass',
+				JWT_SECRET: 'jwt',
+				DASHBOARD_PASSWORD: 'dash',
+			})
 		})
 
-		it('throws when the org secret is missing from ALL_SECRETS', async () => {
+		it('throws and lists every missing secret when none are present', async () => {
 			const service = createSupabaseService(makeCtx({}))
 
 			await expect(service.loadEnv()).rejects.toThrow(
-				/GitHub org secret "PG_EXPORTER_PASSWORD_MYAPP" must be defined/,
+				/PG_EXPORTER_PASSWORD_MYAPP.*POSTGRES_PASSWORD.*JWT_SECRET.*DASHBOARD_PASSWORD/s,
 			)
 		})
 
-		it('throws when the org secret is set to an empty string', async () => {
+		it('throws and names PG_EXPORTER_PASSWORD_MYAPP when only the pg-exporter secret is missing', async () => {
 			const service = createSupabaseService(
-				makeCtx({ PG_EXPORTER_PASSWORD_MYAPP: '' }),
+				makeCtx({
+					POSTGRES_PASSWORD: 'pgpass',
+					JWT_SECRET: 'jwt',
+					DASHBOARD_PASSWORD: 'dash',
+				}),
 			)
 
-			await expect(service.loadEnv()).rejects.toThrow(/must be defined/)
+			await expect(service.loadEnv()).rejects.toThrow(
+				/PG_EXPORTER_PASSWORD_MYAPP/,
+			)
+		})
+
+		it('throws and names POSTGRES_PASSWORD when only POSTGRES_PASSWORD is missing', async () => {
+			const service = createSupabaseService(
+				makeCtx({
+					PG_EXPORTER_PASSWORD_MYAPP: 'pgexp',
+					JWT_SECRET: 'jwt',
+					DASHBOARD_PASSWORD: 'dash',
+				}),
+			)
+
+			await expect(service.loadEnv()).rejects.toThrow(/POSTGRES_PASSWORD/)
+		})
+
+		it('throws and names JWT_SECRET when only JWT_SECRET is missing', async () => {
+			const service = createSupabaseService(
+				makeCtx({
+					PG_EXPORTER_PASSWORD_MYAPP: 'pgexp',
+					POSTGRES_PASSWORD: 'pgpass',
+					DASHBOARD_PASSWORD: 'dash',
+				}),
+			)
+
+			await expect(service.loadEnv()).rejects.toThrow(/JWT_SECRET/)
+		})
+
+		it('throws and names DASHBOARD_PASSWORD when only DASHBOARD_PASSWORD is missing', async () => {
+			const service = createSupabaseService(
+				makeCtx({
+					PG_EXPORTER_PASSWORD_MYAPP: 'pgexp',
+					POSTGRES_PASSWORD: 'pgpass',
+					JWT_SECRET: 'jwt',
+				}),
+			)
+
+			await expect(service.loadEnv()).rejects.toThrow(
+				/DASHBOARD_PASSWORD/,
+			)
+		})
+
+		it('treats an empty-string secret as missing', async () => {
+			const service = createSupabaseService(
+				makeCtx({
+					PG_EXPORTER_PASSWORD_MYAPP: '',
+					POSTGRES_PASSWORD: 'pgpass',
+					JWT_SECRET: 'jwt',
+					DASHBOARD_PASSWORD: 'dash',
+				}),
+			)
+
+			await expect(service.loadEnv()).rejects.toThrow(
+				/PG_EXPORTER_PASSWORD_MYAPP/,
+			)
 		})
 	})
 })
