@@ -1,14 +1,13 @@
 FROM node:24-alpine AS base
 ENV PNPM_HOME=/pnpm
-ENV PATH=$PNPM_HOME:$PATH
-RUN corepack enable
+ENV PATH=$PNPM_HOME/bin:$PATH
+RUN corepack enable && corepack prepare pnpm@10.11.0 --activate
 WORKDIR /repo
 
 FROM base AS prepare
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
-	pnpm add -g turbo@2.9.3
 COPY . .
-RUN turbo prune @nextnode-solutions/monitoring --docker
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+	pnpm dlx turbo@2.9.3 prune @nextnode-solutions/monitoring --docker
 
 FROM base AS deps
 COPY --from=prepare /repo/out/json/ ./
