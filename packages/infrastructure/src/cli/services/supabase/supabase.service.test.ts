@@ -369,6 +369,14 @@ describe('createSupabaseService', () => {
 			DASHBOARD_PASSWORD: 'dash',
 		} as const
 
+		// Locked-in HS256 outputs for `signSupabaseJwt({role, iss:'supabase', iat:0}, 'jwt')`.
+		// Hardcoded (not recomputed via signSupabaseJwt) so the test catches any
+		// drift in the JWT signer, header, payload shape, or pinned iat.
+		const ANON_KEY_FOR_JWT_SECRET_JWT =
+			'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjowfQ.UGYosjd4EbG0midOUsKjzjmyntV8HQGNMnxxYMWk36Y'
+		const SERVICE_ROLE_KEY_FOR_JWT_SECRET_JWT =
+			'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjB9.59lKtvORIYdPzZzs6madu3uA6z-vjz91ouJWqxwCP4w'
+
 		it('surfaces all four supabase secrets under their compose .env keys on the secret channel', async () => {
 			const service = createSupabaseService(makeCtx(ALL_SECRETS))
 
@@ -379,6 +387,8 @@ describe('createSupabaseService', () => {
 					POSTGRES_PASSWORD: 'pgpass',
 					JWT_SECRET: 'jwt',
 					DASHBOARD_PASSWORD: 'dash',
+					ANON_KEY: ANON_KEY_FOR_JWT_SECRET_JWT,
+					SERVICE_ROLE_KEY: SERVICE_ROLE_KEY_FOR_JWT_SECRET_JWT,
 				},
 			})
 		})
@@ -402,7 +412,41 @@ describe('createSupabaseService', () => {
 				POSTGRES_PASSWORD: 'pgpass',
 				JWT_SECRET: 'jwt',
 				DASHBOARD_PASSWORD: 'dash',
+				ANON_KEY: ANON_KEY_FOR_JWT_SECRET_JWT,
+				SERVICE_ROLE_KEY: SERVICE_ROLE_KEY_FOR_JWT_SECRET_JWT,
 			})
+		})
+
+		it('derives ANON_KEY and SERVICE_ROLE_KEY deterministically from JWT_SECRET (no random iat)', async () => {
+			const first = await createSupabaseService(
+				makeCtx(ALL_SECRETS),
+			).loadEnv()
+			const second = await createSupabaseService(
+				makeCtx(ALL_SECRETS),
+			).loadEnv()
+
+			expect(first.secret['ANON_KEY']).toBe(ANON_KEY_FOR_JWT_SECRET_JWT)
+			expect(first.secret['SERVICE_ROLE_KEY']).toBe(
+				SERVICE_ROLE_KEY_FOR_JWT_SECRET_JWT,
+			)
+			expect(second.secret['ANON_KEY']).toBe(first.secret['ANON_KEY'])
+			expect(second.secret['SERVICE_ROLE_KEY']).toBe(
+				first.secret['SERVICE_ROLE_KEY'],
+			)
+		})
+
+		it('rotates ANON_KEY and SERVICE_ROLE_KEY when JWT_SECRET changes', async () => {
+			const a = await createSupabaseService(
+				makeCtx({ ...ALL_SECRETS, JWT_SECRET: 'secret-a' }),
+			).loadEnv()
+			const b = await createSupabaseService(
+				makeCtx({ ...ALL_SECRETS, JWT_SECRET: 'secret-b' }),
+			).loadEnv()
+
+			expect(a.secret['ANON_KEY']).not.toBe(b.secret['ANON_KEY'])
+			expect(a.secret['SERVICE_ROLE_KEY']).not.toBe(
+				b.secret['SERVICE_ROLE_KEY'],
+			)
 		})
 
 		it('throws and lists every missing secret when none are present', async () => {

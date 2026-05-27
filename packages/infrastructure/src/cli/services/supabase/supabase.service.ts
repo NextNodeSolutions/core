@@ -16,12 +16,21 @@ import {
 	pgExporterPasswordSecretName,
 } from '#/domain/services/postgres-exporter.ts'
 import type { ServiceEnv } from '#/domain/services/service.ts'
+import { signSupabaseJwt } from '#/domain/services/supabase-jwt.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
 
 const ENV_GITHUB_OWNER = 'GITHUB_REPOSITORY_OWNER'
 const PASSWORD_BYTES = 32
+
+/**
+ * Pinned `iat` for the derived ANON_KEY / SERVICE_ROLE_KEY JWTs. Using a
+ * fixed epoch (not `Date.now()`) makes both keys deterministic functions
+ * of `JWT_SECRET`, so a re-render of `.env` across deploys yields the
+ * exact same tokens — clients caching the key do not see spurious churn.
+ */
+const SUPABASE_DERIVED_KEY_IAT = 0
 
 export function generatePgExporterPassword(): string {
 	return randomBytes(PASSWORD_BYTES).toString('base64')
@@ -258,6 +267,24 @@ export function createSupabaseService(ctx: ServiceFactoryContext): Service {
 					`supabase service: the following GitHub secrets must be in ALL_SECRETS before deploy can render the supabase compose .env: ${missing.join(', ')} — run "provision" first so the auto-generated ones are pushed and the operator-set DASHBOARD_PASSWORD is verified, then re-trigger the deploy workflow so ALL_SECRETS picks them up`,
 				)
 			}
+
+			const jwtSecret = secret['JWT_SECRET']!
+			secret['ANON_KEY'] = signSupabaseJwt(
+				{
+					role: 'anon',
+					iss: 'supabase',
+					iat: SUPABASE_DERIVED_KEY_IAT,
+				},
+				jwtSecret,
+			)
+			secret['SERVICE_ROLE_KEY'] = signSupabaseJwt(
+				{
+					role: 'service_role',
+					iss: 'supabase',
+					iat: SUPABASE_DERIVED_KEY_IAT,
+				},
+				jwtSecret,
+			)
 
 			return { public: {}, secret }
 		},
