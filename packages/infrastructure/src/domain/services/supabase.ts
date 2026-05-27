@@ -58,6 +58,14 @@ export const SUPABASE_DB_DATA_DIR = '/var/lib/postgresql/data'
 export const SUPABASE_KONG_HTTP_PORT = 8000
 
 /**
+ * Port supabase/studio listens on inside the compose network. The Caddy
+ * reverse-proxy build (P7-11) targets `studio:${SUPABASE_STUDIO_HTTP_PORT}`
+ * for the `studio.<deployDomain>` vhost, gated behind basic auth. Mirrors
+ * the upstream supabase/supabase docker-compose default.
+ */
+export const SUPABASE_STUDIO_HTTP_PORT = 3000
+
+/**
  * Lifetime, in seconds, of the JWTs gotrue/realtime/storage sign with
  * JWT_SECRET. Mirrors the upstream supabase docker-compose default —
  * pinned here so deploys are reproducible and the value is reviewed in

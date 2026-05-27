@@ -1,7 +1,3 @@
-import {
-	SUPABASE_KONG_HTTP_PORT,
-	SUPABASE_KONG_SERVICE_NAME,
-} from '#/domain/services/supabase.ts'
 import type { ObjectStorageBinding } from '#/domain/storage/binding.ts'
 
 export interface CaddyUpstream {
@@ -9,36 +5,9 @@ export interface CaddyUpstream {
 	readonly dial: string
 }
 
-export interface SupabaseCaddyBinding {
-	readonly deployDomain: string
-}
-
-export function supabaseApiHostname(deployDomain: string): string {
-	return `api.${deployDomain}`
-}
-
-function buildSupabaseKongRoute(deployDomain: string): CaddyRoute {
-	return {
-		match: [{ host: [supabaseApiHostname(deployDomain)] }],
-		handle: [
-			{
-				handler: 'reverse_proxy',
-				upstreams: [
-					{
-						dial: `${SUPABASE_KONG_SERVICE_NAME}:${String(SUPABASE_KONG_HTTP_PORT)}`,
-					},
-				],
-			},
-		],
-		terminal: true,
-	}
-}
-
 /** Caddy reads env vars from /etc/caddy/env at startup via EnvironmentFile. */
 export const CADDY_ENV_R2_SECRET_KEY = 'CADDY_R2_SECRET_KEY'
 export const CADDY_ENV_CF_API_TOKEN = 'CF_DNS_API_TOKEN'
-const CADDY_R2_SECRET_PLACEHOLDER = `{env.${CADDY_ENV_R2_SECRET_KEY}}`
-const CADDY_CF_TOKEN_PLACEHOLDER = `{env.${CADDY_ENV_CF_API_TOKEN}}`
 
 export interface AcmeIssuer {
 	readonly module: 'acme'
@@ -61,11 +30,43 @@ export interface InternalIssuer {
 
 export type CaddyIssuer = AcmeIssuer | InternalIssuer
 
+/**
+ * ACME issuer with HTTP-01 challenge — Let's Encrypt over the public
+ * internet. Caddy serves the challenge on :80 of the public IP.
+ */
+export function buildPublicAcmeIssuer(email: string): AcmeIssuer {
+	return { module: 'acme', email }
+}
+
+/**
+ * ACME issuer with DNS-01 challenge via Cloudflare — for projects whose
+ * server is not publicly reachable (e.g. Tailscale-only). Let's Encrypt
+ * issues real certs by validating DNS records the operator owns through
+ * Cloudflare. HTTP-01 and TLS-ALPN are explicitly disabled so Caddy never
+ * tries to fall back to them.
+ */
+export function buildDnsAcmeIssuer(email: string): AcmeIssuer {
+	return {
+		module: 'acme',
+		email,
+		challenges: {
+			http: { disabled: true },
+			'tls-alpn': { disabled: true },
+			dns: {
+				provider: {
+					name: 'cloudflare',
+					api_token: `{env.${CADDY_ENV_CF_API_TOKEN}}`,
+				},
+			},
+		},
+	}
+}
+
 export interface CaddyConfigInput {
-	readonly upstreams: ReadonlyArray<CaddyUpstream>
+	readonly routes: ReadonlyArray<CaddyRoute>
+	readonly subjects: ReadonlyArray<string>
 	readonly storage: ObjectStorageBinding
-	readonly acmeEmail: string
-	readonly supabase?: SupabaseCaddyBinding
+	readonly issuer: CaddyIssuer
 }
 
 export interface CaddyRoute {
@@ -74,10 +75,26 @@ export interface CaddyRoute {
 	readonly terminal: boolean
 }
 
-export interface CaddyHandler {
-	readonly handler: string
+export interface CaddyReverseProxyHandler {
+	readonly handler: 'reverse_proxy'
 	readonly upstreams: ReadonlyArray<{ readonly dial: string }>
 }
+
+export interface CaddyBasicAuthAccount {
+	readonly username: string
+	readonly password: string
+}
+
+export interface CaddyBasicAuthHandler {
+	readonly handler: 'authentication'
+	readonly providers: {
+		readonly http_basic: {
+			readonly accounts: ReadonlyArray<CaddyBasicAuthAccount>
+		}
+	}
+}
+
+export type CaddyHandler = CaddyReverseProxyHandler | CaddyBasicAuthHandler
 
 export interface CaddyS3Storage {
 	readonly module: string
@@ -112,7 +129,7 @@ export interface CaddyJsonConfig {
 	}
 }
 
-function buildRoute(upstream: CaddyUpstream): CaddyRoute {
+export function buildUpstreamRoute(upstream: CaddyUpstream): CaddyRoute {
 	return {
 		match: [{ host: [upstream.hostname] }],
 		handle: [
@@ -177,25 +194,13 @@ export function extractUpstreams(
 }
 
 export function buildCaddyConfig(input: CaddyConfigInput): CaddyJsonConfig {
-	const upstreamRoutes = input.upstreams.map(buildRoute)
-	const supabaseRoutes = input.supabase
-		? [buildSupabaseKongRoute(input.supabase.deployDomain)]
-		: []
-	const routes = [...upstreamRoutes, ...supabaseRoutes]
-	const subjects = [
-		...input.upstreams.map(u => u.hostname),
-		...(input.supabase
-			? [supabaseApiHostname(input.supabase.deployDomain)]
-			: []),
-	]
-
 	return {
 		apps: {
 			http: {
 				servers: {
 					https: {
 						listen: [':443'],
-						routes,
+						routes: input.routes,
 					},
 				},
 			},
@@ -203,93 +208,14 @@ export function buildCaddyConfig(input: CaddyConfigInput): CaddyJsonConfig {
 				automation: {
 					policies: [
 						{
-							subjects,
-							issuers: [
-								{ module: 'acme', email: input.acmeEmail },
-							],
+							subjects: input.subjects,
+							issuers: [input.issuer],
 							storage: {
 								module: 's3',
 								host: input.storage.host,
 								bucket: input.storage.bucket,
 								access_id: input.storage.accessKeyId,
-								secret_key: CADDY_R2_SECRET_PLACEHOLDER,
-								prefix: input.storage.prefix,
-							},
-						},
-					],
-				},
-			},
-		},
-	}
-}
-
-export interface InternalCaddyConfigInput {
-	readonly upstreams: ReadonlyArray<CaddyUpstream>
-	readonly storage: ObjectStorageBinding
-	readonly acmeEmail: string
-	readonly supabase?: SupabaseCaddyBinding
-}
-
-/**
- * Build a Caddy JSON config for internal (Tailscale-only) projects.
- *
- * Uses DNS-01 challenge via Cloudflare instead of HTTP-01, so Let's Encrypt
- * can issue real certs even though the server is not publicly reachable.
- * Certs are stored in R2 (same as public mode).
- */
-export function buildInternalCaddyConfig(
-	input: InternalCaddyConfigInput,
-): CaddyJsonConfig {
-	const upstreamRoutes = input.upstreams.map(buildRoute)
-	const supabaseRoutes = input.supabase
-		? [buildSupabaseKongRoute(input.supabase.deployDomain)]
-		: []
-	const routes = [...upstreamRoutes, ...supabaseRoutes]
-	const subjects = [
-		...input.upstreams.map(u => u.hostname),
-		...(input.supabase
-			? [supabaseApiHostname(input.supabase.deployDomain)]
-			: []),
-	]
-
-	return {
-		apps: {
-			http: {
-				servers: {
-					https: {
-						listen: [':443'],
-						routes,
-					},
-				},
-			},
-			tls: {
-				automation: {
-					policies: [
-						{
-							subjects,
-							issuers: [
-								{
-									module: 'acme',
-									email: input.acmeEmail,
-									challenges: {
-										http: { disabled: true },
-										'tls-alpn': { disabled: true },
-										dns: {
-											provider: {
-												name: 'cloudflare',
-												api_token:
-													CADDY_CF_TOKEN_PLACEHOLDER,
-											},
-										},
-									},
-								},
-							],
-							storage: {
-								module: 's3',
-								host: input.storage.host,
-								bucket: input.storage.bucket,
-								access_id: input.storage.accessKeyId,
-								secret_key: CADDY_R2_SECRET_PLACEHOLDER,
+								secret_key: `{env.${CADDY_ENV_R2_SECRET_KEY}}`,
 								prefix: input.storage.prefix,
 							},
 						},

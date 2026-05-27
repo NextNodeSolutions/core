@@ -1,3 +1,4 @@
+import { extractUpstreams } from '#/domain/caddy/config.ts'
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
 import { executeHandlers } from '#/domain/deploy/execute-handlers.ts'
@@ -5,7 +6,6 @@ import type { TeardownResult } from '#/domain/deploy/teardown-result.ts'
 import type { TeardownTarget } from '#/domain/deploy/teardown-target.ts'
 import type { DnsClient } from '#/domain/dns/client.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
-import { extractUpstreams } from '#/domain/hetzner/caddy-config.ts'
 import {
 	VPS_MANAGED_RESOURCES,
 	VPS_PROJECT_MANAGED_RESOURCES,

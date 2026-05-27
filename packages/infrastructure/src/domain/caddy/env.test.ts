@@ -1,7 +1,7 @@
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import { describe, expect, it } from 'vitest'
 
-import { CADDY_ENV_PATH, renderCaddyEnv } from './caddy-env.ts'
+import { CADDY_ENV_PATH, renderCaddyEnv } from './env.ts'
 
 const STORAGE: InfraStorageRuntimeConfig = {
 	accountId: 'account-123',

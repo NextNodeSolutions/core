@@ -1,9 +1,9 @@
 import { converge } from '#/cli/hetzner/converge.ts'
+import { composeCaddyConfig } from '#/domain/caddy/compose.ts'
+import { extractUpstreams } from '#/domain/caddy/config.ts'
+import { CADDY_ENV_PATH, renderCaddyEnv } from '#/domain/caddy/env.ts'
 import { buildR2CaddyBinding } from '#/domain/cloudflare/r2/caddy-binding.ts'
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
-import { extractUpstreams } from '#/domain/hetzner/caddy-config.ts'
-import { CADDY_ENV_PATH, renderCaddyEnv } from '#/domain/hetzner/caddy-env.ts'
-import { buildCaddyForProject } from '#/domain/hetzner/caddy-for-project.ts'
 import { selectVectorConfig } from '#/domain/hetzner/vector-config.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
@@ -56,7 +56,7 @@ export async function convergeVps(input: ConvergeVpsInput): Promise<void> {
 		)
 
 		const caddyConfig = JSON.stringify(
-			buildCaddyForProject({
+			composeCaddyConfig({
 				storage: buildR2CaddyBinding(input.infraStorage, input.vpsName),
 				upstreams: existingUpstreams,
 				acmeEmail: input.acmeEmail,

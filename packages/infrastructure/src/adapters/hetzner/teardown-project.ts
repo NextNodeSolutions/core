@@ -1,12 +1,12 @@
+import { composeCaddyConfig } from '#/domain/caddy/compose.ts'
+import type { CaddyUpstream } from '#/domain/caddy/config.ts'
+import { extractUpstreams } from '#/domain/caddy/config.ts'
 import { extractRootDomain } from '#/domain/cloudflare/dns-records.ts'
 import { buildR2CaddyBinding } from '#/domain/cloudflare/r2/caddy-binding.ts'
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import type { ResourceOutcome } from '#/domain/deploy/resource-outcome.ts'
 import type { DnsClient } from '#/domain/dns/client.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
-import type { CaddyUpstream } from '#/domain/hetzner/caddy-config.ts'
-import { extractUpstreams } from '#/domain/hetzner/caddy-config.ts'
-import { buildCaddyForProject } from '#/domain/hetzner/caddy-for-project.ts'
 import { computeSilo } from '#/domain/hetzner/env-silo.ts'
 import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
 import { createLogger } from '@nextnode-solutions/logger'
@@ -109,7 +109,7 @@ export async function teardownProjectCaddyRoute(
 		remaining.length === 0
 			? EMPTY_CADDY_CONFIG
 			: JSON.stringify(
-					buildCaddyForProject({
+					composeCaddyConfig({
 						storage: buildR2CaddyBinding(
 							caddy.infraStorage,
 							caddy.vpsName,
