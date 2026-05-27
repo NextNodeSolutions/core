@@ -3,10 +3,13 @@ import { describe, expect, it } from 'vitest'
 import {
 	SUPABASE_AUTH_IMAGE,
 	SUPABASE_AUTH_SERVICE_NAME,
+	SUPABASE_DASHBOARD_USERNAME,
 	SUPABASE_DB_DATA_DIR,
 	SUPABASE_DB_DATA_VOLUME,
 	SUPABASE_DB_SERVICE_NAME,
 	SUPABASE_DEFAULT_DATABASE,
+	SUPABASE_JWT_EXPIRY_SECONDS,
+	SUPABASE_KONG_HTTP_PORT,
 	SUPABASE_KONG_IMAGE,
 	SUPABASE_KONG_SERVICE_NAME,
 	SUPABASE_POSTGRES_IMAGE,
@@ -50,6 +53,20 @@ describe('supabase image pins', () => {
 		expect(SUPABASE_STUDIO_IMAGE).toMatch(
 			/^supabase\/studio:\d{4}\.\d{2}\.\d{2}-sha-[0-9a-f]+$/,
 		)
+	})
+})
+
+describe('supabase static config defaults', () => {
+	it('pins KONG_HTTP_PORT to the upstream supabase compose default so Caddy and kong agree', () => {
+		expect(SUPABASE_KONG_HTTP_PORT).toBe(8000)
+	})
+
+	it('pins JWT_EXPIRY to the upstream supabase compose default (1h)', () => {
+		expect(SUPABASE_JWT_EXPIRY_SECONDS).toBe(3600)
+	})
+
+	it('pins the dashboard admin username to the upstream supabase compose default', () => {
+		expect(SUPABASE_DASHBOARD_USERNAME).toBe('supabase')
 	})
 })
 

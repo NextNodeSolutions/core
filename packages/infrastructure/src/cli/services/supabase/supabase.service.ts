@@ -17,6 +17,11 @@ import {
 } from '#/domain/services/postgres-exporter.ts'
 import type { ServiceEnv } from '#/domain/services/service.ts'
 import { signSupabaseJwt } from '#/domain/services/supabase-jwt.ts'
+import {
+	SUPABASE_DASHBOARD_USERNAME,
+	SUPABASE_JWT_EXPIRY_SECONDS,
+	SUPABASE_KONG_HTTP_PORT,
+} from '#/domain/services/supabase.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
@@ -286,7 +291,16 @@ export function createSupabaseService(ctx: ServiceFactoryContext): Service {
 				jwtSecret,
 			)
 
-			return { public: {}, secret }
+			const publicEnv: Record<string, string> = {
+				KONG_HTTP_PORT: String(SUPABASE_KONG_HTTP_PORT),
+				JWT_EXPIRY: String(SUPABASE_JWT_EXPIRY_SECONDS),
+				DASHBOARD_USERNAME: SUPABASE_DASHBOARD_USERNAME,
+				STUDIO_DEFAULT_ORGANIZATION: ctx.projectName,
+				STUDIO_DEFAULT_PROJECT: ctx.projectName,
+				POOLER_TENANT_ID: ctx.projectName,
+			}
+
+			return { public: publicEnv, secret }
 		},
 	}
 }

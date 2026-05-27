@@ -1,6 +1,7 @@
 import type { EnvSecretsAdapter } from '#/adapters/github/env-secrets.ts'
 import type { OrgSecretsAdapter } from '#/adapters/github/org-secrets.ts'
 import type { ServiceFactoryContext } from '#/cli/services/service.ts'
+import { SUPABASE_KONG_HTTP_PORT } from '#/domain/services/supabase.ts'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -381,7 +382,14 @@ describe('createSupabaseService', () => {
 			const service = createSupabaseService(makeCtx(ALL_SECRETS))
 
 			await expect(service.loadEnv()).resolves.toEqual({
-				public: {},
+				public: {
+					KONG_HTTP_PORT: '8000',
+					JWT_EXPIRY: '3600',
+					DASHBOARD_USERNAME: 'supabase',
+					STUDIO_DEFAULT_ORGANIZATION: 'myapp',
+					STUDIO_DEFAULT_PROJECT: 'myapp',
+					POOLER_TENANT_ID: 'myapp',
+				},
 				secret: {
 					PG_EXPORTER_PASSWORD: 'pgexp',
 					POSTGRES_PASSWORD: 'pgpass',
@@ -391,6 +399,39 @@ describe('createSupabaseService', () => {
 					SERVICE_ROLE_KEY: SERVICE_ROLE_KEY_FOR_JWT_SECRET_JWT,
 				},
 			})
+		})
+
+		it('exposes the upstream-template static config vars in the public channel, with the project-scoped studio + pooler ids', async () => {
+			const env = await createSupabaseService(
+				makeCtx(
+					{
+						PG_EXPORTER_PASSWORD_MY_COOL_APP: 'pgexp',
+						POSTGRES_PASSWORD: 'pgpass',
+						JWT_SECRET: 'jwt',
+						DASHBOARD_PASSWORD: 'dash',
+					},
+					'my-cool-app',
+				),
+			).loadEnv()
+
+			expect(env.public).toEqual({
+				KONG_HTTP_PORT: '8000',
+				JWT_EXPIRY: '3600',
+				DASHBOARD_USERNAME: 'supabase',
+				STUDIO_DEFAULT_ORGANIZATION: 'my-cool-app',
+				STUDIO_DEFAULT_PROJECT: 'my-cool-app',
+				POOLER_TENANT_ID: 'my-cool-app',
+			})
+		})
+
+		it('reuses SUPABASE_KONG_HTTP_PORT from the domain so Caddy and kong share one source of truth for the port', async () => {
+			const env = await createSupabaseService(
+				makeCtx(ALL_SECRETS),
+			).loadEnv()
+
+			expect(env.public['KONG_HTTP_PORT']).toBe(
+				String(SUPABASE_KONG_HTTP_PORT),
+			)
 		})
 
 		it('reads the pg-exporter password under the project-derived name (kebab → snake-upper)', async () => {

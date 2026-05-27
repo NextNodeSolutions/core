@@ -49,6 +49,31 @@ export const SUPABASE_DB_DATA_VOLUME = 'supabase-db-data'
  */
 export const SUPABASE_DB_DATA_DIR = '/var/lib/postgresql/data'
 
+/**
+ * Port kong listens on inside the supabase compose network. Exposed as
+ * a shared constant so the Caddy reverse-proxy build (P7-10) can route
+ * the public HTTPS vhost to `kong:${SUPABASE_KONG_HTTP_PORT}` from the
+ * same source of truth as the compose .env consumed by kong itself.
+ */
+export const SUPABASE_KONG_HTTP_PORT = 8000
+
+/**
+ * Lifetime, in seconds, of the JWTs gotrue/realtime/storage sign with
+ * JWT_SECRET. Mirrors the upstream supabase docker-compose default —
+ * pinned here so deploys are reproducible and the value is reviewed in
+ * one place rather than scattered across env files.
+ */
+export const SUPABASE_JWT_EXPIRY_SECONDS = 3600
+
+/**
+ * Default admin username for Supabase Studio behind Caddy basic auth.
+ * The matching password (DASHBOARD_PASSWORD) is operator-set per env
+ * (see `requireDashboardPasswordSecret`). Mirrors the upstream
+ * docker-compose template default; the operator changes it per project
+ * only if they have a strong reason to deviate from supabase docs.
+ */
+export const SUPABASE_DASHBOARD_USERNAME = 'supabase'
+
 export interface SupabaseService {
 	readonly image: string
 	readonly restart: string
