@@ -2,12 +2,15 @@ import type { ImageRef } from '#/domain/deploy/target.ts'
 import {
 	POSTGRES_EXPORTER_DSN_ENV,
 	POSTGRES_EXPORTER_IMAGE,
+	POSTGRES_EXPORTER_INIT_HOST_PATH,
+	POSTGRES_EXPORTER_INIT_MOUNT_PATH,
 	POSTGRES_EXPORTER_PASSWORD_ENV,
 	POSTGRES_EXPORTER_PORT,
 	POSTGRES_EXPORTER_SERVICE_NAME,
 	POSTGRES_EXPORTER_USER,
 	TAILSCALE_IP_ENV,
 	buildPostgresExporterDsn,
+	buildPostgresExporterInitMount,
 } from '#/domain/services/postgres-exporter.ts'
 import {
 	POSTGRES_DATA_DIR,
@@ -483,8 +486,28 @@ describe('renderComposeFile - supabase service wiring', () => {
 
 		expect(parsed.services.db.volumes).toEqual([
 			`${SUPABASE_DB_DATA_VOLUME}:${SUPABASE_DB_DATA_DIR}`,
+			buildPostgresExporterInitMount(),
 		])
 		expect(parsed.volumes).toEqual({ [SUPABASE_DB_DATA_VOLUME]: {} })
+	})
+
+	it('bind-mounts the postgres-exporter bootstrap SQL into /docker-entrypoint-initdb.d/ on the db service as read-only', () => {
+		const result = renderComposeFile({
+			...baseInput,
+			supabase: {},
+		})
+		const parsed = parse(result)
+
+		expect(parsed.services.db.volumes).toContain(
+			`${POSTGRES_EXPORTER_INIT_HOST_PATH}:${POSTGRES_EXPORTER_INIT_MOUNT_PATH}:ro`,
+		)
+	})
+
+	it('does not mount the postgres-exporter bootstrap SQL when supabase is omitted', () => {
+		const result = renderComposeFile(baseInput)
+		const parsed = parse(result)
+
+		expect(parsed.services).not.toHaveProperty('db')
 	})
 
 	it('declares auth, realtime, storage, and kong as depending on db', () => {

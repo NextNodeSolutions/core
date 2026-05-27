@@ -77,6 +77,24 @@ export const POSTGRES_EXPORTER_INIT_FILENAME = '00-pg-monitor.sql'
 export const POSTGRES_EXPORTER_INIT_MOUNT_PATH = `/docker-entrypoint-initdb.d/${POSTGRES_EXPORTER_INIT_FILENAME}`
 
 /**
+ * Host-side path the bootstrap file lives at, relative to the compose
+ * file directory. The provisioning step writes the rendered SQL next to
+ * `compose.yaml` on the VPS, so docker-compose's relative-path resolution
+ * picks it up at `compose up` time.
+ */
+export const POSTGRES_EXPORTER_INIT_HOST_PATH = `./${POSTGRES_EXPORTER_INIT_FILENAME}`
+
+/**
+ * Compose volume spec mounting the bootstrap SQL into the Supabase `db`
+ * container as read-only. `:ro` is defensive - postgres only reads
+ * `/docker-entrypoint-initdb.d/` scripts, but the bind mount prevents the
+ * container from writing back to the host file should that ever change.
+ */
+export function buildPostgresExporterInitMount(): string {
+	return `${POSTGRES_EXPORTER_INIT_HOST_PATH}:${POSTGRES_EXPORTER_INIT_MOUNT_PATH}:ro`
+}
+
+/**
  * Render the DSN postgres_exporter uses to reach the Supabase `db`
  * service over the internal compose network. `sslmode=disable` because
  * the connection never leaves the docker bridge; password is the caller's

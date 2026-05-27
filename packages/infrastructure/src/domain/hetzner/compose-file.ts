@@ -6,6 +6,7 @@ import type { ImageRef } from '#/domain/deploy/target.ts'
 import type { PostgresExporterSidecarService } from '#/domain/services/postgres-exporter.ts'
 import {
 	POSTGRES_EXPORTER_SERVICE_NAME,
+	buildPostgresExporterInitMount,
 	buildPostgresExporterSidecar,
 } from '#/domain/services/postgres-exporter.ts'
 import type {
@@ -19,9 +20,13 @@ import {
 	buildPostgresBackupSidecar,
 	buildPostgresSidecar,
 } from '#/domain/services/postgres.ts'
-import type { SupabaseService } from '#/domain/services/supabase.ts'
+import type {
+	SupabaseService,
+	SupabaseStack,
+} from '#/domain/services/supabase.ts'
 import {
 	SUPABASE_DB_DATA_VOLUME,
+	SUPABASE_DB_SERVICE_NAME,
 	buildSupabaseStack,
 } from '#/domain/services/supabase.ts'
 import { stringify } from 'yaml'
@@ -83,6 +88,22 @@ interface ComposeConfig {
 	readonly volumes?: Readonly<Record<string, Record<string, never>>>
 }
 
+/**
+ * Append the postgres-exporter bootstrap-SQL bind mount to the supabase
+ * `db` service's volumes. The mount is what makes the supabase/postgres
+ * image run `00-pg-monitor.sql` exactly once on initdb, creating the
+ * `postgres_exporter` role the exporter sidecar authenticates as.
+ */
+function withPostgresExporterInitMount(stack: SupabaseStack): SupabaseStack {
+	const db = stack[SUPABASE_DB_SERVICE_NAME]
+	if (!db) return stack
+	const augmented: SupabaseService = {
+		...db,
+		volumes: [...(db.volumes ?? []), buildPostgresExporterInitMount()],
+	}
+	return { ...stack, [SUPABASE_DB_SERVICE_NAME]: augmented }
+}
+
 function buildTopLevelVolumes(
 	userVolumes: ReadonlyArray<ComposeVolume> = [],
 	includePostgres: boolean,
@@ -103,7 +124,9 @@ export function renderComposeFile(input: ComposeFileInput): string {
 	const postgresBackupSidecar = input.postgres
 		? buildPostgresBackupSidecar(input.postgres, input.projectName)
 		: null
-	const supabaseStack = input.supabase ? buildSupabaseStack() : null
+	const supabaseStack = input.supabase
+		? withPostgresExporterInitMount(buildSupabaseStack())
+		: null
 	const postgresExporterSidecar = input.supabase
 		? buildPostgresExporterSidecar()
 		: null

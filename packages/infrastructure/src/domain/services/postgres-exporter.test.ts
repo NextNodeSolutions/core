@@ -4,6 +4,7 @@ import {
 	POSTGRES_EXPORTER_DSN_ENV,
 	POSTGRES_EXPORTER_IMAGE,
 	POSTGRES_EXPORTER_INIT_FILENAME,
+	POSTGRES_EXPORTER_INIT_HOST_PATH,
 	POSTGRES_EXPORTER_INIT_MOUNT_PATH,
 	POSTGRES_EXPORTER_PASSWORD_ENV,
 	POSTGRES_EXPORTER_PORT,
@@ -11,6 +12,7 @@ import {
 	POSTGRES_EXPORTER_USER,
 	TAILSCALE_IP_ENV,
 	buildPostgresExporterDsn,
+	buildPostgresExporterInitMount,
 	buildPostgresExporterSidecar,
 	renderPostgresExporterBootstrapSql,
 } from './postgres-exporter.ts'
@@ -35,6 +37,10 @@ describe('postgres-exporter constants', () => {
 		expect(POSTGRES_EXPORTER_INIT_MOUNT_PATH).toBe(
 			'/docker-entrypoint-initdb.d/00-pg-monitor.sql',
 		)
+	})
+
+	it('resolves the host-side bootstrap path relative to the compose file directory', () => {
+		expect(POSTGRES_EXPORTER_INIT_HOST_PATH).toBe('./00-pg-monitor.sql')
 	})
 
 	it('names the sidecar after the role it runs', () => {
@@ -87,6 +93,21 @@ describe('buildPostgresExporterSidecar', () => {
 		expect(buildPostgresExporterSidecar().environment).toEqual({
 			[POSTGRES_EXPORTER_DSN_ENV]: `postgresql://${POSTGRES_EXPORTER_USER}:\${${POSTGRES_EXPORTER_PASSWORD_ENV}}@${SUPABASE_DB_SERVICE_NAME}:5432/${SUPABASE_DEFAULT_DATABASE}?sslmode=disable`,
 		})
+	})
+})
+
+describe('buildPostgresExporterInitMount', () => {
+	it('binds the host-side bootstrap SQL into /docker-entrypoint-initdb.d/ on the db container as read-only', () => {
+		expect(buildPostgresExporterInitMount()).toBe(
+			`${POSTGRES_EXPORTER_INIT_HOST_PATH}:${POSTGRES_EXPORTER_INIT_MOUNT_PATH}:ro`,
+		)
+	})
+
+	it('uses the canonical 00-pg-monitor.sql filename on both sides of the mount', () => {
+		const mount = buildPostgresExporterInitMount()
+
+		expect(mount).toContain(POSTGRES_EXPORTER_INIT_FILENAME)
+		expect(mount.split(':')[1]).toContain('00-pg-monitor.sql')
 	})
 })
 
