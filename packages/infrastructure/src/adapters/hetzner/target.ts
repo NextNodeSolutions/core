@@ -44,6 +44,7 @@ import type {
 	HcloudConvergedState,
 	HcloudProvisionedState,
 } from './state/types.ts'
+import { releaseProjectHostPort } from './teardown-project.ts'
 import { runHetznerTeardown } from './teardown.ts'
 
 const logger = createLogger()
@@ -176,10 +177,8 @@ export class HetznerVpsTarget implements DeployTarget {
 	): Promise<DeployResult> {
 		const start = Date.now()
 		const vpsName = this.config.vpsName
-		const { session, hostname, hostPort } = await this.openRolloutSession(
-			projectName,
-			input,
-		)
+		const { session, hostname, hostPort, allocated } =
+			await this.openRolloutSession(projectName, input)
 
 		try {
 			const { upstream, deployed } = await deployContainer(session, {
@@ -241,6 +240,9 @@ export class HetznerVpsTarget implements DeployTarget {
 				deployedEnvironments: [deployed],
 				durationMs: Date.now() - start,
 			}
+		} catch (err) {
+			if (allocated) await this.releaseAllocatedHostPort(projectName)
+			throw err
 		} finally {
 			session.close()
 		}
@@ -251,10 +253,8 @@ export class HetznerVpsTarget implements DeployTarget {
 		input: DeployInput,
 		env: DeployEnv,
 	): Promise<void> {
-		const { session, hostname, hostPort } = await this.openRolloutSession(
-			projectName,
-			input,
-		)
+		const { session, hostname, hostPort, allocated } =
+			await this.openRolloutSession(projectName, input)
 
 		try {
 			await stageRollout(session, {
@@ -269,6 +269,9 @@ export class HetznerVpsTarget implements DeployTarget {
 				volumes: this.config.volumes,
 				postgres: this.config.postgres,
 			})
+		} catch (err) {
+			if (allocated) await this.releaseAllocatedHostPort(projectName)
+			throw err
 		} finally {
 			session.close()
 		}
@@ -337,6 +340,7 @@ export class HetznerVpsTarget implements DeployTarget {
 		readonly session: SshSession
 		readonly hostname: string
 		readonly hostPort: number
+		readonly allocated: boolean
 	}> {
 		this.requireImage(input)
 		const vpsName = this.config.vpsName
@@ -374,7 +378,35 @@ export class HetznerVpsTarget implements DeployTarget {
 			expectedHostKeyFingerprint: existing.state.sshHostKeyFingerprint,
 		})
 
-		return { session, hostname, hostPort }
+		return { session, hostname, hostPort, allocated }
+	}
+
+	// Compensates a freshly-allocated host port when the rollout that
+	// follows the allocation fails. Without this, every failed deploy on
+	// a previously-unmapped project leaves a phantom entry in the VPS
+	// state, hiding that port from future allocations on the same VPS.
+	//
+	// Re-reads state before releasing so a concurrent deploy that
+	// advanced state in the meantime is preserved (writeState ETag).
+	// Swallows + warns on failure so the original error from the caller
+	// is not masked.
+	private async releaseAllocatedHostPort(projectName: string): Promise<void> {
+		const vpsName = this.config.vpsName
+		try {
+			const fresh = await readState(this.r2, vpsName)
+			if (!fresh || fresh.state.phase === 'created') return
+			await releaseProjectHostPort(
+				this.r2,
+				vpsName,
+				projectName,
+				fresh.state,
+				fresh.etag,
+			)
+		} catch (err) {
+			logger.warn(
+				`Failed to release host port allocation for "${projectName}" on VPS "${vpsName}"; phantom entry may remain in state: ${String(err)}`,
+			)
+		}
 	}
 
 	private requireImage(input: DeployInput): ImageRef {

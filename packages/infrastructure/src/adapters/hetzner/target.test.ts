@@ -1127,6 +1127,59 @@ describe('HetznerVpsTarget', () => {
 					}),
 				)
 			})
+
+			it('releases a freshly-allocated port when the rollout fails', async () => {
+				const { createSshSession: mockedSsh } =
+					await import('./ssh/session.ts')
+				const mockSession = createMockSession()
+				seedState()
+				vi.mocked(mockedSsh).mockResolvedValueOnce(mockSession)
+				vi.mocked(mockSession.writeFile).mockRejectedValueOnce(
+					new Error('SSH write failed'),
+				)
+
+				const target = new HetznerVpsTarget(TARGET_CONFIG)
+
+				await expect(
+					target.deploy('acme-web', DEPLOY_INPUT, DEPLOY_ENV),
+				).rejects.toThrow('SSH write failed')
+
+				const persisted: unknown = JSON.parse(
+					fakeR2State.get('hetzner/acme-web.json')!,
+				)
+				expect(persisted).toEqual(
+					expect.objectContaining({ hostPorts: {} }),
+				)
+			})
+
+			it('does not release the port on failure when the project already had one (re-deploy)', async () => {
+				const { createSshSession: mockedSsh } =
+					await import('./ssh/session.ts')
+				const mockSession = createMockSession()
+				seedState({
+					...CONVERGED_STATE,
+					hostPorts: { 'acme-web': 8080 },
+				})
+				vi.mocked(mockedSsh).mockResolvedValueOnce(mockSession)
+				vi.mocked(mockSession.writeFile).mockRejectedValueOnce(
+					new Error('SSH write failed'),
+				)
+
+				const target = new HetznerVpsTarget(TARGET_CONFIG)
+
+				await expect(
+					target.deploy('acme-web', DEPLOY_INPUT, DEPLOY_ENV),
+				).rejects.toThrow('SSH write failed')
+
+				const persisted: unknown = JSON.parse(
+					fakeR2State.get('hetzner/acme-web.json')!,
+				)
+				expect(persisted).toEqual(
+					expect.objectContaining({
+						hostPorts: { 'acme-web': 8080 },
+					}),
+				)
+			})
 		})
 	})
 
