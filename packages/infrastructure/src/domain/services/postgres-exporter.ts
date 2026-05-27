@@ -46,6 +46,16 @@ export const POSTGRES_EXPORTER_DSN_ENV = 'DATA_SOURCE_NAME'
 export const POSTGRES_EXPORTER_PASSWORD_ENV = 'PG_EXPORTER_PASSWORD'
 
 /**
+ * Per-project GitHub org secret name carrying the exporter password.
+ * Project names are kebab-case lowercase; GitHub secrets accept only
+ * `[A-Z0-9_]`, so hyphens map to underscores and the whole identifier
+ * uppercases. Same name flows through `ALL_SECRETS` at deploy time.
+ */
+export function pgExporterPasswordSecretName(projectName: string): string {
+	return `${POSTGRES_EXPORTER_PASSWORD_ENV}_${projectName.replace(/-/g, '_').toUpperCase()}`
+}
+
+/**
  * Compose env-var holding the VPS Tailscale IPv4 address. Written into
  * `.env` by the Hetzner cloud-init / convergeVps step, so the exporter
  * port binding resolves to the tailnet interface at compose-up.
