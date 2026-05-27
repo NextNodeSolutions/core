@@ -127,6 +127,71 @@ describe('buildCaddyConfig', () => {
 		const json = JSON.stringify(config)
 		expect(() => JSON.parse(json)).not.toThrow()
 	})
+
+	it('emits no supabase route when supabase is not declared', () => {
+		const config = buildCaddyConfig(
+			makeInput([
+				{ hostname: 'acme.example.com', dial: '127.0.0.1:8080' },
+			]),
+		)
+
+		const routes = config.apps.http.servers.https.routes
+		expect(routes).toHaveLength(1)
+		expect(routes[0]?.match[0]?.host).toStrictEqual(['acme.example.com'])
+	})
+
+	it('emits an api.<domain> -> kong:8000 route when supabase is declared', () => {
+		const config = buildCaddyConfig({
+			...makeInput([
+				{ hostname: 'acme.example.com', dial: '127.0.0.1:8080' },
+			]),
+			supabase: { deployDomain: 'acme.example.com' },
+		})
+
+		const routes = config.apps.http.servers.https.routes
+		expect(routes).toHaveLength(2)
+		expect(routes[1]).toStrictEqual({
+			match: [{ host: ['api.acme.example.com'] }],
+			handle: [
+				{
+					handler: 'reverse_proxy',
+					upstreams: [{ dial: 'kong:8000' }],
+				},
+			],
+			terminal: true,
+		})
+	})
+
+	it('adds the supabase api hostname to TLS automation subjects', () => {
+		const config = buildCaddyConfig({
+			...makeInput([
+				{ hostname: 'acme.example.com', dial: '127.0.0.1:8080' },
+			]),
+			supabase: { deployDomain: 'acme.example.com' },
+		})
+
+		expect(config.apps.tls.automation.policies[0]?.subjects).toStrictEqual([
+			'acme.example.com',
+			'api.acme.example.com',
+		])
+	})
+
+	it('derives api.<deployDomain> for a dev deploy domain', () => {
+		const config = buildCaddyConfig({
+			...makeInput([
+				{
+					hostname: 'dev.acme.example.com',
+					dial: '127.0.0.1:8081',
+				},
+			]),
+			supabase: { deployDomain: 'dev.acme.example.com' },
+		})
+
+		const routes = config.apps.http.servers.https.routes
+		expect(routes[1]?.match[0]?.host).toStrictEqual([
+			'api.dev.acme.example.com',
+		])
+	})
 })
 
 describe('extractUpstreams', () => {
@@ -259,5 +324,22 @@ describe('buildInternalCaddyConfig', () => {
 		)
 		const json = JSON.stringify(config)
 		expect(() => JSON.parse(json)).not.toThrow()
+	})
+
+	it('emits the supabase kong route when supabase is declared', () => {
+		const config = buildInternalCaddyConfig({
+			...makeInternalInput([
+				{ hostname: 'monitor.example.com', dial: '127.0.0.1:8080' },
+			]),
+			supabase: { deployDomain: 'monitor.example.com' },
+		})
+
+		const routes = config.apps.http.servers.https.routes
+		expect(routes).toHaveLength(2)
+		expect(routes[1]?.handle[0]?.upstreams[0]?.dial).toBe('kong:8000')
+		expect(config.apps.tls.automation.policies[0]?.subjects).toStrictEqual([
+			'monitor.example.com',
+			'api.monitor.example.com',
+		])
 	})
 })

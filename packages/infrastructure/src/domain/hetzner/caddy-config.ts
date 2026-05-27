@@ -1,8 +1,37 @@
+import {
+	SUPABASE_KONG_HTTP_PORT,
+	SUPABASE_KONG_SERVICE_NAME,
+} from '#/domain/services/supabase.ts'
 import type { ObjectStorageBinding } from '#/domain/storage/binding.ts'
 
 export interface CaddyUpstream {
 	readonly hostname: string
 	readonly dial: string
+}
+
+export interface SupabaseCaddyBinding {
+	readonly deployDomain: string
+}
+
+export function supabaseApiHostname(deployDomain: string): string {
+	return `api.${deployDomain}`
+}
+
+function buildSupabaseKongRoute(deployDomain: string): CaddyRoute {
+	return {
+		match: [{ host: [supabaseApiHostname(deployDomain)] }],
+		handle: [
+			{
+				handler: 'reverse_proxy',
+				upstreams: [
+					{
+						dial: `${SUPABASE_KONG_SERVICE_NAME}:${String(SUPABASE_KONG_HTTP_PORT)}`,
+					},
+				],
+			},
+		],
+		terminal: true,
+	}
 }
 
 /** Caddy reads env vars from /etc/caddy/env at startup via EnvironmentFile. */
@@ -36,6 +65,7 @@ export interface CaddyConfigInput {
 	readonly upstreams: ReadonlyArray<CaddyUpstream>
 	readonly storage: ObjectStorageBinding
 	readonly acmeEmail: string
+	readonly supabase?: SupabaseCaddyBinding
 }
 
 export interface CaddyRoute {
@@ -147,7 +177,17 @@ export function extractUpstreams(
 }
 
 export function buildCaddyConfig(input: CaddyConfigInput): CaddyJsonConfig {
-	const hostnames = input.upstreams.map(u => u.hostname)
+	const upstreamRoutes = input.upstreams.map(buildRoute)
+	const supabaseRoutes = input.supabase
+		? [buildSupabaseKongRoute(input.supabase.deployDomain)]
+		: []
+	const routes = [...upstreamRoutes, ...supabaseRoutes]
+	const subjects = [
+		...input.upstreams.map(u => u.hostname),
+		...(input.supabase
+			? [supabaseApiHostname(input.supabase.deployDomain)]
+			: []),
+	]
 
 	return {
 		apps: {
@@ -155,7 +195,7 @@ export function buildCaddyConfig(input: CaddyConfigInput): CaddyJsonConfig {
 				servers: {
 					https: {
 						listen: [':443'],
-						routes: input.upstreams.map(buildRoute),
+						routes,
 					},
 				},
 			},
@@ -163,7 +203,7 @@ export function buildCaddyConfig(input: CaddyConfigInput): CaddyJsonConfig {
 				automation: {
 					policies: [
 						{
-							subjects: hostnames,
+							subjects,
 							issuers: [
 								{ module: 'acme', email: input.acmeEmail },
 							],
@@ -187,6 +227,7 @@ export interface InternalCaddyConfigInput {
 	readonly upstreams: ReadonlyArray<CaddyUpstream>
 	readonly storage: ObjectStorageBinding
 	readonly acmeEmail: string
+	readonly supabase?: SupabaseCaddyBinding
 }
 
 /**
@@ -199,7 +240,17 @@ export interface InternalCaddyConfigInput {
 export function buildInternalCaddyConfig(
 	input: InternalCaddyConfigInput,
 ): CaddyJsonConfig {
-	const hostnames = input.upstreams.map(u => u.hostname)
+	const upstreamRoutes = input.upstreams.map(buildRoute)
+	const supabaseRoutes = input.supabase
+		? [buildSupabaseKongRoute(input.supabase.deployDomain)]
+		: []
+	const routes = [...upstreamRoutes, ...supabaseRoutes]
+	const subjects = [
+		...input.upstreams.map(u => u.hostname),
+		...(input.supabase
+			? [supabaseApiHostname(input.supabase.deployDomain)]
+			: []),
+	]
 
 	return {
 		apps: {
@@ -207,7 +258,7 @@ export function buildInternalCaddyConfig(
 				servers: {
 					https: {
 						listen: [':443'],
-						routes: input.upstreams.map(buildRoute),
+						routes,
 					},
 				},
 			},
@@ -215,7 +266,7 @@ export function buildInternalCaddyConfig(
 				automation: {
 					policies: [
 						{
-							subjects: hostnames,
+							subjects,
 							issuers: [
 								{
 									module: 'acme',
