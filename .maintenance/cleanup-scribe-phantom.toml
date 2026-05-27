@@ -1,0 +1,12 @@
+[project]
+name = "scribe"
+type = "app"
+domain = "scribe-phantom-cleanup.nextnode.fr"
+
+[deploy]
+target = "hetzner-vps"
+vps = "nn-internals"
+
+[deploy.hetzner]
+server_type = "cx23"
+location = "nbg1"
