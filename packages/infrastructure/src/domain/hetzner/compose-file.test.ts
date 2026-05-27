@@ -3,6 +3,16 @@ import {
 	POSTGRES_DATA_DIR,
 	POSTGRES_DATA_VOLUME,
 } from '#/domain/services/postgres.ts'
+import {
+	SUPABASE_AUTH_IMAGE,
+	SUPABASE_DB_DATA_DIR,
+	SUPABASE_DB_DATA_VOLUME,
+	SUPABASE_KONG_IMAGE,
+	SUPABASE_POSTGRES_IMAGE,
+	SUPABASE_REALTIME_IMAGE,
+	SUPABASE_STORAGE_IMAGE,
+	SUPABASE_STUDIO_IMAGE,
+} from '#/domain/services/supabase.ts'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 
@@ -409,5 +419,164 @@ describe('renderComposeFile - postgres service wiring', () => {
 		const parsed = parse(result)
 
 		expect(parsed.services.app).not.toHaveProperty('depends_on')
+	})
+})
+
+describe('renderComposeFile - supabase service wiring', () => {
+	const baseInput = {
+		image: IMAGE,
+		hostPort: 8080,
+		projectName: PROJECT_NAME,
+		postgres: undefined,
+	} as const
+
+	it('renders the full self-host stack (db + auth + realtime + storage + kong + studio) when services.supabase is declared', () => {
+		const result = renderComposeFile({
+			...baseInput,
+			supabase: {},
+		})
+		const parsed = parse(result)
+
+		expect(Object.keys(parsed.services)).toEqual([
+			'app',
+			'db',
+			'auth',
+			'realtime',
+			'storage',
+			'kong',
+			'studio',
+		])
+	})
+
+	it('pins each supabase service to its module image constant', () => {
+		const result = renderComposeFile({
+			...baseInput,
+			supabase: {},
+		})
+		const parsed = parse(result)
+
+		expect(parsed.services.db.image).toBe(SUPABASE_POSTGRES_IMAGE)
+		expect(parsed.services.auth.image).toBe(SUPABASE_AUTH_IMAGE)
+		expect(parsed.services.realtime.image).toBe(SUPABASE_REALTIME_IMAGE)
+		expect(parsed.services.storage.image).toBe(SUPABASE_STORAGE_IMAGE)
+		expect(parsed.services.kong.image).toBe(SUPABASE_KONG_IMAGE)
+		expect(parsed.services.studio.image).toBe(SUPABASE_STUDIO_IMAGE)
+	})
+
+	it('mounts the supabase-db-data volume on the db service and declares it at the top level', () => {
+		const result = renderComposeFile({
+			...baseInput,
+			supabase: {},
+		})
+		const parsed = parse(result)
+
+		expect(parsed.services.db.volumes).toEqual([
+			`${SUPABASE_DB_DATA_VOLUME}:${SUPABASE_DB_DATA_DIR}`,
+		])
+		expect(parsed.volumes).toEqual({ [SUPABASE_DB_DATA_VOLUME]: {} })
+	})
+
+	it('declares auth, realtime, storage, and kong as depending on db', () => {
+		const result = renderComposeFile({
+			...baseInput,
+			supabase: {},
+		})
+		const parsed = parse(result)
+
+		expect(parsed.services.auth.depends_on).toEqual(['db'])
+		expect(parsed.services.realtime.depends_on).toEqual(['db'])
+		expect(parsed.services.storage.depends_on).toEqual(['db'])
+		expect(parsed.services.kong.depends_on).toEqual(['db'])
+	})
+
+	it('omits depends_on on db (root) and studio (talks via kong)', () => {
+		const result = renderComposeFile({
+			...baseInput,
+			supabase: {},
+		})
+		const parsed = parse(result)
+
+		expect(parsed.services.db).not.toHaveProperty('depends_on')
+		expect(parsed.services.studio).not.toHaveProperty('depends_on')
+	})
+
+	it('exposes no host ports on any supabase service - exposure is fronted by the VPS reverse proxy', () => {
+		const result = renderComposeFile({
+			...baseInput,
+			supabase: {},
+		})
+		const parsed = parse(result)
+
+		const supabaseServiceNames = [
+			'db',
+			'auth',
+			'realtime',
+			'storage',
+			'kong',
+			'studio',
+		] as const
+		for (const name of supabaseServiceNames) {
+			expect(parsed.services[name]).not.toHaveProperty('ports')
+		}
+	})
+
+	it('leaves the app service unchanged when services.supabase is declared - no app↔supabase depends_on coupling', () => {
+		const result = renderComposeFile({
+			...baseInput,
+			supabase: {},
+		})
+		const parsed = parse(result)
+
+		expect(parsed.services.app).toEqual({
+			image: 'ghcr.io/acme/web:sha-abc123',
+			restart: 'unless-stopped',
+			env_file: ['.env'],
+			ports: [`127.0.0.1:8080:${CONTAINER_PORT}`],
+		})
+	})
+
+	it('produces an unchanged compose YAML when services.supabase is omitted', () => {
+		const withoutSupabase = renderComposeFile(baseInput)
+
+		expect(parse(withoutSupabase)).toEqual({
+			services: {
+				app: {
+					image: 'ghcr.io/acme/web:sha-abc123',
+					restart: 'unless-stopped',
+					env_file: ['.env'],
+					ports: [`127.0.0.1:8080:${CONTAINER_PORT}`],
+				},
+			},
+		})
+		expect(parse(withoutSupabase).services).not.toHaveProperty('db')
+		expect(parse(withoutSupabase).services).not.toHaveProperty('kong')
+		expect(parse(withoutSupabase)).not.toHaveProperty('volumes')
+	})
+
+	it('merges supabase services with the embedded postgres sidecar when both are declared', () => {
+		const result = renderComposeFile({
+			...baseInput,
+			postgres: {
+				mode: 'embedded',
+			},
+			supabase: {},
+		})
+		const parsed = parse(result)
+
+		expect(Object.keys(parsed.services)).toEqual([
+			'app',
+			'postgres',
+			'postgres-backup',
+			'db',
+			'auth',
+			'realtime',
+			'storage',
+			'kong',
+			'studio',
+		])
+		expect(parsed.volumes).toEqual({
+			[POSTGRES_DATA_VOLUME]: {},
+			[SUPABASE_DB_DATA_VOLUME]: {},
+		})
 	})
 })

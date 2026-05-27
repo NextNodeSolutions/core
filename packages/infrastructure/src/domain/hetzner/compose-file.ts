@@ -1,4 +1,7 @@
-import type { PostgresServiceConfig } from '#/config/types.ts'
+import type {
+	PostgresServiceConfig,
+	SupabaseServiceConfig,
+} from '#/config/types.ts'
 import type { ImageRef } from '#/domain/deploy/target.ts'
 import type {
 	PostgresBackupSidecarService,
@@ -11,6 +14,11 @@ import {
 	buildPostgresBackupSidecar,
 	buildPostgresSidecar,
 } from '#/domain/services/postgres.ts'
+import type { SupabaseService } from '#/domain/services/supabase.ts'
+import {
+	SUPABASE_DB_DATA_VOLUME,
+	buildSupabaseStack,
+} from '#/domain/services/supabase.ts'
 import { stringify } from 'yaml'
 
 /**
@@ -37,6 +45,7 @@ export interface ComposeFileInput {
 	readonly hostPort: number
 	readonly volumes?: ReadonlyArray<ComposeVolume>
 	readonly postgres: PostgresServiceConfig | undefined
+	readonly supabase?: SupabaseServiceConfig
 	readonly projectName: string
 }
 
@@ -57,22 +66,26 @@ interface ComposeService {
 	readonly depends_on?: Readonly<Record<string, ComposeServiceDependency>>
 }
 
+type ComposeServiceLike =
+	| ComposeService
+	| PostgresSidecarService
+	| PostgresBackupSidecarService
+	| SupabaseService
+
 interface ComposeConfig {
-	readonly services: {
-		readonly app: ComposeService
-		readonly [POSTGRES_SIDECAR_SERVICE_NAME]?: PostgresSidecarService
-		readonly [POSTGRES_BACKUP_SERVICE_NAME]?: PostgresBackupSidecarService
-	}
+	readonly services: Readonly<Record<string, ComposeServiceLike>>
 	readonly volumes?: Readonly<Record<string, Record<string, never>>>
 }
 
 function buildTopLevelVolumes(
 	userVolumes: ReadonlyArray<ComposeVolume> = [],
 	includePostgres: boolean,
+	includeSupabase: boolean,
 ): Record<string, Record<string, never>> | undefined {
 	const result: Record<string, Record<string, never>> = {}
 	for (const v of userVolumes) result[v.name] = {}
 	if (includePostgres) result[POSTGRES_DATA_VOLUME] = {}
+	if (includeSupabase) result[SUPABASE_DB_DATA_VOLUME] = {}
 	return Object.keys(result).length ? result : undefined
 }
 
@@ -84,10 +97,12 @@ export function renderComposeFile(input: ComposeFileInput): string {
 	const postgresBackupSidecar = input.postgres
 		? buildPostgresBackupSidecar(input.postgres, input.projectName)
 		: null
+	const supabaseStack = input.supabase ? buildSupabaseStack() : null
 
 	const topLevelVolumes = buildTopLevelVolumes(
 		userVolumes,
 		postgresSidecar !== null,
+		supabaseStack !== null,
 	)
 
 	const config: ComposeConfig = {
@@ -114,6 +129,7 @@ export function renderComposeFile(input: ComposeFileInput): string {
 			...(postgresBackupSidecar && {
 				[POSTGRES_BACKUP_SERVICE_NAME]: postgresBackupSidecar,
 			}),
+			...supabaseStack,
 		},
 		...(topLevelVolumes && { volumes: topLevelVolumes }),
 	}

@@ -1,3 +1,8 @@
+import {
+	SUPABASE_DB_SERVICE_NAME,
+	SUPABASE_DEFAULT_DATABASE,
+} from './supabase.ts'
+
 /**
  * Prometheus community postgres_exporter, pinned. Hosted on quay.io per
  * upstream convention. Bumping this constant rolls out a new exporter
@@ -15,22 +20,6 @@ export const POSTGRES_EXPORTER_PORT = 9187
 
 /** Compose service name for the postgres_exporter sidecar. */
 export const POSTGRES_EXPORTER_SERVICE_NAME = 'postgres-exporter'
-
-/**
- * Compose service name of the Supabase database container - matches the
- * upstream `supabase/postgres` self-host stack convention (`db` is what
- * every other Supabase service connects to). The exporter joins the same
- * compose network as `db`.
- */
-export const SUPABASE_DB_SERVICE_NAME = 'db'
-
-/**
- * Database initialised inside the Supabase `db` container. Supabase's
- * postgres image runs `initdb -d postgres` and then layers `auth`,
- * `storage`, `realtime` schemas inside it - the exporter connects to
- * `postgres` so it sees the full cluster.
- */
-export const SUPABASE_DEFAULT_DATABASE = 'postgres'
 
 /**
  * SQL role the exporter authenticates as. Granted the PG ≥10 built-in

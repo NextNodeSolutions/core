@@ -9,13 +9,15 @@ import {
 	POSTGRES_EXPORTER_PORT,
 	POSTGRES_EXPORTER_SERVICE_NAME,
 	POSTGRES_EXPORTER_USER,
-	SUPABASE_DB_SERVICE_NAME,
-	SUPABASE_DEFAULT_DATABASE,
 	TAILSCALE_IP_ENV,
 	buildPostgresExporterDsn,
 	buildPostgresExporterSidecar,
 	renderPostgresExporterBootstrapSql,
 } from './postgres-exporter.ts'
+import {
+	SUPABASE_DB_SERVICE_NAME,
+	SUPABASE_DEFAULT_DATABASE,
+} from './supabase.ts'
 
 describe('postgres-exporter constants', () => {
 	it('pins the exporter to a tagged release on the quay.io community registry', () => {
@@ -33,14 +35,6 @@ describe('postgres-exporter constants', () => {
 		expect(POSTGRES_EXPORTER_INIT_MOUNT_PATH).toBe(
 			'/docker-entrypoint-initdb.d/00-pg-monitor.sql',
 		)
-	})
-
-	it('uses the upstream supabase service name for the database container', () => {
-		expect(SUPABASE_DB_SERVICE_NAME).toBe('db')
-	})
-
-	it('defaults the database name to the supabase initdb target', () => {
-		expect(SUPABASE_DEFAULT_DATABASE).toBe('postgres')
 	})
 
 	it('names the sidecar after the role it runs', () => {
