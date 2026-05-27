@@ -105,6 +105,127 @@ export function buildPostgresExporterInitMount(): string {
 }
 
 /**
+ * Env-var the prometheus community postgres_exporter reads to discover an
+ * extra custom-queries YAML (additive to its built-in metric set). Matches
+ * the upstream `--extend.query-path` flag.
+ */
+export const POSTGRES_EXPORTER_QUERIES_ENV = 'PG_EXPORTER_EXTEND_QUERY_PATH'
+
+/**
+ * Host-side filename of the custom queries YAML, written next to
+ * `compose.yaml` by the provisioning step. Kebab-case to match the rest of
+ * the host-side artefacts.
+ */
+export const POSTGRES_EXPORTER_QUERIES_FILENAME = 'pg-exporter-queries.yaml'
+
+/**
+ * Host-side path used in the compose bind mount, resolved relative to the
+ * compose file directory by docker-compose at `compose up` time.
+ */
+export const POSTGRES_EXPORTER_QUERIES_HOST_PATH = `./${POSTGRES_EXPORTER_QUERIES_FILENAME}`
+
+/**
+ * In-container path the exporter reads the custom queries from. Lives
+ * under `/etc/postgres_exporter/` to keep it out of the data dir and
+ * outside any image-managed path.
+ */
+export const POSTGRES_EXPORTER_QUERIES_MOUNT_PATH =
+	'/etc/postgres_exporter/queries.yaml'
+
+/**
+ * Cardinality cap on the per-statement metric set. The exporter scrapes
+ * the top-N rows of `pg_stat_statements` ordered by `total_exec_time`, so
+ * this is the maximum number of `pg_stat_statements_top_*` series the
+ * exporter can emit per scrape, regardless of how many statements the
+ * cluster has seen.
+ */
+export const POSTGRES_EXPORTER_TOP_QUERIES_LIMIT = 50
+
+/**
+ * Compose volume spec bind-mounting the custom queries YAML into the
+ * exporter container as read-only. `ro` is mandatory here - the exporter
+ * never writes back.
+ */
+export function buildPostgresExporterQueriesMount(): string {
+	return `${POSTGRES_EXPORTER_QUERIES_HOST_PATH}:${POSTGRES_EXPORTER_QUERIES_MOUNT_PATH}:ro`
+}
+
+/**
+ * Render the custom queries YAML the exporter loads via
+ * `PG_EXPORTER_EXTEND_QUERY_PATH`. Two metric sets:
+ *
+ *   - `pg_stat_statements_top`: top-N statements by `total_exec_time` with
+ *     per-statement `calls`, `total_exec_time`, `mean_exec_time`, `rows`.
+ *     The `query` LABEL collapses to `sha256(normalized_statement)[0:16]_
+ *     <first 80 chars>` - bounded length, deterministic, PII-safe (the
+ *     `query` column from `pg_stat_statements` is already normalised by
+ *     postgres: literals are replaced by `$N` placeholders).
+ *   - `pg_stat_statements_global`: cluster-wide aggregates - total calls,
+ *     total rows, total exec time, and the p95 of per-statement
+ *     `mean_exec_time` via `percentile_cont`.
+ *
+ * Requires the `pgcrypto` extension for `digest(query, 'sha256')`; this
+ * extension is enabled by default on the supabase/postgres image. The
+ * `LIMIT` is hard-coded from `POSTGRES_EXPORTER_TOP_QUERIES_LIMIT` so the
+ * cardinality contract is enforced from this module.
+ *
+ * Pure: returns the YAML as a string. The provisioning step writes the
+ * rendered file to disk on the VPS next to `compose.yaml`.
+ */
+export function renderPostgresExporterQueriesYaml(): string {
+	const topLimit = String(POSTGRES_EXPORTER_TOP_QUERIES_LIMIT)
+	return `pg_stat_statements_top:
+  query: |
+    SELECT
+      substring(encode(digest(query, 'sha256'), 'hex'), 1, 16) || '_' || substring(query, 1, 80) AS query,
+      calls,
+      total_exec_time,
+      mean_exec_time,
+      rows
+    FROM pg_stat_statements
+    ORDER BY total_exec_time DESC
+    LIMIT ${topLimit};
+  metrics:
+    - query:
+        usage: "LABEL"
+        description: "sha256(normalized_statement)[0:16]_<first 80 chars>"
+    - calls:
+        usage: "COUNTER"
+        description: "Total number of times the statement was executed"
+    - total_exec_time:
+        usage: "COUNTER"
+        description: "Total time spent in the statement in milliseconds"
+    - mean_exec_time:
+        usage: "GAUGE"
+        description: "Mean time spent per execution in milliseconds"
+    - rows:
+        usage: "COUNTER"
+        description: "Total rows retrieved or affected by the statement"
+pg_stat_statements_global:
+  query: |
+    SELECT
+      sum(calls) AS total_calls,
+      sum(rows) AS total_rows,
+      sum(total_exec_time) AS total_exec_time_ms,
+      percentile_cont(0.95) WITHIN GROUP (ORDER BY mean_exec_time) AS mean_exec_time_p95_ms
+    FROM pg_stat_statements;
+  metrics:
+    - total_calls:
+        usage: "COUNTER"
+        description: "Cluster-wide sum of statement executions"
+    - total_rows:
+        usage: "COUNTER"
+        description: "Cluster-wide sum of rows retrieved or affected"
+    - total_exec_time_ms:
+        usage: "COUNTER"
+        description: "Cluster-wide cumulative execution time in milliseconds"
+    - mean_exec_time_p95_ms:
+        usage: "GAUGE"
+        description: "p95 of per-statement mean execution time in milliseconds"
+`
+}
+
+/**
  * Render the DSN postgres_exporter uses to reach the Supabase `db`
  * service over the internal compose network. `sslmode=disable` because
  * the connection never leaves the docker bridge; password is the caller's
@@ -121,6 +242,7 @@ export interface PostgresExporterSidecarService {
 	readonly depends_on: ReadonlyArray<string>
 	readonly ports: ReadonlyArray<string>
 	readonly environment: Readonly<Record<string, string>>
+	readonly volumes: ReadonlyArray<string>
 }
 
 /**
@@ -148,7 +270,10 @@ export function buildPostgresExporterSidecar(): PostgresExporterSidecarService {
 			[POSTGRES_EXPORTER_DSN_ENV]: buildPostgresExporterDsn(
 				`\${${POSTGRES_EXPORTER_PASSWORD_ENV}}`,
 			),
+			[POSTGRES_EXPORTER_QUERIES_ENV]:
+				POSTGRES_EXPORTER_QUERIES_MOUNT_PATH,
 		},
+		volumes: [buildPostgresExporterQueriesMount()],
 	}
 }
 

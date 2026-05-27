@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { parse } from 'yaml'
 
 import {
 	POSTGRES_EXPORTER_DSN_ENV,
@@ -8,14 +9,21 @@ import {
 	POSTGRES_EXPORTER_INIT_MOUNT_PATH,
 	POSTGRES_EXPORTER_PASSWORD_ENV,
 	POSTGRES_EXPORTER_PORT,
+	POSTGRES_EXPORTER_QUERIES_ENV,
+	POSTGRES_EXPORTER_QUERIES_FILENAME,
+	POSTGRES_EXPORTER_QUERIES_HOST_PATH,
+	POSTGRES_EXPORTER_QUERIES_MOUNT_PATH,
 	POSTGRES_EXPORTER_SERVICE_NAME,
+	POSTGRES_EXPORTER_TOP_QUERIES_LIMIT,
 	POSTGRES_EXPORTER_USER,
 	TAILSCALE_IP_ENV,
 	buildPostgresExporterDsn,
 	buildPostgresExporterInitMount,
+	buildPostgresExporterQueriesMount,
 	buildPostgresExporterSidecar,
 	pgExporterPasswordSecretName,
 	renderPostgresExporterBootstrapSql,
+	renderPostgresExporterQueriesYaml,
 } from './postgres-exporter.ts'
 import {
 	SUPABASE_DB_SERVICE_NAME,
@@ -93,7 +101,15 @@ describe('buildPostgresExporterSidecar', () => {
 	it('threads the DSN through DATA_SOURCE_NAME with the per-project password env interpolated at compose-up', () => {
 		expect(buildPostgresExporterSidecar().environment).toEqual({
 			[POSTGRES_EXPORTER_DSN_ENV]: `postgresql://${POSTGRES_EXPORTER_USER}:\${${POSTGRES_EXPORTER_PASSWORD_ENV}}@${SUPABASE_DB_SERVICE_NAME}:5432/${SUPABASE_DEFAULT_DATABASE}?sslmode=disable`,
+			[POSTGRES_EXPORTER_QUERIES_ENV]:
+				POSTGRES_EXPORTER_QUERIES_MOUNT_PATH,
 		})
+	})
+
+	it('bind-mounts the custom queries YAML into the exporter container as read-only', () => {
+		expect(buildPostgresExporterSidecar().volumes).toEqual([
+			buildPostgresExporterQueriesMount(),
+		])
 	})
 })
 
@@ -153,6 +169,154 @@ describe('pgExporterPasswordSecretName', () => {
 	it('translates kebab hyphens to underscores so the result is a valid GitHub secret name', () => {
 		expect(pgExporterPasswordSecretName('my-cool-app')).toBe(
 			'PG_EXPORTER_PASSWORD_MY_COOL_APP',
+		)
+	})
+})
+
+describe('postgres-exporter custom-queries constants', () => {
+	it('uses the upstream PG_EXPORTER_EXTEND_QUERY_PATH env var so the exporter discovers the YAML', () => {
+		expect(POSTGRES_EXPORTER_QUERIES_ENV).toBe(
+			'PG_EXPORTER_EXTEND_QUERY_PATH',
+		)
+	})
+
+	it('persists the queries YAML next to compose.yaml on the host under a kebab-case filename', () => {
+		expect(POSTGRES_EXPORTER_QUERIES_FILENAME).toBe(
+			'pg-exporter-queries.yaml',
+		)
+		expect(POSTGRES_EXPORTER_QUERIES_HOST_PATH).toBe(
+			'./pg-exporter-queries.yaml',
+		)
+	})
+
+	it('mounts the queries YAML at a stable path outside any image-managed directory', () => {
+		expect(POSTGRES_EXPORTER_QUERIES_MOUNT_PATH).toBe(
+			'/etc/postgres_exporter/queries.yaml',
+		)
+	})
+
+	it('caps per-statement series at 50 so cardinality stays bounded regardless of cluster traffic', () => {
+		expect(POSTGRES_EXPORTER_TOP_QUERIES_LIMIT).toBe(50)
+	})
+})
+
+describe('buildPostgresExporterQueriesMount', () => {
+	it('binds the host-side queries YAML to the in-container path as read-only', () => {
+		expect(buildPostgresExporterQueriesMount()).toBe(
+			`${POSTGRES_EXPORTER_QUERIES_HOST_PATH}:${POSTGRES_EXPORTER_QUERIES_MOUNT_PATH}:ro`,
+		)
+	})
+})
+
+describe('renderPostgresExporterQueriesYaml', () => {
+	it('parses as valid YAML with exactly two metric sets - top-statements + global aggregates', () => {
+		const parsed = parse(renderPostgresExporterQueriesYaml())
+
+		expect(Object.keys(parsed)).toEqual([
+			'pg_stat_statements_top',
+			'pg_stat_statements_global',
+		])
+	})
+
+	it('caps the per-statement metric set with the module limit so cardinality is bounded', () => {
+		const yaml = renderPostgresExporterQueriesYaml()
+
+		expect(yaml).toContain(
+			`LIMIT ${String(POSTGRES_EXPORTER_TOP_QUERIES_LIMIT)};`,
+		)
+		expect(yaml).toContain('ORDER BY total_exec_time DESC')
+	})
+
+	it('labels each top statement with sha256(normalized_statement)[0:16] + first 80 chars - bounded length, PII-safe', () => {
+		const yaml = renderPostgresExporterQueriesYaml()
+
+		expect(yaml).toContain(
+			"substring(encode(digest(query, 'sha256'), 'hex'), 1, 16) || '_' || substring(query, 1, 80) AS query",
+		)
+	})
+
+	it('declares the top-statement columns with the correct prometheus usage types', () => {
+		const parsed = parse(renderPostgresExporterQueriesYaml())
+
+		expect(parsed.pg_stat_statements_top.metrics).toEqual([
+			{
+				query: {
+					usage: 'LABEL',
+					description:
+						'sha256(normalized_statement)[0:16]_<first 80 chars>',
+				},
+			},
+			{
+				calls: {
+					usage: 'COUNTER',
+					description:
+						'Total number of times the statement was executed',
+				},
+			},
+			{
+				total_exec_time: {
+					usage: 'COUNTER',
+					description:
+						'Total time spent in the statement in milliseconds',
+				},
+			},
+			{
+				mean_exec_time: {
+					usage: 'GAUGE',
+					description:
+						'Mean time spent per execution in milliseconds',
+				},
+			},
+			{
+				rows: {
+					usage: 'COUNTER',
+					description:
+						'Total rows retrieved or affected by the statement',
+				},
+			},
+		])
+	})
+
+	it('exposes global aggregates - total calls/rows/exec-time as counters and p95 mean_exec_time as gauge', () => {
+		const parsed = parse(renderPostgresExporterQueriesYaml())
+
+		expect(parsed.pg_stat_statements_global.metrics).toEqual([
+			{
+				total_calls: {
+					usage: 'COUNTER',
+					description: 'Cluster-wide sum of statement executions',
+				},
+			},
+			{
+				total_rows: {
+					usage: 'COUNTER',
+					description:
+						'Cluster-wide sum of rows retrieved or affected',
+				},
+			},
+			{
+				total_exec_time_ms: {
+					usage: 'COUNTER',
+					description:
+						'Cluster-wide cumulative execution time in milliseconds',
+				},
+			},
+			{
+				mean_exec_time_p95_ms: {
+					usage: 'GAUGE',
+					description:
+						'p95 of per-statement mean execution time in milliseconds',
+				},
+			},
+		])
+		expect(parsed.pg_stat_statements_global.query).toContain(
+			'percentile_cont(0.95) WITHIN GROUP (ORDER BY mean_exec_time)',
+		)
+	})
+
+	it('produces deterministic output across calls', () => {
+		expect(renderPostgresExporterQueriesYaml()).toBe(
+			renderPostgresExporterQueriesYaml(),
 		)
 	})
 })
