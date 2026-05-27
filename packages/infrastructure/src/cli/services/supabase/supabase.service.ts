@@ -172,6 +172,28 @@ export async function ensureJwtSecret(
 	)
 }
 
+/**
+ * DASHBOARD_PASSWORD is a human credential: the operator types it in the
+ * browser to log into Supabase Studio behind Caddy basic auth. GitHub
+ * env-secrets are write-only, so auto-generating it would lock the
+ * operator out of their own dashboard. Instead we require the user to
+ * set it themselves (as a repo env-secret) and fail loud at provision
+ * time if it's missing — earlier feedback than a silent deploy miss.
+ */
+export function requireDashboardPasswordSecret(
+	repoSecrets: Readonly<Record<string, string>>,
+	owner: string,
+	repo: string,
+	environment: AppEnvironment,
+): void {
+	if (!repoSecrets['DASHBOARD_PASSWORD']) {
+		throw new Error(
+			`supabase service: env-secret "DASHBOARD_PASSWORD" must be set on ${owner}/${repo} for the "${environment}" environment — this is the human admin password for Supabase Studio and must be chosen by the operator. Set it with: gh secret set DASHBOARD_PASSWORD --repo ${owner}/${repo} --env ${environment}`,
+		)
+	}
+	logger.info(`supabase DASHBOARD_PASSWORD present in ALL_SECRETS`)
+}
+
 export function createSupabaseService(ctx: ServiceFactoryContext): Service {
 	const secretName = pgExporterPasswordSecretName(ctx.projectName)
 	return {
@@ -188,6 +210,12 @@ export function createSupabaseService(ctx: ServiceFactoryContext): Service {
 				ctx.environment,
 			)
 			await ensureJwtSecret(
+				ctx.repoSecrets,
+				ctx.repository.owner,
+				ctx.repository.name,
+				ctx.environment,
+			)
+			requireDashboardPasswordSecret(
 				ctx.repoSecrets,
 				ctx.repository.owner,
 				ctx.repository.name,

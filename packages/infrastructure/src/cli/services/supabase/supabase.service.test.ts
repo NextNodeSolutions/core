@@ -11,6 +11,7 @@ import {
 	generateJwtSecret,
 	generatePgExporterPassword,
 	generatePostgresPassword,
+	requireDashboardPasswordSecret,
 	rotatePgExporterPasswordSecret,
 	supabaseServiceDefinition,
 } from './supabase.service.ts'
@@ -290,6 +291,43 @@ describe('ensureJwtSecret', () => {
 			),
 		).rejects.toThrow(/gh CLI unavailable/)
 		expect(adapter.setRepoEnvSecret).not.toHaveBeenCalled()
+	})
+})
+
+describe('requireDashboardPasswordSecret', () => {
+	it('returns silently when DASHBOARD_PASSWORD is present in ALL_SECRETS', () => {
+		expect(() =>
+			requireDashboardPasswordSecret(
+				{ DASHBOARD_PASSWORD: 'operator-chosen' },
+				'NextNodeSolutions',
+				'core',
+				'production',
+			),
+		).not.toThrow()
+	})
+
+	it('throws a helpful error pointing to the env-secret name and the gh command when absent', () => {
+		expect(() =>
+			requireDashboardPasswordSecret(
+				{},
+				'NextNodeSolutions',
+				'core',
+				'production',
+			),
+		).toThrow(
+			/env-secret "DASHBOARD_PASSWORD" must be set on NextNodeSolutions\/core for the "production" environment.*gh secret set DASHBOARD_PASSWORD --repo NextNodeSolutions\/core --env production/s,
+		)
+	})
+
+	it('scopes the error to the development environment when called from a dev deploy', () => {
+		expect(() =>
+			requireDashboardPasswordSecret(
+				{},
+				'NextNodeSolutions',
+				'core',
+				'development',
+			),
+		).toThrow(/"development"/)
 	})
 })
 
