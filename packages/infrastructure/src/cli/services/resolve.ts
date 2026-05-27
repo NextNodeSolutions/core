@@ -1,6 +1,7 @@
 import type { GithubRepository } from '#/cli/env.ts'
 import type { DeployableConfig } from '#/config/types.ts'
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
+import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 
 import { SERVICE_DEFINITIONS } from './registry.ts'
@@ -18,6 +19,9 @@ export interface ResolveServicesInput {
 export function resolveServices(
 	input: ResolveServicesInput,
 ): ReadonlyArray<Service> {
+	const deployDomain = input.config.project.domain
+		? resolveDeployDomain(input.config.project.domain, input.environment)
+		: null
 	const ctx: ServiceFactoryContext = {
 		projectName: input.config.project.name,
 		environment: input.environment,
@@ -25,6 +29,7 @@ export function resolveServices(
 		cfToken: input.cfToken,
 		infraStorage: input.infraStorage,
 		repoSecrets: input.repoSecrets,
+		deployDomain,
 	}
 	const services: Service[] = []
 	for (const definition of Object.values(SERVICE_DEFINITIONS)) {

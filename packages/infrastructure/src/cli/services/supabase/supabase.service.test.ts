@@ -20,6 +20,7 @@ import {
 function makeCtx(
 	repoSecrets: Readonly<Record<string, string>> = {},
 	projectName = 'myapp',
+	deployDomain: string | null = 'example.com',
 ): ServiceFactoryContext {
 	return {
 		projectName,
@@ -28,6 +29,7 @@ function makeCtx(
 		cfToken: 'cf-token',
 		infraStorage: null,
 		repoSecrets,
+		deployDomain,
 	}
 }
 
@@ -389,6 +391,8 @@ describe('createSupabaseService', () => {
 					STUDIO_DEFAULT_ORGANIZATION: 'myapp',
 					STUDIO_DEFAULT_PROJECT: 'myapp',
 					POOLER_TENANT_ID: 'myapp',
+					API_EXTERNAL_URL: 'https://api.example.com',
+					SITE_URL: 'https://example.com',
 				},
 				secret: {
 					PG_EXPORTER_PASSWORD: 'pgexp',
@@ -421,7 +425,41 @@ describe('createSupabaseService', () => {
 				STUDIO_DEFAULT_ORGANIZATION: 'my-cool-app',
 				STUDIO_DEFAULT_PROJECT: 'my-cool-app',
 				POOLER_TENANT_ID: 'my-cool-app',
+				API_EXTERNAL_URL: 'https://api.example.com',
+				SITE_URL: 'https://example.com',
 			})
+		})
+
+		it('exposes API_EXTERNAL_URL on api.<domain> and SITE_URL on the bare domain when deployDomain is the production host', async () => {
+			const env = await createSupabaseService(
+				makeCtx(ALL_SECRETS, 'myapp', 'example.com'),
+			).loadEnv()
+
+			expect(env.public['SITE_URL']).toBe('https://example.com')
+			expect(env.public['API_EXTERNAL_URL']).toBe(
+				'https://api.example.com',
+			)
+		})
+
+		it('derives both URLs from the dev subdomain when deployDomain is the dev host', async () => {
+			const env = await createSupabaseService(
+				makeCtx(ALL_SECRETS, 'myapp', 'dev.example.com'),
+			).loadEnv()
+
+			expect(env.public['SITE_URL']).toBe('https://dev.example.com')
+			expect(env.public['API_EXTERNAL_URL']).toBe(
+				'https://api.dev.example.com',
+			)
+		})
+
+		it('throws when deployDomain is null — gotrue auth callbacks cannot be silently misconfigured', async () => {
+			const service = createSupabaseService(
+				makeCtx(ALL_SECRETS, 'myapp', null),
+			)
+
+			await expect(service.loadEnv()).rejects.toThrow(
+				/project\.domain must be set/,
+			)
 		})
 
 		it('reuses SUPABASE_KONG_HTTP_PORT from the domain so Caddy and kong share one source of truth for the port', async () => {

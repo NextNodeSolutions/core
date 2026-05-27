@@ -291,6 +291,17 @@ export function createSupabaseService(ctx: ServiceFactoryContext): Service {
 				jwtSecret,
 			)
 
+			if (ctx.deployDomain === null) {
+				throw new Error(
+					"supabase service: project.domain must be set in nextnode.toml — supabase bakes the resolved domain into gotrue's API_EXTERNAL_URL (magic-link / OAuth callback host) and SITE_URL (default redirect target), so a missing domain breaks the entire auth flow at runtime",
+				)
+			}
+
+			// `api.<domain>` is the NextNode convention for the kong API
+			// gateway vhost: app traffic stays on `<domain>`, the supabase
+			// REST + auth + storage + realtime entrypoints sit behind
+			// `api.<domain>`, and Studio (the admin UI) is fronted by
+			// Caddy basic auth on a separate vhost (see P7-11).
 			const publicEnv: Record<string, string> = {
 				KONG_HTTP_PORT: String(SUPABASE_KONG_HTTP_PORT),
 				JWT_EXPIRY: String(SUPABASE_JWT_EXPIRY_SECONDS),
@@ -298,6 +309,8 @@ export function createSupabaseService(ctx: ServiceFactoryContext): Service {
 				STUDIO_DEFAULT_ORGANIZATION: ctx.projectName,
 				STUDIO_DEFAULT_PROJECT: ctx.projectName,
 				POOLER_TENANT_ID: ctx.projectName,
+				API_EXTERNAL_URL: `https://api.${ctx.deployDomain}`,
+				SITE_URL: `https://${ctx.deployDomain}`,
 			}
 
 			return { public: publicEnv, secret }

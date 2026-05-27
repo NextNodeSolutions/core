@@ -34,6 +34,7 @@ function makeCtx(
 		cfToken: 'cf-token',
 		infraStorage,
 		repoSecrets,
+		deployDomain: 'example.com',
 	}
 }
 

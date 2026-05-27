@@ -42,6 +42,15 @@ export interface ServiceFactoryContext {
 	readonly cfToken: string
 	readonly infraStorage: InfraStorageRuntimeConfig | null
 	readonly repoSecrets: Readonly<Record<string, string>>
+	/**
+	 * Project deploy domain already resolved against the current
+	 * environment via `resolveDeployDomain` (so callers see `example.com`
+	 * in production, `dev.example.com` in development). `null` when the
+	 * project does not declare `project.domain` — services that require
+	 * a domain (e.g. supabase, which bakes it into auth callback URLs)
+	 * must fail loud rather than fall back silently.
+	 */
+	readonly deployDomain: string | null
 }
 
 export interface ServiceDefinition<K extends ServiceName = ServiceName> {

@@ -28,6 +28,7 @@ const CTX: ServiceFactoryContext = {
 	cfToken: 'cf-token',
 	infraStorage: INFRA_STORAGE,
 	repoSecrets: {},
+	deployDomain: 'example.com',
 }
 
 const CONFIG: R2ServiceConfig = {
