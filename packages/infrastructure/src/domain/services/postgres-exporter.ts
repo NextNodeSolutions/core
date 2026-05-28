@@ -36,24 +36,15 @@ export const POSTGRES_EXPORTER_USER = 'postgres_exporter'
 export const POSTGRES_EXPORTER_DSN_ENV = 'DATA_SOURCE_NAME'
 
 /**
- * Compose env-var the project's per-project exporter password is injected
- * into via `.env`. The provisioning step (see Phase 6 / P6-06) generates
- * a 32-byte b64 random secret per project, persists it as
- * `PG_EXPORTER_PASSWORD_<PROJECT>` in GitHub, and `convergeVps` writes it
- * into the VPS `.env` under this canonical name so the same compose file
- * works on every host.
+ * Compose env-var the exporter password is injected into via `.env`. The
+ * provisioning step generates a 32-byte b64 random secret and persists it
+ * as a GitHub env-secret named literally `PG_EXPORTER_PASSWORD` on the
+ * project's repository, scoped to the current pipeline environment. GH
+ * already isolates the secret per (repo, environment), so no project or
+ * environment suffix in the secret name. `convergeVps` writes it into the
+ * VPS `.env` under this same name so the compose file works on every host.
  */
 export const POSTGRES_EXPORTER_PASSWORD_ENV = 'PG_EXPORTER_PASSWORD'
-
-/**
- * Per-project GitHub org secret name carrying the exporter password.
- * Project names are kebab-case lowercase; GitHub secrets accept only
- * `[A-Z0-9_]`, so hyphens map to underscores and the whole identifier
- * uppercases. Same name flows through `ALL_SECRETS` at deploy time.
- */
-export function pgExporterPasswordSecretName(projectName: string): string {
-	return `${POSTGRES_EXPORTER_PASSWORD_ENV}_${projectName.replace(/-/g, '_').toUpperCase()}`
-}
 
 /**
  * Compose env-var holding the VPS Tailscale IPv4 address. Written into
@@ -288,9 +279,10 @@ export function buildPostgresExporterSidecar(): PostgresExporterSidecarService {
  * pipe this file through psql later to repair a missing role).
  *
  * Pure: returns the SQL as a string. The caller sources the password
- * (per-project secret `PG_EXPORTER_PASSWORD_<PROJECT>`, see P6-06) and
- * persists the rendered file to disk during provisioning. Base64
- * passwords are safe to single-quote since the alphabet excludes `'`.
+ * (GitHub env-secret `PG_EXPORTER_PASSWORD` on the project repo, scoped
+ * to the current pipeline environment) and persists the rendered file to
+ * disk during provisioning. Base64 passwords are safe to single-quote
+ * since the alphabet excludes `'`.
  */
 export function renderPostgresExporterBootstrapSql(password: string): string {
 	return `DO $$

@@ -2,9 +2,6 @@ import { randomBytes } from 'node:crypto'
 
 import { createEnvSecretsAdapter } from '#/adapters/github/env-secrets.ts'
 import type { EnvSecretsAdapter } from '#/adapters/github/env-secrets.ts'
-import { createOrgSecretsAdapter } from '#/adapters/github/org-secrets.ts'
-import type { OrgSecretsAdapter } from '#/adapters/github/org-secrets.ts'
-import { requireEnv } from '#/cli/env.ts'
 import { loadR2Service } from '#/cli/services/r2/load.ts'
 import type {
 	Service,
@@ -12,10 +9,7 @@ import type {
 	ServiceFactoryContext,
 } from '#/cli/services/service.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
-import {
-	POSTGRES_EXPORTER_PASSWORD_ENV,
-	pgExporterPasswordSecretName,
-} from '#/domain/services/postgres-exporter.ts'
+import { POSTGRES_EXPORTER_PASSWORD_ENV } from '#/domain/services/postgres-exporter.ts'
 import type { ServiceEnv } from '#/domain/services/service.ts'
 import { signSupabaseJwt } from '#/domain/services/supabase-jwt.ts'
 import {
@@ -28,7 +22,6 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
 
-const ENV_GITHUB_OWNER = 'GITHUB_REPOSITORY_OWNER'
 const PASSWORD_BYTES = 32
 
 /**
@@ -52,30 +45,10 @@ export function generateJwtSecret(): string {
 }
 
 /**
- * Same shape as `cli/r2/ensure-setup.ts:persistOrgSecrets`: read the org
- * from env, probe gh, push one secret. Kept inline (one call site each
- * for ensure + rotate) rather than added to the adapter interface — the
- * adapter stays a thin wrapper around `gh secret set`.
- */
-async function pushOrgSecret(
-	name: string,
-	value: string,
-	adapter: OrgSecretsAdapter,
-): Promise<void> {
-	const org = requireEnv(ENV_GITHUB_OWNER)
-	if (!(await adapter.ghAvailable())) {
-		throw new Error(
-			'supabase service: gh CLI unavailable — cannot persist the postgres-exporter password as a GitHub org secret',
-		)
-	}
-	await adapter.setOrgSecret(name, value, org)
-}
-
-/**
  * GitHub env-secrets are scoped per (repo, environment), so the secret
  * name stays a literal (no `_<PROJECT>` suffix) — the repo + env are
- * the isolation boundary. Symmetric with `pushOrgSecret`: probe gh,
- * fail loud if unavailable, push one secret.
+ * the isolation boundary. Probe gh, fail loud if unavailable, push one
+ * secret.
  */
 async function pushEnvSecret(
 	name: string,
@@ -94,34 +67,56 @@ async function pushEnvSecret(
 }
 
 /**
- * Idempotent provision: if the secret already reached this run through
- * `ALL_SECRETS`, leave it alone; otherwise generate + push. Skipping on
- * `repoSecrets[name]` (not on a separate gh-list call) keeps the source
- * of truth aligned with what deploy reads — same dict, no drift.
+ * Idempotent provision: if `PG_EXPORTER_PASSWORD` already reached this
+ * run through `ALL_SECRETS`, leave it alone; otherwise generate + push as
+ * a GitHub env-secret on the project repo, scoped to the current pipeline
+ * environment. Skipping on `repoSecrets[name]` (not on a separate gh-list
+ * call) keeps the source of truth aligned with what deploy reads — same
+ * dict, no drift.
  */
 export async function ensurePgExporterPasswordSecret(
-	projectName: string,
 	repoSecrets: Readonly<Record<string, string>>,
-	adapter: OrgSecretsAdapter = createOrgSecretsAdapter(),
+	owner: string,
+	repo: string,
+	environment: AppEnvironment,
+	adapter: EnvSecretsAdapter = createEnvSecretsAdapter(),
 ): Promise<void> {
-	const secretName = pgExporterPasswordSecretName(projectName)
-	if (repoSecrets[secretName]) {
+	if (repoSecrets[POSTGRES_EXPORTER_PASSWORD_ENV]) {
 		logger.info(
-			`postgres-exporter password already in ALL_SECRETS (${secretName}) — skipping`,
+			`postgres-exporter password already in ALL_SECRETS (${POSTGRES_EXPORTER_PASSWORD_ENV}) — skipping`,
 		)
 		return
 	}
-	await pushOrgSecret(secretName, generatePgExporterPassword(), adapter)
-	logger.info(`postgres-exporter password persisted as ${secretName}`)
+	await pushEnvSecret(
+		POSTGRES_EXPORTER_PASSWORD_ENV,
+		generatePgExporterPassword(),
+		owner,
+		repo,
+		environment,
+		adapter,
+	)
+	logger.info(
+		`postgres-exporter password persisted as env-secret on ${owner}/${repo} (${environment})`,
+	)
 }
 
 export async function rotatePgExporterPasswordSecret(
-	projectName: string,
-	adapter: OrgSecretsAdapter = createOrgSecretsAdapter(),
+	owner: string,
+	repo: string,
+	environment: AppEnvironment,
+	adapter: EnvSecretsAdapter = createEnvSecretsAdapter(),
 ): Promise<void> {
-	const secretName = pgExporterPasswordSecretName(projectName)
-	await pushOrgSecret(secretName, generatePgExporterPassword(), adapter)
-	logger.info(`postgres-exporter password rotated for ${secretName}`)
+	await pushEnvSecret(
+		POSTGRES_EXPORTER_PASSWORD_ENV,
+		generatePgExporterPassword(),
+		owner,
+		repo,
+		environment,
+		adapter,
+	)
+	logger.info(
+		`postgres-exporter password rotated on ${owner}/${repo} (${environment})`,
+	)
 }
 
 /**
@@ -211,7 +206,6 @@ export function requireDashboardPasswordSecret(
 }
 
 export function createSupabaseService(ctx: ServiceFactoryContext): Service {
-	const pgExporterSecretName = pgExporterPasswordSecretName(ctx.projectName)
 	if (ctx.infraStorage === null) {
 		throw new Error(
 			'supabase service: infra storage (R2 state bucket) must be loaded by the caller — supabase reads the R2 service state to derive BACKUP_R2_* env vars for the pg_dump sidecar',
@@ -222,8 +216,10 @@ export function createSupabaseService(ctx: ServiceFactoryContext): Service {
 		name: 'supabase',
 		async provision(): Promise<void> {
 			await ensurePgExporterPasswordSecret(
-				ctx.projectName,
 				ctx.repoSecrets,
+				ctx.repository.owner,
+				ctx.repository.name,
+				ctx.environment,
 			)
 			await ensurePostgresPasswordSecret(
 				ctx.repoSecrets,
@@ -250,7 +246,7 @@ export function createSupabaseService(ctx: ServiceFactoryContext): Service {
 				readonly envKey: string
 			}> = [
 				{
-					secretName: pgExporterSecretName,
+					secretName: POSTGRES_EXPORTER_PASSWORD_ENV,
 					envKey: POSTGRES_EXPORTER_PASSWORD_ENV,
 				},
 				{

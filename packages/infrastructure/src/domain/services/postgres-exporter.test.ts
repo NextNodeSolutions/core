@@ -21,7 +21,6 @@ import {
 	buildPostgresExporterInitMount,
 	buildPostgresExporterQueriesMount,
 	buildPostgresExporterSidecar,
-	pgExporterPasswordSecretName,
 	renderPostgresExporterBootstrapSql,
 	renderPostgresExporterQueriesYaml,
 } from './postgres-exporter.ts'
@@ -155,20 +154,6 @@ describe('renderPostgresExporterBootstrapSql', () => {
 	it('produces deterministic output for the same input', () => {
 		expect(renderPostgresExporterBootstrapSql('s3cret')).toBe(
 			renderPostgresExporterBootstrapSql('s3cret'),
-		)
-	})
-})
-
-describe('pgExporterPasswordSecretName', () => {
-	it('uppercases and prefixes with the canonical env var name', () => {
-		expect(pgExporterPasswordSecretName('myapp')).toBe(
-			'PG_EXPORTER_PASSWORD_MYAPP',
-		)
-	})
-
-	it('translates kebab hyphens to underscores so the result is a valid GitHub secret name', () => {
-		expect(pgExporterPasswordSecretName('my-cool-app')).toBe(
-			'PG_EXPORTER_PASSWORD_MY_COOL_APP',
 		)
 	})
 })

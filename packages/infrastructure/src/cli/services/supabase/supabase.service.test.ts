@@ -1,5 +1,4 @@
 import type { EnvSecretsAdapter } from '#/adapters/github/env-secrets.ts'
-import type { OrgSecretsAdapter } from '#/adapters/github/org-secrets.ts'
 import type { ServiceFactoryContext } from '#/cli/services/service.ts'
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import type { R2ServiceState } from '#/domain/services/r2.ts'
@@ -58,16 +57,6 @@ function makeCtx(
 	}
 }
 
-function makeAdapter(
-	overrides: Partial<OrgSecretsAdapter> = {},
-): OrgSecretsAdapter {
-	return {
-		ghAvailable: vi.fn().mockResolvedValue(true),
-		setOrgSecret: vi.fn().mockResolvedValue(undefined),
-		...overrides,
-	}
-}
-
 function makeEnvAdapter(
 	overrides: Partial<EnvSecretsAdapter> = {},
 ): EnvSecretsAdapter {
@@ -79,7 +68,6 @@ function makeEnvAdapter(
 }
 
 beforeEach(() => {
-	vi.stubEnv('GITHUB_REPOSITORY_OWNER', 'NextNodeOrg')
 	loadR2ServiceMock.mockReset()
 	loadR2ServiceMock.mockResolvedValue(R2_STATE)
 })
@@ -105,50 +93,75 @@ describe('generatePgExporterPassword', () => {
 })
 
 describe('ensurePgExporterPasswordSecret', () => {
-	it('skips when the secret is already in ALL_SECRETS (no gh call)', async () => {
-		const adapter = makeAdapter()
+	it('skips when PG_EXPORTER_PASSWORD is already in ALL_SECRETS (no gh call)', async () => {
+		const adapter = makeEnvAdapter()
 
 		await ensurePgExporterPasswordSecret(
-			'myapp',
-			{ PG_EXPORTER_PASSWORD_MYAPP: 'existing' },
+			{ PG_EXPORTER_PASSWORD: 'existing' },
+			'NextNodeSolutions',
+			'core',
+			'production',
 			adapter,
 		)
 
 		expect(adapter.ghAvailable).not.toHaveBeenCalled()
-		expect(adapter.setOrgSecret).not.toHaveBeenCalled()
+		expect(adapter.setRepoEnvSecret).not.toHaveBeenCalled()
 	})
 
-	it('generates + persists a fresh 32-byte b64 password when absent from ALL_SECRETS', async () => {
-		const adapter = makeAdapter()
+	it('persists a fresh 32-byte b64 password as an env-secret (repo + env scope, no project suffix)', async () => {
+		const adapter = makeEnvAdapter()
 
-		await ensurePgExporterPasswordSecret('my-cool-app', {}, adapter)
+		await ensurePgExporterPasswordSecret(
+			{},
+			'NextNodeSolutions',
+			'core',
+			'production',
+			adapter,
+		)
 
-		expect(adapter.setOrgSecret).toHaveBeenCalledTimes(1)
-		const [name, value, org] = vi.mocked(adapter.setOrgSecret).mock
-			.calls[0]!
-		expect(name).toBe('PG_EXPORTER_PASSWORD_MY_COOL_APP')
-		expect(org).toBe('NextNodeOrg')
+		expect(adapter.setRepoEnvSecret).toHaveBeenCalledTimes(1)
+		const [name, value, owner, repo, environment] = vi.mocked(
+			adapter.setRepoEnvSecret,
+		).mock.calls[0]!
+		expect(name).toBe('PG_EXPORTER_PASSWORD')
+		expect(owner).toBe('NextNodeSolutions')
+		expect(repo).toBe('core')
+		expect(environment).toBe('production')
 		expect(value).toHaveLength(44)
 		expect(Buffer.from(value, 'base64')).toHaveLength(32)
 	})
 
-	it('throws when GITHUB_REPOSITORY_OWNER is unset', async () => {
-		vi.unstubAllEnvs()
+	it('scopes to the development environment when called from a dev deploy', async () => {
+		const adapter = makeEnvAdapter()
 
-		await expect(
-			ensurePgExporterPasswordSecret('myapp', {}, makeAdapter()),
-		).rejects.toThrow(/GITHUB_REPOSITORY_OWNER/)
+		await ensurePgExporterPasswordSecret(
+			{},
+			'NextNodeSolutions',
+			'core',
+			'development',
+			adapter,
+		)
+
+		const [, , , , environment] = vi.mocked(adapter.setRepoEnvSecret).mock
+			.calls[0]!
+		expect(environment).toBe('development')
 	})
 
 	it('throws when gh CLI is unavailable rather than silently dropping the password', async () => {
-		const adapter = makeAdapter({
+		const adapter = makeEnvAdapter({
 			ghAvailable: vi.fn().mockResolvedValue(false),
 		})
 
 		await expect(
-			ensurePgExporterPasswordSecret('myapp', {}, adapter),
+			ensurePgExporterPasswordSecret(
+				{},
+				'NextNodeSolutions',
+				'core',
+				'production',
+				adapter,
+			),
 		).rejects.toThrow(/gh CLI unavailable/)
-		expect(adapter.setOrgSecret).not.toHaveBeenCalled()
+		expect(adapter.setRepoEnvSecret).not.toHaveBeenCalled()
 	})
 })
 
@@ -362,26 +375,39 @@ describe('requireDashboardPasswordSecret', () => {
 })
 
 describe('rotatePgExporterPasswordSecret', () => {
-	it('force-sets the secret with a fresh value (no idempotency check)', async () => {
-		const adapter = makeAdapter()
+	it('force-sets the env-secret with a fresh value (no idempotency check)', async () => {
+		const adapter = makeEnvAdapter()
 
-		await rotatePgExporterPasswordSecret('myapp', adapter)
+		await rotatePgExporterPasswordSecret(
+			'NextNodeSolutions',
+			'core',
+			'production',
+			adapter,
+		)
 
-		expect(adapter.setOrgSecret).toHaveBeenCalledTimes(1)
-		const [name, value, org] = vi.mocked(adapter.setOrgSecret).mock
-			.calls[0]!
-		expect(name).toBe('PG_EXPORTER_PASSWORD_MYAPP')
-		expect(org).toBe('NextNodeOrg')
+		expect(adapter.setRepoEnvSecret).toHaveBeenCalledTimes(1)
+		const [name, value, owner, repo, environment] = vi.mocked(
+			adapter.setRepoEnvSecret,
+		).mock.calls[0]!
+		expect(name).toBe('PG_EXPORTER_PASSWORD')
+		expect(owner).toBe('NextNodeSolutions')
+		expect(repo).toBe('core')
+		expect(environment).toBe('production')
 		expect(value).toHaveLength(44)
 	})
 
 	it('throws when gh CLI is unavailable', async () => {
-		const adapter = makeAdapter({
+		const adapter = makeEnvAdapter({
 			ghAvailable: vi.fn().mockResolvedValue(false),
 		})
 
 		await expect(
-			rotatePgExporterPasswordSecret('myapp', adapter),
+			rotatePgExporterPasswordSecret(
+				'NextNodeSolutions',
+				'core',
+				'production',
+				adapter,
+			),
 		).rejects.toThrow(/gh CLI unavailable/)
 	})
 })
@@ -399,7 +425,7 @@ describe('createSupabaseService', () => {
 
 	describe('loadEnv', () => {
 		const ALL_SECRETS = {
-			PG_EXPORTER_PASSWORD_MYAPP: 'pgexp',
+			PG_EXPORTER_PASSWORD: 'pgexp',
 			POSTGRES_PASSWORD: 'pgpass',
 			JWT_SECRET: 'jwt',
 			DASHBOARD_PASSWORD: 'dash',
@@ -447,7 +473,7 @@ describe('createSupabaseService', () => {
 			const env = await createSupabaseService(
 				makeCtx(
 					{
-						PG_EXPORTER_PASSWORD_MY_COOL_APP: 'pgexp',
+						PG_EXPORTER_PASSWORD: 'pgexp',
 						POSTGRES_PASSWORD: 'pgpass',
 						JWT_SECRET: 'jwt',
 						DASHBOARD_PASSWORD: 'dash',
@@ -510,11 +536,11 @@ describe('createSupabaseService', () => {
 			)
 		})
 
-		it('reads the pg-exporter password under the project-derived name (kebab → snake-upper)', async () => {
+		it('reads the pg-exporter password under the literal PG_EXPORTER_PASSWORD env-secret name regardless of project', async () => {
 			const service = createSupabaseService(
 				makeCtx(
 					{
-						PG_EXPORTER_PASSWORD_MY_COOL_APP: 'pgexp',
+						PG_EXPORTER_PASSWORD: 'pgexp',
 						POSTGRES_PASSWORD: 'pgpass',
 						JWT_SECRET: 'jwt',
 						DASHBOARD_PASSWORD: 'dash',
@@ -574,11 +600,11 @@ describe('createSupabaseService', () => {
 			const service = createSupabaseService(makeCtx({}))
 
 			await expect(service.loadEnv()).rejects.toThrow(
-				/PG_EXPORTER_PASSWORD_MYAPP.*POSTGRES_PASSWORD.*JWT_SECRET.*DASHBOARD_PASSWORD/s,
+				/PG_EXPORTER_PASSWORD.*POSTGRES_PASSWORD.*JWT_SECRET.*DASHBOARD_PASSWORD/s,
 			)
 		})
 
-		it('throws and names PG_EXPORTER_PASSWORD_MYAPP when only the pg-exporter secret is missing', async () => {
+		it('throws and names PG_EXPORTER_PASSWORD when only the pg-exporter secret is missing', async () => {
 			const service = createSupabaseService(
 				makeCtx({
 					POSTGRES_PASSWORD: 'pgpass',
@@ -588,14 +614,14 @@ describe('createSupabaseService', () => {
 			)
 
 			await expect(service.loadEnv()).rejects.toThrow(
-				/PG_EXPORTER_PASSWORD_MYAPP/,
+				/PG_EXPORTER_PASSWORD/,
 			)
 		})
 
 		it('throws and names POSTGRES_PASSWORD when only POSTGRES_PASSWORD is missing', async () => {
 			const service = createSupabaseService(
 				makeCtx({
-					PG_EXPORTER_PASSWORD_MYAPP: 'pgexp',
+					PG_EXPORTER_PASSWORD: 'pgexp',
 					JWT_SECRET: 'jwt',
 					DASHBOARD_PASSWORD: 'dash',
 				}),
@@ -607,7 +633,7 @@ describe('createSupabaseService', () => {
 		it('throws and names JWT_SECRET when only JWT_SECRET is missing', async () => {
 			const service = createSupabaseService(
 				makeCtx({
-					PG_EXPORTER_PASSWORD_MYAPP: 'pgexp',
+					PG_EXPORTER_PASSWORD: 'pgexp',
 					POSTGRES_PASSWORD: 'pgpass',
 					DASHBOARD_PASSWORD: 'dash',
 				}),
@@ -619,7 +645,7 @@ describe('createSupabaseService', () => {
 		it('throws and names DASHBOARD_PASSWORD when only DASHBOARD_PASSWORD is missing', async () => {
 			const service = createSupabaseService(
 				makeCtx({
-					PG_EXPORTER_PASSWORD_MYAPP: 'pgexp',
+					PG_EXPORTER_PASSWORD: 'pgexp',
 					POSTGRES_PASSWORD: 'pgpass',
 					JWT_SECRET: 'jwt',
 				}),
@@ -633,7 +659,7 @@ describe('createSupabaseService', () => {
 		it('treats an empty-string secret as missing', async () => {
 			const service = createSupabaseService(
 				makeCtx({
-					PG_EXPORTER_PASSWORD_MYAPP: '',
+					PG_EXPORTER_PASSWORD: '',
 					POSTGRES_PASSWORD: 'pgpass',
 					JWT_SECRET: 'jwt',
 					DASHBOARD_PASSWORD: 'dash',
@@ -641,7 +667,7 @@ describe('createSupabaseService', () => {
 			)
 
 			await expect(service.loadEnv()).rejects.toThrow(
-				/PG_EXPORTER_PASSWORD_MYAPP/,
+				/PG_EXPORTER_PASSWORD/,
 			)
 		})
 
