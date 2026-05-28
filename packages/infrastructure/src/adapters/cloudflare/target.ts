@@ -7,6 +7,14 @@ import { PAGES_MANAGED_RESOURCES } from '#/domain/cloudflare/managed-resources.t
 import { computePagesProjectName } from '#/domain/cloudflare/pages-project-name.ts'
 import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
 import { executeHandlers } from '#/domain/deploy/execute-handlers.ts'
+
+import { reconcileDnsRecords } from './dns/reconcile.ts'
+import { getPagesProject } from './pages/api.ts'
+import { reconcileDomains } from './pages/domains.ts'
+import { updatePagesEnvVars } from './pages/env.ts'
+import { provisionProject } from './pages/project.ts'
+import { teardownPagesDns, teardownProject } from './teardown-pages.ts'
+
 import type {
 	DeployEnv,
 	DeployInput,
@@ -23,13 +31,6 @@ import type {
 import type { TeardownResult } from '#/domain/deploy/teardown-result.ts'
 import type { TeardownTarget } from '#/domain/deploy/teardown-target.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
-
-import { reconcileDnsRecords } from './dns/reconcile.ts'
-import { getPagesProject } from './pages/api.ts'
-import { reconcileDomains } from './pages/domains.ts'
-import { updatePagesEnvVars } from './pages/env.ts'
-import { provisionProject } from './pages/project.ts'
-import { teardownPagesDns, teardownProject } from './teardown-pages.ts'
 
 export interface CloudflarePagesTargetConfig {
 	readonly accountId: string

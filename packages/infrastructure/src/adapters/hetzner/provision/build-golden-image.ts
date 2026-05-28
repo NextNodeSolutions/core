@@ -1,5 +1,4 @@
 import { createSnapshot, findImageById } from '#/adapters/hetzner/api/image.ts'
-import type { CreateServerInput } from '#/adapters/hetzner/api/server.ts'
 import {
 	createServer,
 	deleteServer,
@@ -22,6 +21,8 @@ import {
 	renderGoldenImageCloudInit,
 } from '#/domain/hetzner/golden-image.ts'
 import { createLogger } from '@nextnode-solutions/logger'
+
+import type { CreateServerInput } from '#/adapters/hetzner/api/server.ts'
 
 const logger = createLogger()
 

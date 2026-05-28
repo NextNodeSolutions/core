@@ -1,6 +1,7 @@
-import type { CloudflareClient } from '@/lib/adapters/cloudflare/client.ts'
 import { listDnsRecordsByContent } from '@/lib/adapters/cloudflare/dns-records.ts'
 import { listZones } from '@/lib/adapters/cloudflare/zones.ts'
+
+import type { CloudflareClient } from '@/lib/adapters/cloudflare/client.ts'
 import type {
 	VpsAccessKind,
 	VpsDnsMatch,

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 
-import type { R2ServiceState } from './r2.ts'
 import {
 	SUPABASE_AUTH_IMAGE,
 	SUPABASE_AUTH_SERVICE_NAME,
@@ -23,6 +22,8 @@ import {
 	buildSupabaseBackupEnv,
 	buildSupabaseStack,
 } from './supabase.ts'
+
+import type { R2ServiceState } from './r2.ts'
 
 describe('supabase image pins', () => {
 	it('pins the supabase/postgres image to a PG 17 release line', () => {

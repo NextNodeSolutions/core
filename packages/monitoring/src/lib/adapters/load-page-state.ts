@@ -1,6 +1,7 @@
 import { MissingEnvError } from '@/lib/adapters/env.ts'
 import { logger } from '@/lib/adapters/logger.ts'
 import { UpstreamApiFailure } from '@/lib/adapters/upstream-api-failure.ts'
+
 import type { LoadState } from '@/lib/domain/load-state.ts'
 
 export const loadPageState = async <T>(

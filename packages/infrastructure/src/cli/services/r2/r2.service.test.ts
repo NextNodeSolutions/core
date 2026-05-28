@@ -1,8 +1,9 @@
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
 import type { ServiceFactoryContext } from '#/cli/services/service.ts'
 import type { R2ServiceConfig } from '#/config/types.ts'
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import type { R2ServiceState } from '#/domain/services/r2.ts'
-import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const ensureMock = vi.hoisted(() => vi.fn())
 const loadMock = vi.hoisted(() => vi.fn())

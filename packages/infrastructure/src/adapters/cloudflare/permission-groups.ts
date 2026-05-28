@@ -1,6 +1,6 @@
-import type { R2PermissionGroupIds } from '#/domain/cloudflare/r2/token-policy.ts'
-
 import { CLOUDFLARE_API_BASE, cfFetchJson, requireArrayResult } from './api.ts'
+
+import type { R2PermissionGroupIds } from '#/domain/cloudflare/r2/token-policy.ts'
 
 const READ_GROUP_NAME = 'Workers R2 Storage Bucket Item Read'
 const WRITE_GROUP_NAME = 'Workers R2 Storage Bucket Item Write'

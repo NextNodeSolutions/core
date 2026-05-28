@@ -9,6 +9,7 @@ import {
 	buildSummary,
 	parseSemanticReleaseOutput,
 } from '#/domain/pipeline/publish-result.ts'
+
 import type { PublishResult } from '#/domain/pipeline/publish-result.ts'
 
 const DEFAULT_SR_OUTPUT = '/tmp/sr-output.txt'

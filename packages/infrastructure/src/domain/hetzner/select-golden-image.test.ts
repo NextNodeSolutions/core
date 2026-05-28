@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import type { GoldenImageCandidate } from './select-golden-image.ts'
 import { selectGoldenImage } from './select-golden-image.ts'
+
+import type { GoldenImageCandidate } from './select-golden-image.ts'
 
 const NOW_MS = new Date('2026-04-22T12:00:00Z').getTime()
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000

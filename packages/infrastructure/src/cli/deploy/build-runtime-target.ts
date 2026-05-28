@@ -1,9 +1,9 @@
+import { TARGET_DEFINITIONS } from './registry.ts'
+
 import type { DeployableConfig } from '#/config/types.ts'
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import type { DeployTarget } from '#/domain/deploy/target.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
-
-import { TARGET_DEFINITIONS } from './registry.ts'
 
 export function buildRuntimeTarget(
 	config: DeployableConfig,

@@ -1,7 +1,8 @@
-import type { ResourceOutcome } from '#/domain/deploy/resource-outcome.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
 import { createPagesProject, getPagesProject } from './api.ts'
+
+import type { ResourceOutcome } from '#/domain/deploy/resource-outcome.ts'
 
 const logger = createLogger()
 

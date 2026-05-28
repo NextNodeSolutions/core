@@ -1,5 +1,6 @@
-import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 
 vi.mock('node:timers/promises', () => ({
 	setTimeout: vi.fn(() => Promise.resolve()),
@@ -23,10 +24,11 @@ vi.mock('#/adapters/r2/client.ts', () => ({
 	})),
 }))
 
-import type { MockResponse } from '#/test-fetch.ts'
 import { notFound, okJson, unauthorized } from '#/test-fetch.ts'
 
 import { ensureR2Service } from './ensure.ts'
+
+import type { MockResponse } from '#/test-fetch.ts'
 
 const PERMISSION_GROUPS_BODY = {
 	success: true,

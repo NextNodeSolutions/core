@@ -1,4 +1,5 @@
 import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
+
 import type { AppEnvironment } from '#/domain/environment.ts'
 
 export interface DesiredPagesDomain {

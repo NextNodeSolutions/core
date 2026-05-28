@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { buildProvisionSummary } from './provision-summary.ts'
+
 import type { ProvisionResult } from './target.ts'
 
 describe('buildProvisionSummary', () => {

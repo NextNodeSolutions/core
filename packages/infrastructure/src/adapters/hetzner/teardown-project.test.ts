@@ -1,13 +1,14 @@
-import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { SshSession } from './ssh/session.types.ts'
-import type { HcloudConvergedState } from './state/types.ts'
 import {
 	releaseProjectHostPort,
 	teardownProjectCaddyRoute,
 	teardownProjectContainer,
 } from './teardown-project.ts'
+
+import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
+import type { SshSession } from './ssh/session.types.ts'
+import type { HcloudConvergedState } from './state/types.ts'
 import type { TeardownCaddyContext } from './teardown-project.ts'
 
 const CADDY_CONTEXT: TeardownCaddyContext = {

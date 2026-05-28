@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createProviderUtils } from '../src/providers/base.js'
 import { createProvider } from '../src/providers/registry.js'
 import { createResendProvider } from '../src/providers/resend.js'
+
 import type { EmailMessage } from '../src/types/email.js'
 
 // Mock the Resend SDK — external API boundary, no real HTTP

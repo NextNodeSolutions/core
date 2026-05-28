@@ -16,11 +16,12 @@ import {
 	downloadPostgresBackup,
 	listPostgresBackupSnapshots,
 } from '#/adapters/r2/backup-store.ts'
-import type { PostgresBackupSnapshot } from '#/domain/services/postgres.ts'
 import { selectPostgresBackupForRestore } from '#/domain/services/postgres.ts'
 import { CreateBucketCommand, S3Client } from '@aws-sdk/client-s3'
 import { Client } from 'pg'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+
+import type { PostgresBackupSnapshot } from '#/domain/services/postgres.ts'
 
 const RUN = process.env.RUN_INTEGRATION === '1'
 

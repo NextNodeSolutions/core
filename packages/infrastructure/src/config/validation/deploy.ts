@@ -1,10 +1,3 @@
-import type {
-	DeployImageConfig,
-	DeploySection,
-	DeployTargetType,
-	DeployVolume,
-	DeployableProjectType,
-} from '#/config/types.ts'
 import {
 	DEFAULT_DEPLOY_IMAGE,
 	DEFAULT_DEPLOY_TARGETS,
@@ -17,6 +10,14 @@ import {
 } from '#/config/types.ts'
 
 import { DEPLOY_PROVIDER_VALIDATORS } from './providers/registry.ts'
+
+import type {
+	DeployImageConfig,
+	DeploySection,
+	DeployTargetType,
+	DeployVolume,
+	DeployableProjectType,
+} from '#/config/types.ts'
 import type { ValidationResult } from './result.ts'
 
 function validateSecrets(deployRecord: Record<string, unknown>): {

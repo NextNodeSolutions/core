@@ -5,6 +5,11 @@
 
 import { LOG_LEVEL_PRIORITY } from '../constants.js'
 import { ConsoleTransport } from '../transports/console.js'
+import { generateRequestId } from '../utils/crypto.js'
+import { detectEnvironment } from '../utils/environment.js'
+
+import { createLogEntry } from './create-log-entry.js'
+
 import type {
 	ChildLoggerConfig,
 	Environment,
@@ -14,10 +19,6 @@ import type {
 	LogObject,
 	Transport,
 } from '../types.js'
-import { generateRequestId } from '../utils/crypto.js'
-import { detectEnvironment } from '../utils/environment.js'
-
-import { createLogEntry } from './create-log-entry.js'
 
 export class NextNodeLogger implements Logger {
 	private readonly environment: Environment

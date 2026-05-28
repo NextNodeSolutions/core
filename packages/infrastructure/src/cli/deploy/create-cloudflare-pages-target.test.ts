@@ -1,7 +1,8 @@
-import type { CloudflarePagesDeployableConfig } from '#/config/types.ts'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createCloudflarePagesTarget } from './create-cloudflare-pages-target.ts'
+
+import type { CloudflarePagesDeployableConfig } from '#/config/types.ts'
 
 vi.mock('../../adapters/cloudflare/target.ts', () => ({
 	CloudflarePagesTarget: vi.fn(),

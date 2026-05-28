@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { buildR2CaddyBinding } from './caddy-binding.ts'
+
 import type { InfraStorageRuntimeConfig } from './runtime-config.ts'
 
 const R2: InfraStorageRuntimeConfig = {

@@ -3,15 +3,15 @@
  * Implementation of EmailProvider interface for Resend
  */
 
-import type { Logger } from '@nextnode-solutions/logger'
-import type { Attachment, CreateEmailOptions, Resend } from 'resend'
-
-import type { EmailMessage } from '../types/email.js'
-import type { EmailProvider } from '../types/provider.js'
-import type { EmailError, SendResult } from '../types/result.js'
 import { fail } from '../types/result.js'
 
 import { createProviderUtils } from './base.js'
+
+import type { Logger } from '@nextnode-solutions/logger'
+import type { Attachment, CreateEmailOptions, Resend } from 'resend'
+import type { EmailMessage } from '../types/email.js'
+import type { EmailProvider } from '../types/provider.js'
+import type { EmailError, SendResult } from '../types/result.js'
 
 const HTTP_VALIDATION_ERROR = 422
 const HTTP_UNAUTHORIZED = 401

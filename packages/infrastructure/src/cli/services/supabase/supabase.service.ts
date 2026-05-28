@@ -1,16 +1,8 @@
 import { randomBytes } from 'node:crypto'
 
 import { createEnvSecretsAdapter } from '#/adapters/github/env-secrets.ts'
-import type { EnvSecretsAdapter } from '#/adapters/github/env-secrets.ts'
 import { loadR2Service } from '#/cli/services/r2/load.ts'
-import type {
-	Service,
-	ServiceDefinition,
-	ServiceFactoryContext,
-} from '#/cli/services/service.ts'
-import type { AppEnvironment } from '#/domain/environment.ts'
 import { POSTGRES_EXPORTER_PASSWORD_ENV } from '#/domain/services/postgres-exporter.ts'
-import type { ServiceEnv } from '#/domain/services/service.ts'
 import { signSupabaseJwt } from '#/domain/services/supabase-jwt.ts'
 import {
 	SUPABASE_DASHBOARD_USERNAME,
@@ -19,6 +11,15 @@ import {
 	buildSupabaseBackupEnv,
 } from '#/domain/services/supabase.ts'
 import { createLogger } from '@nextnode-solutions/logger'
+
+import type { EnvSecretsAdapter } from '#/adapters/github/env-secrets.ts'
+import type {
+	Service,
+	ServiceDefinition,
+	ServiceFactoryContext,
+} from '#/cli/services/service.ts'
+import type { AppEnvironment } from '#/domain/environment.ts'
+import type { ServiceEnv } from '#/domain/services/service.ts'
 
 const logger = createLogger()
 

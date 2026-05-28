@@ -1,18 +1,19 @@
 import { ensureR2Bucket } from '#/adapters/cloudflare/r2/buckets.ts'
-import type {
-	Service,
-	ServiceDefinition,
-	ServiceFactoryContext,
-} from '#/cli/services/service.ts'
-import type { PostgresServiceConfig } from '#/config/types.ts'
 import { R2_BUCKET_LOCATION_HINT } from '#/config/types.ts'
 import {
 	buildPostgresEmbeddedEnv,
 	buildPostgresExternalEnv,
 	postgresBackupBucketName,
 } from '#/domain/services/postgres.ts'
-import type { ServiceEnv } from '#/domain/services/service.ts'
 import { createLogger } from '@nextnode-solutions/logger'
+
+import type {
+	Service,
+	ServiceDefinition,
+	ServiceFactoryContext,
+} from '#/cli/services/service.ts'
+import type { PostgresServiceConfig } from '#/config/types.ts'
+import type { ServiceEnv } from '#/domain/services/service.ts'
 
 const logger = createLogger()
 

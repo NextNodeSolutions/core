@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import type { CloudflarePagesProjectEntry } from '@/lib/domain/cloudflare/project-group.ts'
 import { groupPagesProjects } from '@/lib/domain/cloudflare/project-group.ts'
+
+import type { CloudflarePagesProjectEntry } from '@/lib/domain/cloudflare/project-group.ts'
 
 const entry = (
 	name: string,

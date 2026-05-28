@@ -1,12 +1,13 @@
 import { readFileSync } from 'node:fs'
 
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { recoverCommand } from './recover.command.ts'
+
 import type {
 	RecoverOrphanInput,
 	RecoverOrphanResult,
 } from '#/adapters/hetzner/recover-orphan.ts'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-
-import { recoverCommand } from './recover.command.ts'
 
 vi.mock(import('#/cli/r2/load-runtime.ts'), async () => ({
 	loadR2Runtime: vi.fn(async () => ({

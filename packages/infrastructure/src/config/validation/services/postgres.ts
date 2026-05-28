@@ -1,5 +1,6 @@
-import type { PostgresMode, PostgresServiceConfig } from '#/config/types.ts'
 import { POSTGRES_MODES, isPostgresMode, isRecord } from '#/config/types.ts'
+
+import type { PostgresMode, PostgresServiceConfig } from '#/config/types.ts'
 import type { ValidationResult } from '#/config/validation/result.ts'
 
 export function validatePostgresService(

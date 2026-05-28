@@ -1,6 +1,6 @@
-import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
-
 import { CADDY_ENV_CF_API_TOKEN, CADDY_ENV_R2_SECRET_KEY } from './config.ts'
+
+import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 
 export interface CaddyEnvInput {
 	readonly infraStorage: InfraStorageRuntimeConfig

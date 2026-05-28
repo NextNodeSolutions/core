@@ -16,8 +16,9 @@
  */
 
 import { cachified } from '@epic-web/cachified'
-import type { Cache, CacheEntry } from '@epic-web/cachified'
 import { LRUCache } from 'lru-cache'
+
+import type { Cache, CacheEntry } from '@epic-web/cachified'
 
 const DEFAULT_MAX_ENTRIES = 1000
 const SINGLETON_KEY = 'value'

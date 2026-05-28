@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
+import { computeProjectHealth } from '@/lib/domain/cloudflare/pages-project-health.ts'
+
 import type {
 	CloudflarePagesDeployment,
 	CloudflarePagesDeploymentEnvironment,
 	CloudflarePagesDeploymentStatus,
 } from '@/lib/domain/cloudflare/pages-deployment.ts'
-import { computeProjectHealth } from '@/lib/domain/cloudflare/pages-project-health.ts'
 
 const deployment = (
 	id: string,

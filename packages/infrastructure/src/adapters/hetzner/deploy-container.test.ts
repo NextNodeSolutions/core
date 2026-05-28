@@ -1,8 +1,9 @@
-import type { PostgresServiceConfig } from '#/config/types.ts'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { BringUpInput } from './deploy-container.ts'
 import { bringUpApp, bringUpDb } from './deploy-container.ts'
+
+import type { PostgresServiceConfig } from '#/config/types.ts'
+import type { BringUpInput } from './deploy-container.ts'
 import type { SshSession } from './ssh/session.types.ts'
 
 beforeEach(() => {

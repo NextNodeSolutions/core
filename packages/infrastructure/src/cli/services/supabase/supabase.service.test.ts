@@ -1,9 +1,10 @@
+import { SUPABASE_KONG_HTTP_PORT } from '#/domain/services/supabase.ts'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import type { EnvSecretsAdapter } from '#/adapters/github/env-secrets.ts'
 import type { ServiceFactoryContext } from '#/cli/services/service.ts'
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import type { R2ServiceState } from '#/domain/services/r2.ts'
-import { SUPABASE_KONG_HTTP_PORT } from '#/domain/services/supabase.ts'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const loadR2ServiceMock = vi.hoisted(() => vi.fn())
 

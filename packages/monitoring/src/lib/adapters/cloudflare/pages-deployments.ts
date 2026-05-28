@@ -1,20 +1,21 @@
 import { keyedMemoizeAsync } from '@/lib/adapters/cache.ts'
 import { apiGet, extractArrayResult } from '@/lib/adapters/cloudflare/client.ts'
-import type { CloudflareClient } from '@/lib/adapters/cloudflare/client.ts'
 import {
 	parseCloudflarePagesDeploymentEnvironment,
 	parseCloudflarePagesDeploymentStatus,
 	SHORT_ID_LENGTH,
-} from '@/lib/domain/cloudflare/pages-deployment.ts'
-import type {
-	CloudflarePagesDeployment,
-	CloudflarePagesDeploymentStatus,
 } from '@/lib/domain/cloudflare/pages-deployment.ts'
 import { isRecord } from '@/lib/domain/is-record.ts'
 import {
 	parseStringArray,
 	parseStringOrNull,
 } from '@/lib/domain/parse-string.ts'
+
+import type { CloudflareClient } from '@/lib/adapters/cloudflare/client.ts'
+import type {
+	CloudflarePagesDeployment,
+	CloudflarePagesDeploymentStatus,
+} from '@/lib/domain/cloudflare/pages-deployment.ts'
 
 const parseTrigger = (value: unknown): string | null => {
 	if (!isRecord(value)) return null

@@ -1,5 +1,6 @@
-import type { GhRunner } from './gh-runner.ts'
 import { defaultGhRunner, probeGh } from './gh-runner.ts'
+
+import type { GhRunner } from './gh-runner.ts'
 
 export interface EnvSecretsAdapter {
 	setRepoEnvSecret: (

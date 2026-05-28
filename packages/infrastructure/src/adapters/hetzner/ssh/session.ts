@@ -1,9 +1,9 @@
 import { Buffer } from 'node:buffer'
 import { createHash, timingSafeEqual } from 'node:crypto'
 
-import type { Client, SFTPWrapper } from 'ssh2'
 import { Client as Ssh2Client } from 'ssh2'
 
+import type { Client, SFTPWrapper } from 'ssh2'
 import type { SshSession, SshSessionConfig } from './session.types.ts'
 
 const DEFAULT_PORT = 22

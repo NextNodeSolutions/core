@@ -1,7 +1,8 @@
-import type { SshSession } from '#/adapters/hetzner/ssh/session.types.ts'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { waitForSsh } from './wait-for-ssh.ts'
+
+import type { SshSession } from '#/adapters/hetzner/ssh/session.types.ts'
 
 function createMockSession(): SshSession {
 	return {

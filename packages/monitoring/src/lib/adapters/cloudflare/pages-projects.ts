@@ -4,9 +4,10 @@ import {
 	extractObjectResult,
 	listAll,
 } from '@/lib/adapters/cloudflare/client.ts'
+import { isRecord } from '@/lib/domain/is-record.ts'
+
 import type { CloudflareClient } from '@/lib/adapters/cloudflare/client.ts'
 import type { CloudflarePagesProject } from '@/lib/domain/cloudflare/pages-project.ts'
-import { isRecord } from '@/lib/domain/is-record.ts'
 
 // Cloudflare rejects per_page > 10 on /pages/projects with error 8000024
 // ("Invalid list options provided"). Undocumented cap — used as the chunk size

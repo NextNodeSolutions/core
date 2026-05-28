@@ -7,11 +7,12 @@ import { createTailnetClient } from '#/adapters/tailscale/oauth.ts'
 import { getEnv, requireEnv } from '#/cli/env.ts'
 import { loadR2Runtime } from '#/cli/r2/load-runtime.ts'
 import { findOrphanVps } from '#/domain/hetzner/orphans.ts'
+import { createLogger } from '@nextnode-solutions/logger'
+
 import type {
 	HetznerServerSummary,
 	OrphanVps,
 } from '#/domain/hetzner/orphans.ts'
-import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
 

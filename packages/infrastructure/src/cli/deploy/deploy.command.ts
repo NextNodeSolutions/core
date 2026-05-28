@@ -4,10 +4,11 @@ const logger = createLogger()
 
 import { writeEnvVar, writeSecret } from '#/adapters/github/env.ts'
 import { writeSummary } from '#/adapters/github/output.ts'
-import type { DeployableConfig } from '#/config/types.ts'
 import { buildDeploySummary } from '#/domain/deploy/deploy-summary.ts'
 
 import { resolveDeployContext } from './resolve-deploy-context.ts'
+
+import type { DeployableConfig } from '#/config/types.ts'
 
 export async function deployCommand(config: DeployableConfig): Promise<void> {
 	const { target, env, input, merged } = await resolveDeployContext(config)

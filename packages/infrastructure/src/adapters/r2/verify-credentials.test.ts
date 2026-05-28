@@ -1,7 +1,8 @@
-import type { MockResponse } from '#/test-fetch.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { verifyR2Credentials } from './verify-credentials.ts'
+
+import type { MockResponse } from '#/test-fetch.ts'
 
 function status(code: number, body = ''): MockResponse {
 	return {

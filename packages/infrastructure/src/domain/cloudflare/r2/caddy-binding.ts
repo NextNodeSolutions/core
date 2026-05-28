@@ -1,6 +1,6 @@
-import type { ObjectStorageBinding } from '#/domain/storage/binding.ts'
-
 import { computeR2Host } from './addressing.ts'
+
+import type { ObjectStorageBinding } from '#/domain/storage/binding.ts'
 import type { InfraStorageRuntimeConfig } from './runtime-config.ts'
 
 /**

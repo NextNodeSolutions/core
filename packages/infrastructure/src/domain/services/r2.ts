@@ -1,6 +1,5 @@
 import type { ServicesConfig } from '#/config/types.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
-
 import type { ServiceEnv } from './service.ts'
 
 /**

@@ -10,10 +10,10 @@ Embedded Postgres lifecycle: provision a sidecar in the project's compose stack,
 
 ### Commands
 
-| Command                                          | Purpose                                                            |
-| ------------------------------------------------ | ------------------------------------------------------------------ |
-| `infrastructure provision --project <slug>`      | Provision the project (compose stack, R2 buckets, DNS).            |
-| `infrastructure migrate`                         | Apply drizzle migrations against `DATABASE_URL` (advisory-locked). |
+| Command                                                    | Purpose                                                            |
+| ---------------------------------------------------------- | ------------------------------------------------------------------ |
+| `infrastructure provision --project <slug>`                | Provision the project (compose stack, R2 buckets, DNS).            |
+| `infrastructure migrate`                                   | Apply drizzle migrations against `DATABASE_URL` (advisory-locked). |
 | `infrastructure restore --project <slug> --at <iso> --yes` | Fetch the closest backup ≤ `<iso>` from R2 and replay it.          |
 
 `restore` is destructive (`pg_restore --clean --if-exists`) and refuses to run without `--yes`.

@@ -1,18 +1,8 @@
-import type {
-	PostgresServiceConfig,
-	SupabaseServiceConfig,
-} from '#/config/types.ts'
-import type { ImageRef } from '#/domain/deploy/target.ts'
-import type { PostgresExporterSidecarService } from '#/domain/services/postgres-exporter.ts'
 import {
 	POSTGRES_EXPORTER_SERVICE_NAME,
 	buildPostgresExporterInitMount,
 	buildPostgresExporterSidecar,
 } from '#/domain/services/postgres-exporter.ts'
-import type {
-	PostgresBackupSidecarService,
-	PostgresSidecarService,
-} from '#/domain/services/postgres.ts'
 import {
 	POSTGRES_BACKUP_SERVICE_NAME,
 	POSTGRES_DATA_VOLUME,
@@ -20,11 +10,6 @@ import {
 	buildPostgresBackupSidecar,
 	buildPostgresSidecar,
 } from '#/domain/services/postgres.ts'
-import type {
-	SupabaseBackupSidecarService,
-	SupabaseService,
-	SupabaseStack,
-} from '#/domain/services/supabase.ts'
 import {
 	SUPABASE_BACKUP_SERVICE_NAME,
 	SUPABASE_DB_DATA_VOLUME,
@@ -33,6 +18,22 @@ import {
 	buildSupabaseStack,
 } from '#/domain/services/supabase.ts'
 import { stringify } from 'yaml'
+
+import type {
+	PostgresServiceConfig,
+	SupabaseServiceConfig,
+} from '#/config/types.ts'
+import type { ImageRef } from '#/domain/deploy/target.ts'
+import type { PostgresExporterSidecarService } from '#/domain/services/postgres-exporter.ts'
+import type {
+	PostgresBackupSidecarService,
+	PostgresSidecarService,
+} from '#/domain/services/postgres.ts'
+import type {
+	SupabaseBackupSidecarService,
+	SupabaseService,
+	SupabaseStack,
+} from '#/domain/services/supabase.ts'
 
 /**
  * Port the application container listens on.

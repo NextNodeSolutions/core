@@ -1,11 +1,12 @@
+import { describe, expect, it } from 'vitest'
+
+import { buildMigrateCommand, buildSnapshotCommand } from './migrate.ts'
+
 import type {
 	ImageRef,
 	MigrateInput,
 	SnapshotInput,
 } from '#/domain/deploy/target.ts'
-import { describe, expect, it } from 'vitest'
-
-import { buildMigrateCommand, buildSnapshotCommand } from './migrate.ts'
 
 const IMAGE: ImageRef = {
 	registry: 'ghcr.io',

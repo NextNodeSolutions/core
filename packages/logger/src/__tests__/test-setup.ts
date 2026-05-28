@@ -3,8 +3,9 @@
  * Provides reusable mocking utilities for Vitest tests
  */
 
-import type { MockInstance } from 'vitest'
 import { vi } from 'vitest'
+
+import type { MockInstance } from 'vitest'
 
 /**
  * Console mocking utilities

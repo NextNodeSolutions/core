@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import type { TeardownResult } from './teardown-result.ts'
 import { buildTeardownSummary } from './teardown-summary.ts'
+
+import type { TeardownResult } from './teardown-result.ts'
 
 describe('buildTeardownSummary', () => {
 	it('renders a VPS teardown summary with resource outcomes', () => {

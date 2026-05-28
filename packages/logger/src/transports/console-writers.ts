@@ -7,6 +7,7 @@
 import { formatForBrowser } from '../formatters/console-browser.js'
 import { formatForNode } from '../formatters/console-node.js'
 import { formatAsJson } from '../formatters/json.js'
+
 import type { LogEntry } from '../types.js'
 
 export type ConsoleFormat = 'json' | 'node' | 'browser'

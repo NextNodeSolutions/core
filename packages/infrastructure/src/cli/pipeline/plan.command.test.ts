@@ -3,10 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { STATIC_WITH_DOMAIN } from '#/cli/fixtures.ts'
-import type { NextNodeConfig } from '#/config/types.ts'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { planCommand } from './plan.command.ts'
+
+import type { NextNodeConfig } from '#/config/types.ts'
 
 const PACKAGE_CONFIG: NextNodeConfig = {
 	project: {

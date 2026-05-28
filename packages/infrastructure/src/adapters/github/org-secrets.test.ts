@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import type { ExecResult, GhRunner } from './gh-runner.ts'
 import { createOrgSecretsAdapter } from './org-secrets.ts'
+
+import type { ExecResult, GhRunner } from './gh-runner.ts'
 
 function ok(stdout = '', stderr = ''): ExecResult {
 	return { exitCode: 0, stdout, stderr }

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 
-import type { R2ServiceState } from './r2.ts'
 import {
 	buildR2ServiceEnv,
 	computeR2BucketBindings,
@@ -9,6 +8,8 @@ import {
 	r2ServiceStateKey,
 	r2ServiceTokenName,
 } from './r2.ts'
+
+import type { R2ServiceState } from './r2.ts'
 
 describe('computeR2ServiceAliases', () => {
 	it('returns an empty list when neither [services.r2] nor [services.supabase] is declared', () => {

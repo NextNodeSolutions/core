@@ -17,8 +17,9 @@ import { prodGateCommand } from './cli/pipeline/prod-gate.command.ts'
 import { publishResultCommand } from './cli/pipeline/publish-result.command.ts'
 import { rotatePgExporterPasswordCommand } from './cli/services/supabase/rotate.command.ts'
 import { loadConfig } from './config/load.ts'
-import type { DeployableConfig, NextNodeConfig } from './config/types.ts'
 import { isDeployableConfig } from './config/types.ts'
+
+import type { DeployableConfig, NextNodeConfig } from './config/types.ts'
 
 const logger = createLogger()
 

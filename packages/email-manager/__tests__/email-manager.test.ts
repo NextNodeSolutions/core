@@ -5,12 +5,14 @@
  * facade's orchestration behavior (provider creation, defaultFrom resolution,
  * render failure propagation, provider delegation).
  */
-import { createSpyLogger } from '@nextnode-solutions/logger/testing'
 import { createElement } from 'react'
-import type { ReactElement } from 'react'
+
+import { createSpyLogger } from '@nextnode-solutions/logger/testing'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createEmailManager } from '../src/email-manager.js'
+
+import type { ReactElement } from 'react'
 import type { EmailProvider } from '../src/types/provider.js'
 import type { SendResult } from '../src/types/result.js'
 

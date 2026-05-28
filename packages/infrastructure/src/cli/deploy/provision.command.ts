@@ -1,13 +1,14 @@
 import { writeSummary } from '#/adapters/github/output.ts'
 import { getEnv, requireEnv, requireGithubRepository } from '#/cli/env.ts'
 import { resolveServices } from '#/cli/services/resolve.ts'
-import type { DeployableConfig } from '#/config/types.ts'
 import { buildProvisionSummary } from '#/domain/deploy/provision-summary.ts'
 import { resolveEnvironment } from '#/domain/environment.ts'
 
 import { buildRuntimeTarget } from './build-runtime-target.ts'
 import { ensureInfraStorageForConfig } from './load-infra-storage.ts'
 import { readRepoSecrets } from './secrets.ts'
+
+import type { DeployableConfig } from '#/config/types.ts'
 
 export async function provisionCommand(
 	config: DeployableConfig,

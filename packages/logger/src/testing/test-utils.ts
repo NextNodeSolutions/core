@@ -4,6 +4,8 @@
  */
 
 import { createLogEntry } from '../core/create-log-entry.js'
+import { generateRequestId } from '../utils/crypto.js'
+
 import type {
 	ChildLoggerConfig,
 	LogEntry,
@@ -12,7 +14,6 @@ import type {
 	LogObject,
 	SpyLogger,
 } from '../types.js'
-import { generateRequestId } from '../utils/crypto.js'
 
 /**
  * Creates a spy logger that tracks all log calls without producing any output.

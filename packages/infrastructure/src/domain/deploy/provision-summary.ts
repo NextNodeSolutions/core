@@ -2,6 +2,7 @@ import {
 	buildResourceOutcomeRows,
 	renderKeyValueTable,
 } from './summary-renderer.ts'
+
 import type { ProvisionResult } from './target.ts'
 
 export function buildProvisionSummary(

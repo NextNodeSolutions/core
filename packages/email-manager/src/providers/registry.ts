@@ -4,15 +4,15 @@
  */
 
 import { createLogger } from '@nextnode-solutions/logger'
-import type { Logger } from '@nextnode-solutions/logger'
 
+import { createResendProvider } from './resend.js'
+
+import type { Logger } from '@nextnode-solutions/logger'
 import type {
 	EmailProvider,
 	ProviderConfigMap,
 	ResendProviderConfig,
 } from '../types/provider.js'
-
-import { createResendProvider } from './resend.js'
 
 /**
  * Initialize the Resend provider

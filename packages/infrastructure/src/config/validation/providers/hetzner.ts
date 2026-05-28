@@ -1,6 +1,6 @@
-import type { HetznerDeployConfig } from '#/config/types.ts'
 import { DEFAULT_HETZNER_CONFIG, isRecord } from '#/config/types.ts'
 
+import type { HetznerDeployConfig } from '#/config/types.ts'
 import type { DeployProviderValidator } from './registry.ts'
 
 type FieldResult = { error?: string; value?: string }

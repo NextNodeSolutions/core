@@ -1,4 +1,5 @@
 import { resolveProjectIdentity } from '@/lib/domain/cloudflare/pages-environment.ts'
+
 import type { CloudflarePagesProject } from '@/lib/domain/cloudflare/pages-project.ts'
 
 export interface CloudflarePagesProjectEntry extends CloudflarePagesProject {

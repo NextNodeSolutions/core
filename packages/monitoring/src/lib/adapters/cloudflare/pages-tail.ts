@@ -3,8 +3,9 @@ import {
 	apiPost,
 	extractObjectResult,
 } from '@/lib/adapters/cloudflare/client.ts'
-import type { CloudflareClient } from '@/lib/adapters/cloudflare/client.ts'
 import { logger } from '@/lib/adapters/logger.ts'
+
+import type { CloudflareClient } from '@/lib/adapters/cloudflare/client.ts'
 
 export interface PagesTailSession {
 	readonly id: string

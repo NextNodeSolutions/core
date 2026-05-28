@@ -1,7 +1,3 @@
-import type {
-	DesiredDnsRecord,
-	DnsRecordLookup,
-} from '#/domain/cloudflare/dns-records.ts'
 import { reconcileDnsRecord } from '#/domain/cloudflare/dns-records.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
@@ -14,6 +10,11 @@ import {
 	setZoneSslMode,
 	updateDnsRecord,
 } from './api.ts'
+
+import type {
+	DesiredDnsRecord,
+	DnsRecordLookup,
+} from '#/domain/cloudflare/dns-records.ts'
 
 const logger = createLogger()
 

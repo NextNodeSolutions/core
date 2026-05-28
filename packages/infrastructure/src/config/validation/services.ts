@@ -1,15 +1,16 @@
+import { isRecord, SERVICE_NAMES } from '#/config/types.ts'
+
+import { validatePostgresService } from './services/postgres.ts'
+import { validateR2Service } from './services/r2.ts'
+import { validateSupabaseService } from './services/supabase.ts'
+
 import type {
 	PostgresServiceConfig,
 	R2ServiceConfig,
 	ServicesConfig,
 	SupabaseServiceConfig,
 } from '#/config/types.ts'
-import { isRecord, SERVICE_NAMES } from '#/config/types.ts'
-
 import type { ValidationResult } from './result.ts'
-import { validatePostgresService } from './services/postgres.ts'
-import { validateR2Service } from './services/r2.ts'
-import { validateSupabaseService } from './services/supabase.ts'
 
 interface MutableServicesConfig {
 	r2?: R2ServiceConfig

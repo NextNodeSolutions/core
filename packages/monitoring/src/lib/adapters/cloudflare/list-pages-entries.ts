@@ -1,6 +1,7 @@
-import type { CloudflareClient } from '@/lib/adapters/cloudflare/client.ts'
 import { listPagesProjects } from '@/lib/adapters/cloudflare/pages-projects.ts'
 import { resolvePrimaryDomain } from '@/lib/adapters/cloudflare/resolve-primary-domain.ts'
+
+import type { CloudflareClient } from '@/lib/adapters/cloudflare/client.ts'
 import type { CloudflarePagesProjectEntry } from '@/lib/domain/cloudflare/project-group.ts'
 
 export interface ListPagesEntriesOptions {

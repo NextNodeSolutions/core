@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import type { CloudflareDnsRecord } from '@/lib/domain/cloudflare/dns-record.ts'
 import { groupDnsMatchesByHostname } from '@/lib/domain/cloudflare/vps-hosted-project.ts'
+
+import type { CloudflareDnsRecord } from '@/lib/domain/cloudflare/dns-record.ts'
 import type {
 	VpsAccessKind,
 	VpsDnsMatch,

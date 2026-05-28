@@ -1,8 +1,9 @@
-import type { SshSession } from '#/adapters/hetzner/ssh/session.types.ts'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { ConvergenceInput } from './converge.ts'
 import { converge } from './converge.ts'
+
+import type { SshSession } from '#/adapters/hetzner/ssh/session.types.ts'
+import type { ConvergenceInput } from './converge.ts'
 
 const VECTOR_TOML = '[sources.docker]\ntype = "docker_logs"\n'
 const VECTOR_ENV = 'NN_CLIENT_ID=nextnode\nNN_PROJECT=acme\n'

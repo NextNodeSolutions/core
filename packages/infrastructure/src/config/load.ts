@@ -2,12 +2,6 @@ import { readFileSync } from 'node:fs'
 
 import { parse as parseTOML } from 'smol-toml'
 
-import type {
-	DeploySection,
-	NextNodeConfig,
-	ParseConfigResult,
-	ProjectSection,
-} from './types.ts'
 import { isDeployable } from './types.ts'
 import { validateDeploySection } from './validation/deploy.ts'
 import {
@@ -22,6 +16,13 @@ import {
 	hasAnyService,
 	validateServicesSection,
 } from './validation/services.ts'
+
+import type {
+	DeploySection,
+	NextNodeConfig,
+	ParseConfigResult,
+	ProjectSection,
+} from './types.ts'
 
 export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 	const projectResult = validateProjectSection(raw['project'])

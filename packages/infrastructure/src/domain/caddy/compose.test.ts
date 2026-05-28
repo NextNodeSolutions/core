@@ -1,7 +1,8 @@
-import type { ObjectStorageBinding } from '#/domain/storage/binding.ts'
 import { describe, expect, it } from 'vitest'
 
 import { composeCaddyConfig } from './compose.ts'
+
+import type { ObjectStorageBinding } from '#/domain/storage/binding.ts'
 
 const STORAGE: ObjectStorageBinding = {
 	host: 'acct.r2.cloudflarestorage.com',

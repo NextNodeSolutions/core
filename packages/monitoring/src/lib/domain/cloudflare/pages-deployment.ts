@@ -1,5 +1,6 @@
-import type { BadgeStatus } from '@/lib/domain/badge-status.ts'
 import { parseStringUnion } from '@/lib/domain/parse-string-union.ts'
+
+import type { BadgeStatus } from '@/lib/domain/badge-status.ts'
 
 export const SHORT_ID_LENGTH = 8
 export const GIT_SHORT_HASH_LENGTH = 7

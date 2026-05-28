@@ -1,4 +1,5 @@
 import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
+
 import type { AppEnvironment } from '#/domain/environment.ts'
 
 const DNS_TTL_UNPROXIED = 300

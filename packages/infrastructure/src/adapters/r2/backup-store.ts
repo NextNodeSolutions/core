@@ -2,7 +2,6 @@ import { createWriteStream } from 'node:fs'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 
-import type { PostgresBackupSnapshot } from '#/domain/services/postgres.ts'
 import {
 	POSTGRES_BACKUP_PREFIX,
 	parsePostgresBackupKey,
@@ -13,6 +12,8 @@ import {
 	GetObjectCommand,
 	ListObjectsV2Command,
 } from '@aws-sdk/client-s3'
+
+import type { PostgresBackupSnapshot } from '#/domain/services/postgres.ts'
 import type { S3Client } from '@aws-sdk/client-s3'
 
 /**

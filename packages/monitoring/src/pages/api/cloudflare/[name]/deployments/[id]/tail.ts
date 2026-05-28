@@ -1,14 +1,14 @@
-import type { APIRoute } from 'astro'
-
 import { resolveCloudflareClient } from '@/lib/adapters/cloudflare/accounts.ts'
-import type { CloudflareClient } from '@/lib/adapters/cloudflare/client.ts'
 import {
 	createPagesTail,
 	deletePagesTail,
 } from '@/lib/adapters/cloudflare/pages-tail.ts'
-import type { PagesTailSession } from '@/lib/adapters/cloudflare/pages-tail.ts'
 import { HTTP_STATUS } from '@/lib/adapters/http-status.ts'
 import { logger } from '@/lib/adapters/logger.ts'
+
+import type { APIRoute } from 'astro'
+import type { CloudflareClient } from '@/lib/adapters/cloudflare/client.ts'
+import type { PagesTailSession } from '@/lib/adapters/cloudflare/pages-tail.ts'
 
 export const prerender = false
 

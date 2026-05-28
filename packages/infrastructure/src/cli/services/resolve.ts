@@ -1,10 +1,11 @@
+import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
+
+import { SERVICE_DEFINITIONS } from './registry.ts'
+
 import type { GithubRepository } from '#/cli/env.ts'
 import type { DeployableConfig } from '#/config/types.ts'
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
-import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
-
-import { SERVICE_DEFINITIONS } from './registry.ts'
 import type { Service, ServiceFactoryContext } from './service.ts'
 
 export interface ResolveServicesInput {

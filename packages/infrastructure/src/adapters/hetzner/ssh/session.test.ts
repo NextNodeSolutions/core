@@ -6,6 +6,7 @@ import { Client } from 'ssh2'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createSshSession } from './session.ts'
+
 import type { SshSession } from './session.types.ts'
 
 const FAKE_HOST_KEY = Buffer.from('fake-host-public-key-bytes')

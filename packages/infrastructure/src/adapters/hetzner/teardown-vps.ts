@@ -1,8 +1,4 @@
 import { extractRootDomain } from '#/domain/cloudflare/dns-records.ts'
-import type { ResourceOutcome } from '#/domain/deploy/resource-outcome.ts'
-import type { DnsClient } from '#/domain/dns/client.ts'
-import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
-import type { TailnetClient } from '#/domain/tailnet/client.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
 import {
@@ -14,6 +10,11 @@ import { deleteServer, findServerById } from './api/server.ts'
 import { MAX_POLL_ATTEMPTS, POLL_INTERVAL_MS } from './constants.ts'
 import { deleteState, readState } from './state/read-write.ts'
 import { waitUntil } from './wait.ts'
+
+import type { ResourceOutcome } from '#/domain/deploy/resource-outcome.ts'
+import type { DnsClient } from '#/domain/dns/client.ts'
+import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
+import type { TailnetClient } from '#/domain/tailnet/client.ts'
 
 const logger = createLogger()
 

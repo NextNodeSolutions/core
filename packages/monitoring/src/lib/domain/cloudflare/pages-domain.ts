@@ -1,5 +1,6 @@
-import type { BadgeStatus } from '@/lib/domain/badge-status.ts'
 import { parseStringUnion } from '@/lib/domain/parse-string-union.ts'
+
+import type { BadgeStatus } from '@/lib/domain/badge-status.ts'
 
 export const CLOUDFLARE_PAGES_DOMAIN_STATUSES = [
 	'active',

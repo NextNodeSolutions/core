@@ -4,15 +4,16 @@
  * then delegates rendering to an injectable ConsoleWriter strategy.
  */
 
-import type { Environment, LogEntry, LogLevel, Transport } from '../types.js'
 import { detectRuntime } from '../utils/environment.js'
 
+import { DEFAULT_CONSOLE_WRITERS } from './console-writers.js'
+
+import type { Environment, LogEntry, LogLevel, Transport } from '../types.js'
 import type {
 	ConsoleFormat,
 	ConsoleMethod,
 	ConsoleWriter,
 } from './console-writers.js'
-import { DEFAULT_CONSOLE_WRITERS } from './console-writers.js'
 
 // Console methods mapping for type safety
 const CONSOLE_METHODS: Record<LogLevel, ConsoleMethod> = {

@@ -22,16 +22,16 @@ For projects already deployed against the old org-secret scheme:
    env-secret (the next deploy will reset it on first boot of a clean
    volume, but a live cluster keeps the old hash):
 
-   ```sql
-   ALTER ROLE postgres_exporter PASSWORD '<value of new PG_EXPORTER_PASSWORD env-secret>';
-   ```
+    ```sql
+    ALTER ROLE postgres_exporter PASSWORD '<value of new PG_EXPORTER_PASSWORD env-secret>';
+    ```
 
 2. Delete the now-orphaned org-secret so it stops showing up in
    `ALL_SECRETS` for every project in the org:
 
-   ```sh
-   gh secret delete --org NextNodeSolutions PG_EXPORTER_PASSWORD_<PROJECT>
-   ```
+    ```sh
+    gh secret delete --org NextNodeSolutions PG_EXPORTER_PASSWORD_<PROJECT>
+    ```
 
-   Where `<PROJECT>` is the uppercase project slug with hyphens replaced
-   by underscores (e.g. `my-cool-app` → `MY_COOL_APP`).
+    Where `<PROJECT>` is the uppercase project slug with hyphens replaced
+    by underscores (e.g. `my-cool-app` → `MY_COOL_APP`).

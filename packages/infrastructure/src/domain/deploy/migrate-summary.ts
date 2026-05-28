@@ -1,7 +1,7 @@
-import type { AppEnvironment } from '#/domain/environment.ts'
-
-import type { SummaryRow } from './summary-renderer.ts'
 import { formatDuration, renderKeyValueTable } from './summary-renderer.ts'
+
+import type { AppEnvironment } from '#/domain/environment.ts'
+import type { SummaryRow } from './summary-renderer.ts'
 
 export interface MigrateSummaryInput {
 	readonly projectName: string

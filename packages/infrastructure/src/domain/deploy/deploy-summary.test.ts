@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { buildDeploySummary, formatDuration } from './deploy-summary.ts'
+
 import type { DeployResult } from './target.ts'
 
 describe('buildDeploySummary', () => {

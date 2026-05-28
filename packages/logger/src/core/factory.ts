@@ -3,9 +3,9 @@
  * Provides `createLogger` for building logger instances.
  */
 
-import type { LoggerConfig } from '../types.js'
-
 import { NextNodeLogger } from './nextnode-logger.js'
+
+import type { LoggerConfig } from '../types.js'
 
 /**
  * Factory function for creating logger instances.

@@ -3,12 +3,13 @@
  * Uses ANSI escape codes for colorized terminal output
  */
 
-import type { LogEntry, LogLevel } from '../types.js'
 import { safeStringify } from '../utils/serialization.js'
 import { formatTimeForDisplay } from '../utils/time.js'
 
 import { createScopeColorCache } from './scope-colors.js'
 import { LOG_LEVEL_ICONS, formatLocationForDisplay } from './shared.js'
+
+import type { LogEntry, LogLevel } from '../types.js'
 
 const COLORS = {
 	reset: '\x1b[0m',

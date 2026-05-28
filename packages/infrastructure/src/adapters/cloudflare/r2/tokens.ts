@@ -4,9 +4,10 @@ import {
 	requireArrayResult,
 	requireObjectResult,
 } from '#/adapters/cloudflare/api.ts'
+import { buildR2TokenPolicy } from '#/domain/cloudflare/r2/token-policy.ts'
+
 import type { CloudflareTokenResult } from '#/domain/cloudflare/r2/credentials.ts'
 import type { R2PermissionGroupIds } from '#/domain/cloudflare/r2/token-policy.ts'
-import { buildR2TokenPolicy } from '#/domain/cloudflare/r2/token-policy.ts'
 
 export interface CreateR2TokenInput {
 	readonly token: string

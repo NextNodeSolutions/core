@@ -1,14 +1,15 @@
+import { goldenImageFingerprint } from '#/domain/hetzner/golden-image.ts'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { HetznerVpsTarget } from './target.ts'
+
 import type {
 	TeardownResult,
 	VpsFullTeardownResult,
 } from '#/domain/deploy/teardown-result.ts'
-import { goldenImageFingerprint } from '#/domain/hetzner/golden-image.ts'
 import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-
 import type { SshSession } from './ssh/session.types.ts'
 import type { HcloudVpsState } from './state/types.ts'
-import { HetznerVpsTarget } from './target.ts'
 
 const GOLDEN_IMAGE_ID = 7777
 const goldenImageFixture = (): {

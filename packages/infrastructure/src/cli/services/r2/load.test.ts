@@ -1,6 +1,7 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import type { R2ServiceState } from '#/domain/services/r2.ts'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const fakeR2State = new Map<string, string>()
 
@@ -20,10 +21,11 @@ vi.mock('#/adapters/r2/client.ts', () => ({
 	})),
 }))
 
-import type { MockResponse } from '#/test-fetch.ts'
 import { okEmpty, unauthorized } from '#/test-fetch.ts'
 
 import { loadR2Service } from './load.ts'
+
+import type { MockResponse } from '#/test-fetch.ts'
 
 interface StubOptions {
 	readonly verifyStatus?: 'ok' | '401'

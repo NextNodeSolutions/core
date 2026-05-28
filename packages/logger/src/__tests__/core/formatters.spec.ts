@@ -13,6 +13,7 @@ import {
 	resetScopeCache as resetNodeScopeCache,
 } from '@/formatters/console-node.js'
 import { formatAsJson, formatAsJsonPretty } from '@/formatters/json.js'
+
 import type { LogEntry } from '@/types.js'
 
 describe('formatForNode', () => {

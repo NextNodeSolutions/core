@@ -5,10 +5,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { createLogger, NextNodeLogger } from '@/logger.js'
-import type { LogEntry, LoggerConfig, Transport } from '@/types.js'
 
-import type { ConsoleMocks } from '../test-setup.js'
 import { createConsoleMocks, restoreConsoleMocks } from '../test-setup.js'
+
+import type { LogEntry, LoggerConfig, Transport } from '@/types.js'
+import type { ConsoleMocks } from '../test-setup.js'
 
 describe('NextNodeLogger', () => {
 	let consoleMocks: ConsoleMocks

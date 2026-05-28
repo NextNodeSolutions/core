@@ -2,6 +2,7 @@ import {
 	buildResourceOutcomeRows,
 	renderKeyValueTable,
 } from './summary-renderer.ts'
+
 import type { TeardownResult } from './teardown-result.ts'
 
 export function buildTeardownSummary(

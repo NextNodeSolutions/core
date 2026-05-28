@@ -1,9 +1,10 @@
 import { APP_WITH_DOMAIN, STATIC_WITH_DOMAIN } from '#/cli/fixtures.ts'
-import type { DeployableConfig } from '#/config/types.ts'
-import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import { describe, expect, it } from 'vitest'
 
 import { resolveServices } from './resolve.ts'
+
+import type { DeployableConfig } from '#/config/types.ts'
+import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 
 const INFRA_STORAGE: InfraStorageRuntimeConfig = {
 	accountId: 'acct',

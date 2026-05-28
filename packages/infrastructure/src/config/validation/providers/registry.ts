@@ -1,12 +1,12 @@
+import { cloudflarePages } from './cloudflare-pages.ts'
+import { hetznerVps } from './hetzner.ts'
+
 import type {
 	DeployImageConfig,
 	DeploySection,
 	DeployTargetType,
 	DeployVolume,
 } from '#/config/types.ts'
-
-import { cloudflarePages } from './cloudflare-pages.ts'
-import { hetznerVps } from './hetzner.ts'
 
 export interface DeployProviderResult {
 	readonly errors: string[]

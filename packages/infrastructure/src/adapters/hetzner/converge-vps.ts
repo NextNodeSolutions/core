@@ -3,12 +3,13 @@ import { composeCaddyConfig } from '#/domain/caddy/compose.ts'
 import { extractUpstreams } from '#/domain/caddy/config.ts'
 import { CADDY_ENV_PATH, renderCaddyEnv } from '#/domain/caddy/env.ts'
 import { buildR2CaddyBinding } from '#/domain/cloudflare/r2/caddy-binding.ts'
-import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import { selectVectorConfig } from '#/domain/hetzner/vector-config.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
 import { CADDY_CONFIG_PATH } from './constants.ts'
 import { createSshSession } from './ssh/session.ts'
+
+import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 
 const logger = createLogger()
 

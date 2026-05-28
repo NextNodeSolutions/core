@@ -3,11 +3,12 @@ import { createLogger } from '@nextnode-solutions/logger'
 const logger = createLogger()
 
 import { getEnv } from '#/cli/env.ts'
-import type { DeployableConfig } from '#/config/types.ts'
 import { resolveEnvironment } from '#/domain/environment.ts'
 
 import { buildRuntimeTarget } from './build-runtime-target.ts'
 import { loadInfraStorageForConfig } from './load-infra-storage.ts'
+
+import type { DeployableConfig } from '#/config/types.ts'
 
 export async function dnsCommand(config: DeployableConfig): Promise<void> {
 	if (!config.project.domain) {

@@ -1,8 +1,9 @@
 import { parse } from 'smol-toml'
 import { describe, expect, it } from 'vitest'
 
-import type { VectorConfig } from './vector-toml.ts'
 import { isVectorConfig, renderVectorToml } from './vector-toml.ts'
+
+import type { VectorConfig } from './vector-toml.ts'
 
 function parseVectorConfig(): VectorConfig {
 	const parsed: unknown = parse(renderVectorToml())

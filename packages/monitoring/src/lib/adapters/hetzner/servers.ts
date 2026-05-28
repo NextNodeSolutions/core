@@ -5,6 +5,13 @@ import {
 	parseVpsCpuType,
 	parseVpsStatus,
 } from '@/lib/domain/hetzner/vps.ts'
+import { isRecord } from '@/lib/domain/is-record.ts'
+import {
+	parseFiniteNumber,
+	requireFiniteNumber,
+} from '@/lib/domain/parse-number.ts'
+import { parseStringOrNull } from '@/lib/domain/parse-string.ts'
+
 import type {
 	HetznerVps,
 	HetznerVpsLocation,
@@ -12,12 +19,6 @@ import type {
 	HetznerVpsServerType,
 	HetznerVpsTraffic,
 } from '@/lib/domain/hetzner/vps.ts'
-import { isRecord } from '@/lib/domain/is-record.ts'
-import {
-	parseFiniteNumber,
-	requireFiniteNumber,
-} from '@/lib/domain/parse-number.ts'
-import { parseStringOrNull } from '@/lib/domain/parse-string.ts'
 
 // Public IPv4 is optional in the Hetzner API (servers can be IPv6-only or
 // private-net-only), so `null` is a domain value, not a silent fallback.

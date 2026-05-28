@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import type { DomainProbe } from '@/lib/domain/cloudflare/primary-domain.ts'
 import { selectPrimaryDomain } from '@/lib/domain/cloudflare/primary-domain.ts'
+
+import type { DomainProbe } from '@/lib/domain/cloudflare/primary-domain.ts'
 
 const probe = (
 	name: string,

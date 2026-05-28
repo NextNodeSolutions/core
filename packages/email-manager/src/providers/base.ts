@@ -3,10 +3,11 @@
  * Shared functionality for all email providers (composition pattern)
  */
 
+import { emailFail } from '../types/result.js'
+
 import type { EmailMessage, EmailRecipient } from '../types/email.js'
 import type { EmailError } from '../types/result.js'
 import type { Result } from '../types/result.js'
-import { emailFail } from '../types/result.js'
 
 const MAX_RECIPIENTS = 50
 

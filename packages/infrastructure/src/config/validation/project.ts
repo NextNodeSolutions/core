@@ -1,4 +1,3 @@
-import type { PackageSection, ProjectSection } from '#/config/types.ts'
 import {
 	isProjectType,
 	isRecord,
@@ -7,6 +6,7 @@ import {
 	PROJECT_TYPES,
 } from '#/config/types.ts'
 
+import type { PackageSection, ProjectSection } from '#/config/types.ts'
 import type { ValidationResult } from './result.ts'
 
 function validateProjectName(value: unknown): {

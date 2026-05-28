@@ -1,6 +1,5 @@
 import type { AppEnvironment } from '#/domain/environment.ts'
 import type { ServiceEnv } from '#/domain/services/service.ts'
-
 import type {
 	PagesResourceOutcome,
 	VpsResourceOutcome,

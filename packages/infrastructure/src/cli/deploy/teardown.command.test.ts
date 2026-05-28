@@ -12,9 +12,10 @@ import {
 const { utils: sshUtils } = ssh2
 
 import { APP_WITH_DOMAIN, STATIC_WITH_DOMAIN } from '#/cli/fixtures.ts'
-import type { DeployableConfig } from '#/config/types.ts'
 
 import { teardownCommand } from './teardown.command.ts'
+
+import type { DeployableConfig } from '#/config/types.ts'
 
 // Mock loadR2Runtime (network boundary: Cloudflare accounts API + SigV4 verify)
 vi.mock(import('#/cli/r2/load-runtime.ts'), async () => ({

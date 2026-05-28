@@ -6,6 +6,7 @@ import {
 	DEFAULT_R2_STATE_BUCKET,
 } from '#/config/types.ts'
 import { computeR2Endpoint } from '#/domain/cloudflare/r2/addressing.ts'
+
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 
 /**

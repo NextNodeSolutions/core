@@ -1,9 +1,9 @@
-import type { ServiceName } from '#/config/types.ts'
-
 import { postgresServiceDefinition } from './postgres/postgres.service.ts'
 import { r2ServiceDefinition } from './r2/r2.service.ts'
-import type { ServiceDefinition } from './service.ts'
 import { supabaseServiceDefinition } from './supabase/supabase.service.ts'
+
+import type { ServiceName } from '#/config/types.ts'
+import type { ServiceDefinition } from './service.ts'
 
 /**
  * Registry of every supported service. The mapped-type `satisfies`

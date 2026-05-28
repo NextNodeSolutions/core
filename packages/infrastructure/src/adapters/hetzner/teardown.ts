@@ -1,24 +1,15 @@
 import { extractUpstreams } from '#/domain/caddy/config.ts'
-import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
 import { executeHandlers } from '#/domain/deploy/execute-handlers.ts'
-import type { TeardownResult } from '#/domain/deploy/teardown-result.ts'
-import type { TeardownTarget } from '#/domain/deploy/teardown-target.ts'
-import type { DnsClient } from '#/domain/dns/client.ts'
-import type { AppEnvironment } from '#/domain/environment.ts'
 import {
 	VPS_MANAGED_RESOURCES,
 	VPS_PROJECT_MANAGED_RESOURCES,
 } from '#/domain/hetzner/managed-resources.ts'
-import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
-import type { TailnetClient } from '#/domain/tailnet/client.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
 import { CADDY_CONFIG_PATH } from './constants.ts'
 import { createSshSession } from './ssh/session.ts'
-import type { SshSession } from './ssh/session.types.ts'
 import { readState } from './state/read-write.ts'
-import type { HcloudConvergedState } from './state/types.ts'
 import {
 	releaseProjectHostPort,
 	teardownProjectCaddyRoute,
@@ -34,6 +25,16 @@ import {
 	teardownVpsDns,
 	teardownVpsState,
 } from './teardown-vps.ts'
+
+import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
+import type { TeardownResult } from '#/domain/deploy/teardown-result.ts'
+import type { TeardownTarget } from '#/domain/deploy/teardown-target.ts'
+import type { DnsClient } from '#/domain/dns/client.ts'
+import type { AppEnvironment } from '#/domain/environment.ts'
+import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
+import type { TailnetClient } from '#/domain/tailnet/client.ts'
+import type { SshSession } from './ssh/session.types.ts'
+import type { HcloudConvergedState } from './state/types.ts'
 
 const logger = createLogger()
 

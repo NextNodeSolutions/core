@@ -1,14 +1,14 @@
-import type { ObjectStorageBinding } from '#/domain/storage/binding.ts'
-
-import type { CaddyJsonConfig, CaddyUpstream } from './config.ts'
 import {
 	buildCaddyConfig,
 	buildDnsAcmeIssuer,
 	buildPublicAcmeIssuer,
 	buildUpstreamRoute,
 } from './config.ts'
-import type { SupabaseCaddyBinding } from './supabase.ts'
 import { buildSupabaseRoutes, buildSupabaseSubjects } from './supabase.ts'
+
+import type { ObjectStorageBinding } from '#/domain/storage/binding.ts'
+import type { CaddyJsonConfig, CaddyUpstream } from './config.ts'
+import type { SupabaseCaddyBinding } from './supabase.ts'
 
 export interface CaddyComposeInput {
 	readonly storage: ObjectStorageBinding

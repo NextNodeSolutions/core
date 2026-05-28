@@ -4,10 +4,12 @@
  */
 
 import { createLogger } from '@nextnode-solutions/logger'
-import type { Logger } from '@nextnode-solutions/logger'
 
 import { createProvider } from './providers/registry.js'
 import { renderTemplate } from './templates/renderer.js'
+import { emailFail } from './types/result.js'
+
+import type { Logger } from '@nextnode-solutions/logger'
 import type {
 	EmailMessage,
 	EmailRecipient,
@@ -16,7 +18,6 @@ import type {
 } from './types/email.js'
 import type { EmailProvider, ProviderConfigMap } from './types/provider.js'
 import type { SendResult } from './types/result.js'
-import { emailFail } from './types/result.js'
 
 /**
  * Email manager configuration (FR-6)

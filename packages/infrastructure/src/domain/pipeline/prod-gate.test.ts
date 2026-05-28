@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { evaluateDevRun, findDevRun } from './prod-gate.ts'
+
 import type { WorkflowRun } from './prod-gate.ts'
 
 const DEV_PATH = '.github/workflows/deploy-dev.yml'

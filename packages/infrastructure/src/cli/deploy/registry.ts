@@ -1,7 +1,7 @@
-import type { DeployTargetType } from '#/config/types.ts'
-
 import { cloudflarePagesTargetDefinition } from './create-cloudflare-pages-target.ts'
 import { hetznerTargetDefinition } from './create-hetzner-target.ts'
+
+import type { DeployTargetType } from '#/config/types.ts'
 import type { TargetDefinition } from './target.ts'
 
 /**

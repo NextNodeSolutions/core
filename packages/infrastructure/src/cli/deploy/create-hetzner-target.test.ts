@@ -11,10 +11,10 @@ import {
 
 const { utils: sshUtils } = ssh2
 
+import { createHetznerTarget } from './create-hetzner-target.ts'
+
 import type { HetznerDeployableConfig } from '#/config/types.ts'
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
-
-import { createHetznerTarget } from './create-hetzner-target.ts'
 
 let TEST_PRIVATE_KEY: string
 let TEST_PUBLIC_LINE: string

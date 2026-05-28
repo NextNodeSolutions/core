@@ -1,8 +1,9 @@
-import type { MockResponse } from '#/test-fetch.ts'
 import { okEmpty, okJson, unauthorized } from '#/test-fetch.ts'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { loadR2Runtime } from './load-runtime.ts'
+
+import type { MockResponse } from '#/test-fetch.ts'
 
 interface StubOptions {
 	readonly accountId?: string

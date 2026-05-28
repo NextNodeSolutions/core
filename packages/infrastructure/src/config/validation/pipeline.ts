@@ -1,4 +1,3 @@
-import type { EnvironmentSection, ScriptsSection } from '#/config/types.ts'
 import {
 	DEFAULT_ENVIRONMENT,
 	DEFAULT_SCRIPTS,
@@ -7,6 +6,7 @@ import {
 	isScriptValue,
 } from '#/config/types.ts'
 
+import type { EnvironmentSection, ScriptsSection } from '#/config/types.ts'
 import type { ValidationResult } from './result.ts'
 
 export function validateScriptsSection(

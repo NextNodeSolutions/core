@@ -3,12 +3,13 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
 
-import type { DeployableConfig } from '#/config/types.ts'
 import { buildMigrateSummary } from '#/domain/deploy/migrate-summary.ts'
-import type { MigrateInput } from '#/domain/deploy/target.ts'
 import { DEFAULT_MIGRATE_COMMAND } from '#/domain/deploy/target.ts'
 
 import { resolveDeployContext } from './resolve-deploy-context.ts'
+
+import type { DeployableConfig } from '#/config/types.ts'
+import type { MigrateInput } from '#/domain/deploy/target.ts'
 
 /**
  * `migrate-remote` orchestrates Path A's migrate phase. It runs in its

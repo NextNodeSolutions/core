@@ -1,17 +1,18 @@
+import {
+	buildR2ServiceEnv,
+	computeR2ServiceAliases,
+} from '#/domain/services/r2.ts'
+
+import { ensureR2Service } from './ensure.ts'
+import { loadR2Service } from './load.ts'
+
 import type {
 	Service,
 	ServiceDefinition,
 	ServiceFactoryContext,
 } from '#/cli/services/service.ts'
 import type { R2ServiceConfig } from '#/config/types.ts'
-import {
-	buildR2ServiceEnv,
-	computeR2ServiceAliases,
-} from '#/domain/services/r2.ts'
 import type { ServiceEnv } from '#/domain/services/service.ts'
-
-import { ensureR2Service } from './ensure.ts'
-import { loadR2Service } from './load.ts'
 
 export function createR2Service(
 	ctx: ServiceFactoryContext,

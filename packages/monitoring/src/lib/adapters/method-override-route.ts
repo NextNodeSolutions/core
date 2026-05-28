@@ -1,8 +1,8 @@
-import type { APIRoute } from 'astro'
-
 import { HTTP_STATUS } from '@/lib/adapters/http-status.ts'
 import { jsonResponse } from '@/lib/adapters/json-response.ts'
 import { notImplemented } from '@/lib/domain/api-result.ts'
+
+import type { APIRoute } from 'astro'
 
 type ActionBuilder = (params: Record<string, string | undefined>) => string
 

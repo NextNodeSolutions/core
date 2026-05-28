@@ -8,12 +8,13 @@ import {
 	R2_BUCKET_LOCATION_HINT,
 } from '#/config/types.ts'
 import { computeR2Endpoint } from '#/domain/cloudflare/r2/addressing.ts'
-import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
+import { rotateR2Credentials } from './rotate-token.ts'
+
+import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import type { R2Context } from './context.ts'
 import type { R2Credentials } from './rotate-token.ts'
-import { rotateR2Credentials } from './rotate-token.ts'
 
 const logger = createLogger()
 

@@ -1,7 +1,8 @@
-import type { ProjectSection, ScriptsSection } from '#/config/types.ts'
 import { describe, expect, it } from 'vitest'
 
 import { buildQualityMatrix, hasProdGate } from './quality-matrix.ts'
+
+import type { ProjectSection, ScriptsSection } from '#/config/types.ts'
 import type { PipelineContext, QualityTask } from './quality-matrix.ts'
 
 const PROD_GATE_CMD = 'run-prod-gate'

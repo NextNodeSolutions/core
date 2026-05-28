@@ -1,10 +1,11 @@
 import { keyedMemoizeAsync } from '@/lib/adapters/cache.ts'
 import { listAll } from '@/lib/adapters/cloudflare/client.ts'
-import type { CloudflareClient } from '@/lib/adapters/cloudflare/client.ts'
-import type { CloudflareDnsRecord } from '@/lib/domain/cloudflare/dns-record.ts'
 import { parseDnsRecordType } from '@/lib/domain/cloudflare/dns-record.ts'
 import { isRecord } from '@/lib/domain/is-record.ts'
 import { parseStringOrNull } from '@/lib/domain/parse-string.ts'
+
+import type { CloudflareClient } from '@/lib/adapters/cloudflare/client.ts'
+import type { CloudflareDnsRecord } from '@/lib/domain/cloudflare/dns-record.ts'
 
 // /zones/:id/dns_records accepts per_page up to 100 (default 100). Larger
 // values return error 1004. Used as the chunk size for auto-pagination.

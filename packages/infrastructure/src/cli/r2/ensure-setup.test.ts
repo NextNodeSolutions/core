@@ -6,10 +6,11 @@ vi.mock('node:timers/promises', () => ({
 	setTimeout: vi.fn(() => Promise.resolve()),
 }))
 
-import type { MockResponse } from '#/test-fetch.ts'
 import { notFound, okJson, unauthorized } from '#/test-fetch.ts'
 
 import { ensureR2Setup } from './ensure-setup.ts'
+
+import type { MockResponse } from '#/test-fetch.ts'
 
 interface ListedTokenFixture {
 	readonly id: string

@@ -1,8 +1,9 @@
 import { getEnv, requireGithubRepository } from '#/cli/env.ts'
-import type { DeployableConfig } from '#/config/types.ts'
 import { resolveEnvironment } from '#/domain/environment.ts'
 
 import { rotatePgExporterPasswordSecret } from './supabase.service.ts'
+
+import type { DeployableConfig } from '#/config/types.ts'
 
 /**
  * Force-rotate the project's postgres-exporter GitHub env-secret with a

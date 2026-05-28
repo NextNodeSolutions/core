@@ -1,10 +1,11 @@
 import { keyedMemoizeAsync } from '@/lib/adapters/cache.ts'
 import { listAll } from '@/lib/adapters/cloudflare/client.ts'
-import type { CloudflareClient } from '@/lib/adapters/cloudflare/client.ts'
 import { parseCloudflarePagesDomainStatus } from '@/lib/domain/cloudflare/pages-domain.ts'
-import type { CloudflarePagesDomain } from '@/lib/domain/cloudflare/pages-domain.ts'
 import { isRecord } from '@/lib/domain/is-record.ts'
 import { parseStringOrNull } from '@/lib/domain/parse-string.ts'
+
+import type { CloudflareClient } from '@/lib/adapters/cloudflare/client.ts'
+import type { CloudflarePagesDomain } from '@/lib/domain/cloudflare/pages-domain.ts'
 
 // Cloudflare rejects per_page > 25 on /pages/projects/:name/domains with error
 // 8000024 ("Invalid list options provided"). Undocumented cap — used as the

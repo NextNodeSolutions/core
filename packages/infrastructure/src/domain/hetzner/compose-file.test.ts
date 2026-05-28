@@ -1,4 +1,3 @@
-import type { ImageRef } from '#/domain/deploy/target.ts'
 import {
 	POSTGRES_EXPORTER_DSN_ENV,
 	POSTGRES_EXPORTER_IMAGE,
@@ -37,6 +36,8 @@ import {
 	formatImageRef,
 	renderComposeFile,
 } from './compose-file.ts'
+
+import type { ImageRef } from '#/domain/deploy/target.ts'
 
 const IMAGE: ImageRef = {
 	registry: 'ghcr.io',

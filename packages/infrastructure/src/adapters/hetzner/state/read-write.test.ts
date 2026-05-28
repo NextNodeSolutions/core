@@ -1,4 +1,3 @@
-import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -7,6 +6,8 @@ import {
 	readState,
 	writeState,
 } from './read-write.ts'
+
+import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
 
 function createMockR2(): ObjectStoreClient {
 	return {

@@ -3,10 +3,12 @@
  * Mock @react-email/render (external boundary) to verify rendering orchestration
  */
 import { createElement } from 'react'
-import type { ReactElement } from 'react'
+
 import { describe, expect, it, vi } from 'vitest'
 
 import { renderTemplate } from '../src/templates/renderer.js'
+
+import type { ReactElement } from 'react'
 
 // Mock @react-email/render — external rendering library, no DOM needed
 vi.mock('@react-email/render', () => ({

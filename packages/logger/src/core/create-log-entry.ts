@@ -3,10 +3,11 @@
  * Shared between the production logger and the spy logger used in tests.
  */
 
-import type { LogEntry, LogLevel, LogObject } from '../types.js'
 import { parseLocation } from '../utils/location.js'
 import { extractScope } from '../utils/scope.js'
 import { getCurrentTimestamp } from '../utils/time.js'
+
+import type { LogEntry, LogLevel, LogObject } from '../types.js'
 
 export interface CreateLogEntryOptions {
 	readonly level: LogLevel

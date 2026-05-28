@@ -1,7 +1,6 @@
 import { writeSummary } from '#/adapters/github/output.ts'
 import { wipePostgresBackups } from '#/adapters/r2/backup-store.ts'
 import { getEnumEnv, getEnv, isEnvSet } from '#/cli/env.ts'
-import type { DeployableConfig } from '#/config/types.ts'
 import { buildTeardownSummary } from '#/domain/deploy/teardown-summary.ts'
 import {
 	TEARDOWN_TARGETS,
@@ -14,6 +13,8 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 import { buildRuntimeTarget } from './build-runtime-target.ts'
 import { loadInfraStorageForConfig } from './load-infra-storage.ts'
+
+import type { DeployableConfig } from '#/config/types.ts'
 
 const logger = createLogger()
 

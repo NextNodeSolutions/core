@@ -1,7 +1,8 @@
 import { apiGet, extractArrayResult } from '@/lib/adapters/cloudflare/client.ts'
-import type { CloudflareClient } from '@/lib/adapters/cloudflare/client.ts'
 import { ENV_KEYS, getEnv, requireEnv } from '@/lib/adapters/env.ts'
 import { isRecord } from '@/lib/domain/is-record.ts'
+
+import type { CloudflareClient } from '@/lib/adapters/cloudflare/client.ts'
 
 // Rejects tokens that reach 0 or >1 accounts: a multi-account token needs
 // CLOUDFLARE_ACCOUNT_ID set explicitly to avoid picking the wrong one.

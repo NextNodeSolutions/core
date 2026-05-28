@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { createEnvSecretsAdapter } from './env-secrets.ts'
+
 import type { ExecResult, GhRunner } from './gh-runner.ts'
 
 function ok(stdout = '', stderr = ''): ExecResult {

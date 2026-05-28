@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import type { ServiceEnv } from './service.ts'
 import { mergeServiceEnvs } from './service.ts'
+
+import type { ServiceEnv } from './service.ts'
 
 describe('mergeServiceEnvs', () => {
 	it('returns an empty env when no services contribute', () => {

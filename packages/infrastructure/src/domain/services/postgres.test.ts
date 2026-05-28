@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 
-import type { PostgresBackupSnapshot } from './postgres.ts'
 import {
 	POSTGRES_BACKUP_PREFIX,
 	POSTGRES_BACKUP_SCHEDULE,
@@ -21,6 +20,8 @@ import {
 	selectPostgresBackupForRestore,
 	selectPostgresBackupsToPrune,
 } from './postgres.ts'
+
+import type { PostgresBackupSnapshot } from './postgres.ts'
 
 describe('postgresProjectIdentifier', () => {
 	it('passes a single-word lowercase name through unchanged', () => {

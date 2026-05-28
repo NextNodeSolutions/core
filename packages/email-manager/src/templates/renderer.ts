@@ -5,13 +5,14 @@
 
 import { render } from '@react-email/render'
 
+import { emailFail } from '../types/result.js'
+
 import type {
 	EmailTemplateComponent,
 	RenderedTemplate,
 	TemplateRenderOptions,
 } from '../types/email.js'
 import type { EmailError, Result } from '../types/result.js'
-import { emailFail } from '../types/result.js'
 
 /**
  * Default render options

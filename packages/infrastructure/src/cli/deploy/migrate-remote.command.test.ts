@@ -21,6 +21,7 @@ import {
 	APP_WITH_POSTGRES_CUSTOM_MIGRATE,
 	APP_WITH_POSTGRES_EXTERNAL,
 } from '#/cli/fixtures.ts'
+
 import type { MigrateResult, SnapshotResult } from '#/domain/deploy/target.ts'
 
 const MIGRATE_RESULT: MigrateResult = { durationMs: 1234 }

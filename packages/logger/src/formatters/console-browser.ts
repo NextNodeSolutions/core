@@ -3,11 +3,12 @@
  * Uses CSS styling and console API features for DevTools
  */
 
-import type { LogEntry, LogLevel } from '../types.js'
 import { formatTimeForDisplay } from '../utils/time.js'
 
 import { createScopeColorCache } from './scope-colors.js'
 import { LOG_LEVEL_ICONS, formatLocationForDisplay } from './shared.js'
+
+import type { LogEntry, LogLevel } from '../types.js'
 
 // CSS styles for browser DevTools
 const STYLES = {

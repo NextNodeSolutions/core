@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 
-import type { CaddyConfigInput, CaddyRoute } from './config.ts'
 import {
 	buildCaddyConfig,
 	buildDnsAcmeIssuer,
@@ -8,6 +7,8 @@ import {
 	buildUpstreamRoute,
 	extractUpstreams,
 } from './config.ts'
+
+import type { CaddyConfigInput, CaddyRoute } from './config.ts'
 
 const STORAGE_BINDING = {
 	host: 'abc123.r2.cloudflarestorage.com',

@@ -6,11 +6,12 @@ const logger = createLogger()
 
 import { writePlanOutputs } from '#/adapters/github/plan-outputs.ts'
 import { getEnv, requireEnv } from '#/cli/env.ts'
-import type { NextNodeConfig } from '#/config/types.ts'
 import { isDeployable } from '#/config/types.ts'
 import { computePagesProjectName } from '#/domain/cloudflare/pages-project-name.ts'
 import { resolveEnvironment } from '#/domain/environment.ts'
 import { buildQualityMatrix } from '#/domain/pipeline/quality-matrix.ts'
+
+import type { NextNodeConfig } from '#/config/types.ts'
 
 const PROD_GATE_COMMAND =
 	'cd .infra/packages/infrastructure && node src/index.ts prod-gate'

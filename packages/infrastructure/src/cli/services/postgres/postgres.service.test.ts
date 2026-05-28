@@ -1,7 +1,8 @@
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
 import type { ServiceFactoryContext } from '#/cli/services/service.ts'
 import type { PostgresServiceConfig } from '#/config/types.ts'
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
-import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const ensureR2BucketMock = vi.hoisted(() => vi.fn())
 

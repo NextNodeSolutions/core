@@ -1,7 +1,8 @@
-import type { CloudflareClient } from '@/lib/adapters/cloudflare/client.ts'
 import { listPagesDomains } from '@/lib/adapters/cloudflare/pages-domains.ts'
 import { probeDomainStatus } from '@/lib/adapters/cloudflare/probe-domain.ts'
 import { selectPrimaryDomain } from '@/lib/domain/cloudflare/primary-domain.ts'
+
+import type { CloudflareClient } from '@/lib/adapters/cloudflare/client.ts'
 
 export interface ResolvePrimaryDomainOptions {
 	readonly client: CloudflareClient

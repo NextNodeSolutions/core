@@ -3,11 +3,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { STATIC_NO_DOMAIN, STATIC_WITH_DOMAIN } from '#/cli/fixtures.ts'
-import type { FetchImpl } from '#/test-fetch.ts'
 import { methodOf, notFound, okJson, urlOf } from '#/test-fetch.ts'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { provisionCommand } from './provision.command.ts'
+
+import type { FetchImpl } from '#/test-fetch.ts'
 
 const { mockEnsureInfra } = vi.hoisted(() => ({
 	mockEnsureInfra: vi.fn(async () => ({

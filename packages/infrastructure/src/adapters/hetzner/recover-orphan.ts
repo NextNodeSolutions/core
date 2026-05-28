@@ -1,11 +1,12 @@
-import type { OrphanVps } from '#/domain/hetzner/orphans.ts'
-import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
-import type { TailnetClient } from '#/domain/tailnet/client.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
 import { deleteServer, findServerById } from './api/server.ts'
 import { MAX_POLL_ATTEMPTS, POLL_INTERVAL_MS } from './constants.ts'
 import { waitUntil } from './wait.ts'
+
+import type { OrphanVps } from '#/domain/hetzner/orphans.ts'
+import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
+import type { TailnetClient } from '#/domain/tailnet/client.ts'
 
 const logger = createLogger()
 

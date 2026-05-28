@@ -1,4 +1,5 @@
 import { isRecord } from '#/config/types.ts'
+
 import type { R2BucketBinding, R2ServiceState } from '#/domain/services/r2.ts'
 import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
 
