@@ -5,9 +5,44 @@ import {
 	buildR2ServiceEnv,
 	computeR2BucketBindings,
 	computeR2BucketName,
+	computeR2ServiceAliases,
 	r2ServiceStateKey,
 	r2ServiceTokenName,
 } from './r2.ts'
+
+describe('computeR2ServiceAliases', () => {
+	it('returns an empty list when neither [services.r2] nor [services.supabase] is declared', () => {
+		expect(computeR2ServiceAliases({})).toEqual([])
+	})
+
+	it('returns the explicit buckets unchanged when only [services.r2] is declared', () => {
+		expect(
+			computeR2ServiceAliases({ r2: { buckets: ['uploads', 'media'] } }),
+		).toEqual(['uploads', 'media'])
+	})
+
+	it('returns just ["backups"] when only [services.supabase] is declared', () => {
+		expect(computeR2ServiceAliases({ supabase: {} })).toEqual(['backups'])
+	})
+
+	it('appends "backups" after the explicit buckets when both are declared', () => {
+		expect(
+			computeR2ServiceAliases({
+				r2: { buckets: ['uploads', 'media'] },
+				supabase: {},
+			}),
+		).toEqual(['uploads', 'media', 'backups'])
+	})
+
+	it('does not duplicate "backups" if the user already declared it in [services.r2]', () => {
+		expect(
+			computeR2ServiceAliases({
+				r2: { buckets: ['backups', 'uploads'] },
+				supabase: {},
+			}),
+		).toEqual(['backups', 'uploads'])
+	})
+})
 
 describe('computeR2BucketName', () => {
 	it('joins project, environment, and alias with dashes', () => {

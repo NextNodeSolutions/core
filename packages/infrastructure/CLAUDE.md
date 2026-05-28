@@ -40,9 +40,12 @@ src/
         credentials.ts      — deriveR2Credentials (token → S3 creds via SHA256)
         endpoint.ts         — computeR2Endpoint / computeR2Host
         token-policy.ts     — buildR2TokenPolicy
+    caddy/            — Caddy reverse-proxy domain logic (provider-agnostic)
+      config.ts             — Caddy JSON types + buildCaddyConfig (pure) + issuer factories
+      compose.ts            — composeCaddyConfig (orchestrates upstreams + supabase + issuer)
+      env.ts                — renderCaddyEnv + CADDY_ENV_PATH (systemd EnvironmentFile)
+      supabase.ts           — Supabase-specific Caddy routes (api/kong + studio basic-auth)
     hetzner/          — Hetzner VPS domain logic
-      caddy-config.ts       — Caddy JSON config types
-      build-caddy-config.ts — buildCaddyConfig (pure)
       env-silo.ts           — EnvSilo type
       compute-silo.ts       — computeSilo (pure)
       compose-env.ts        — formatComposeEnv (KEY=val serializer)

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { createEnvSecretsAdapter } from './env-secrets.ts'
 import type { ExecResult, GhRunner } from './gh-runner.ts'
-import { createOrgSecretsAdapter } from './org-secrets.ts'
 
 function ok(stdout = '', stderr = ''): ExecResult {
 	return { exitCode: 0, stdout, stderr }
@@ -11,45 +11,59 @@ function fail(exitCode: number, stderr: string): ExecResult {
 	return { exitCode, stdout: '', stderr }
 }
 
-describe('createOrgSecretsAdapter', () => {
-	it('passes the secret value via stdin', async () => {
+describe('createEnvSecretsAdapter', () => {
+	it('passes the secret value via stdin and scopes to repo + environment', async () => {
 		const runner = vi.fn<GhRunner>().mockResolvedValue(ok())
-		const adapter = createOrgSecretsAdapter(runner)
+		const adapter = createEnvSecretsAdapter(runner)
 
-		await adapter.setOrgSecret('R2_ACCESS_KEY_ID', 'my-id', 'NextNodeOrg')
+		await adapter.setRepoEnvSecret(
+			'POSTGRES_PASSWORD',
+			'my-secret',
+			'NextNodeSolutions',
+			'core',
+			'production',
+		)
 
 		expect(runner).toHaveBeenCalledWith(
 			[
 				'secret',
 				'set',
-				'R2_ACCESS_KEY_ID',
-				'--org',
-				'NextNodeOrg',
-				'--visibility',
-				'all',
+				'POSTGRES_PASSWORD',
+				'--repo',
+				'NextNodeSolutions/core',
+				'--env',
+				'production',
 			],
-			'my-id',
+			'my-secret',
 		)
 	})
 
-	it('throws on non-zero exit when setting a secret', async () => {
+	it('throws on non-zero exit when setting an env-secret', async () => {
 		const runner = vi.fn<GhRunner>().mockResolvedValue(fail(1, 'no perms'))
-		const adapter = createOrgSecretsAdapter(runner)
+		const adapter = createEnvSecretsAdapter(runner)
 
 		await expect(
-			adapter.setOrgSecret('NAME', 'val', 'org'),
-		).rejects.toThrow('gh secret set "NAME" failed (exit 1): no perms')
+			adapter.setRepoEnvSecret(
+				'NAME',
+				'val',
+				'owner',
+				'repo',
+				'production',
+			),
+		).rejects.toThrow(
+			'gh secret set "NAME" --env "production" failed (exit 1): no perms',
+		)
 	})
 
 	it('ghAvailable returns false when runner throws', async () => {
 		const runner = vi.fn<GhRunner>().mockRejectedValue(new Error('ENOENT'))
-		const adapter = createOrgSecretsAdapter(runner)
+		const adapter = createEnvSecretsAdapter(runner)
 		await expect(adapter.ghAvailable()).resolves.toBe(false)
 	})
 
 	it('ghAvailable returns true on successful version call', async () => {
 		const runner = vi.fn<GhRunner>().mockResolvedValue(ok('gh version 2.x'))
-		const adapter = createOrgSecretsAdapter(runner)
+		const adapter = createEnvSecretsAdapter(runner)
 		await expect(adapter.ghAvailable()).resolves.toBe(true)
 	})
 })

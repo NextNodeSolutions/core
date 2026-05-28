@@ -2,16 +2,19 @@ import type {
 	PostgresServiceConfig,
 	R2ServiceConfig,
 	ServicesConfig,
+	SupabaseServiceConfig,
 } from '#/config/types.ts'
 import { isRecord, SERVICE_NAMES } from '#/config/types.ts'
 
 import type { ValidationResult } from './result.ts'
 import { validatePostgresService } from './services/postgres.ts'
 import { validateR2Service } from './services/r2.ts'
+import { validateSupabaseService } from './services/supabase.ts'
 
 interface MutableServicesConfig {
 	r2?: R2ServiceConfig
 	postgres?: PostgresServiceConfig
+	supabase?: SupabaseServiceConfig
 }
 
 /**
@@ -45,6 +48,15 @@ export function validateServicesSection(
 			errors.push(...postgresResult.errors)
 		} else {
 			services.postgres = postgresResult.section
+		}
+	}
+
+	if (raw['supabase'] !== undefined) {
+		const supabaseResult = validateSupabaseService(raw['supabase'])
+		if (!supabaseResult.ok) {
+			errors.push(...supabaseResult.errors)
+		} else {
+			services.supabase = supabaseResult.section
 		}
 	}
 

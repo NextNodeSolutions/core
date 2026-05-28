@@ -1,11 +1,11 @@
 import type { DeployVolume, PostgresServiceConfig } from '#/config/types.ts'
+import type { CaddyUpstream } from '#/domain/caddy/config.ts'
 import type {
 	ContainerDeployedEnvironment,
 	DeployEnv,
 	ImageRef,
 } from '#/domain/deploy/target.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
-import type { CaddyUpstream } from '#/domain/hetzner/caddy-config.ts'
 import { formatComposeEnv } from '#/domain/hetzner/compose-env.ts'
 import {
 	CONTAINER_PORT,
@@ -143,6 +143,7 @@ export async function stageRollout(
 			volumes: input.volumes,
 			projectName: input.projectName,
 			postgres: input.postgres,
+			environment: input.environment,
 		}),
 	)
 

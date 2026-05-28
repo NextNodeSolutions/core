@@ -24,9 +24,11 @@ const INFRA_STORAGE: InfraStorageRuntimeConfig = {
 const CTX: ServiceFactoryContext = {
 	projectName: 'myapp',
 	environment: 'production',
+	repository: { owner: 'NextNodeSolutions', name: 'core' },
 	cfToken: 'cf-token',
 	infraStorage: INFRA_STORAGE,
 	repoSecrets: {},
+	deployDomain: 'example.com',
 }
 
 const CONFIG: R2ServiceConfig = {
@@ -126,13 +128,39 @@ describe('createR2Service', () => {
 })
 
 describe('r2ServiceDefinition', () => {
-	it('returns null when [services.r2] is not declared', () => {
+	it('returns null when neither [services.r2] nor [services.supabase] is declared', () => {
 		expect(r2ServiceDefinition.build({}, CTX)).toBeNull()
 	})
 
 	it('builds the R2 service when [services.r2] is declared', () => {
 		const service = r2ServiceDefinition.build({ r2: CONFIG }, CTX)
 		expect(service?.name).toBe('r2')
+	})
+
+	it('builds the R2 service with the implicit backups alias when only [services.supabase] is declared', async () => {
+		ensureMock.mockResolvedValue(STATE)
+		const service = r2ServiceDefinition.build({ supabase: {} }, CTX)
+
+		expect(service?.name).toBe('r2')
+		await service?.provision()
+		expect(ensureMock).toHaveBeenCalledWith(
+			expect.objectContaining({ bucketAliases: ['backups'] }),
+		)
+	})
+
+	it('appends the backups alias to the explicit buckets when [services.supabase] coexists with [services.r2]', async () => {
+		ensureMock.mockResolvedValue(STATE)
+		const service = r2ServiceDefinition.build(
+			{ r2: CONFIG, supabase: {} },
+			CTX,
+		)
+
+		await service?.provision()
+		expect(ensureMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				bucketAliases: ['uploads', 'media', 'backups'],
+			}),
+		)
 	})
 
 	it('propagates the missing-infra-storage precondition from createR2Service', () => {

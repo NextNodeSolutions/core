@@ -3,6 +3,9 @@ import type {
 	HetznerVpsDeploySection,
 	PostgresServiceConfig,
 } from '#/config/types.ts'
+import { composeCaddyConfig } from '#/domain/caddy/compose.ts'
+import { extractUpstreams } from '#/domain/caddy/config.ts'
+import { CADDY_ENV_PATH, renderCaddyEnv } from '#/domain/caddy/env.ts'
 import { buildR2CaddyBinding } from '#/domain/cloudflare/r2/caddy-binding.ts'
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
@@ -24,9 +27,6 @@ import type { TeardownResult } from '#/domain/deploy/teardown-result.ts'
 import type { TeardownTarget } from '#/domain/deploy/teardown-target.ts'
 import type { DnsClient } from '#/domain/dns/client.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
-import { extractUpstreams } from '#/domain/hetzner/caddy-config.ts'
-import { CADDY_ENV_PATH, renderCaddyEnv } from '#/domain/hetzner/caddy-env.ts'
-import { buildCaddyForProject } from '#/domain/hetzner/caddy-for-project.ts'
 import { computeVpsDnsRecords } from '#/domain/hetzner/dns-records.ts'
 import { allocateHostPort } from '#/domain/hetzner/host-port.ts'
 import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
@@ -206,7 +206,7 @@ export class HetznerVpsTarget implements DeployTarget {
 			const mergedUpstreams = [...otherUpstreams, upstream]
 
 			const caddyConfig = JSON.stringify(
-				buildCaddyForProject({
+				composeCaddyConfig({
 					storage: buildR2CaddyBinding(
 						this.config.infraStorage,
 						vpsName,

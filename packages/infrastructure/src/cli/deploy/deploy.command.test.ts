@@ -122,6 +122,7 @@ describe('deployCommand', () => {
 		vi.stubEnv('PIPELINE_ENVIRONMENT', 'production')
 		vi.stubEnv('CLOUDFLARE_ACCOUNT_ID', 'acct-123')
 		vi.stubEnv('CLOUDFLARE_API_TOKEN', 'cf-token')
+		vi.stubEnv('GITHUB_REPOSITORY', 'NextNodeSolutions/core')
 		vi.stubEnv('GITHUB_ENV', envFile)
 		vi.stubEnv('GITHUB_STEP_SUMMARY', summaryFile)
 		stdoutWrites.length = 0

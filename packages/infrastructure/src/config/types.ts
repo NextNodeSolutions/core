@@ -155,6 +155,12 @@ export interface R2ServiceConfig {
 export const POSTGRES_MODES = ['embedded', 'external'] as const
 export type PostgresMode = (typeof POSTGRES_MODES)[number]
 
+// `[services.supabase]` is a declarative gate — the presence of the
+// table opts the project into the full Supabase stack + R2 backups
+// alias. No fields needed today; future knobs land here when there is
+// an actual decision to expose.
+export type SupabaseServiceConfig = Readonly<Record<string, never>>
+
 export interface PostgresServiceConfig {
 	readonly mode: PostgresMode
 	// Drizzle migrations folder relative to nextnode.toml. Defaults to
@@ -179,12 +185,13 @@ export interface PostgresServiceConfig {
  * to `ServiceConfigByName` — TypeScript will then force every service-aware
  * site (validators, `hasAnyService`, future routers) to handle it.
  */
-export const SERVICE_NAMES = ['r2', 'postgres'] as const
+export const SERVICE_NAMES = ['r2', 'postgres', 'supabase'] as const
 export type ServiceName = (typeof SERVICE_NAMES)[number]
 
 export interface ServiceConfigByName {
 	readonly r2: R2ServiceConfig
 	readonly postgres: PostgresServiceConfig
+	readonly supabase: SupabaseServiceConfig
 }
 
 export type ServicesConfig = {
@@ -202,6 +209,7 @@ export const SERVICE_REQUIRES_INFRA_STORAGE: {
 } = {
 	r2: true,
 	postgres: true,
+	supabase: true,
 }
 
 export const KEBAB_IDENTIFIER_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/

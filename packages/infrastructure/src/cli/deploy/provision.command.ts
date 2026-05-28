@@ -1,5 +1,5 @@
 import { writeSummary } from '#/adapters/github/output.ts'
-import { getEnv, requireEnv } from '#/cli/env.ts'
+import { getEnv, requireEnv, requireGithubRepository } from '#/cli/env.ts'
 import { resolveServices } from '#/cli/services/resolve.ts'
 import type { DeployableConfig } from '#/config/types.ts'
 import { buildProvisionSummary } from '#/domain/deploy/provision-summary.ts'
@@ -17,6 +17,7 @@ export async function provisionCommand(
 		getEnv('PIPELINE_ENVIRONMENT'),
 	)
 	const cfToken = requireEnv('CLOUDFLARE_API_TOKEN')
+	const repository = requireGithubRepository()
 	const repoSecrets = readRepoSecrets()
 
 	const infraStorage = await ensureInfraStorageForConfig(config, cfToken)
@@ -27,6 +28,7 @@ export async function provisionCommand(
 	const services = resolveServices({
 		config,
 		environment,
+		repository,
 		cfToken,
 		infraStorage,
 		repoSecrets,

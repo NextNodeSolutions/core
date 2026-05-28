@@ -1,4 +1,4 @@
-import { getEnv, requireEnv } from '#/cli/env.ts'
+import { getEnv, requireEnv, requireGithubRepository } from '#/cli/env.ts'
 import { resolveServices } from '#/cli/services/resolve.ts'
 import type {
 	DeployableConfig,
@@ -52,6 +52,7 @@ export async function resolveDeployContext(
 		getEnv('PIPELINE_ENVIRONMENT'),
 	)
 	const cfToken = requireEnv('CLOUDFLARE_API_TOKEN')
+	const repository = requireGithubRepository()
 	const repoSecrets = readRepoSecrets()
 
 	const infraStorage = await loadInfraStorageForConfig(config)
@@ -60,6 +61,7 @@ export async function resolveDeployContext(
 	const services = resolveServices({
 		config,
 		environment,
+		repository,
 		cfToken,
 		infraStorage,
 		repoSecrets,
