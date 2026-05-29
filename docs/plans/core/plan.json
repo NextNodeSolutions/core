@@ -1,0 +1,266 @@
+{
+	"effort": "V8",
+	"milestones": [
+		{
+			"id": "M1",
+			"demo": "Deploy a project declared with one [deploy.services.app] (source=build, port=3000, url='example.com') end-to-end: build → image pushed → compose rendered with /healthz healthcheck and .env.app → app up on Caddy. Migration from legacy [deploy.image] to the new per-service schema for the simplest case.",
+			"skeleton": true,
+			"tracks": [
+				{
+					"id": "A",
+					"tasks": [
+						{
+							"step": "01",
+							"title": "Replace deploy.image with deploy.services record in types",
+							"size": "I3",
+							"slice_of": ["D1", "D2"],
+							"done_when": "HetznerVpsDeploySection carries services: Record<string, UserServiceConfig>; DeployImageConfig removed from the deploy section; tsc passes.",
+							"description": "WHAT — Introduce UserServiceConfig = ServiceCommon & (BuildServiceConfig | UpstreamServiceConfig), discriminated on `source`. ServiceCommon = { port?: number, url?: string, secrets?: string[], needs?: string[], depends_on?: string[] }. BuildServiceConfig = { source: 'build', context?, dockerfile?, target? }. UpstreamServiceConfig = { source: 'upstream', ref, registryAuthSecret? }. Drop `image: DeployImageConfig` from HetznerVpsDeploySection; replace with `services: Record<string, UserServiceConfig>`. Keep CloudflarePagesDeploySection untouched.\n\nWHY — D1 + D2: the new TOML schema flattens per-service config under [deploy.services.<name>] and pushes image config to be per-service via a discriminated union; greenfield framing (no legacy [deploy.image] kept).\n\nWHERE — packages/infrastructure/src/config/types.ts\n\nDONE WHEN —\n- HetznerVpsDeploySection no longer carries `image`; instead `services: Record<string, UserServiceConfig>`\n- BuildServiceConfig + UpstreamServiceConfig types exported; discriminated union on `source`\n- pnpm typecheck succeeds (downstream call sites broken on purpose — fixed in tasks 02-08)",
+							"sink_id": null
+						},
+						{
+							"step": "02",
+							"title": "Validate [deploy.services.<name>] section with source discriminator",
+							"size": "I4",
+							"slice_of": ["D1", "D2"],
+							"done_when": "validateDeploySection walks [deploy.services.*] sub-tables, enforces the source discriminated union, rejects legacy [deploy.image] residual, requires at least one service.",
+							"description": "WHAT — Replace validateImage with validateServices in validation/deploy.ts. For each sub-table under [deploy.services.<name>]: validate KEBAB instance name; parse ServiceCommon (port default 3000, url optional, secrets array, needs array, depends_on array); switch on `source`. For 'build': context/dockerfile/target optional with defaults (target defaults to service name); reject ref/registry_auth_secret. For 'upstream': require non-empty ref; reject context/dockerfile/target. Reject any [deploy.image] field with a 'migrate to [deploy.services.<name>]' message. Require at least one service. In M1 only, also reject more than one — temporary, lifted in M2.A-01. Wire the new shape through providers/hetzner.ts so it lands in HetznerVpsDeploySection.\n\nWHY — D1 + D2: the parser is the gate between raw TOML and typed config; the discriminated union must be enforced at parse time so the rest of the codebase consumes a clean shape.\n\nWHERE — packages/infrastructure/src/config/validation/deploy.ts; packages/infrastructure/src/config/validation/providers/hetzner.ts; packages/infrastructure/src/config/fixtures\n\nDONE WHEN —\n- Fixture [deploy.services.app] with source=build → parses; port defaults to 3000\n- Fixture source='build' + ref → error 'ref forbidden when source=build'\n- Fixture source='upstream' without ref → error 'ref required when source=upstream'\n- Fixture with residual [deploy.image] → error pointing at [deploy.services.<name>]\n- Fixture with zero [deploy.services.*] → error 'at least one [deploy.services.*] required'\n- Fixture with two [deploy.services.*] → error (M1 stub; relaxed in M2)",
+							"sink_id": null
+						},
+						{
+							"step": "03",
+							"title": "Emit per-service image_refs JSON from compute-image-ref",
+							"size": "I3",
+							"slice_of": ["D2", "D4"],
+							"done_when": "compute-image-ref writes bake_targets CSV + image_refs JSON Record<service, ImageRef> to GITHUB_OUTPUT; legacy image_ref single output removed.",
+							"description": "WHAT — Iterate config.deploy.services. For each service with source='build', compute ImageRef as ghcr.io/<owner>/<repo>-<service>:<sha> (reuse computeImageRef with the service suffix). For each service with source='upstream', parse service.ref through parseImageRef. Emit two GITHUB_OUTPUT entries: `bake_targets='<csv of services with source=build>'` and `image_refs=<JSON Record<service, ImageRef>>`. Drop the legacy single `image_ref` output.\n\nWHY — D4: a single multi-target bake needs the explicit list of build targets; downstream jobs (migrate, deploy) consume the full Record so compose render can map per-service refs.\n\nWHERE — packages/infrastructure/src/cli/deploy/compute-image-ref.command.ts; packages/infrastructure/src/domain/deploy/image-ref.ts (extend computeImageRef with a service suffix arg)\n\nDONE WHEN —\n- Single-service fixture: bake_targets='app', image_refs='{\"app\":{...}}'\n- Mixed fixture (front=build, api=build, worker=upstream): bake_targets='front,api', image_refs has three entries, worker's ref preserved verbatim\n- No legacy image_ref output emitted",
+							"sink_id": null
+						},
+						{
+							"step": "04",
+							"title": "Wire bake multi-target and IMAGE_REFS env in deploy.yml",
+							"size": "I3",
+							"slice_of": ["D4"],
+							"done_when": "deploy.yml passes targets=${bake_targets} to docker/bake-action@v6 and forwards IMAGE_REFS JSON to the migrate + deploy jobs.",
+							"description": "WHAT — In .github/workflows/deploy.yml: change the Build and push step `targets:` from the hardcoded `app` to `${{ steps.compute.outputs.bake_targets }}`. Build the `set:` block by mapping each entry of image_refs JSON to `<target>.tags=<ref>` (one bash line that iterates the JSON, or generated via the compute step itself if simpler — keep YAML free of logic per the package YAML-vs-TS rule). Add `image_refs: ${{ steps.compute.outputs.image_refs }}` to the build-image job outputs. Replace IMAGE_REF env on the migrate + deploy jobs with IMAGE_REFS sourced from build-image.outputs.image_refs (and from plan outputs for the upstream-only path — see plan step).\n\nWHY — D4: one bake run for N services keeps buildx cache shared and runner cost flat; downstream jobs consume the full Record so they know every service's ref.\n\nWHERE — .github/workflows/deploy.yml\n\nDONE WHEN —\n- Build and push step uses targets: ${{ steps.compute.outputs.bake_targets }}\n- build-image job exposes image_refs JSON\n- migrate + deploy jobs have IMAGE_REFS env set (not IMAGE_REF)\n- Manual workflow trigger with single-service fixture: bake runs once, one image pushed to GHCR, deploy succeeds",
+							"sink_id": null
+						},
+						{
+							"step": "05",
+							"title": "Render compose loop over services with auto /healthz healthcheck",
+							"size": "I4",
+							"slice_of": ["D2", "D5", "D7"],
+							"done_when": "renderComposeFile emits one compose service per user service with image from images[name], env_file: ['.env.<name>'], and an auto-injected /healthz healthcheck.",
+							"description": "WHAT — Change ComposeFileInput from { image, hostPort } to { services: Record<string, UserServiceConfig>, images: Record<string, ImageRef>, hostPorts: Record<string, number> }. Loop over services. For each user service emit a compose entry with: `image: formatImageRef(images[name])`, `restart: 'unless-stopped'`, `env_file: ['.env.<name>']`, `ports: ['127.0.0.1:<hostPort[name]>:<service.port>']` ONLY for services with url, `healthcheck: { test: ['CMD','wget','-q','-O-','http://localhost:<service.port>/healthz'], interval: '10s', timeout: '3s', retries: 6 }`. Existing backing groups (postgres, supabase) remain unchanged. M1 ships with a single user service in fixtures.\n\nWHY — D2 (per-service image), D5 (per-service env file), D7 (mandatory /healthz healthcheck contract). Loop body is the foundation for M2 multi-service + M3 multi-instance.\n\nWHERE — packages/infrastructure/src/domain/hetzner/compose-file.ts\n\nDONE WHEN —\n- ComposeFileInput updated to records keyed by service name\n- Test: single-service fixture renders with healthcheck on /healthz and env_file: ['.env.app']\n- Test: service with url declared → ports entry present; service without url → no ports entry\n- Existing backing fixtures (postgres, supabase) still render identically",
+							"sink_id": null
+						},
+						{
+							"step": "06",
+							"title": "Write per-service env file in stageRollout",
+							"size": "I3",
+							"slice_of": ["D5"],
+							"done_when": "stageRollout writes /opt/apps/<project>/<env>/.env.<name> per user service; no shared .env written.",
+							"description": "WHAT — In stageRollout, iterate config.deploy.services. For each service, compose its env map (M1: PORT + target env + repo-secret pool intersected with project secrets — proper per-service filtering lands in M2.A-06). Write `${envDir}/.env.${name}` via formatComposeEnv. Drop the single `${envDir}/.env` write path. Compose render already references env_file: ['.env.<name>'] (M1.A-05).\n\nWHY — D5: per-service env files are the unit of isolation; the file path must match what renderComposeFile references.\n\nWHERE — packages/infrastructure/src/adapters/hetzner/deploy-container.ts (stageRollout)\n\nDONE WHEN —\n- For each service in config.deploy.services, .env.<name> is written\n- No /opt/apps/<project>/<env>/.env file is created\n- Single-service test fixture: .env.app exists, contains PORT + target env + secrets",
+							"sink_id": null
+						},
+						{
+							"step": "07",
+							"title": "Drop app filter from bringUpApp",
+							"size": "I3",
+							"slice_of": ["D7"],
+							"done_when": "bringUpApp runs `docker compose up -d --remove-orphans` with no service filter.",
+							"description": "WHAT — In bringUpApp, replace `docker compose -p <silo> -f <file> up -d --remove-orphans app` with `docker compose -p <silo> -f <file> up -d --remove-orphans`. The compose daemon now orchestrates start order via depends_on healthchecks (set up in M2/M3); filtering by `app` would skip the new user services.\n\nWHY — D7: bring-up is delegated to docker compose; the CLI no longer names a single service.\n\nWHERE — packages/infrastructure/src/adapters/hetzner/deploy-container.ts (bringUpApp)\n\nDONE WHEN —\n- bringUpApp invokes `docker compose -p <silo> -f <file> up -d --remove-orphans` with no positional service\n- Existing tests updated to assert the new command shape",
+							"sink_id": null
+						},
+						{
+							"step": "08",
+							"title": "Consume IMAGE_REFS JSON in deploy and migrate-remote",
+							"size": "I3",
+							"slice_of": ["D4"],
+							"done_when": "DeployInput.images is a Record<string, ImageRef> parsed from IMAGE_REFS env; stageRollout receives the Record.",
+							"description": "WHAT — In resolve-deploy-context.ts, replace `image: parseImageRef(requireEnv('IMAGE_REF'))` with `images: parseImageRefsEnv(requireEnv('IMAGE_REFS'))`, where parseImageRefsEnv JSON.parses then validates each entry into ImageRef. Rename DeployInput.image → DeployInput.images; thread Record<string, ImageRef> through DeployContainerInput; pass to renderComposeFile (signature already updated in M1.A-05). Update the Hetzner DeployTarget impl and migrate-remote command for the same plumbing change.\n\nWHY — D4: image refs are now per-service; the Record is the single source of truth across both the deploy + migrate jobs.\n\nWHERE — packages/infrastructure/src/cli/deploy/resolve-deploy-context.ts; packages/infrastructure/src/cli/deploy/migrate-remote.command.ts; packages/infrastructure/src/adapters/hetzner/target.ts; packages/infrastructure/src/domain/deploy/target.ts (DeployInput type)\n\nDONE WHEN —\n- IMAGE_REF env reads removed; IMAGE_REFS parsed as JSON Record<service, ImageRef>\n- DeployInput.images: Record<string, ImageRef>; stageRollout reads images[name] per service loop iteration\n- Single-service fixture end-to-end test (deploy command): produces the same compose render as before but driven by images['app']",
+							"sink_id": null
+						}
+					]
+				}
+			]
+		},
+		{
+			"id": "M2",
+			"demo": "Deploy a project with front (Astro SSR, url='example.com', secrets=['SESSION_KEY']) + api (Hono, url='api.example.com', secrets=['JWT_SECRET'], depends_on=['api']'s sidecar — no backing yet). Both Caddy-routed with separate certs; each .env.<name> receives FRONT_URL + API_URL and only its declared secrets; front waits for api healthy before serving.",
+			"skeleton": false,
+			"tracks": [
+				{
+					"id": "A",
+					"tasks": [
+						{
+							"step": "01",
+							"title": "Allow multiple [deploy.services.*] entries in validator",
+							"size": "I3",
+							"slice_of": ["D1"],
+							"done_when": "Validator accepts N services; the at-least-one constraint remains; two-services fixture passes.",
+							"description": "WHAT — Remove the M1 single-entry guard in validateServices (M1.A-02). Keep at-least-one. Keep KEBAB on service names and the source discriminator. No other behavior change.\n\nWHY — D1: the schema natively supports N services; M1 stubbed it to one for the walking-skeleton demo.\n\nWHERE — packages/infrastructure/src/config/validation/deploy.ts\n\nDONE WHEN —\n- Fixture with [deploy.services.front] + [deploy.services.api] → both parsed into HetznerVpsDeploySection.services\n- Fixture with zero services still errors",
+							"sink_id": null
+						},
+						{
+							"step": "02",
+							"title": "Validate url uniqueness and project.domain ownership",
+							"size": "I3",
+							"slice_of": ["D3"],
+							"done_when": "Two services declaring the same url → error; url not equal to or sub-domain of project.domain → error.",
+							"description": "WHAT — Add a cross-service validation pass in validateServices (or a new validateUrls callable from providers/hetzner.ts which already has project.domain). Iterate services with url; reject duplicates with the offending service names. For each url, require url === project.domain OR url ends with '.' + project.domain.\n\nWHY — D3: duplicate urls collide at Caddy (the second route silently shadows the first); foreign domains break ACME issuance since we only own project.domain certs.\n\nWHERE — packages/infrastructure/src/config/validation/deploy.ts; packages/infrastructure/src/config/validation/providers/hetzner.ts\n\nDONE WHEN —\n- Fixture: two services with url='example.com' → error 'duplicate url'\n- Fixture: service with url='foreign.com' under project.domain='example.com' → error 'url must belong to project.domain'\n- Fixture: url='api.example.com' under project.domain='example.com' → passes",
+							"sink_id": null
+						},
+						{
+							"step": "03",
+							"title": "Build Caddy upstreams from services with url",
+							"size": "I3",
+							"slice_of": ["D3"],
+							"done_when": "composeCaddyConfig receives one upstream per user service with url; Caddy config has N routes and N TLS subjects.",
+							"description": "WHAT — In the adapter that assembles CaddyComposeInput.upstreams (adapters/hetzner/converge-vps.ts or where deployContainerResult.upstream is collected), replace the single-upstream construction with iteration over config.deploy.services. For each service with url, emit { hostname: service.url, dial: `localhost:<hostPorts[name]>` }. composeCaddyConfig itself already accepts a list — no signature change.\n\nWHY — D3: each externally-routed service gets its own Caddy upstream + ACME cert.\n\nWHERE — packages/infrastructure/src/adapters/hetzner/converge-vps.ts (caller of composeCaddyConfig); related deploy result aggregation\n\nDONE WHEN —\n- Fixture front + api with distinct urls → Caddy config has two routes + two subjects\n- Fixture service without url → no Caddy entry contributed by that service",
+							"sink_id": null
+						},
+						{
+							"step": "04",
+							"title": "Allocate host port per service with url",
+							"size": "I4",
+							"slice_of": ["D3"],
+							"done_when": "allocateHostPort returns a Record<service, port> for services with url; persisted as nested map keyed by project then service; compose maps 127.0.0.1:<hostPort>:<containerPort> only for services with url.",
+							"description": "WHAT — Refactor allocateHostPort: input becomes (hostPorts: Record<project, Record<service, number>>, projectName: string, urlServices: ReadonlyArray<string>). Reuse existing entries; allocate new ones in [8080, 8200). Update the R2 state writer to persist the nested map. renderComposeFile (already loop-driven from M1.A-05) reads hostPorts[name] and omits the ports field for services without url.\n\nWHY — D3: each externally-exposed service binds its own host port; internal-only services never expose anything to the host.\n\nWHERE — packages/infrastructure/src/domain/hetzner/host-port.ts; packages/infrastructure/src/adapters/hetzner/hcloud-state.ts (or wherever host-ports persistence lives); packages/infrastructure/src/domain/hetzner/compose-file.ts\n\nDONE WHEN —\n- host-port state JSON is nested Record<project, Record<service, port>>\n- Two services with url → two distinct host ports allocated; both persisted\n- Service without url → no ports entry in its compose service block\n- Re-running allocation reuses existing assignments",
+							"sink_id": null
+						},
+						{
+							"step": "05",
+							"title": "Cross-inject service URLs into every per-service env file",
+							"size": "I4",
+							"slice_of": ["D5"],
+							"done_when": "Each .env.<name> contains <UPPER_OTHER>_URL=<url> for every project service that declares url (including its own).",
+							"description": "WHAT — In stageRollout's per-service env builder (M1.A-06), compute once `urls = { '<UPPER_NAME>_URL': service.url for service in services if service.url }`. Inject `urls` into every service's env map (symmetric — the contract stays simple and predictable). Upper-snake conversion of the kebab service name.\n\nWHY — D5: each consumer service needs to know its peers' URLs at runtime; symmetric injection avoids the trap of 'which service knows about which'.\n\nWHERE — packages/infrastructure/src/adapters/hetzner/deploy-container.ts (stageRollout per-service env build)\n\nDONE WHEN —\n- Fixture front (url='example.com') + api (url='api.example.com') + worker (no url) → .env.front contains FRONT_URL + API_URL; .env.api contains FRONT_URL + API_URL; .env.worker contains FRONT_URL + API_URL\n- No WORKER_URL injected anywhere (worker has no url)",
+							"sink_id": null
+						},
+						{
+							"step": "06",
+							"title": "Route secrets per service and reject unknown secret references",
+							"size": "I4",
+							"slice_of": ["D5"],
+							"done_when": "Validator rejects service.secrets entries not declared in [deploy.secrets]; stageRollout injects only each service's declared subset into its .env.<name>.",
+							"description": "WHAT — Validator: for each service.secrets[i], assert membership in deploy.secrets; throw 'unknown secret <X> — declare it in [deploy.secrets]'. stageRollout: when composing the env map for service S, project the global secrets pool through S.secrets (set intersection) before merging into the env map. Target-required + service-required secrets (postgres DATABASE_URL, etc.) are always injected via their existing paths.\n\nWHY — D5: per-service isolation — a leaked .env.front blast radius is its own declared subset, not the whole project secret pool.\n\nWHERE — packages/infrastructure/src/config/validation/deploy.ts; packages/infrastructure/src/adapters/hetzner/deploy-container.ts (per-service env build)\n\nDONE WHEN —\n- Fixture front.secrets=['SESSION_KEY'], api.secrets=['JWT_SECRET'], [deploy.secrets]=['SESSION_KEY','JWT_SECRET'] → .env.front has SESSION_KEY but not JWT_SECRET; .env.api has JWT_SECRET but not SESSION_KEY\n- Fixture secrets=['UNKNOWN'] → validation error",
+							"sink_id": null
+						},
+						{
+							"step": "07",
+							"title": "Render inter-service depends_on from service depends_on field",
+							"size": "I4",
+							"slice_of": ["D7"],
+							"done_when": "Validator rejects depends_on entries not declared in deploy.services; compose emits depends_on.<svc>.condition='service_healthy' per entry.",
+							"description": "WHAT — Validator: parse service.depends_on as string[] of user-service names; reject entries not present in deploy.services. renderComposeFile: for each user service with depends_on, emit `depends_on: { <ref>: { condition: 'service_healthy' } }` merged into the compose service block. Backing depends_on (from needs) lands in M3.A-09.\n\nWHY — D7: cold-start order — front can't 200 before api is healthy; compose daemon enforces the gate via depends_on.\n\nWHERE — packages/infrastructure/src/config/validation/deploy.ts; packages/infrastructure/src/domain/hetzner/compose-file.ts\n\nDONE WHEN —\n- Fixture front.depends_on=['api'] → compose.services.front.depends_on.api.condition='service_healthy'\n- Fixture front.depends_on=['nonexistent'] → validation error\n- Combined fixture (front depends on api, api has /healthz): docker compose events on a live VPS show api healthy → front start (verified via e2e)",
+							"sink_id": null
+						}
+					]
+				}
+			]
+		},
+		{
+			"id": "M3",
+			"demo": "Deploy a project with api (needs=['postgres.main']) + cms (needs=['postgres.analytics']) declared alongside [services.postgres.main] + [services.postgres.analytics]. Two postgres sidecars run side-by-side with isolated volumes; .env.api receives POSTGRES_MAIN_URL only; .env.cms receives POSTGRES_ANALYTICS_URL only; depends_on chains gate cold start. Same pattern works for multi-r2 (uploads + backups) and multi-supabase.",
+			"skeleton": false,
+			"tracks": [
+				{
+					"id": "A",
+					"tasks": [
+						{
+							"step": "01",
+							"title": "Nest ServicesConfig as Record kind to Record instance",
+							"size": "I3",
+							"slice_of": ["D6"],
+							"done_when": "ServicesConfig is `{ [K in ServiceName]?: Record<string, ServiceConfigByName[K]> }`; per-kind config types unchanged.",
+							"description": "WHAT — In config/types.ts, change ServicesConfig from `{ [K in ServiceName]?: ServiceConfigByName[K] }` to `{ [K in ServiceName]?: Record<string, ServiceConfigByName[K]> }`. Instance name = lowercase kebab. Add a helper iterator `forEachServiceInstance(services, callback)` used by validators, renderers, and the runtime. Update hasAnyService + requiresInfraStorage to walk the nested record.\n\nWHY — D6: the schema must natively support N instances per kind ([services.postgres.main], [services.postgres.analytics]) for the multi-instance pool model.\n\nWHERE — packages/infrastructure/src/config/types.ts\n\nDONE WHEN —\n- ServicesConfig type allows multiple postgres entries\n- forEachServiceInstance iterator exported\n- pnpm typecheck succeeds (downstream callers broken by intent — fixed in subsequent tasks)",
+							"sink_id": null
+						},
+						{
+							"step": "02",
+							"title": "Parse [services.<kind>.<instance>] sub-tables in services validator",
+							"size": "I4",
+							"slice_of": ["D6"],
+							"done_when": "validateServicesSection walks the nested kind → instance tree; each instance name validated against KEBAB_IDENTIFIER_PATTERN; flat [services.<kind>] (no instance) raises a clear error.",
+							"description": "WHAT — In validation/services.ts, replace the flat per-kind dispatch with a nested walk: for each kind in SERVICE_NAMES, expect raw[kind] to be a Record<instance, raw>. For each instance name, validate KEBAB pattern; dispatch the instance's raw value to the existing per-kind validator (validateR2Service, validatePostgresService, validateSupabaseService — they stay unchanged). Return the nested MutableServicesConfig.\n\nWHY — D6: TOML namespace [services.<kind>.<instance>] is the canonical multi-instance representation.\n\nWHERE — packages/infrastructure/src/config/validation/services.ts\n\nDONE WHEN —\n- Fixture [services.postgres.main] + [services.postgres.analytics] parses to two postgres entries under services.postgres\n- Fixture with non-kebab instance name (e.g. 'Main') → error\n- Fixture flat [services.postgres] with fields directly (no instance level) → error 'instance name required, e.g. [services.postgres.main]'\n- Fixture [services.r2.uploads] + [services.r2.backups] parses to two R2 entries",
+							"sink_id": null
+						},
+						{
+							"step": "03",
+							"title": "Validate needs as qualified kind.instance forward refs",
+							"size": "I4",
+							"slice_of": ["D6"],
+							"done_when": "validateServiceNeeds rejects unqualified needs ('postgres' without instance) and references to undeclared instances.",
+							"description": "WHAT — Add validateServiceNeeds(services: HetznerVpsDeploySection['services'], backing: ServicesConfig) called from validateDeploySection. For each service's needs[i]: split on '.'; require exactly two parts; require kind ∈ SERVICE_NAMES; require backing[kind]?.[instance] !== undefined. Errors carry helpful hints ('instance name required, e.g. postgres.main'; 'unknown backing ref postgres.main').\n\nWHY — D6: forward direction (consumer → producer) needs fully qualified refs because a kind may have N instances; an unqualified ref is ambiguous.\n\nWHERE — packages/infrastructure/src/config/validation/deploy.ts (or a new validation/needs.ts called from deploy)\n\nDONE WHEN —\n- Fixture needs=['postgres.main'] with declared [services.postgres.main] → passes\n- Fixture needs=['postgres'] (unqualified) → error 'instance name required'\n- Fixture needs=['postgres.main'] without backing → error 'unknown backing ref postgres.main'\n- Fixture needs=['unknown.x'] → error 'unknown service kind'",
+							"sink_id": null
+						},
+						{
+							"step": "04",
+							"title": "Parameterize buildPostgresSidecar by instance",
+							"size": "I4",
+							"slice_of": ["D6"],
+							"done_when": "buildPostgresSidecar(config, projectName, instance) emits compose service postgres-<instance> with volume postgres-data-<instance>; buildPostgresBackupSidecar disambiguated similarly.",
+							"description": "WHAT — Update buildPostgresSidecar + buildPostgresBackupSidecar to accept an `instance` argument. Service name becomes `postgres-${instance}`; volume name becomes `postgres-data-${instance}`. POSTGRES_SIDECAR_SERVICE_NAME + POSTGRES_BACKUP_SERVICE_NAME constants become builder functions (or are replaced by per-call computed names). Backup sidecar's --host arg uses the instance-suffixed service name. Existing single-instance call sites pass instance='main' as the default migration path.\n\nWHY — D6: each postgres instance is a distinct sidecar with its own volume; naming must be collision-proof for the multi-instance demo.\n\nWHERE — packages/infrastructure/src/domain/services/postgres.ts; packages/infrastructure/src/domain/services/postgres-exporter.ts (if it references the postgres service name)\n\nDONE WHEN —\n- Test instance='main' → service 'postgres-main', volume 'postgres-data-main'\n- Test instance='analytics' → service 'postgres-analytics', volume 'postgres-data-analytics'\n- Backup sidecar --host arg references the matching instance-suffixed service",
+							"sink_id": null
+						},
+						{
+							"step": "05",
+							"title": "Include instance in R2 bucket names and state paths",
+							"size": "I4",
+							"slice_of": ["D6"],
+							"done_when": "Each R2 instance has a distinct bucket name and state key under R2; instances 'uploads' and 'backups' don't collide.",
+							"description": "WHAT — Thread instance through R2 provisioning + state. Bucket names use the instance suffix (e.g. `<project>-<instance>-<bucket>`). R2 state JSON path under the state bucket includes the instance segment so two instances don't share state. Update the R2 token policy to scope to the instance's buckets.\n\nWHY — D6: multi-r2 (uploads + backups) requires per-instance Cloudflare buckets and per-instance state; sharing would corrupt independent lifecycles.\n\nWHERE — packages/infrastructure/src/adapters/cloudflare/r2/buckets.ts; packages/infrastructure/src/adapters/services/r2-state.ts; packages/infrastructure/src/domain/cloudflare/r2/token-policy.ts; cli/services where R2 is provisioned\n\nDONE WHEN —\n- Single-instance test passes when called with default instance name\n- New test: instances 'uploads' + 'backups' provision two distinct buckets per declared bucket name\n- New test: R2 state JSON for instance 'uploads' is at a key disjoint from instance 'backups'",
+							"sink_id": null
+						},
+						{
+							"step": "06",
+							"title": "Parameterize buildSupabaseStack by instance",
+							"size": "I3",
+							"slice_of": ["D6"],
+							"done_when": "buildSupabaseStack accepts instance; emitted service names + backup sidecar disambiguated by instance.",
+							"description": "WHAT — Add an `instance` argument to buildSupabaseStack and buildSupabaseBackupSidecar. Service names (supabase-db, supabase-kong, etc.) become <name>-<instance>; volume similarly. Default behavior preserved when callers pass instance='default'.\n\nWHY — D6: same multi-instance pattern as postgres + r2; consistency across kinds even if multi-supabase is uncommon today.\n\nWHERE — packages/infrastructure/src/domain/services/supabase.ts\n\nDONE WHEN —\n- Existing tests pass with instance='default'\n- New test: instance='secondary' → distinct service names + volume names",
+							"sink_id": null
+						},
+						{
+							"step": "07",
+							"title": "Iterate every backing instance in renderComposeFile",
+							"size": "I4",
+							"slice_of": ["D6"],
+							"done_when": "renderComposeFile loops over the nested ServicesConfig and emits one sidecar group per instance; top-level volumes list every instance's data volume.",
+							"description": "WHAT — Update renderComposeFile's input type to take ServicesConfig (nested). Loop over services.postgres entries: for each instance, call buildPostgresServiceGroup with the instance arg and spread into compose.services. Same loop for services.supabase entries (and the postgres-exporter init-mount applied per supabase instance). buildTopLevelVolumes collects every instance's data volume.\n\nWHY — D6: multi-instance backings produce distinct compose services; the renderer must walk the nested tree.\n\nWHERE — packages/infrastructure/src/domain/hetzner/compose-file.ts\n\nDONE WHEN —\n- Fixture [services.postgres.main] + [services.postgres.analytics] → compose has postgres-main + postgres-main-backup + postgres-analytics + postgres-analytics-backup\n- Top-level volumes block lists postgres-data-main + postgres-data-analytics\n- Fixture with [services.supabase.default] + [services.supabase.secondary] → two distinct supabase stacks",
+							"sink_id": null
+						},
+						{
+							"step": "08",
+							"title": "Inject backing env vars per service needs prefixed by kind and instance",
+							"size": "I4",
+							"slice_of": ["D5", "D6"],
+							"done_when": "stageRollout writes <UPPER_KIND>_<UPPER_INSTANCE>_<VAR> into each consuming service's .env.<name>; instances not referenced via needs are not injected.",
+							"description": "WHAT — Update resolveServices (or its caller) to expose per-instance env contributions keyed by (kind, instance). In stageRollout's per-service env builder, walk service.needs[i]='kind.instance' and project the backing's env Record through the prefix `<UPPER_KIND>_<UPPER_INSTANCE>_` (e.g. POSTGRES_MAIN_*, R2_UPLOADS_*). Variable name conversion: kebab instance → SNAKE_CASE. Merge into the per-service env map; never inject backings the service didn't declare.\n\nWHY — D5 + D6: explicit per-instance naming prevents collisions when a service consumes two instances of the same kind (e.g. postgres.main + postgres.analytics on a single service); needs drives the dependency graph for env routing.\n\nWHERE — packages/infrastructure/src/adapters/hetzner/deploy-container.ts (per-service env build); packages/infrastructure/src/cli/services/resolve.ts (per-instance loadEnv)\n\nDONE WHEN —\n- Fixture api needs=['postgres.main'] → .env.api contains POSTGRES_MAIN_URL; no POSTGRES_ANALYTICS_*\n- Fixture cms needs=['postgres.analytics'] → .env.cms contains POSTGRES_ANALYTICS_URL\n- Fixture app needs=['r2.uploads','r2.backups'] → .env.app contains R2_UPLOADS_* + R2_BACKUPS_*\n- Backing instance unreferenced by any needs → no env injection anywhere",
+							"sink_id": null
+						},
+						{
+							"step": "09",
+							"title": "Auto-generate depends_on service_healthy for each service needs ref",
+							"size": "I3",
+							"slice_of": ["D6", "D7"],
+							"done_when": "For every service.needs[i]='kind.instance', the compose user-service block has depends_on.<kind>-<instance>={ condition:'service_healthy' }; merged with explicit user-service depends_on.",
+							"description": "WHAT — renderComposeFile: for each user service, walk service.needs and build depends_on entries pointing at the resolved sidecar service name (`<kind>-<instance>`). Merge with explicit user-service depends_on entries from M2.A-07 (no overwrite — they target user services, the backings target sidecars).\n\nWHY — D7: backing must be healthy before consumer starts; bring-up is fully delegated to the docker compose daemon, no orchestration in TS.\n\nWHERE — packages/infrastructure/src/domain/hetzner/compose-file.ts\n\nDONE WHEN —\n- Fixture api needs=['postgres.main'] → compose.services.api.depends_on['postgres-main'].condition='service_healthy'\n- Fixture cms needs=['postgres.main','postgres.analytics'] → both depends_on entries present\n- Combined with M2.A-07: api needs=['postgres.main'] AND front depends_on=['api'] → compose has both backing + inter-service depends_on chains",
+							"sink_id": null
+						},
+						{
+							"step": "10",
+							"title": "Iterate every backing instance in bringUpDb",
+							"size": "I3",
+							"slice_of": ["D6", "D7"],
+							"done_when": "bringUpDb runs one docker compose up -d --wait command listing every postgres + supabase instance and its backup sidecar; no-op when no backings declared.",
+							"description": "WHAT — bringUpDb takes config.services (nested ServicesConfig) instead of input.postgres. Iterate every postgres instance: collect the list of sidecar service names (postgres-<instance>, postgres-<instance>-backup or matching naming from M3.A-04). Same for supabase instances. Run a single `docker compose -p <silo> -f <file> up -d --wait --wait-timeout 60 <s1> <s2> ...`. No-op if no backings.\n\nWHY — D6 + D7: staged bring-up still gates phase 2 on DB readiness; multi-instance requires explicit naming and a single up command keeps the operation atomic.\n\nWHERE — packages/infrastructure/src/adapters/hetzner/deploy-container.ts (bringUpDb)\n\nDONE WHEN —\n- Fixture with 2 postgres instances → bringUpDb invokes docker compose with 4 services listed (postgres-main, postgres-main-backup, postgres-analytics, postgres-analytics-backup)\n- Fixture without backings → bringUpDb is a no-op\n- Existing single-instance fixture: still works (default instance name)",
+							"sink_id": null
+						}
+					]
+				}
+			]
+		}
+	]
+}

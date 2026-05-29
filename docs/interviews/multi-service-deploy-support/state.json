@@ -1,68 +1,57 @@
 {
 	"slug": "multi-service-deploy-support",
-	"topic": "Support N user-declared services (e.g. app + strapi, or api + front) in the @nextnode-solutions/infrastructure deploy pipeline",
-	"change_kind": "additive-brownfield",
+	"topic": "Support N user-declared services in the @nextnode-solutions/infrastructure deploy pipeline. Greenfield framing: no backward-compat to [deploy.image].",
+	"change_kind": "breaking-brownfield",
 	"status": "closed",
 	"rounds": [
 		{ "kind": "discovery", "approval_mode": "approved" },
-		{ "kind": "grilling-1", "approval_mode": "approved" },
-		{ "kind": "grilling-2", "approval_mode": "approved" },
 		{
-			"kind": "closure",
+			"kind": "grilling-1",
 			"approval_mode": "approved",
-			"restructured": "removed primary flag; merged routing decisions into D3 symmetric model"
-		}
-	],
-	"branches": [
-		{
-			"id": "b-schema-shape",
-			"theme": "schema",
-			"scope": "in",
-			"resolved_in": "D1"
+			"note": "8 questions, q6 user picked per-service env (not shared), other recommendations accepted"
 		},
 		{
+			"kind": "grilling-2-regrill-d6",
+			"approval_mode": "approved",
+			"note": "user picked (a) pool global + asked best practice on needs vs for direction → answered in chat: needs forward (universal convention)"
+		},
+		{
+			"kind": "closure-v1",
+			"approval_mode": "approved",
+			"note": "user comment on D6 reopened it — superseded by closure-v2"
+		},
+		{ "kind": "closure-v2", "approval_mode": "approved" }
+	],
+	"branches": [
+		{ "id": "b-schema-shape", "scope": "in", "resolved_in": "D1" },
+		{
 			"id": "b-schema-image-per-service",
-			"theme": "schema",
 			"scope": "in",
 			"resolved_in": "D2"
 		},
 		{
-			"id": "b-primary-designation",
-			"theme": "routing",
+			"id": "b-routing-model",
 			"scope": "in",
-			"resolved_in": "D3 (dissolved — symmetric model has no primary)"
+			"resolved_in": "D3 (symmetric, no primary)"
 		},
 		{
 			"id": "b-secondary-exposure",
-			"theme": "routing",
 			"scope": "in",
-			"resolved_in": "D3"
+			"resolved_in": "D3 (url presence = exposed)"
 		},
-		{
-			"id": "b-build-fanout",
-			"theme": "build",
-			"scope": "in",
-			"resolved_in": "D4"
-		},
+		{ "id": "b-build-fanout", "scope": "in", "resolved_in": "D4" },
 		{
 			"id": "b-env-isolation",
-			"theme": "runtime",
 			"scope": "in",
-			"resolved_in": "D5"
+			"resolved_in": "D5 (per-service .env files)"
 		},
 		{
 			"id": "b-service-deps",
-			"theme": "runtime",
 			"scope": "in",
-			"resolved_in": "D6"
+			"resolved_in": "D6 (pool global multi-instance, forward needs)"
 		},
-		{
-			"id": "b-bringup-order",
-			"theme": "rollout",
-			"scope": "in",
-			"resolved_in": "D7"
-		},
-		{ "id": "b-compat-old-syntax", "theme": "compat", "scope": "out" }
+		{ "id": "b-bringup-order", "scope": "in", "resolved_in": "D7" },
+		{ "id": "b-compat-old-syntax", "scope": "out" }
 	],
 	"decisions": {
 		"D1": {
@@ -71,7 +60,7 @@
 		},
 		"D2": {
 			"theme": "schema",
-			"title": "Image config par service — DeployImageConfig étendu"
+			"title": "Image config par service — discriminated union stricte sur source"
 		},
 		"D3": {
 			"theme": "routing",
@@ -83,15 +72,15 @@
 		},
 		"D5": {
 			"theme": "runtime",
-			"title": "Un seul .env partagé entre tous les user services"
+			"title": "Per-service env files — routing déterministe avec vars backing préfixées par instance"
 		},
 		"D6": {
 			"theme": "runtime",
-			"title": "Backing services dépendances explicites par needs = [...]"
+			"title": "Backings en pool global multi-instance + needs forward direction"
 		},
 		"D7": {
 			"theme": "rollout",
-			"title": "Bring-up délégué à compose via depends_on { condition: service_healthy }"
+			"title": "Bring-up via depends_on compose + healthcheck /healthz mandatory par défaut"
 		}
 	},
 	"promoted_to": "docs/plans/2026-05-29-multi-service-deploy-support.html",
