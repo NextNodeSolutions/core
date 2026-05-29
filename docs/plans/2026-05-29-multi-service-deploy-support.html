@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Interview · Multi-service deploy · Closure</title>
+<script>
+(function () {
+  try {
+    var stored = localStorage.getItem('np-theme');
+    var theme = stored || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', theme);
+  } catch (e) {
+    document.documentElement.setAttribute('data-theme', 'light');
+  }
+})();
+</script>
+<style>
+:root {
+  --np-bg:          oklch(98.4% 0.003 247.86);
+  --np-bg-soft:     oklch(96.8% 0.007 247.84);
+  --np-text:        oklch(20.8% 0.042 265.76);
+  --np-text-muted:  oklch(55.4% 0.046 257.42);
+  --np-border:      oklch(92.9% 0.013 255.51);
+  --np-border-soft: oklch(96.8% 0.007 247.84);
+  --np-accent:      oklch(70.4% 0.14 182.503);
+  --np-accent-bg:   oklch(95.3% 0.051 180.801);
+  --np-accent-hover:oklch(60% 0.118 184.704);
+  --np-highlight:   #F97316;
+  --np-warn:        #D97706;
+  --np-danger:      #DC2626;
+  --np-success:     #16A34A;
+  --np-shadow-soft: 0 2px 6px rgba(0,0,0,.06);
+  --np-shadow-bar:  0 -2px 12px rgba(0,0,0,.04);
+  --np-mono:        "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --np-sans:        "DM Sans", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --np-display:     "Plus Jakarta Sans", "DM Sans", sans-serif;
+}
+[data-theme="dark"] {
+  --np-bg:          oklch(20.8% 0.042 265.76);
+  --np-bg-soft:     oklch(27.9% 0.041 260.03);
+  --np-text:        oklch(98.4% 0.003 247.86);
+  --np-text-muted:  oklch(70.4% 0.04 256.79);
+  --np-border:      oklch(37.2% 0.044 257.29);
+  --np-border-soft: oklch(27.9% 0.041 260.03);
+  --np-accent:      oklch(77.7% 0.152 181.912);
+  --np-accent-bg:   oklch(38.6% 0.063 188.416);
+  --np-accent-hover:oklch(85.5% 0.138 181.071);
+  --np-shadow-soft: 0 2px 6px rgba(0,0,0,.40);
+  --np-shadow-bar:  0 -2px 12px rgba(0,0,0,.35);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: var(--np-sans);
+  background: var(--np-bg);
+  color: var(--np-text);
+  font-size: 15px;
+  line-height: 1.6;
+  padding-bottom: 96px;
+  -webkit-font-smoothing: antialiased;
+}
+.np-theme-toggle {
+  position: fixed; top: 12px; right: 12px;
+  width: 32px; height: 32px;
+  border-radius: 50%; border: 1px solid var(--np-border);
+  background: var(--np-bg-soft); color: var(--np-text);
+  font-size: 16px; cursor: pointer;
+  z-index: 10;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 208px 1fr;
+  min-height: 100vh;
+}
+@media (max-width: 1024px) {
+  .layout { grid-template-columns: 1fr; }
+  aside.sidebar { display: none; }
+}
+
+aside.sidebar {
+  position: sticky; top: 0;
+  height: 100vh; overflow: auto;
+  background: var(--np-bg-soft);
+  border-right: 1px solid var(--np-border);
+  padding: 16px 14px;
+  font-size: 12px;
+}
+aside.sidebar::-webkit-scrollbar { width: 5px; }
+aside.sidebar::-webkit-scrollbar-thumb { background: var(--np-border); border-radius: 3px; }
+.sidebar-title {
+  font-family: var(--np-mono); font-size: 10px;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--np-text-muted);
+  margin: 14px 0 6px;
+}
+.sidebar-title:first-child { margin-top: 0; }
+.sidebar-link {
+  display: flex; align-items: center; gap: 7px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: var(--np-text);
+  text-decoration: none;
+  line-height: 1.3;
+  cursor: pointer;
+}
+.sidebar-link:hover { background: var(--np-bg); }
+.sidebar-link.active {
+  background: var(--np-accent-bg);
+  color: var(--np-accent-hover);
+  font-weight: 600;
+}
+.dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--np-success);
+  border: 1px solid var(--np-success);
+}
+.dot.empty { background: transparent; border-color: var(--np-warn); }
+.progress-bar {
+  margin: 12px 0 6px;
+  padding: 8px 10px;
+  background: var(--np-bg);
+  border-radius: 4px;
+  font-family: var(--np-mono); font-size: 11px;
+  color: var(--np-text-muted);
+}
+.progress-bar .fill {
+  display: block;
+  height: 3px; margin-top: 6px;
+  background: var(--np-accent);
+  border-radius: 2px;
+}
+
+main.content { padding: 28px 36px; max-width: 920px; }
+
+header.np-header { margin-bottom: 22px; }
+.eyebrow {
+  font-family: var(--np-mono); font-size: 11px;
+  letter-spacing: 0.10em; text-transform: uppercase;
+  color: var(--np-text-muted);
+  margin-bottom: 8px;
+}
+h1 {
+  font-family: var(--np-display);
+  font-size: 26px; line-height: 1.25;
+  letter-spacing: -0.01em;
+  margin: 0;
+  font-weight: 800;
+}
+.subhead {
+  margin-top: 10px;
+  color: var(--np-text-muted);
+  font-size: 14px;
+  max-width: 720px;
+}
+
+.theme-block { margin-bottom: 18px; }
+.theme-label {
+  font-family: var(--np-mono); font-size: 11px;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--np-text-muted);
+  padding: 14px 0 6px;
+  border-bottom: 1px dashed var(--np-border);
+  margin-bottom: 14px;
+}
+
+.decision {
+  padding: 18px 0 16px;
+  border-bottom: 1px solid var(--np-border-soft);
+}
+.decision-head {
+  display: flex; align-items: baseline; gap: 12px;
+  margin-bottom: 8px;
+}
+.decision-num {
+  font-family: var(--np-mono); font-size: 11px;
+  color: var(--np-text-muted);
+  letter-spacing: 0.06em;
+}
+.decision-title {
+  font-family: var(--np-display);
+  font-size: 17px; font-weight: 700;
+  line-height: 1.3;
+  margin: 0;
+}
+.fact-preview {
+  background: var(--np-bg-soft);
+  border-left: 3px solid var(--np-accent);
+  padding: 12px 16px;
+  border-radius: 0 6px 6px 0;
+  font-size: 14px; line-height: 1.55;
+  margin: 8px 0 12px;
+}
+.fact-preview .label {
+  font-family: var(--np-mono); font-size: 10px;
+  letter-spacing: 0.10em; text-transform: uppercase;
+  color: var(--np-accent-hover); font-weight: 600;
+  margin-bottom: 5px;
+}
+
+.details-toggle {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid var(--np-border);
+  border-radius: 6px;
+  font-family: var(--np-mono); font-size: 11px;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--np-text-muted);
+  cursor: pointer;
+  margin-right: 10px;
+}
+.details-toggle:hover { color: var(--np-text); }
+
+.fields-grid {
+  display: none;
+  margin-top: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+.decision.expanded .fields-grid { display: grid; }
+.decision.expanded .fact-preview { display: none; }
+@media (max-width: 720px) {
+  .fields-grid { grid-template-columns: 1fr; }
+}
+
+.field {
+  background: var(--np-bg-soft);
+  border-left: 4px solid var(--np-accent);
+  padding: 12px 14px;
+  border-radius: 0 6px 6px 0;
+  line-height: 1.55;
+  font-size: 13.5px;
+  position: relative;
+}
+.field .badge {
+  display: inline-block;
+  font-family: var(--np-mono); font-size: 10px;
+  letter-spacing: 0.10em;
+  color: var(--np-accent-hover); font-weight: 700;
+  margin-right: 6px;
+}
+.field .label-text {
+  font-family: var(--np-mono); font-size: 10px;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--np-text-muted);
+}
+.field .prose {
+  outline: none;
+  cursor: text;
+  margin-top: 6px;
+  min-height: 22px;
+}
+.field .prose:hover { box-shadow: inset 0 0 0 1px var(--np-accent-bg); }
+.field .prose:focus { outline: 1px solid var(--np-accent); background: var(--np-bg); padding: 4px 6px; margin: 6px -6px 0; border-radius: 4px; }
+
+.decision-footer {
+  display: flex; align-items: flex-start; gap: 12px;
+  margin-top: 14px;
+}
+.decision-note {
+  flex: 1;
+  font-family: var(--np-sans); font-size: 12.5px;
+  border: 1px dashed var(--np-border);
+  background: transparent;
+  border-radius: 4px;
+  padding: 7px 11px;
+  color: var(--np-text);
+  resize: vertical;
+  min-height: 38px;
+  transition: border-color .15s, background .15s;
+}
+.decision-note.has-value {
+  border: 1px solid var(--np-accent);
+  background: var(--np-accent-bg);
+}
+
+.risk-grid, .next-steps {
+  margin-top: 28px;
+  padding: 18px 20px;
+  background: var(--np-bg-soft);
+  border-radius: 8px;
+}
+.section-h2 {
+  font-family: var(--np-display);
+  font-size: 16px; font-weight: 700;
+  margin: 0 0 10px;
+}
+.risk-row {
+  display: grid;
+  grid-template-columns: 1fr 80px 1.2fr;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--np-border-soft);
+  font-size: 13px;
+  align-items: baseline;
+}
+.risk-row:last-child { border-bottom: 0; }
+.sev {
+  display: inline-block;
+  font-family: var(--np-mono); font-size: 10px;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+  text-align: center;
+}
+.sev.high { background: rgba(220,38,38,.15); color: var(--np-danger); }
+.sev.med  { background: rgba(217,119,6,.15); color: var(--np-warn); }
+.sev.low  { background: rgba(22,163,74,.15); color: var(--np-success); }
+
+.next-steps ol { padding-left: 22px; margin: 4px 0; font-size: 13px; line-height: 1.6; }
+.next-steps ol li { margin-bottom: 4px; }
+.copy-bundle {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-top: 12px;
+  padding: 8px 14px;
+  background: var(--np-accent);
+  color: white; border: 0;
+  font-family: var(--np-mono); font-size: 11px;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.copy-bundle:hover { background: var(--np-accent-hover); }
+
+footer.rp-gate {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: var(--np-bg);
+  border-top: 1px solid var(--np-border);
+  padding: 12px 32px;
+  display: flex; gap: 10px; justify-content: flex-end; align-items: center;
+  box-shadow: var(--np-shadow-bar);
+  z-index: 6;
+}
+.progress-footer { margin-right: auto; font-family: var(--np-mono); font-size: 11px; color: var(--np-text-muted); }
+.rp-btn {
+  font-family: var(--np-sans); font-size: 13px; font-weight: 600;
+  padding: 9px 18px; border-radius: 6px; border: 0; cursor: pointer;
+}
+.rp-btn-ghost { background: transparent; color: var(--np-text-muted); border: 1px solid var(--np-border); }
+.rp-btn-primary { background: var(--np-accent); color: white; }
+.rp-btn-primary:hover { background: var(--np-accent-hover); }
+</style>
+</head>
+<body>
+<button class="np-theme-toggle" id="themeToggle" title="Toggle theme">◐</button>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="content">
+    <header class="np-header">
+      <div class="eyebrow">Interview · Closure · 7 decisions · symmetric routing model</div>
+      <h1>Multi-service deploy — plan d'implémentation</h1>
+      <div class="subhead">Chaque décision porte ses 6 cellules (Fact / Mechanism / Edge / Rejected / Order / Verification). Clique « Détails · 6 champs » pour éditer en place ; laisse un afterthought si une cellule cloche. Approve → plan promu vers <code>docs/plans/</code> + <code>backlog-bundle.json</code> émis.</div>
+    </header>
+
+    <div id="decisionsRoot"></div>
+
+    <section class="risk-grid" id="risks">
+      <h2 class="section-h2">Risques</h2>
+      <div class="risk-row"><div><strong>Contract <code>deployContainer</code> change</strong> — passe de <code>image: ImageRef</code> à <code>images: Record&lt;service, ImageRef&gt;</code>. Casse <code>migrate.command.ts</code> + <code>cli/deploy/resolve-deploy-context.ts</code> + tests.</div><span class="sev high">High</span><div>Refacto type-driven : le compiler force chaque call site à se mettre à jour. Un test e2e existant doit continuer à pass (single-service legacy).</div></div>
+      <div class="risk-row"><div><strong>Backward-compat fragile</strong> — la rule « absence de <code>[deploy.services]</code> → comportement legacy avec <code>url = project.domain</code> » sans test explicite = régression silencieuse possible sur tous les apps existantes.</div><span class="sev high">High</span><div>Test dédié <code>resolve-services-backward-compat.test.ts</code> sur un fixture nextnode.toml minimal (sans <code>[deploy.services]</code>) qui asserte le service synthétisé depuis <code>[deploy.image]</code> avec <code>url = project.domain</code>.</div></div>
+      <div class="risk-row"><div><strong>Cold-start sans depends_on entre services</strong> — avec le modèle symétrique parallèle, un service qui en requête un autre au boot (ex. front qui SSR-call api) peut taper avant que l'autre soit healthy → 500.</div><span class="sev med">Med</span><div>Le champ <code>depends_on?: string[]</code> au niveau service permet d'expliciter l'ordre quand nécessaire. Default = parallèle après backings healthy. Doc explicite dans README.</div></div>
+      <div class="risk-row"><div><strong>Healthcheck par service mandatory</strong> dès qu'un autre service fait <code>depends_on</code> dessus — sans healthcheck, le rollout bloque indéfiniment.</div><span class="sev med">Med</span><div>Default HTTP GET <code>/</code> sur le port interne du service (interval 10s, retries 6) injecté par <code>renderComposeFile</code> si le Dockerfile n'en définit pas.</div></div>
+      <div class="risk-row"><div><strong>Bake multi-target temps de build</strong> — si les services ont peu de layers communs, build N images en série dans le même bake peut allonger le pipeline vs matrix parallèle.</div><span class="sev low">Low</span><div>Cache buildx mutualisé absorbe la plupart des cas. Si gêne réelle observée sur un caller, basculer vers matrix sous flag <code>bake_mode = "parallel"</code> (out of MVP).</div></div>
+    </section>
+
+    <section class="next-steps" id="nextSteps">
+      <h2 class="section-h2">Next steps — ordre d'implémentation</h2>
+      <ol>
+        <li><strong>D1</strong> — Étendre <code>config/types.ts</code> avec <code>UserServiceConfig</code> (<code>port, url, source, context, dockerfile, target, ref, needs, depends_on</code>) + <code>HetznerVpsDeploySection.services</code>. Loader TOML.</li>
+        <li><strong>D2</strong> — Étendre <code>DeployImageConfig</code> avec <code>context / dockerfile / target</code>. Adapter <code>compute-image-ref.command.ts</code> pour itérer.</li>
+        <li><strong>D3</strong> — Routing symétrique : <code>composeCaddyConfig</code> itère sur services avec <code>url</code>, <code>host-port</code> alloue un port par service exposé, <code>resolveServices</code> dans le domain avec chemin backward-compat (<code>[deploy.image]</code> synthétisé en service avec <code>url = project.domain</code>). Validator : pas de duplicate <code>url</code>, chaque <code>url</code> appartient à <code>project.domain</code> ou ses sous-domaines.</li>
+        <li><strong>D6</strong> — <code>validateServiceNeeds</code> dans le validator (chaque <code>needs[i]</code> doit correspondre à un backing déclaré).</li>
+        <li><strong>D4</strong> — <code>deploy.yml</code> step Build and push avec <code>targets</code> dynamiques + <code>image_refs</code> JSON via GITHUB_OUTPUT.</li>
+        <li><strong>D7</strong> — <code>renderComposeFile</code> ajoute <code>depends_on</code> (de <code>needs</code> backing + <code>depends_on</code> inter-services explicite) + healthcheck par défaut. <code>bringUpApp</code> drop le filtre <code>app</code>.</li>
+        <li><strong>D5</strong> — Décision passive (aucun code). Mention dans README.</li>
+        <li><strong>Tests fixtures</strong> — nextnode.toml multi-service (front + api symétriques, ou app + cms Strapi) + nextnode.toml legacy (sans <code>[deploy.services]</code>, backward-compat).</li>
+        <li><strong>Doc</strong> — Section « Multi-service deploys » dans <code>packages/infrastructure/README.md</code>.</li>
+      </ol>
+      <button class="copy-bundle" id="copyBundle">📋 Copy backlog bundle (JSON)</button>
+    </section>
+  </main>
+</div>
+
+<footer class="rp-gate">
+  <span class="progress-footer" id="progressFooter">42/42 cells filled · 0 afterthoughts</span>
+  <button id="rp-reject" class="rp-btn rp-btn-ghost">Reject</button>
+  <button id="rp-approve" class="rp-btn rp-btn-primary">Approve · promote</button>
+</footer>
+
+<script>
+const THEMES = [
+  { id: 'schema',  label: 'Schema · forme TOML' },
+  { id: 'routing', label: 'Routing · primary & exposition' },
+  { id: 'build',   label: 'Build · pipeline CI' },
+  { id: 'runtime', label: 'Runtime · env & deps' },
+  { id: 'rollout', label: 'Rollout · ordre de démarrage' },
+]
+
+const DECISIONS = [
+  {
+    id: 'd1', theme: 'schema',
+    title: 'Forme TOML — tables nommées à plat sous [deploy.services.<name>]',
+    fact: "Les consumers déclarent N services applicatifs via des tables nommées [deploy.services.<name>], avec tous les champs à plat : port (default 3000), url (hostname externe, optionnel), source ('build'|'upstream'), context, dockerfile, target, ref, registryAuthSecret, needs, depends_on. Pas de flag primary, pas de sub-table .image, pas de sub-table .expose — tout est symétrique. Si la table [deploy.services] est entièrement absente du nextnode.toml, le bloc [deploy.image] legacy continue à fonctionner comme avant et est interprété comme un service unique synthétisé avec url = project.domain (chemin backward-compat des consumers actuels du monorepo).",
+    mechanism: "1) config/types.ts : nouveau type UserServiceConfig = { port?: number, url?: string, source: 'build'|'upstream', context?: string, dockerfile?: string, target?: string, ref?: string, registryAuthSecret?: string, needs?: ServiceName[], depends_on?: string[] }. 2) HetznerVpsDeploySection ajoute services?: Record<string, UserServiceConfig>. 3) config/loader.ts parse [deploy.services.*] en walking des sub-tables TOML (smol-toml retourne déjà les sub-keys). 4) Le schema reste sous DeployableConfig ; pas de touche à NextNodeConfig.services (backing).",
+    edge: "Touche config/types.ts, config/loader.ts, config/validation/deploy.ts, et les call sites qui consomment HetznerVpsDeploySection. NE touche PAS [deploy.image] (laissé en place pour backward-compat), NI [services.postgres|supabase|r2] (backing). CloudflarePagesDeploySection ignore services (champ uniquement sur HetznerVpsDeploySection).",
+    rejected: "Table-array [[deploy.services]] avec champ name : duplication du nom + doublons accidentels possibles. Namespace [services.<name>] partagé avec backing : casse la séparation deploy/services existante. Sub-table [deploy.services.<name>.image] : rejeté en round 2, couche TOML sans bénéfice tant qu'il n'y a qu'un seul namespace nested. Flag primary = true : rejeté avant closure, asymétrique pour rien dans les cas api + front où aucun service n'est plus 'principal' que l'autre.",
+    order: "Première décision à implémenter. Bloque toutes les autres (D2-D7) qui consomment ce schema. Aucun prérequis.",
+    verification: "Test unitaire config/loader.ts : fixture nextnode.toml avec [deploy.services.front] (port=3000, url='example.com', source=build) et [deploy.services.api] (port=8080, url='api.example.com', source=build, context='./api', needs=['postgres']) parse en UserServiceConfig record correctement typé. Test backward-compat : nextnode.toml sans [deploy.services] parse comme avant (config.deploy.image résolu, services undefined).",
+  },
+  {
+    id: 'd2', theme: 'schema',
+    title: 'Image config par service — DeployImageConfig étendu',
+    fact: "Chaque entrée [deploy.services.<name>] porte sa propre config d'image complète et indépendante : source ('build' ou 'upstream'), context (défaut './'), dockerfile (défaut 'Dockerfile'), target (défaut <name>) pour les builds ; ref + registryAuthSecret? pour upstream. Le shape DeployImageConfig existant (config/types.ts:116-141, discriminated union sur source) est étendu avec context/dockerfile/target côté 'build' et réutilisé tel quel pour 'upstream'.",
+    mechanism: "1) config/types.ts : DeployImageConfig devient { source: 'build', context?: string, dockerfile?: string, target?: string } | { source: 'upstream', ref: string, registryAuthSecret?: string }. 2) UserServiceConfig (D1) inclut ces champs à plat. 3) Nouvelle fonction domain buildImageRefForService(serviceName, projectName, sha) compose le tag GHCR : pour 'build', ghcr.io/<repo>-<service>:<sha> ; pour 'upstream', service.ref direct. 4) cli/deploy/compute-image-ref.command.ts itère sur services et émet un Record<service, ImageRef> dans GITHUB_OUTPUT.",
+    edge: "Étend DeployImageConfig sans casser le shape pour les consumers single-service ([deploy.image] continue à supporter la discriminated union actuelle, juste avec les nouveaux champs optionnels). Touche compute-image-ref.command.ts. NE touche PAS le runtime des images existantes.",
+    rejected: "Tous les services obligatoirement 'build' : bloque le cas worker-from-upstream. Tous 'upstream' : bloque le cas Strapi-from-./cms/ (besoin réel J1). Context implicite déduit du nom du service : magique, casse les consumers qui ont une structure non-conventionnelle.",
+    order: "Après D1 (schema). Avant D4 (build-fanout) qui consomme la liste des services source='build'.",
+    verification: "Test config/types.ts : fixture avec un service 'build' (avec context='./api', dockerfile='Dockerfile', target='api') et un service 'upstream' (avec ref='ghcr.io/x/y:v1') parse en deux UserServiceConfig avec discriminated union correcte. Test compute-image-ref : services = { front: build, api: build, worker: upstream } → 3 entrées dans le Record retourné, 2 builds taggés et 1 upstream ref direct.",
+  },
+  {
+    id: 'd3', theme: 'routing',
+    title: "Routing symétrique — chaque service déclare son url, internal-only sinon",
+    fact: "Le routage est entièrement symétrique entre services. Chaque entrée [deploy.services.<name>] peut déclarer url = '<hostname>' qui crée une route Caddy + cert ACME pour ce hostname. Sans url, le service est joignable uniquement en interne via http://<name>:<port> depuis les autres services du compose. Aucune notion de 'primary' — un cas api + front est traité avec deux url symétriques (front sur example.com, api sur api.example.com). Backward-compat : sans [deploy.services], le bloc [deploy.image] continue à fonctionner comme avant, le service synthétisé prenant project.domain comme url implicite.",
+    mechanism: "1) UserServiceConfig porte port?: number (default 3000) et url?: string (optionnel). 2) Validator : pas de duplicate url entre services ; chaque url doit appartenir à project.domain (égalité) ou un de ses sous-domaines (suffix match). 3) domain/caddy/compose.ts :: composeCaddyConfig itère sur services et ajoute un upstream Caddy par service ayant url : { hostname: service.url, dial: 'localhost:<hostPort>' }. 4) domain/hetzner/host-port.ts alloue un hostPort unique par service ayant url. 5) renderComposeFile mappe '127.0.0.1:<hostPort>:<port>' dans services.<name>.ports uniquement pour les services ayant url. 6) domain/deploy/target.ts ajoute resolveServices(config) : si config.deploy.services présent, retourne les services tels quels ; sinon synthétise un Record<string, UserServiceConfig> à une seule entrée depuis config.deploy.image avec url = project.domain. 7) Le .env partagé contient <UPPER_SERVICE_NAME>_URL pour chaque service ayant url, plus SITE_URL en alias quand un seul service expose (backward-compat single-service).",
+    edge: "Touche composeCaddyConfig, host-port.ts, renderComposeFile, validator (no-duplicate-url + url-belongs-to-domain), et resolveServices dans le domain. NE touche PAS [deploy.image] (chemin backward-compat traversé) ni Cloudflare Pages. project.domain reste utilisé comme 'canonical domain' pour valider les sous-domaines déclarés dans url.",
+    rejected: "Flag primary = true : rejeté avant closure — ajoute un concept asymétrique qui ne reflète pas la réalité des apps api + front où aucun service n'est plus 'principal' que l'autre. Sous-domaine par défaut (sans déclaration url) : expose tout par accident, consomme des certs ACME inutiles, génère du DNS noise. Internal-only toujours : bloque le cas api + front qui demande deux url séparées. Champ expose = true séparé : redondant avec la présence de url, simplifié en 'url présent = exposé'.",
+    order: "Après D1 (schema). Avant D7 (rollout doit attendre healthcheck des services exposés).",
+    verification: "Test composeCaddyConfig : services = { front: url='example.com', api: url='api.example.com', worker: (pas d'url) } → 2 upstreams Caddy générés (front sur example.com, api sur api.example.com), worker absent de Caddy. Test renderComposeFile : front et api ont ports: ['127.0.0.1:<hostPort>:<port>'], worker n'a pas d'entry ports. Test backward-compat : nextnode.toml sans [deploy.services] → resolveServices retourne un seul service synthétisé avec url=project.domain, SITE_URL injecté comme avant. Test validator : deux services avec url='example.com' → erreur 'duplicate url' ; service avec url='foreign.com' (pas un sous-domaine de project.domain) → erreur 'url must belong to project.domain'.",
+  },
+  {
+    id: 'd4', theme: 'build',
+    title: 'CI build single bake multi-target dans le job build-image',
+    fact: "Le job build-image de .github/workflows/deploy.yml passe targets: <csv> à docker/bake-action@v6 en un seul appel, où le CSV est calculé par le step compute-image-ref à partir de la liste des services source='build'. Cache buildx partagé entre targets. Sortie : un Record<service, image_ref> JSON exposé via GITHUB_OUTPUT, consommé par les jobs migrate et deploy en aval.",
+    mechanism: "1) cli/deploy/compute-image-ref.command.ts itère sur resolveServices(config) (D3) ; pour chaque service source='build', construit un ImageRef. Sortie GITHUB_OUTPUT : bake_targets='<csv>' + image_refs=<JSON Record<service, ImageRef>>. 2) deploy.yml step 'Build and push' : targets: ${{ steps.compute.outputs.bake_targets }}. 3) Le set: <target>.tags=<ref> est généré pour chaque target via une boucle bash ou via le HCL du docker-compose.yml caller. 4) Jobs migrate et deploy reçoivent IMAGE_REFS (JSON env) au lieu d'IMAGE_REF, parsent et passent à deployContainer({ images: Record<service, ImageRef> }).",
+    edge: "Touche compute-image-ref.command.ts, .github/workflows/deploy.yml (step Build and push + env wiring de migrate/deploy), et le contract de deployContainer (passe de image: ImageRef à images: Record<service, ImageRef>). Le contract docker bake reste identique côté pattern, juste plus de targets.",
+    rejected: "Matrix GH par service : duplique le setup (checkout, buildx, login) N fois, perd la mutualisation du cache buildx, coût runner × N. Séquentiel : pipeline N fois plus long sans bénéfice. Bake HCL séparé : pourrait être plus expressif mais ajoute un fichier de plus pour pas grand-chose vu que bake-action en YAML suffit.",
+    order: "Après D2 (image config per service). Bloque D7 (rollout doit avoir les image refs au moment du compose render).",
+    verification: "Workflow run avec nextnode.toml de test contenant 2 services build (front + api) : un seul job build-image, log montre docker bake -f ... front api, deux images publiées dans GHCR (verify via gh api). GITHUB_OUTPUT bake_targets='front,api' et image_refs JSON avec 2 entrées. Job deploy consomme les deux refs sans erreur.",
+  },
+  {
+    id: 'd5', theme: 'runtime',
+    title: 'Un seul .env partagé entre tous les user services (current behavior)',
+    fact: "Tous les user services lisent le même fichier .env écrit par stageRollout sur la VPS. Pas de splittage per-service. La surface de leak est acceptable vu le modèle single-tenant : un caller = un domaine = une équipe = un VPS.",
+    mechanism: "Aucun changement de code dans deploy-container.ts ni renderComposeFile sur la partie env. Chaque user service entry dans le compose rendu garde env_file: ['.env']. stageRollout continue à écrire un seul .env à partir de input.env + input.secrets fusionnés, plus les <UPPER_SERVICE_NAME>_URL générés par D3. Décision passive — c'est le comportement actuel préservé.",
+    edge: "Décision sans code dans cette décision. Aucun fichier touché directement (le .env continue d'être écrit comme avant, juste avec quelques vars URL en plus issues de D3). Ne ferme pas la porte au per-service env file plus tard — D5 peut être révisée si un caller signale un vrai besoin d'isolation, mais hors périmètre MVP.",
+    rejected: "Per-service env file (.env.<service>) : templating complexe dans renderComposeFile, le caller doit splitter ses secrets dans nextnode.toml, gain marginal vu single-tenant. Shared + override (.env + .env.<service>) : encore plus de complexité (deux niveaux), pour une promesse d'isolation que la version simple ne nécessite pas dans le MVP.",
+    order: "Indépendant. Codable en parallèle de D1-D7 (en pratique : rien à coder, juste documenter dans README).",
+    verification: "Tests existants de renderComposeFile continuent à pass après D7. Test multi-service : 2 user services + sidecars infra → chaque service entry inclut env_file: ['.env'] et aucune entry per-service env file.",
+  },
+  {
+    id: 'd6', theme: 'runtime',
+    title: "Backing services dépendances explicites par needs = [...]",
+    fact: "Chaque user service déclare explicitement ses dépendances aux backing services via needs: ServiceName[] (valeurs possibles : 'postgres', 'supabase', 'r2'). Le validator vérifie au plan-time que chaque entrée de needs correspond à un backing service déclaré dans [services.*]. Le .env partagé (D5) injecte déjà toutes les vars backing — needs sert principalement de validation, de documentation, et de driver pour les depends_on du compose (D7).",
+    mechanism: "1) UserServiceConfig porte needs?: ServiceName[] (D1). 2) config/validation/deploy.ts ajoute validateServiceNeeds(services, backing) : pour chaque user service, chaque needs[i] doit appartenir aux backing services présents dans [services.*] ; sinon throw 'service <name> needs <X> but [services.<X>] is not declared'. 3) Au runtime : pas d'injection sélective — toutes les vars backing restent dans le .env partagé (D5). needs reste lisible pour le futur si on bouge vers per-service env (out of scope MVP). 4) D7 consomme needs pour générer les depends_on des backing services en compose.",
+    edge: "Touche UserServiceConfig (champ) et le validator. Pas de logique runtime extra dans cette décision. NE débloque PAS le per-database naming Postgres (sidecar actuel = une seule DB).",
+    rejected: "Auto-link silencieux (toutes les vars backing visibles partout sans déclaration) : c'est déjà le cas vu D5, mais documenter via needs reste utile pour validate + future-proof. Per-database naming (postgres = { database = 'strapi' }) : bloqué tant que le sidecar Postgres NextNode ne supporte qu'une DB embedded.",
+    order: "Après D1 (schema) et D5 (env isolation décidée). Avant D7 (rollout utilise needs pour générer depends_on backing).",
+    verification: "Test validator : needs=['postgres'] sans [services.postgres] déclaré → erreur 'unknown backing service'. Test : needs=['supabase'] avec [services.supabase] présent → pas d'erreur. Test runtime : 2 services avec needs différents → .env partagé contient toutes les vars des deux backing (DATABASE_URL, SUPABASE_*).",
+  },
+  {
+    id: 'd7', theme: 'rollout',
+    title: 'Bring-up délégué à compose via depends_on { condition: service_healthy }',
+    fact: "L'ordre de démarrage des services sur le VPS est géré par le docker compose daemon via depends_on healthchecks rendus dans le compose. Pas de notion de primary qui dépend des secondaires : chaque service déclare lui-même son depends_on?: string[] s'il a besoin qu'un autre user service soit healthy avant de démarrer ; sinon, après que les backings sont healthy, tous les services démarrent en parallèle. Phase 2 dans bringUpApp se simplifie en docker compose up -d --remove-orphans — le daemon orchestre.",
+    mechanism: "1) renderComposeFile génère pour chaque user service un depends_on map combinant : (a) needs (D6) — chaque entrée backing healthcheckée (postgres) devient un lien en service_healthy ; (b) depends_on?: string[] explicite du UserServiceConfig — chaque entrée pointe vers un autre user service en service_healthy. 2) Chaque user service entry porte un healthcheck par défaut (HTTP GET / sur service.port, interval 10s, timeout 3s, retries 6) si le Dockerfile n'en définit pas. 3) bringUpApp dans adapters/hetzner/deploy-container.ts : remplace 'docker compose up -d --remove-orphans app' par 'docker compose up -d --remove-orphans' (tous les user services en une commande, daemon orchestre). 4) Phase 1 (bringUpDb) reste inchangée — postgres + postgres-backup montés avant cette phase 2.",
+    edge: "Touche renderComposeFile (ajout depends_on combiné + healthcheck par défaut) et bringUpApp dans adapters/hetzner/deploy-container.ts (drop le filtre 'app'). NE touche PAS la phase 1 (bringUpDb) ni la migrate command. Healthcheck par défaut HTTP est appliqué uniquement quand le Dockerfile n'en définit pas — l'image utilisateur peut overrider via HEALTHCHECK Dockerfile instruction. Validator : chaque depends_on[i] doit pointer vers un service déclaré dans [deploy.services.*] (no dangling reference).",
+    rejected: "Phasé côté CLI (CLI execute up cms --wait puis up app) : réinvente depends_on, ajoute du code à entretenir pour chaque ordre, viole la HARD RULE platform-native (compose sait déjà faire). Parallèle bête sans depends_on possible : cold-start qui tape un service pas encore healthy → 500. Primary depends on all secondaries (heuristique de l'ancienne D8) : invalide dans le modèle symétrique — un front ne dépend pas forcément d'un api au boot, c'est au caller de l'expliciter via depends_on.",
+    order: "Dernier dans la chaîne. Après D4 (image refs) + D6 (needs pour depends_on backing).",
+    verification: "Test renderComposeFile : nextnode.toml avec front (depends_on=['api']) + api (needs=['postgres']) + Postgres → compose rendu contient services.api.depends_on.postgres.condition='service_healthy' et services.front.depends_on.api.condition='service_healthy'. E2e deploy : docker compose events sur la VPS montre la séquence postgres healthy → api healthy → front healthy. Test validator : depends_on=['nonexistent'] → erreur 'unknown service reference'.",
+  },
+]
+
+const state = {
+  decisions: {},
+  notes: {},
+  expanded: new Set(),
+}
+
+for (const d of DECISIONS) {
+  state.decisions[d.id] = {
+    fact: d.fact, mechanism: d.mechanism, edge: d.edge,
+    rejected: d.rejected, order: d.order, verification: d.verification,
+  }
+}
+
+const FIELD_DEFS = [
+  ['fact',         'F', 'Fact'],
+  ['mechanism',    'M', 'Mechanism'],
+  ['edge',         'E', 'Edge'],
+  ['rejected',     'R', 'Rejected'],
+  ['order',        'O', 'Order'],
+  ['verification', 'V', 'Verification'],
+]
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
+}
+
+function renderSidebar() {
+  const side = document.getElementById('sidebar')
+  let html = ''
+  const byTheme = new Map(THEMES.map(t => [t.id, []]))
+  for (const d of DECISIONS) byTheme.get(d.theme).push(d)
+
+  const total = DECISIONS.length * 6
+  const filled = Object.values(state.decisions).reduce((acc, dec) => acc + FIELD_DEFS.filter(([k]) => (dec[k] || '').trim().length > 0).length, 0)
+  html += `<div class="progress-bar">Cellules complètes ${filled}/${total}<span class="fill" style="width:${(filled / total * 100).toFixed(0)}%"></span></div>`
+
+  for (const t of THEMES) {
+    const ds = byTheme.get(t.id) || []
+    if (ds.length === 0) continue
+    html += `<div class="sidebar-title">${escapeHtml(t.label)}</div>`
+    for (const d of ds) {
+      const dec = state.decisions[d.id]
+      const complete = FIELD_DEFS.every(([k]) => (dec[k] || '').trim().length > 0)
+      html += `<a class="sidebar-link" data-target="dec-${d.id}"><span class="dot ${complete ? '' : 'empty'}"></span><span>${escapeHtml(d.title)}</span></a>`
+    }
+  }
+  html += `<div class="sidebar-title">Annexes</div>`
+  html += `<a class="sidebar-link" data-target="risks"><span class="dot"></span><span>Risques</span></a>`
+  html += `<a class="sidebar-link" data-target="nextSteps"><span class="dot"></span><span>Next steps</span></a>`
+  side.innerHTML = html
+
+  side.querySelectorAll('.sidebar-link').forEach(a => {
+    a.addEventListener('click', () => {
+      document.getElementById(a.dataset.target)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  })
+}
+
+function renderDecisions() {
+  const root = document.getElementById('decisionsRoot')
+  let html = ''
+  const byTheme = new Map(THEMES.map(t => [t.id, []]))
+  for (const d of DECISIONS) byTheme.get(d.theme).push(d)
+
+  for (const t of THEMES) {
+    const ds = byTheme.get(t.id) || []
+    if (ds.length === 0) continue
+    html += `<section class="theme-block" id="theme-${t.id}"><div class="theme-label">${escapeHtml(t.label)}</div>`
+    for (const d of ds) {
+      const expanded = state.expanded.has(d.id)
+      const dec = state.decisions[d.id]
+      const note = state.notes[d.id] || ''
+      html += `
+        <article class="decision ${expanded ? 'expanded' : ''}" id="dec-${d.id}" data-id="${d.id}">
+          <div class="decision-head">
+            <span class="decision-num">${d.id.toUpperCase()}</span>
+            <h3 class="decision-title">${escapeHtml(d.title)}</h3>
+          </div>
+          <div class="fact-preview">
+            <div class="label">Fact</div>
+            <div>${escapeHtml(dec.fact)}</div>
+          </div>
+          <div class="fields-grid">
+            ${FIELD_DEFS.map(([k, badge, label]) => `
+              <div class="field">
+                <span class="badge">[${badge}]</span><span class="label-text">${label}</span>
+                <div class="prose" contenteditable="true" data-decision="${d.id}" data-field="${k}">${escapeHtml(dec[k])}</div>
+              </div>
+            `).join('')}
+          </div>
+          <div class="decision-footer">
+            <button class="details-toggle" data-toggle="${d.id}">${expanded ? '▾ Réduire' : '▸ Détails · 6 champs'}</button>
+            <textarea class="decision-note ${note.trim() ? 'has-value' : ''}" data-note="${d.id}" placeholder="💬 Afterthought, question, doute pour Claude…">${escapeHtml(note)}</textarea>
+          </div>
+        </article>
+      `
+    }
+    html += `</section>`
+  }
+  root.innerHTML = html
+
+  root.querySelectorAll('button[data-toggle]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.toggle
+      if (state.expanded.has(id)) state.expanded.delete(id)
+      else state.expanded.add(id)
+      renderDecisions()
+    })
+  })
+
+  root.querySelectorAll('.prose[contenteditable]').forEach(el => {
+    el.addEventListener('input', () => {
+      const id = el.dataset.decision
+      const field = el.dataset.field
+      state.decisions[id][field] = el.textContent
+      if (field === 'fact') {
+        const preview = document.querySelector(`#dec-${id} .fact-preview > div:last-child`)
+        if (preview) preview.textContent = el.textContent
+      }
+      renderSidebar()
+    })
+  })
+
+  root.querySelectorAll('textarea.decision-note').forEach(ta => {
+    ta.addEventListener('input', () => {
+      const id = ta.dataset.note
+      state.notes[id] = ta.value
+      ta.classList.toggle('has-value', ta.value.trim().length > 0)
+      updateProgressFooter()
+    })
+  })
+}
+
+function updateProgressFooter() {
+  const total = DECISIONS.length * 6
+  const filled = Object.values(state.decisions).reduce((acc, dec) => acc + FIELD_DEFS.filter(([k]) => (dec[k] || '').trim().length > 0).length, 0)
+  const notesCount = Object.values(state.notes).filter(n => n.trim().length > 0).length
+  document.getElementById('progressFooter').textContent = `${filled}/${total} cells filled · ${notesCount} afterthoughts`
+}
+
+function initScrollSpy() {
+  const obs = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (e.isIntersecting) {
+        document.querySelectorAll('.sidebar-link').forEach(a => a.classList.toggle('active', a.dataset.target === e.target.id))
+      }
+    }
+  }, { rootMargin: '-20% 0px -65% 0px' })
+  document.querySelectorAll('.decision, #risks, #nextSteps').forEach(el => obs.observe(el))
+}
+
+document.getElementById('themeToggle').addEventListener('click', () => {
+  const cur = document.documentElement.getAttribute('data-theme')
+  const next = cur === 'dark' ? 'light' : 'dark'
+  document.documentElement.setAttribute('data-theme', next)
+  try { localStorage.setItem('np-theme', next) } catch (e) {}
+})
+
+function buildBundle() {
+  return {
+    schema_version: "1",
+    source: { kind: "interview", slug: "multi-service-deploy-support", change_kind: "additive-brownfield" },
+    target: {
+      linear_project_hint: "NextNode Infrastructure",
+      linear_team_hint: "INT",
+      repo_path_hint: "packages/infrastructure",
+    },
+    decisions: DECISIONS.map((d, i) => {
+      const dec = state.decisions[d.id]
+      return {
+        id: `D${i + 1}`,
+        theme: d.theme,
+        title: d.title,
+        fact: dec.fact,
+        mechanism: dec.mechanism,
+        edge: dec.edge,
+        rejected: dec.rejected,
+        order: dec.order,
+        verification: dec.verification,
+      }
+    }),
+    open_facts: {
+      existing_image_config_location: "config/types.ts:116-141 (DeployImageConfig discriminated union build|upstream)",
+      backward_compat_trigger: "absence of [deploy.services] table in nextnode.toml → [deploy.image] resolves as a single synthesized service with url = project.domain",
+      bake_action_version: "docker/bake-action@v6",
+      default_container_port: "3000 (CONTAINER_PORT in domain/hetzner/compose-file.ts:45 — now becomes the default for service.port when omitted)",
+      caddy_compose_module: "domain/caddy/compose.ts (composeCaddyConfig)",
+      compose_render_entrypoint: "domain/hetzner/compose-file.ts (renderComposeFile)",
+      bringup_phase_2_entrypoint: "adapters/hetzner/deploy-container.ts (bringUpApp)",
+      backing_services_today: "postgres (embedded|external), supabase, r2",
+      consumer_example_api_front: "front (Astro, ./Dockerfile, port=3000, url='example.com') + api (Hono, ./api/Dockerfile, port=8080, url='api.example.com', needs=['postgres'])",
+      consumer_example_strapi: "app (Astro, ./Dockerfile, port=3000, url='example.com') + cms (Strapi, ./cms/Dockerfile, port=1337, needs=['postgres'], url='cms.example.com')",
+      routing_model: "symmetric — no primary flag, presence of url field opts a service into Caddy public route; absence = internal-only via http://<name>:<port>",
+    },
+    freeform: "",
+  }
+}
+document.getElementById('copyBundle').addEventListener('click', async () => {
+  const bundle = buildBundle()
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(bundle, null, 2))
+    document.getElementById('copyBundle').textContent = '✓ Copied to clipboard'
+    setTimeout(() => { document.getElementById('copyBundle').textContent = '📋 Copy backlog bundle (JSON)' }, 2000)
+  } catch (e) {
+    alert('Clipboard failed. Bundle written to console.')
+    console.log(JSON.stringify(bundle, null, 2))
+  }
+})
+
+async function rpSubmit(mode) {
+  const payload = {
+    round: 'closure',
+    decisions: state.decisions,
+    comments: Object.entries(state.notes).filter(([, v]) => v.trim().length > 0).map(([target, body]) => ({ target, body })),
+    freeform: '',
+    approval_mode: mode,
+  }
+  const res = await fetch('./submit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) throw new Error('submit failed')
+  document.body.innerHTML = `<main style="padding:4rem;font-family:var(--np-sans);max-width:600px;margin:0 auto"><h1 style="font-family:var(--np-display);font-size:26px;margin:0 0 14px">${mode === 'rejected' ? '✗ Rejected' : '✓ Submitted'}</h1><p style="color:var(--np-text-muted)">Retour à Claude — tu peux fermer cet onglet.</p></main>`
+}
+document.getElementById('rp-approve').onclick = () => rpSubmit('approved')
+document.getElementById('rp-reject').onclick  = () => rpSubmit('rejected')
+
+renderSidebar()
+renderDecisions()
+initScrollSpy()
+updateProgressFooter()
+</script>
+</body>
+</html>

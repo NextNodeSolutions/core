@@ -1,0 +1,99 @@
+{
+	"slug": "multi-service-deploy-support",
+	"topic": "Support N user-declared services (e.g. app + strapi, or api + front) in the @nextnode-solutions/infrastructure deploy pipeline",
+	"change_kind": "additive-brownfield",
+	"status": "closed",
+	"rounds": [
+		{ "kind": "discovery", "approval_mode": "approved" },
+		{ "kind": "grilling-1", "approval_mode": "approved" },
+		{ "kind": "grilling-2", "approval_mode": "approved" },
+		{
+			"kind": "closure",
+			"approval_mode": "approved",
+			"restructured": "removed primary flag; merged routing decisions into D3 symmetric model"
+		}
+	],
+	"branches": [
+		{
+			"id": "b-schema-shape",
+			"theme": "schema",
+			"scope": "in",
+			"resolved_in": "D1"
+		},
+		{
+			"id": "b-schema-image-per-service",
+			"theme": "schema",
+			"scope": "in",
+			"resolved_in": "D2"
+		},
+		{
+			"id": "b-primary-designation",
+			"theme": "routing",
+			"scope": "in",
+			"resolved_in": "D3 (dissolved — symmetric model has no primary)"
+		},
+		{
+			"id": "b-secondary-exposure",
+			"theme": "routing",
+			"scope": "in",
+			"resolved_in": "D3"
+		},
+		{
+			"id": "b-build-fanout",
+			"theme": "build",
+			"scope": "in",
+			"resolved_in": "D4"
+		},
+		{
+			"id": "b-env-isolation",
+			"theme": "runtime",
+			"scope": "in",
+			"resolved_in": "D5"
+		},
+		{
+			"id": "b-service-deps",
+			"theme": "runtime",
+			"scope": "in",
+			"resolved_in": "D6"
+		},
+		{
+			"id": "b-bringup-order",
+			"theme": "rollout",
+			"scope": "in",
+			"resolved_in": "D7"
+		},
+		{ "id": "b-compat-old-syntax", "theme": "compat", "scope": "out" }
+	],
+	"decisions": {
+		"D1": {
+			"theme": "schema",
+			"title": "Forme TOML — tables nommées à plat sous [deploy.services.<name>]"
+		},
+		"D2": {
+			"theme": "schema",
+			"title": "Image config par service — DeployImageConfig étendu"
+		},
+		"D3": {
+			"theme": "routing",
+			"title": "Routing symétrique — chaque service déclare son url, internal-only sinon"
+		},
+		"D4": {
+			"theme": "build",
+			"title": "CI build single bake multi-target dans le job build-image"
+		},
+		"D5": {
+			"theme": "runtime",
+			"title": "Un seul .env partagé entre tous les user services"
+		},
+		"D6": {
+			"theme": "runtime",
+			"title": "Backing services dépendances explicites par needs = [...]"
+		},
+		"D7": {
+			"theme": "rollout",
+			"title": "Bring-up délégué à compose via depends_on { condition: service_healthy }"
+		}
+	},
+	"promoted_to": "docs/plans/2026-05-29-multi-service-deploy-support.html",
+	"backlog_bundle": "docs/interviews/multi-service-deploy-support/backlog-bundle.json"
+}
