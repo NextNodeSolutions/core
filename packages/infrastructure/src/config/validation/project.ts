@@ -1,72 +1,47 @@
 import {
-	isProjectType,
 	isRecord,
-	isScriptValue,
 	KEBAB_IDENTIFIER_PATTERN,
 	PROJECT_TYPES,
 } from '#/config/types.ts'
+import { array, boolean, optional, picklist, pipe, regex } from 'valibot'
+
+import {
+	collectFieldErrors,
+	nonEmptyString,
+	optionalNonEmpty,
+	optionalStringOrFalse,
+	runSchema,
+} from './valibot.ts'
 
 import type { PackageSection, ProjectSection } from '#/config/types.ts'
 import type { ValidationResult } from './result.ts'
 
-function validateProjectName(value: unknown): {
-	errors: string[]
-	name: string | undefined
-} {
-	if (!value || typeof value !== 'string') {
-		return {
-			errors: ['project.name is required and must be a string'],
-			name: undefined,
-		}
-	}
-	if (!KEBAB_IDENTIFIER_PATTERN.test(value)) {
-		return {
-			errors: [
-				`project.name must be lowercase alphanumeric with dashes only (pattern: ${KEBAB_IDENTIFIER_PATTERN.source})`,
-			],
-			name: undefined,
-		}
-	}
-	return { errors: [], name: value }
-}
+const NAME_MSG = 'project.name is required and must be a string'
+const NAME_PATTERN_MSG = `project.name must be lowercase alphanumeric with dashes only (pattern: ${KEBAB_IDENTIFIER_PATTERN.source})`
+const TYPE_MSG = `project.type is required and must be one of: ${PROJECT_TYPES.join(', ')}`
+const FILTER_MSG = 'project.filter must be a string or false'
+const DOMAIN_MSG = 'project.domain must be a non-empty string'
+const REDIRECT_NOT_ARRAY_MSG =
+	'project.redirect_domains must be an array of strings'
+const REDIRECT_ENTRY_MSG =
+	'project.redirect_domains entries must be non-empty strings'
+const INTERNAL_MSG = 'project.internal must be a boolean'
 
-function validateDomainFields(raw: Record<string, unknown>): {
-	errors: string[]
-	domain: string | undefined
-	redirectDomains: ReadonlyArray<string>
-} {
-	const errors: string[] = []
-	const domain = raw['domain']
-	if (domain !== undefined && (typeof domain !== 'string' || domain === '')) {
-		errors.push('project.domain must be a non-empty string')
-	}
-
-	const redirectDomains = raw['redirect_domains']
-	if (redirectDomains !== undefined) {
-		if (!Array.isArray(redirectDomains)) {
-			errors.push('project.redirect_domains must be an array of strings')
-		} else if (
-			!redirectDomains.every(
-				(entry): entry is string =>
-					typeof entry === 'string' && entry !== '',
-			)
-		) {
-			errors.push(
-				'project.redirect_domains entries must be non-empty strings',
-			)
-		}
-	}
-
-	return {
-		errors,
-		domain: typeof domain === 'string' ? domain : undefined,
-		redirectDomains: Array.isArray(redirectDomains)
-			? redirectDomains.filter(
-					(entry): entry is string => typeof entry === 'string',
-				)
-			: [],
-	}
-}
+// Required: validating each value directly (not as an optional object entry)
+// means a missing key arrives as `undefined` and fails with the real message,
+// while the success branch yields a narrowed type — no placeholder fallback.
+const nameSchema = pipe(
+	nonEmptyString(NAME_MSG),
+	regex(KEBAB_IDENTIFIER_PATTERN, NAME_PATTERN_MSG),
+)
+const typeSchema = picklist(PROJECT_TYPES, TYPE_MSG)
+const filterSchema = optionalStringOrFalse(FILTER_MSG, false)
+const domainSchema = optionalNonEmpty(DOMAIN_MSG)
+const redirectDomainsSchema = optional(
+	array(nonEmptyString(REDIRECT_ENTRY_MSG), REDIRECT_NOT_ARRAY_MSG),
+	[],
+)
+const internalSchema = optional(boolean(INTERNAL_MSG), false)
 
 export function validateProjectSection(
 	raw: unknown,
@@ -75,50 +50,46 @@ export function validateProjectSection(
 		return { ok: false, errors: ['[project] section is required'] }
 	}
 
-	const errors: string[] = []
-
-	const nameResult = validateProjectName(raw['name'])
-	errors.push(...nameResult.errors)
-
-	const type = raw['type']
-	if (!type || !isProjectType(type)) {
-		errors.push(
-			`project.type is required and must be one of: ${PROJECT_TYPES.join(', ')}`,
-		)
-	}
-
-	const filter = raw['filter']
-	if (filter !== undefined && !isScriptValue(filter)) {
-		errors.push('project.filter must be a string or false')
-	}
-
-	const domainResult = validateDomainFields(raw)
-	errors.push(...domainResult.errors)
-
-	const internal = raw['internal']
-	if (internal !== undefined && typeof internal !== 'boolean') {
-		errors.push('project.internal must be a boolean')
-	}
+	const name = runSchema(nameSchema, raw['name'])
+	const type = runSchema(typeSchema, raw['type'])
+	const filter = runSchema(filterSchema, raw['filter'])
+	const domain = runSchema(domainSchema, raw['domain'])
+	const redirectDomains = runSchema(
+		redirectDomainsSchema,
+		raw['redirect_domains'],
+	)
+	const internal = runSchema(internalSchema, raw['internal'])
 
 	if (
-		errors.length > 0 ||
-		nameResult.name === undefined ||
-		!isProjectType(type)
+		!name.ok ||
+		!type.ok ||
+		!filter.ok ||
+		!domain.ok ||
+		!redirectDomains.ok ||
+		!internal.ok
 	) {
-		return { ok: false, errors }
+		return {
+			ok: false,
+			errors: collectFieldErrors(
+				name,
+				type,
+				filter,
+				domain,
+				redirectDomains,
+				internal,
+			),
+		}
 	}
 
 	return {
 		ok: true,
 		section: {
-			name: nameResult.name,
-			type,
-			filter: isScriptValue(filter) ? filter : false,
-			...(domainResult.domain !== undefined && {
-				domain: domainResult.domain,
-			}),
-			redirectDomains: domainResult.redirectDomains,
-			internal: internal === true,
+			name: name.section,
+			type: type.section,
+			filter: filter.section,
+			...(domain.section !== undefined && { domain: domain.section }),
+			redirectDomains: redirectDomains.section,
+			internal: internal.section,
 		},
 	}
 }
@@ -129,7 +100,7 @@ export function validatePackageSection(
 	if (!isRecord(raw)) return { ok: true, section: false }
 
 	const access = raw['access']
-	if (!access || typeof access !== 'string') {
+	if (typeof access !== 'string' || access === '') {
 		return {
 			ok: false,
 			errors: ['package.access is required and must be a string'],

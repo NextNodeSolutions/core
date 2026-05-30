@@ -1,7 +1,24 @@
-import { POSTGRES_MODES, isPostgresMode, isRecord } from '#/config/types.ts'
+import { isRecord, POSTGRES_MODES } from '#/config/types.ts'
+import { picklist } from 'valibot'
 
-import type { PostgresMode, PostgresServiceConfig } from '#/config/types.ts'
+import { collectFieldErrors, optionalNonEmpty, runSchema } from '../valibot.ts'
+
+import type { PostgresServiceConfig } from '#/config/types.ts'
 import type { ValidationResult } from '#/config/validation/result.ts'
+
+const modeSchema = picklist(
+	POSTGRES_MODES,
+	`services.postgres.mode must be one of: ${POSTGRES_MODES.join(', ')}`,
+)
+const migrationsFolderSchema = optionalNonEmpty(
+	'services.postgres.migrations_folder must be a non-empty string when set',
+)
+const migrateCommandSchema = optionalNonEmpty(
+	'services.postgres.migrate_command must be a non-empty string when set',
+)
+const checkCommandSchema = optionalNonEmpty(
+	'services.postgres.check_command must be a non-empty string when set',
+)
 
 export function validatePostgresService(
 	raw: unknown,
@@ -10,100 +27,51 @@ export function validatePostgresService(
 		return { ok: false, errors: ['[services.postgres] must be a table'] }
 	}
 
-	const modeResult = validateMode(raw['mode'])
-	const migrationsFolderResult = validateMigrationsFolder(
+	// `mode` is required: validating the value directly (rather than as an
+	// optional object entry) means a missing key reaches `picklist` as
+	// `undefined` and fails with the real message — no "Invalid key" default,
+	// no placeholder needed.
+	const mode = runSchema(modeSchema, raw['mode'])
+	const migrationsFolder = runSchema(
+		migrationsFolderSchema,
 		raw['migrations_folder'],
 	)
-	const migrateCommandResult = validateMigrateCommand(raw['migrate_command'])
-	const checkCommandResult = validateCheckCommand(raw['check_command'])
+	const migrateCommand = runSchema(
+		migrateCommandSchema,
+		raw['migrate_command'],
+	)
+	const checkCommand = runSchema(checkCommandSchema, raw['check_command'])
 
 	if (
-		!modeResult.ok ||
-		!migrationsFolderResult.ok ||
-		!migrateCommandResult.ok ||
-		!checkCommandResult.ok
+		!mode.ok ||
+		!migrationsFolder.ok ||
+		!migrateCommand.ok ||
+		!checkCommand.ok
 	) {
 		return {
 			ok: false,
-			errors: [
-				modeResult,
-				migrationsFolderResult,
-				migrateCommandResult,
-				checkCommandResult,
-			].flatMap(r => (r.ok ? [] : r.errors)),
+			errors: collectFieldErrors(
+				mode,
+				migrationsFolder,
+				migrateCommand,
+				checkCommand,
+			),
 		}
 	}
 
 	return {
 		ok: true,
 		section: {
-			mode: modeResult.section,
-			...(migrationsFolderResult.section !== undefined && {
-				migrationsFolder: migrationsFolderResult.section,
+			mode: mode.section,
+			...(migrationsFolder.section !== undefined && {
+				migrationsFolder: migrationsFolder.section,
 			}),
-			...(migrateCommandResult.section !== undefined && {
-				migrateCommand: migrateCommandResult.section,
+			...(migrateCommand.section !== undefined && {
+				migrateCommand: migrateCommand.section,
 			}),
-			...(checkCommandResult.section !== undefined && {
-				checkCommand: checkCommandResult.section,
+			...(checkCommand.section !== undefined && {
+				checkCommand: checkCommand.section,
 			}),
 		},
 	}
-}
-
-function validateMode(raw: unknown): ValidationResult<PostgresMode> {
-	if (!isPostgresMode(raw)) {
-		return {
-			ok: false,
-			errors: [
-				`services.postgres.mode must be one of: ${POSTGRES_MODES.join(', ')}`,
-			],
-		}
-	}
-	return { ok: true, section: raw }
-}
-
-function validateMigrationsFolder(
-	raw: unknown,
-): ValidationResult<string | undefined> {
-	if (raw === undefined) return { ok: true, section: undefined }
-	if (typeof raw !== 'string' || raw === '') {
-		return {
-			ok: false,
-			errors: [
-				'services.postgres.migrations_folder must be a non-empty string when set',
-			],
-		}
-	}
-	return { ok: true, section: raw }
-}
-
-function validateMigrateCommand(
-	raw: unknown,
-): ValidationResult<string | undefined> {
-	if (raw === undefined) return { ok: true, section: undefined }
-	if (typeof raw !== 'string' || raw === '') {
-		return {
-			ok: false,
-			errors: [
-				'services.postgres.migrate_command must be a non-empty string when set',
-			],
-		}
-	}
-	return { ok: true, section: raw }
-}
-
-function validateCheckCommand(
-	raw: unknown,
-): ValidationResult<string | undefined> {
-	if (raw === undefined) return { ok: true, section: undefined }
-	if (typeof raw !== 'string' || raw === '') {
-		return {
-			ok: false,
-			errors: [
-				'services.postgres.check_command must be a non-empty string when set',
-			],
-		}
-	}
-	return { ok: true, section: raw }
 }

@@ -5,51 +5,97 @@ import {
 	DEPLOY_IMAGE_SOURCES,
 	DEPLOY_TARGETS,
 	KEBAB_IDENTIFIER_PATTERN,
-	isDeployImageSource,
 	isDeployTarget,
 	isRecord,
 } from '#/config/types.ts'
+import {
+	array,
+	check,
+	integer,
+	literal,
+	maxValue,
+	minValue,
+	number,
+	object,
+	optional,
+	pipe,
+	regex,
+	transform,
+	variant,
+} from 'valibot'
 
 import { DEPLOY_PROVIDER_VALIDATORS } from './providers/registry.ts'
+import {
+	forbiddenField,
+	nonEmptyString,
+	optionalNonEmpty,
+	runSchema,
+	stringArray,
+} from './valibot.ts'
 
 import type {
-	BuildServiceConfig,
 	DeployImageConfig,
 	DeploySection,
 	DeployTargetType,
 	DeployVolume,
 	DeployableProjectType,
-	UpstreamServiceConfig,
 	UserServiceConfig,
 } from '#/config/types.ts'
+import type { GenericSchema } from 'valibot'
 import type { ValidationResult } from './result.ts'
 
 const MIN_TCP_PORT = 1
 const MAX_TCP_PORT = 65_535
 
-const isNonEmptyString = (value: unknown): value is string =>
-	typeof value === 'string' && value !== ''
+// --- secrets -------------------------------------------------------------
+
+const SECRETS_NOT_ARRAY = 'deploy.secrets must be an array of strings'
+const SECRETS_ENTRY = 'deploy.secrets entries must be non-empty strings'
+
+const secretsSchema = optional(
+	array(nonEmptyString(SECRETS_ENTRY), SECRETS_NOT_ARRAY),
+	[],
+)
 
 function validateSecrets(deployRecord: Record<string, unknown>): {
 	errors: string[]
 	secrets: ReadonlyArray<string>
 } {
-	const rawSecrets = deployRecord['secrets']
-	if (rawSecrets === undefined) return { errors: [], secrets: [] }
-	if (!Array.isArray(rawSecrets)) {
-		return {
-			errors: ['deploy.secrets must be an array of strings'],
-			secrets: [],
-		}
-	}
-	if (!rawSecrets.every(isNonEmptyString)) {
-		return {
-			errors: ['deploy.secrets entries must be non-empty strings'],
-			secrets: [],
-		}
-	}
-	return { errors: [], secrets: rawSecrets }
+	const result = runSchema(secretsSchema, deployRecord['secrets'])
+	if (!result.ok) return { errors: result.errors, secrets: [] }
+	return { errors: [], secrets: result.section }
 }
+
+// --- vps -----------------------------------------------------------------
+
+const VPS_MSG = 'deploy.vps must be a non-empty string'
+
+const vpsSchema = optionalNonEmpty(VPS_MSG)
+
+function validateVps(deployRecord: Record<string, unknown>): {
+	errors: string[]
+	vps: string | null
+} {
+	const result = runSchema(vpsSchema, deployRecord['vps'])
+	if (!result.ok) return { errors: result.errors, vps: null }
+	return { errors: [], vps: result.section ?? null }
+}
+
+// --- volumes -------------------------------------------------------------
+
+const VOLUMES_NOT_TABLE =
+	'[deploy.volumes] must be a table mapping alias to mount path'
+
+const volumeMountSchema = (name: string): GenericSchema<unknown, string> =>
+	pipe(
+		nonEmptyString(
+			`deploy.volumes.${name} must be a non-empty absolute mount path`,
+		),
+		regex(/^\//, issue => {
+			const value = typeof issue.input === 'string' ? issue.input : ''
+			return `deploy.volumes.${name} must be an absolute path (got "${value}")`
+		}),
+	)
 
 function validateVolumes(deployRecord: Record<string, unknown>): {
 	errors: string[]
@@ -57,14 +103,8 @@ function validateVolumes(deployRecord: Record<string, unknown>): {
 } {
 	const raw = deployRecord['volumes']
 	if (raw === undefined) return { errors: [], volumes: [] }
-	if (!isRecord(raw)) {
-		return {
-			errors: [
-				'[deploy.volumes] must be a table mapping alias to mount path',
-			],
-			volumes: [],
-		}
-	}
+	if (!isRecord(raw)) return { errors: [VOLUMES_NOT_TABLE], volumes: [] }
+
 	const errors: string[] = []
 	const volumes: DeployVolume[] = []
 	for (const [name, value] of Object.entries(raw)) {
@@ -74,22 +114,69 @@ function validateVolumes(deployRecord: Record<string, unknown>): {
 			)
 			continue
 		}
-		if (typeof value !== 'string' || value === '') {
-			errors.push(
-				`deploy.volumes.${name} must be a non-empty absolute mount path`,
-			)
+		const result = runSchema(volumeMountSchema(name), value)
+		if (!result.ok) {
+			errors.push(...result.errors)
 			continue
 		}
-		if (!value.startsWith('/')) {
-			errors.push(
-				`deploy.volumes.${name} must be an absolute path (got "${value}")`,
-			)
-			continue
-		}
-		volumes.push({ name, mount: value })
+		volumes.push({ name, mount: result.section })
 	}
 	return { errors, volumes }
 }
+
+// --- image ---------------------------------------------------------------
+
+const IMAGE_NOT_TABLE = '[deploy.image] must be a table'
+const IMAGE_SOURCE_MSG = `deploy.image.source must be one of: ${DEPLOY_IMAGE_SOURCES.join(', ')}`
+const IMAGE_REF_BUILD_FORBIDDEN =
+	'deploy.image.ref is only allowed when deploy.image.source = "upstream"'
+const IMAGE_AUTH_BUILD_FORBIDDEN =
+	'deploy.image.registry_auth_secret is only allowed when deploy.image.source = "upstream"'
+const IMAGE_REF_REQUIRED =
+	'deploy.image.ref is required and must be a non-empty string when deploy.image.source = "upstream"'
+const IMAGE_AUTH_NONEMPTY =
+	'deploy.image.registry_auth_secret must be a non-empty string'
+
+const imageBuildSchema = pipe(
+	object({
+		source: optional(literal('build')),
+		ref: forbiddenField(IMAGE_REF_BUILD_FORBIDDEN),
+		registry_auth_secret: forbiddenField(IMAGE_AUTH_BUILD_FORBIDDEN),
+	}),
+	transform((): DeployImageConfig => ({ source: 'build' })),
+)
+
+// `ref` is `optional` (not required) so that a MISSING key still reaches the
+// outer `check` and surfaces IMAGE_REF_REQUIRED — a required entry would instead
+// emit valibot's generic "Invalid key" message for the absent key.
+const imageUpstreamSchema = pipe(
+	object({
+		source: literal('upstream'),
+		ref: optional(nonEmptyString(IMAGE_REF_REQUIRED)),
+		registry_auth_secret: optional(nonEmptyString(IMAGE_AUTH_NONEMPTY)),
+	}),
+	check(
+		input => typeof input.ref === 'string' && input.ref !== '',
+		IMAGE_REF_REQUIRED,
+	),
+	transform((input): DeployImageConfig => {
+		const ref = typeof input.ref === 'string' ? input.ref : ''
+		if (input.registry_auth_secret === undefined) {
+			return { source: 'upstream', ref }
+		}
+		return {
+			source: 'upstream',
+			ref,
+			registryAuthSecret: input.registry_auth_secret,
+		}
+	}),
+)
+
+const imageSchema = variant(
+	'source',
+	[imageBuildSchema, imageUpstreamSchema],
+	IMAGE_SOURCE_MSG,
+)
 
 function validateImage(deployRecord: Record<string, unknown>): {
 	errors: string[]
@@ -97,268 +184,171 @@ function validateImage(deployRecord: Record<string, unknown>): {
 } {
 	const raw = deployRecord['image']
 	if (raw === undefined) return { errors: [], image: DEFAULT_DEPLOY_IMAGE }
-	if (!isRecord(raw)) {
-		return {
-			errors: ['[deploy.image] must be a table'],
-			image: DEFAULT_DEPLOY_IMAGE,
-		}
-	}
+	if (!isRecord(raw))
+		return { errors: [IMAGE_NOT_TABLE], image: DEFAULT_DEPLOY_IMAGE }
 
-	const rawSource = raw['source']
-	if (rawSource !== undefined && !isDeployImageSource(rawSource)) {
-		return {
-			errors: [
-				`deploy.image.source must be one of: ${DEPLOY_IMAGE_SOURCES.join(', ')}`,
-			],
-			image: DEFAULT_DEPLOY_IMAGE,
-		}
-	}
-
-	const source = rawSource ?? 'build'
-
-	if (source === 'build') {
-		if (raw['ref'] !== undefined) {
-			return {
-				errors: [
-					'deploy.image.ref is only allowed when deploy.image.source = "upstream"',
-				],
-				image: DEFAULT_DEPLOY_IMAGE,
-			}
-		}
-		if (raw['registry_auth_secret'] !== undefined) {
-			return {
-				errors: [
-					'deploy.image.registry_auth_secret is only allowed when deploy.image.source = "upstream"',
-				],
-				image: DEFAULT_DEPLOY_IMAGE,
-			}
-		}
-		return { errors: [], image: { source: 'build' } }
-	}
-
-	const rawRef = raw['ref']
-	if (typeof rawRef !== 'string' || rawRef === '') {
-		return {
-			errors: [
-				'deploy.image.ref is required and must be a non-empty string when deploy.image.source = "upstream"',
-			],
-			image: DEFAULT_DEPLOY_IMAGE,
-		}
-	}
-
-	const rawAuth = raw['registry_auth_secret']
-	if (
-		rawAuth !== undefined &&
-		(typeof rawAuth !== 'string' || rawAuth === '')
-	) {
-		return {
-			errors: [
-				'deploy.image.registry_auth_secret must be a non-empty string',
-			],
-			image: DEFAULT_DEPLOY_IMAGE,
-		}
-	}
-
-	return {
-		errors: [],
-		image:
-			rawAuth === undefined
-				? { source: 'upstream', ref: rawRef }
-				: {
-						source: 'upstream',
-						ref: rawRef,
-						registryAuthSecret: rawAuth,
-					},
-	}
+	const result = runSchema(imageSchema, raw)
+	if (!result.ok)
+		return { errors: result.errors, image: DEFAULT_DEPLOY_IMAGE }
+	return { errors: [], image: result.section }
 }
 
-function parseOptionalNonEmpty(
-	raw: unknown,
-	path: string,
-	errors: string[],
-): string | undefined {
-	if (raw === undefined) return undefined
-	if (typeof raw !== 'string' || raw === '') {
-		errors.push(`${path} must be a non-empty string`)
-		return undefined
-	}
-	return raw
+// --- services ------------------------------------------------------------
+
+const servicePortMsg = (name: string): string =>
+	`deploy.services.${name}.port must be an integer between ${MIN_TCP_PORT} and ${MAX_TCP_PORT}`
+
+type ServiceCommonParsed = {
+	port: number
+	url?: string | undefined
+	secrets: string[]
+	needs: string[]
+	depends_on: string[]
 }
 
-function parseStringArray(
-	raw: unknown,
-	path: string,
-	errors: string[],
-): string[] {
-	if (raw === undefined) return []
-	if (!Array.isArray(raw) || !raw.every(isNonEmptyString)) {
-		errors.push(`${path} must be an array of non-empty strings`)
-		return []
-	}
-	return raw
+// The validated-but-not-yet-shaped service, as the variant emits it: snake_case
+// keys, source-forbidden fields typed `undefined`, and the upstream `ref` still
+// optional (its presence is enforced by the variant's `check`, surfaced when
+// building the final config).
+type ParsedService = ServiceCommonParsed &
+	(
+		| {
+				source?: 'build' | undefined
+				ref?: undefined
+				registry_auth_secret?: undefined
+				context?: string | undefined
+				dockerfile?: string | undefined
+				target?: string | undefined
+		  }
+		| {
+				source: 'upstream'
+				context?: undefined
+				dockerfile?: undefined
+				target?: undefined
+				ref?: string | undefined
+				registry_auth_secret?: string | undefined
+		  }
+	)
+
+type ServiceCommonEntries = {
+	port: GenericSchema<unknown, number>
+	url: GenericSchema<unknown, string | undefined>
+	secrets: GenericSchema<unknown, string[]>
+	needs: GenericSchema<unknown, string[]>
+	depends_on: GenericSchema<unknown, string[]>
 }
 
-type ServiceVariantResult = {
-	errors: string[]
-	variant?: BuildServiceConfig | UpstreamServiceConfig
-}
+const serviceCommonEntries = (name: string): ServiceCommonEntries => ({
+	port: optional(
+		pipe(
+			number(servicePortMsg(name)),
+			integer(servicePortMsg(name)),
+			minValue(MIN_TCP_PORT, servicePortMsg(name)),
+			maxValue(MAX_TCP_PORT, servicePortMsg(name)),
+		),
+		DEFAULT_SERVICE_PORT,
+	),
+	url: optionalNonEmpty(`deploy.services.${name}.url`),
+	secrets: stringArray(`deploy.services.${name}.secrets`),
+	needs: stringArray(`deploy.services.${name}.needs`),
+	depends_on: stringArray(`deploy.services.${name}.depends_on`),
+})
 
-function validateBuildVariant(
-	name: string,
-	raw: Record<string, unknown>,
-): ServiceVariantResult {
-	const errors: string[] = []
-	if (raw['ref'] !== undefined) {
-		errors.push(
-			`deploy.services.${name}.ref is only allowed when source = "upstream"`,
-		)
-	}
-	if (raw['registry_auth_secret'] !== undefined) {
-		errors.push(
-			`deploy.services.${name}.registry_auth_secret is only allowed when source = "upstream"`,
-		)
-	}
-	const context = parseOptionalNonEmpty(
-		raw['context'],
-		`deploy.services.${name}.context`,
-		errors,
-	)
-	const dockerfile = parseOptionalNonEmpty(
-		raw['dockerfile'],
-		`deploy.services.${name}.dockerfile`,
-		errors,
-	)
-	const target = parseOptionalNonEmpty(
-		raw['target'],
-		`deploy.services.${name}.target`,
-		errors,
-	)
-	if (errors.length > 0) return { errors }
-	return {
-		errors: [],
-		variant: {
-			source: 'build',
-			...(context !== undefined ? { context } : {}),
-			...(dockerfile !== undefined ? { dockerfile } : {}),
-			target: target ?? name,
-		},
-	}
-}
-
-function validateUpstreamVariant(
-	name: string,
-	raw: Record<string, unknown>,
-): ServiceVariantResult {
-	const errors: string[] = []
-	for (const field of ['context', 'dockerfile', 'target'] as const) {
-		if (raw[field] !== undefined) {
-			errors.push(
-				`deploy.services.${name}.${field} is only allowed when source = "build"`,
-			)
-		}
-	}
-	const rawRef = raw['ref']
-	if (typeof rawRef !== 'string' || rawRef === '') {
-		errors.push(
-			`deploy.services.${name}.ref is required and must be a non-empty string when source = "upstream"`,
-		)
-	}
-	const registryAuthSecret = parseOptionalNonEmpty(
-		raw['registry_auth_secret'],
-		`deploy.services.${name}.registry_auth_secret`,
-		errors,
-	)
-	if (errors.length > 0 || typeof rawRef !== 'string' || rawRef === '') {
-		return { errors }
-	}
-	return {
-		errors: [],
-		variant: {
-			source: 'upstream',
-			ref: rawRef,
-			...(registryAuthSecret !== undefined ? { registryAuthSecret } : {}),
-		},
-	}
-}
-
-function validateServiceSource(
-	name: string,
-	raw: Record<string, unknown>,
-): ServiceVariantResult {
-	const rawSource = raw['source']
-	if (rawSource !== undefined && !isDeployImageSource(rawSource)) {
-		return {
-			errors: [
-				`deploy.services.${name}.source must be one of: ${DEPLOY_IMAGE_SOURCES.join(', ')}`,
-			],
-		}
-	}
-	return (rawSource ?? 'build') === 'build'
-		? validateBuildVariant(name, raw)
-		: validateUpstreamVariant(name, raw)
-}
-
-function validateService(
-	name: string,
-	raw: unknown,
-): { errors: string[]; service?: UserServiceConfig } {
-	if (!isRecord(raw)) {
-		return { errors: [`[deploy.services.${name}] must be a table`] }
-	}
-
-	const errors: string[] = []
-
-	let port = DEFAULT_SERVICE_PORT
-	const rawPort = raw['port']
-	if (rawPort !== undefined) {
-		if (
-			typeof rawPort !== 'number' ||
-			!Number.isInteger(rawPort) ||
-			rawPort < MIN_TCP_PORT ||
-			rawPort > MAX_TCP_PORT
-		) {
-			errors.push(
-				`deploy.services.${name}.port must be an integer between ${MIN_TCP_PORT} and ${MAX_TCP_PORT}`,
-			)
-		} else {
-			port = rawPort
-		}
-	}
-
-	const url = parseOptionalNonEmpty(
-		raw['url'],
-		`deploy.services.${name}.url`,
-		errors,
-	)
-	const secrets = parseStringArray(
-		raw['secrets'],
-		`deploy.services.${name}.secrets`,
-		errors,
-	)
-	const needs = parseStringArray(
-		raw['needs'],
-		`deploy.services.${name}.needs`,
-		errors,
-	)
-	const dependsOn = parseStringArray(
-		raw['depends_on'],
-		`deploy.services.${name}.depends_on`,
-		errors,
-	)
-
-	const sourceResult = validateServiceSource(name, raw)
-	errors.push(...sourceResult.errors)
-
-	if (errors.length > 0 || !sourceResult.variant) return { errors }
-
+// Shape a validated service into its final UserServiceConfig. Called only on a
+// successful parse, so the upstream `ref` is guaranteed present by the variant's
+// `check`; the absent branch is an invariant violation, not a value to paper
+// over (no `?? ''` placeholder).
+function toUserService(name: string, parsed: ParsedService): UserServiceConfig {
 	const common = {
-		port,
-		secrets,
-		needs,
-		dependsOn,
-		...(url !== undefined ? { url } : {}),
+		port: parsed.port,
+		secrets: parsed.secrets,
+		needs: parsed.needs,
+		dependsOn: parsed.depends_on,
+		...(parsed.url !== undefined ? { url: parsed.url } : {}),
 	}
-	return { errors: [], service: { ...common, ...sourceResult.variant } }
+	if (parsed.source === 'upstream') {
+		if (parsed.ref === undefined) {
+			throw new Error(
+				`deploy.services.${name}: upstream ref absent after validation — schema invariant broken`,
+			)
+		}
+		return {
+			...common,
+			source: 'upstream',
+			ref: parsed.ref,
+			...(parsed.registry_auth_secret !== undefined
+				? { registryAuthSecret: parsed.registry_auth_secret }
+				: {}),
+		}
+	}
+	return {
+		...common,
+		source: 'build',
+		...(parsed.context !== undefined ? { context: parsed.context } : {}),
+		...(parsed.dockerfile !== undefined
+			? { dockerfile: parsed.dockerfile }
+			: {}),
+		target: parsed.target ?? name,
+	}
+}
+
+// `variant` options must be plain object schemas (the discriminator is read
+// structurally), so the two members are inlined here. The upstream `ref` is
+// `optional` (not required) with the "ref required" rule in the OUTER pipe
+// `check`: a required entry would emit valibot's generic "Invalid key" message
+// when the key is MISSING, whereas the check surfaces the custom message for
+// both the absent and empty-string cases. The snake→camel shaping into
+// UserServiceConfig happens in `toUserService` once the parse has succeeded.
+const serviceSchema = (name: string): GenericSchema<unknown, ParsedService> => {
+	const refMsg = `deploy.services.${name}.ref is required and must be a non-empty string when source = "upstream"`
+	return pipe(
+		variant(
+			'source',
+			[
+				object({
+					source: optional(literal('build')),
+					ref: forbiddenField(
+						`deploy.services.${name}.ref is only allowed when source = "upstream"`,
+					),
+					registry_auth_secret: forbiddenField(
+						`deploy.services.${name}.registry_auth_secret is only allowed when source = "upstream"`,
+					),
+					context: optionalNonEmpty(
+						`deploy.services.${name}.context`,
+					),
+					dockerfile: optionalNonEmpty(
+						`deploy.services.${name}.dockerfile`,
+					),
+					target: optionalNonEmpty(`deploy.services.${name}.target`),
+					...serviceCommonEntries(name),
+				}),
+				object({
+					source: literal('upstream'),
+					context: forbiddenField(
+						`deploy.services.${name}.context is only allowed when source = "build"`,
+					),
+					dockerfile: forbiddenField(
+						`deploy.services.${name}.dockerfile is only allowed when source = "build"`,
+					),
+					target: forbiddenField(
+						`deploy.services.${name}.target is only allowed when source = "build"`,
+					),
+					ref: optional(nonEmptyString(refMsg)),
+					registry_auth_secret: optionalNonEmpty(
+						`deploy.services.${name}.registry_auth_secret`,
+					),
+					...serviceCommonEntries(name),
+				}),
+			],
+			`deploy.services.${name}.source must be one of: ${DEPLOY_IMAGE_SOURCES.join(', ')}`,
+		),
+		check(
+			input =>
+				input.source !== 'upstream' ||
+				(typeof input.ref === 'string' && input.ref !== ''),
+			refMsg,
+		),
+	)
 }
 
 function synthesizeServiceFromImage(
@@ -424,23 +414,18 @@ function validateServices(
 			)
 			continue
 		}
-		const result = validateService(name, value)
-		errors.push(...result.errors)
-		if (result.service) services[name] = result.service
+		if (!isRecord(value)) {
+			errors.push(`[deploy.services.${name}] must be a table`)
+			continue
+		}
+		const result = runSchema(serviceSchema(name), value)
+		if (!result.ok) {
+			errors.push(...result.errors)
+			continue
+		}
+		services[name] = toUserService(name, result.section)
 	}
 	return { errors, services }
-}
-
-function validateVps(deployRecord: Record<string, unknown>): {
-	errors: string[]
-	vps: string | null
-} {
-	const raw = deployRecord['vps']
-	if (raw === undefined) return { errors: [], vps: null }
-	if (typeof raw !== 'string' || raw === '') {
-		return { errors: ['deploy.vps must be a non-empty string'], vps: null }
-	}
-	return { errors: [], vps: raw }
 }
 
 export function validateDeploySection(

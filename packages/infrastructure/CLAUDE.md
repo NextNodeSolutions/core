@@ -90,7 +90,7 @@ src/
 | `cli/*`      | `domain/`, `adapters/`, `config/`, logger        | direct `node:fs`, `fetch`, raw `process.env` outside `cli/env.ts` |
 | `domain/*`   | other `domain/*`, `config/schema` (types only)   | `process.env`, `node:fs`, `fetch`, logger, any adapter            |
 | `adapters/*` | `config/schema` (types), `domain/*` (types only) | domain business logic, cross-adapter calls                        |
-| `config/*`   | nothing in-app (stdlib + smol-toml only)         | domain, cli, adapters                                             |
+| `config/*`   | nothing in-app (stdlib + smol-toml + valibot)    | domain, cli, adapters                                             |
 
 ### Hard rules per layer
 
