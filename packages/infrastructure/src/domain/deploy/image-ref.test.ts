@@ -1,6 +1,30 @@
 import { describe, expect, it } from 'vitest'
 
-import { computeImageRef, parseImageRef } from './image-ref.ts'
+import {
+	computeImageRef,
+	parseImageRef,
+	resolveServiceImageRefs,
+} from './image-ref.ts'
+
+import type { UserServiceConfig } from '#/config/types.ts'
+
+const buildService = (target: string): UserServiceConfig => ({
+	port: 3000,
+	secrets: [],
+	needs: [],
+	dependsOn: [],
+	source: 'build',
+	target,
+})
+
+const upstreamService = (ref: string): UserServiceConfig => ({
+	port: 3000,
+	secrets: [],
+	needs: [],
+	dependsOn: [],
+	source: 'upstream',
+	ref,
+})
 
 describe('computeImageRef', () => {
 	it('normalizes a standard GitHub repository + full sha to a GHCR ref', () => {
@@ -26,6 +50,20 @@ describe('computeImageRef', () => {
 			registry: 'ghcr.io',
 			repository: 'nextnodesolutions/core',
 			tag: 'sha-ABCDEF0',
+		})
+	})
+
+	it('appends the service name to the repository when a service suffix is given', () => {
+		expect(
+			computeImageRef({
+				repository: 'NextNodeSolutions/Core',
+				sha: 'abc1234567890',
+				service: 'app',
+			}),
+		).toEqual({
+			registry: 'ghcr.io',
+			repository: 'nextnodesolutions/core-app',
+			tag: 'sha-abc1234',
 		})
 	})
 
@@ -147,4 +185,100 @@ describe('parseImageRef', () => {
 			)
 		},
 	)
+})
+
+describe('resolveServiceImageRefs', () => {
+	it('computes a suffixed ref for a build service and marks it a bake target', () => {
+		expect(
+			resolveServiceImageRefs(
+				{ app: buildService('app') },
+				'acme/web',
+				'abc1234567890',
+			),
+		).toEqual({
+			imageRefs: {
+				app: {
+					registry: 'ghcr.io',
+					repository: 'acme/web-app',
+					tag: 'sha-abc1234',
+				},
+			},
+			bakeTargets: ['app'],
+			primaryRef: {
+				registry: 'ghcr.io',
+				repository: 'acme/web-app',
+				tag: 'sha-abc1234',
+			},
+		})
+	})
+
+	it('keeps an upstream ref verbatim and excludes it from bake targets', () => {
+		expect(
+			resolveServiceImageRefs(
+				{ cache: upstreamService('docker.io/library/redis:7') },
+				'acme/web',
+				'abc1234567890',
+			),
+		).toEqual({
+			imageRefs: {
+				cache: {
+					registry: 'docker.io',
+					repository: 'library/redis',
+					tag: '7',
+				},
+			},
+			bakeTargets: [],
+			primaryRef: {
+				registry: 'docker.io',
+				repository: 'library/redis',
+				tag: '7',
+			},
+		})
+	})
+
+	it('bakes only build services, ordered by declaration', () => {
+		const result = resolveServiceImageRefs(
+			{
+				front: buildService('front'),
+				worker: upstreamService('docker.io/acme/worker:2.0'),
+				api: buildService('api'),
+			},
+			'acme/web',
+			'abc1234567890',
+		)
+
+		expect(result.bakeTargets).toEqual(['front', 'api'])
+		expect(result.imageRefs).toEqual({
+			front: {
+				registry: 'ghcr.io',
+				repository: 'acme/web-front',
+				tag: 'sha-abc1234',
+			},
+			worker: {
+				registry: 'docker.io',
+				repository: 'acme/worker',
+				tag: '2.0',
+			},
+			api: {
+				registry: 'ghcr.io',
+				repository: 'acme/web-api',
+				tag: 'sha-abc1234',
+			},
+		})
+		expect(result.primaryRef).toEqual({
+			registry: 'ghcr.io',
+			repository: 'acme/web-front',
+			tag: 'sha-abc1234',
+		})
+	})
+
+	it('reports no primary ref and no targets for an empty service set', () => {
+		expect(
+			resolveServiceImageRefs({}, 'acme/web', 'abc1234567890'),
+		).toEqual({
+			imageRefs: {},
+			bakeTargets: [],
+			primaryRef: undefined,
+		})
+	})
 })

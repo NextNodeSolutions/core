@@ -1,3 +1,4 @@
+import type { UserServiceConfig } from '#/config/types.ts'
 import type { ImageRef } from './target.ts'
 
 const DEFAULT_REGISTRY = 'ghcr.io'
@@ -15,6 +16,11 @@ const TAG_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$/
 export interface ComputeImageRefInput {
 	readonly repository: string
 	readonly sha: string
+	// Optional per-service suffix. When set, the image repository becomes
+	// `<owner>/<repo>-<service>` so each declared service publishes to its
+	// own GHCR path; omitted for the bare repo image. The service name is a
+	// validated KEBAB identifier, so it is already lowercase and metacharacter-free.
+	readonly service?: string
 }
 
 /**
@@ -22,7 +28,8 @@ export interface ComputeImageRefInput {
  *
  * Single source of truth for the NextNode image-naming convention:
  *   - registry: `ghcr.io`
- *   - repository: `<owner>/<repo>` lowercased (GHCR requires lowercase)
+ *   - repository: `<owner>/<repo>` lowercased (GHCR requires lowercase),
+ *     optionally suffixed with `-<service>` for per-service images
  *   - tag: `sha-<first 7 chars of commit sha>`
  */
 export function computeImageRef(input: ComputeImageRefInput): ImageRef {
@@ -36,9 +43,12 @@ export function computeImageRef(input: ComputeImageRefInput): ImageRef {
 			`Invalid sha "${input.sha}": expected at least ${String(SHORT_SHA_LENGTH)} chars`,
 		)
 	}
+	const baseRepository = input.repository.toLowerCase()
 	return {
 		registry: DEFAULT_REGISTRY,
-		repository: input.repository.toLowerCase(),
+		repository: input.service
+			? `${baseRepository}-${input.service}`
+			: baseRepository,
 		tag: `sha-${input.sha.slice(0, SHORT_SHA_LENGTH)}`,
 	}
 }
@@ -97,4 +107,43 @@ export function parseImageRef(raw: string): ImageRef {
 	}
 
 	return { registry, repository, tag }
+}
+
+export interface ServiceImageRefs {
+	// Image ref per declared service, by instance name.
+	readonly imageRefs: Record<string, ImageRef>
+	// Instance names of the `build` services only — the explicit target list
+	// for a single multi-target `docker buildx bake`.
+	readonly bakeTargets: ReadonlyArray<string>
+	// The first declared service's ref, mirrored to the legacy single-image
+	// output during the M1 migration. Undefined only when no service exists.
+	readonly primaryRef: ImageRef | undefined
+}
+
+/**
+ * Resolve the image ref of every declared service. `build` services get a
+ * per-service suffixed ref computed from the commit sha (the pipeline builds
+ * + pushes them, so they appear in `bakeTargets`); `upstream` services keep
+ * their declared `ref` verbatim.
+ */
+export function resolveServiceImageRefs(
+	services: Record<string, UserServiceConfig>,
+	repository: string,
+	sha: string,
+): ServiceImageRefs {
+	const imageRefs: Record<string, ImageRef> = {}
+	const bakeTargets: string[] = []
+	let primaryRef: ImageRef | undefined
+
+	for (const [name, service] of Object.entries(services)) {
+		const ref =
+			service.source === 'build'
+				? computeImageRef({ repository, sha, service: name })
+				: parseImageRef(service.ref)
+		imageRefs[name] = ref
+		if (service.source === 'build') bakeTargets.push(name)
+		primaryRef ??= ref
+	}
+
+	return { imageRefs, bakeTargets, primaryRef }
 }
