@@ -12,7 +12,11 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 import { shellEscape } from './ssh/shell-escape.ts'
 
-import type { DeployVolume, PostgresServiceConfig } from '#/config/types.ts'
+import type {
+	DeployVolume,
+	PostgresServiceConfig,
+	UserServiceConfig,
+} from '#/config/types.ts'
 import type { CaddyUpstream } from '#/domain/caddy/config.ts'
 import type {
 	ContainerDeployedEnvironment,
@@ -25,6 +29,11 @@ import type { SshSession } from './ssh/session.types.ts'
 const logger = createLogger()
 
 const REGISTRY_TOKEN_USER = '__token__'
+
+// M1 deploys a single user workload named `app`: the image/host-port Records
+// fed to the compose renderer are keyed by it, and its env file is `.env.app`.
+// The Record source switches to the per-service IMAGE_REFS in M1.A-04.
+const APP_SERVICE_NAME = 'app'
 
 /**
  * Seconds the docker compose CLI's native `--wait` flag will block before
@@ -45,6 +54,10 @@ export interface DeployContainerInput {
 	readonly registryToken: string | undefined
 	readonly volumes: ReadonlyArray<DeployVolume>
 	readonly postgres: PostgresServiceConfig | undefined
+	// User workloads declared under [deploy.services.<name>]. The compose
+	// renderer loops these; M1.A-04 switches the image/host-port Records over
+	// to the per-service IMAGE_REFS source.
+	readonly services: Record<string, UserServiceConfig>
 }
 
 export interface DeployContainerResult {
@@ -135,12 +148,19 @@ export async function stageRollout(
 		...input.secrets,
 	}
 	await session.exec(`mkdir -p ${envDirQ}`)
-	await session.writeFile(`${envDir}/.env`, formatComposeEnv(allEnv))
+	// Per-service env file (`.env.<name>`) is the isolation unit the compose
+	// `env_file` points at. M1 has the single `app` workload, so we write
+	// `.env.app`; the per-service fan-out lands with multi-service M2.
+	await session.writeFile(
+		`${envDir}/.env.${APP_SERVICE_NAME}`,
+		formatComposeEnv(allEnv),
+	)
 	await session.writeFile(
 		`${envDir}/compose.yaml`,
 		renderComposeFile({
-			image: input.image,
-			hostPort: input.hostPort,
+			services: input.services,
+			images: { [APP_SERVICE_NAME]: input.image },
+			hostPorts: { [APP_SERVICE_NAME]: input.hostPort },
 			volumes: input.volumes,
 			projectName: input.projectName,
 			postgres: input.postgres,
@@ -192,11 +212,13 @@ export async function bringUpDb(
 }
 
 /**
- * Phase 2: rotate the app container. `renderComposeFile` only ever emits
- * three services — `app`, `postgres`, `postgres-backup` — and the DB
- * pair is brought up in phase 1 (or absent altogether). So phase 2 is
- * unconditionally `up -d --remove-orphans app`: it rotates the single
- * non-DB service and drops any orphan left by a previous deploy.
+ * Phase 2: rotate the user workloads. The embedded-postgres pair is brought
+ * up in phase 1 (or is absent), and its compose `--wait` already gated it
+ * healthy — a re-`up` of the whole file leaves the healthy DB untouched and
+ * rotates every user service to its new image. So phase 2 is unconditionally
+ * `up -d --remove-orphans` with no positional service (M1 has one user
+ * workload; the bare form generalises to the multi-service file in M2/M3) and
+ * drops any orphan left by a previous deploy.
  */
 export async function bringUpApp(
 	session: SshSession,
@@ -208,7 +230,7 @@ export async function bringUpApp(
 	const composeFileQ = shellEscape(composeFile)
 
 	await session.exec(
-		`docker compose -p ${siloIdQ} -f ${composeFileQ} up -d --remove-orphans app`,
+		`docker compose -p ${siloIdQ} -f ${composeFileQ} up -d --remove-orphans`,
 	)
 }
 

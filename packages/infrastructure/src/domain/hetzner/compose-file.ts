@@ -22,6 +22,7 @@ import { stringify } from 'yaml'
 import type {
 	PostgresServiceConfig,
 	SupabaseServiceConfig,
+	UserServiceConfig,
 } from '#/config/types.ts'
 import type { ImageRef } from '#/domain/deploy/target.ts'
 import type { PostgresExporterSidecarService } from '#/domain/services/postgres-exporter.ts'
@@ -55,8 +56,12 @@ export interface ComposeVolume {
 }
 
 export interface ComposeFileInput {
-	readonly image: ImageRef
-	readonly hostPort: number
+	// User workloads declared under [deploy.services.<name>], by instance name.
+	readonly services: Record<string, UserServiceConfig>
+	// Resolved image ref per service (build → computed, upstream → parsed).
+	readonly images: Record<string, ImageRef>
+	// Allocated host port per service — consulted only for `url` services.
+	readonly hostPorts: Record<string, number>
 	readonly volumes?: ReadonlyArray<ComposeVolume>
 	readonly postgres: PostgresServiceConfig | undefined
 	readonly supabase?: SupabaseServiceConfig
@@ -72,13 +77,37 @@ interface ComposeServiceDependency {
 	readonly condition: 'service_healthy'
 }
 
+interface ComposeHealthcheck {
+	readonly test: ReadonlyArray<string>
+	readonly interval: string
+	readonly timeout: string
+	readonly retries: number
+}
+
 interface ComposeService {
 	readonly image: string
 	readonly restart: string
 	readonly env_file: ReadonlyArray<string>
-	readonly ports: ReadonlyArray<string>
+	readonly healthcheck: ComposeHealthcheck
+	readonly ports?: ReadonlyArray<string>
 	readonly volumes?: ReadonlyArray<string>
 	readonly depends_on?: Readonly<Record<string, ComposeServiceDependency>>
+}
+
+// Mandatory /healthz contract (D7): every user workload must answer a
+// liveness probe so compose owns bring-up readiness. `wget` is present in
+// the alpine/distroless-busybox bases NextNode app images build on.
+const HEALTHCHECK_INTERVAL = '10s'
+const HEALTHCHECK_TIMEOUT = '3s'
+const HEALTHCHECK_RETRIES = 6
+
+function buildHealthcheck(port: number): ComposeHealthcheck {
+	return {
+		test: ['CMD', 'wget', '-q', '-O-', `http://localhost:${port}/healthz`],
+		interval: HEALTHCHECK_INTERVAL,
+		timeout: HEALTHCHECK_TIMEOUT,
+		retries: HEALTHCHECK_RETRIES,
+	}
 }
 
 type ComposeServiceLike =
@@ -160,6 +189,71 @@ function buildSupabaseServiceGroup(
 	}
 }
 
+function buildPortMapping(
+	service: UserServiceConfig,
+	hostPort: number | undefined,
+	name: string,
+): { ports?: ReadonlyArray<string> } {
+	// Only `url` services face the reverse proxy, so only they publish a host
+	// port; internal services are reached by siblings over the compose network.
+	if (service.url === undefined) return {}
+	if (hostPort === undefined) {
+		throw new Error(
+			`renderComposeFile: service "${name}" declares a url but has no allocated host port`,
+		)
+	}
+	return {
+		ports: [`127.0.0.1:${hostPort}:${service.port}`],
+	}
+}
+
+/**
+ * Render the user workloads declared under [deploy.services.<name>]. Each
+ * gets its own image, per-service env file (`.env.<name>` — the isolation
+ * unit, D5) and mandatory /healthz healthcheck (D7). The FIRST declared
+ * service is the primary app: it carries the user-declared volumes and the
+ * embedded-postgres `service_healthy` dependency (M1 has exactly one user
+ * service; per-service volume/dependency wiring lands with multi-service M2).
+ */
+function buildUserServices(
+	services: Record<string, UserServiceConfig>,
+	images: Record<string, ImageRef>,
+	hostPorts: Record<string, number>,
+	userVolumes: ReadonlyArray<ComposeVolume> | undefined,
+	dependsOnPostgres: boolean,
+): Record<string, ComposeService> {
+	const result: Record<string, ComposeService> = {}
+	Object.entries(services).forEach(([name, service], index) => {
+		const image = images[name]
+		if (!image) {
+			throw new Error(
+				`renderComposeFile: missing image ref for service "${name}"`,
+			)
+		}
+		const isPrimary = index === 0
+		result[name] = {
+			image: formatImageRef(image),
+			restart: 'unless-stopped',
+			env_file: [`.env.${name}`],
+			healthcheck: buildHealthcheck(service.port),
+			...buildPortMapping(service, hostPorts[name], name),
+			...(isPrimary &&
+				userVolumes && {
+					volumes: userVolumes.map(v => `${v.name}:${v.mount}`),
+				}),
+			...(isPrimary &&
+				dependsOnPostgres && {
+					depends_on: {
+						[POSTGRES_SIDECAR_SERVICE_NAME]: {
+							condition: 'service_healthy',
+						},
+					},
+				}),
+		}
+	})
+	return result
+}
+
 export function renderComposeFile(input: ComposeFileInput): string {
 	const userVolumes = input.volumes?.length ? input.volumes : undefined
 	const postgres = input.postgres
@@ -176,22 +270,13 @@ export function renderComposeFile(input: ComposeFileInput): string {
 
 	const config: ComposeConfig = {
 		services: {
-			app: {
-				image: formatImageRef(input.image),
-				restart: 'unless-stopped',
-				env_file: ['.env'],
-				ports: [`127.0.0.1:${input.hostPort}:${CONTAINER_PORT}`],
-				...(userVolumes && {
-					volumes: userVolumes.map(v => `${v.name}:${v.mount}`),
-				}),
-				...(postgres && {
-					depends_on: {
-						[POSTGRES_SIDECAR_SERVICE_NAME]: {
-							condition: 'service_healthy',
-						},
-					},
-				}),
-			},
+			...buildUserServices(
+				input.services,
+				input.images,
+				input.hostPorts,
+				userVolumes,
+				postgres !== null,
+			),
 			...postgres,
 			...supabase,
 		},

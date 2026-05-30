@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { HetznerVpsTarget } from './target.ts'
 
+import type { UserServiceConfig } from '#/config/types.ts'
 import type {
 	TeardownResult,
 	VpsFullTeardownResult,
@@ -190,6 +191,17 @@ const TARGET_CONFIG = {
 	hetzner: HETZNER_CONFIG,
 	volumes: [],
 	postgres: undefined,
+	services: {
+		app: {
+			port: 3000,
+			url: 'acme-web.example.com',
+			secrets: [],
+			needs: [],
+			dependsOn: [],
+			source: 'build',
+			target: 'app',
+		},
+	} satisfies Record<string, UserServiceConfig>,
 	infraStorage: STORAGE_CONFIG,
 	stateStore: mockStateStore,
 	certsStore: mockCertsStore,
@@ -858,7 +870,7 @@ describe('HetznerVpsTarget', () => {
 			)
 		})
 
-		it('writes .env with merged envVars and secrets', async () => {
+		it('writes the per-service .env.app with merged envVars and secrets', async () => {
 			const { createSshSession: mockedSsh } =
 				await import('./ssh/session.ts')
 			const mockSession = createMockSession()
@@ -869,13 +881,13 @@ describe('HetznerVpsTarget', () => {
 			await target.deploy('acme-web', DEPLOY_INPUT, DEPLOY_ENV)
 
 			expect(mockSession.writeFile).toHaveBeenCalledWith(
-				'/opt/apps/acme-web/production/.env',
+				'/opt/apps/acme-web/production/.env.app',
 				expect.stringContaining(
 					'SITE_URL=https://acme-web.example.com',
 				),
 			)
 			expect(mockSession.writeFile).toHaveBeenCalledWith(
-				'/opt/apps/acme-web/production/.env',
+				'/opt/apps/acme-web/production/.env.app',
 				expect.stringContaining('DATABASE_URL=postgres://db:5432'),
 			)
 		})

@@ -80,7 +80,7 @@ describe('bringUpDb', () => {
 })
 
 describe('bringUpApp', () => {
-	it('always rotates only the app service (regardless of whether postgres is staged)', async () => {
+	it('rotates the whole compose file with no positional service (regardless of whether postgres is staged)', async () => {
 		const withPg = recordingSession()
 		const noPg = recordingSession()
 
@@ -88,7 +88,7 @@ describe('bringUpApp', () => {
 		await bringUpApp(noPg, { ...BASE_INPUT, postgres: undefined })
 
 		const expected =
-			"docker compose -p 'acme-web-production' -f '/opt/apps/acme-web/production/compose.yaml' up -d --remove-orphans app"
+			"docker compose -p 'acme-web-production' -f '/opt/apps/acme-web/production/compose.yaml' up -d --remove-orphans"
 		expect(withPg.exec).toHaveBeenCalledExactlyOnceWith(expected)
 		expect(noPg.exec).toHaveBeenCalledExactlyOnceWith(expected)
 	})

@@ -37,7 +37,9 @@ import {
 	renderComposeFile,
 } from './compose-file.ts'
 
+import type { UserServiceConfig } from '#/config/types.ts'
 import type { ImageRef } from '#/domain/deploy/target.ts'
+import type { ComposeFileInput } from './compose-file.ts'
 
 const IMAGE: ImageRef = {
 	registry: 'ghcr.io',
@@ -47,6 +49,40 @@ const IMAGE: ImageRef = {
 
 const PROJECT_NAME = 'acme-web'
 const ENVIRONMENT = 'production'
+
+// The primary user workload: a public `build` service on port 3000 with a
+// `url`, so it publishes a host port. The compose renderer keys images +
+// host ports by the service name.
+const APP_SERVICE: UserServiceConfig = {
+	port: 3000,
+	url: 'example.com',
+	secrets: [],
+	needs: [],
+	dependsOn: [],
+	source: 'build',
+	target: 'app',
+}
+
+const APP_HEALTHCHECK = {
+	test: ['CMD', 'wget', '-q', '-O-', 'http://localhost:3000/healthz'],
+	interval: '10s',
+	timeout: '3s',
+	retries: 6,
+}
+
+function baseInput(
+	overrides: Partial<ComposeFileInput> = {},
+): ComposeFileInput {
+	return {
+		services: { app: APP_SERVICE },
+		images: { app: IMAGE },
+		hostPorts: { app: 8080 },
+		projectName: PROJECT_NAME,
+		environment: ENVIRONMENT,
+		postgres: undefined,
+		...overrides,
+	}
+}
 
 describe('CONTAINER_PORT', () => {
 	it('is the single source of truth for the app listening port', () => {
@@ -81,152 +117,187 @@ describe('formatImageRef', () => {
 })
 
 describe('renderComposeFile', () => {
-	it('produces valid compose YAML with image and port mapping', () => {
-		const result = renderComposeFile({
-			image: IMAGE,
-			hostPort: 8080,
-			projectName: PROJECT_NAME,
-			environment: ENVIRONMENT,
-			postgres: undefined,
-		})
-		const parsed = parse(result)
+	it('renders the user service with image, per-service env file, healthcheck, and port mapping', () => {
+		const parsed = parse(renderComposeFile(baseInput()))
 
 		expect(parsed).toEqual({
 			services: {
 				app: {
 					image: 'ghcr.io/acme/web:sha-abc123',
 					restart: 'unless-stopped',
-					env_file: ['.env'],
+					env_file: ['.env.app'],
+					healthcheck: APP_HEALTHCHECK,
 					ports: [`127.0.0.1:8080:${CONTAINER_PORT}`],
 				},
 			},
 		})
 	})
 
-	it('binds to 127.0.0.1 only', () => {
-		const result = renderComposeFile({
-			image: IMAGE,
-			hostPort: 8081,
-			projectName: PROJECT_NAME,
-			environment: ENVIRONMENT,
-			postgres: undefined,
+	it('names the env file after the service instance', () => {
+		const parsed = parse(
+			renderComposeFile({
+				services: { web: APP_SERVICE },
+				images: { web: IMAGE },
+				hostPorts: { web: 8080 },
+				projectName: PROJECT_NAME,
+				environment: ENVIRONMENT,
+				postgres: undefined,
+			}),
+		)
+
+		expect(parsed.services.web.env_file).toEqual(['.env.web'])
+	})
+
+	it('emits a /healthz healthcheck targeting the service port', () => {
+		const parsed = parse(
+			renderComposeFile(
+				baseInput({
+					services: { app: { ...APP_SERVICE, port: 4000 } },
+				}),
+			),
+		)
+
+		expect(parsed.services.app.healthcheck).toEqual({
+			test: ['CMD', 'wget', '-q', '-O-', 'http://localhost:4000/healthz'],
+			interval: '10s',
+			timeout: '3s',
+			retries: 6,
 		})
-		const parsed = parse(result)
+	})
+
+	it('binds to 127.0.0.1 only', () => {
+		const parsed = parse(
+			renderComposeFile(baseInput({ hostPorts: { app: 8081 } })),
+		)
 
 		expect(parsed.services.app.ports[0]).toMatch(/^127\.0\.0\.1:8081:/)
 	})
 
-	it('uses CONTAINER_PORT as the container-side port', () => {
-		const result = renderComposeFile({
-			image: IMAGE,
-			hostPort: 8080,
-			projectName: PROJECT_NAME,
-			environment: ENVIRONMENT,
-			postgres: undefined,
-		})
-		const parsed = parse(result)
+	it('maps the allocated host port to the service container port', () => {
+		const parsed = parse(
+			renderComposeFile(baseInput({ hostPorts: { app: 8080 } })),
+		)
 
 		expect(parsed.services.app.ports[0]).toBe(
 			`127.0.0.1:8080:${CONTAINER_PORT}`,
 		)
 	})
 
-	it('uses the full image ref in the image field', () => {
-		const result = renderComposeFile({
-			image: {
-				registry: 'registry.example.com',
-				repository: 'team/app',
-				tag: 'v2.0.0',
-			},
-			hostPort: 8080,
-			projectName: PROJECT_NAME,
-			environment: ENVIRONMENT,
-			postgres: undefined,
-		})
-		const parsed = parse(result)
+	it('omits the port mapping for a service without a url', () => {
+		const internal: UserServiceConfig = {
+			port: 3000,
+			secrets: [],
+			needs: [],
+			dependsOn: [],
+			source: 'build',
+			target: 'worker',
+		}
+		const parsed = parse(
+			renderComposeFile({
+				services: { worker: internal },
+				images: { worker: IMAGE },
+				hostPorts: {},
+				projectName: PROJECT_NAME,
+				environment: ENVIRONMENT,
+				postgres: undefined,
+			}),
+		)
+
+		expect(parsed.services.worker).not.toHaveProperty('ports')
+		expect(parsed.services.worker.healthcheck).toEqual(APP_HEALTHCHECK)
+	})
+
+	it('uses the resolved image ref in the image field', () => {
+		const parsed = parse(
+			renderComposeFile(
+				baseInput({
+					images: {
+						app: {
+							registry: 'registry.example.com',
+							repository: 'team/app',
+							tag: 'v2.0.0',
+						},
+					},
+				}),
+			),
+		)
 
 		expect(parsed.services.app.image).toBe(
 			'registry.example.com/team/app:v2.0.0',
 		)
 	})
 
+	it('throws when a service has no resolved image ref', () => {
+		expect(() =>
+			renderComposeFile({
+				services: { app: APP_SERVICE },
+				images: {},
+				hostPorts: { app: 8080 },
+				projectName: PROJECT_NAME,
+				environment: ENVIRONMENT,
+				postgres: undefined,
+			}),
+		).toThrow('missing image ref for service "app"')
+	})
+
+	it('throws when a url service has no allocated host port', () => {
+		expect(() =>
+			renderComposeFile({
+				services: { app: APP_SERVICE },
+				images: { app: IMAGE },
+				hostPorts: {},
+				projectName: PROJECT_NAME,
+				environment: ENVIRONMENT,
+				postgres: undefined,
+			}),
+		).toThrow('service "app" declares a url but has no allocated host port')
+	})
+
 	it('omits volumes keys when no volumes are provided', () => {
-		const result = renderComposeFile({
-			image: IMAGE,
-			hostPort: 8080,
-			projectName: PROJECT_NAME,
-			environment: ENVIRONMENT,
-			postgres: undefined,
-		})
-		const parsed = parse(result)
+		const parsed = parse(renderComposeFile(baseInput()))
 
 		expect(parsed.services.app).not.toHaveProperty('volumes')
 		expect(parsed).not.toHaveProperty('volumes')
 	})
 
 	it('omits volumes keys when an empty volumes array is provided', () => {
-		const result = renderComposeFile({
-			image: IMAGE,
-			hostPort: 8080,
-			volumes: [],
-			projectName: PROJECT_NAME,
-			environment: ENVIRONMENT,
-			postgres: undefined,
-		})
-		const parsed = parse(result)
+		const parsed = parse(renderComposeFile(baseInput({ volumes: [] })))
 
 		expect(parsed.services.app).not.toHaveProperty('volumes')
 		expect(parsed).not.toHaveProperty('volumes')
 	})
 
 	it('renders the same YAML with no volumes as without the field', () => {
-		const without = renderComposeFile({
-			image: IMAGE,
-			hostPort: 8080,
-			projectName: PROJECT_NAME,
-			environment: ENVIRONMENT,
-			postgres: undefined,
-		})
-		const withEmpty = renderComposeFile({
-			image: IMAGE,
-			hostPort: 8080,
-			volumes: [],
-			projectName: PROJECT_NAME,
-			environment: ENVIRONMENT,
-			postgres: undefined,
-		})
+		const without = renderComposeFile(baseInput())
+		const withEmpty = renderComposeFile(baseInput({ volumes: [] }))
 
 		expect(withEmpty).toBe(without)
 	})
 
 	it('emits service.volumes mounts and a top-level named volume when provided', () => {
-		const result = renderComposeFile({
-			image: IMAGE,
-			hostPort: 8080,
-			volumes: [{ name: 'data', mount: '/var/lib/app' }],
-			projectName: PROJECT_NAME,
-			environment: ENVIRONMENT,
-			postgres: undefined,
-		})
-		const parsed = parse(result)
+		const parsed = parse(
+			renderComposeFile(
+				baseInput({
+					volumes: [{ name: 'data', mount: '/var/lib/app' }],
+				}),
+			),
+		)
 
 		expect(parsed.services.app.volumes).toEqual(['data:/var/lib/app'])
 		expect(parsed.volumes).toEqual({ data: {} })
 	})
 
 	it('emits multiple volumes preserving order', () => {
-		const result = renderComposeFile({
-			image: IMAGE,
-			hostPort: 8080,
-			volumes: [
-				{ name: 'data', mount: '/var/lib/app' },
-				{ name: 'cache', mount: '/var/cache/app' },
-			],
-			projectName: PROJECT_NAME,
-			environment: ENVIRONMENT,
-			postgres: undefined,
-		})
-		const parsed = parse(result)
+		const parsed = parse(
+			renderComposeFile(
+				baseInput({
+					volumes: [
+						{ name: 'data', mount: '/var/lib/app' },
+						{ name: 'cache', mount: '/var/cache/app' },
+					],
+				}),
+			),
+		)
 
 		expect(parsed.services.app.volumes).toEqual([
 			'data:/var/lib/app',
@@ -235,36 +306,28 @@ describe('renderComposeFile', () => {
 		expect(parsed.volumes).toEqual({ data: {}, cache: {} })
 	})
 
-	it('keeps image, restart, env_file, and ports unchanged when volumes are added', () => {
-		const result = renderComposeFile({
-			image: IMAGE,
-			hostPort: 8080,
-			volumes: [{ name: 'data', mount: '/var/lib/app' }],
-			projectName: PROJECT_NAME,
-			environment: ENVIRONMENT,
-			postgres: undefined,
-		})
-		const parsed = parse(result)
+	it('keeps image, restart, env_file, healthcheck, and ports unchanged when volumes are added', () => {
+		const parsed = parse(
+			renderComposeFile(
+				baseInput({
+					volumes: [{ name: 'data', mount: '/var/lib/app' }],
+				}),
+			),
+		)
 
 		expect(parsed.services.app.image).toBe('ghcr.io/acme/web:sha-abc123')
 		expect(parsed.services.app.restart).toBe('unless-stopped')
-		expect(parsed.services.app.env_file).toEqual(['.env'])
+		expect(parsed.services.app.env_file).toEqual(['.env.app'])
+		expect(parsed.services.app.healthcheck).toEqual(APP_HEALTHCHECK)
 		expect(parsed.services.app.ports).toEqual([
 			`127.0.0.1:8080:${CONTAINER_PORT}`,
 		])
 	})
 
 	it('emits a postgres sidecar when services.postgres.mode is embedded', () => {
-		const result = renderComposeFile({
-			image: IMAGE,
-			hostPort: 8080,
-			postgres: {
-				mode: 'embedded',
-			},
-			projectName: PROJECT_NAME,
-			environment: ENVIRONMENT,
-		})
-		const parsed = parse(result)
+		const parsed = parse(
+			renderComposeFile(baseInput({ postgres: { mode: 'embedded' } })),
+		)
 
 		expect(parsed.services.postgres).toEqual({
 			image: 'postgres:18',
@@ -282,31 +345,17 @@ describe('renderComposeFile', () => {
 	})
 
 	it('does not expose postgres on a host port', () => {
-		const result = renderComposeFile({
-			image: IMAGE,
-			hostPort: 8080,
-			postgres: {
-				mode: 'embedded',
-			},
-			projectName: PROJECT_NAME,
-			environment: ENVIRONMENT,
-		})
-		const parsed = parse(result)
+		const parsed = parse(
+			renderComposeFile(baseInput({ postgres: { mode: 'embedded' } })),
+		)
 
 		expect(parsed.services.postgres).not.toHaveProperty('ports')
 	})
 
 	it('omits the postgres sidecar when mode is external', () => {
-		const result = renderComposeFile({
-			image: IMAGE,
-			hostPort: 8080,
-			postgres: {
-				mode: 'external',
-			},
-			projectName: PROJECT_NAME,
-			environment: ENVIRONMENT,
-		})
-		const parsed = parse(result)
+		const parsed = parse(
+			renderComposeFile(baseInput({ postgres: { mode: 'external' } })),
+		)
 
 		expect(parsed.services).not.toHaveProperty('postgres')
 		expect(parsed.services).not.toHaveProperty('postgres-backup')
@@ -314,16 +363,9 @@ describe('renderComposeFile', () => {
 	})
 
 	it('emits a postgres-backup sidecar when postgres is embedded', () => {
-		const result = renderComposeFile({
-			image: IMAGE,
-			hostPort: 8080,
-			postgres: {
-				mode: 'embedded',
-			},
-			projectName: PROJECT_NAME,
-			environment: ENVIRONMENT,
-		})
-		const parsed = parse(result)
+		const parsed = parse(
+			renderComposeFile(baseInput({ postgres: { mode: 'embedded' } })),
+		)
 
 		expect(parsed.services['postgres-backup']).toEqual({
 			image: 'ghcr.io/solectrus/postgres-s3-backup:18',
@@ -348,32 +390,22 @@ describe('renderComposeFile', () => {
 	})
 
 	it('does not expose postgres-backup on a host port', () => {
-		const result = renderComposeFile({
-			image: IMAGE,
-			hostPort: 8080,
-			postgres: {
-				mode: 'embedded',
-			},
-			projectName: PROJECT_NAME,
-			environment: ENVIRONMENT,
-		})
-		const parsed = parse(result)
+		const parsed = parse(
+			renderComposeFile(baseInput({ postgres: { mode: 'embedded' } })),
+		)
 
 		expect(parsed.services['postgres-backup']).not.toHaveProperty('ports')
 	})
 
 	it('merges the postgres-data volume with user-declared volumes', () => {
-		const result = renderComposeFile({
-			image: IMAGE,
-			hostPort: 8080,
-			volumes: [{ name: 'app-data', mount: '/var/lib/app' }],
-			postgres: {
-				mode: 'embedded',
-			},
-			projectName: PROJECT_NAME,
-			environment: ENVIRONMENT,
-		})
-		const parsed = parse(result)
+		const parsed = parse(
+			renderComposeFile(
+				baseInput({
+					volumes: [{ name: 'app-data', mount: '/var/lib/app' }],
+					postgres: { mode: 'embedded' },
+				}),
+			),
+		)
 
 		expect(parsed.volumes).toEqual({
 			'app-data': {},
@@ -382,22 +414,93 @@ describe('renderComposeFile', () => {
 	})
 })
 
-describe('renderComposeFile - postgres service wiring', () => {
-	const baseInput = {
-		image: IMAGE,
-		hostPort: 8080,
-		projectName: PROJECT_NAME,
-		environment: ENVIRONMENT,
-	} as const
+describe('renderComposeFile - multiple user services', () => {
+	const API_IMAGE: ImageRef = {
+		registry: 'ghcr.io',
+		repository: 'acme/web-api',
+		tag: 'sha-abc123',
+	}
+	const API_SERVICE: UserServiceConfig = {
+		port: 3001,
+		secrets: [],
+		needs: [],
+		dependsOn: [],
+		source: 'build',
+		target: 'api',
+	}
 
-	it('renders both postgres and postgres-backup sidecars in embedded mode', () => {
-		const result = renderComposeFile({
-			...baseInput,
-			postgres: {
-				mode: 'embedded',
-			},
+	it('renders each declared service with its own image, env file, and healthcheck', () => {
+		const parsed = parse(
+			renderComposeFile({
+				services: { app: APP_SERVICE, api: API_SERVICE },
+				images: { app: IMAGE, api: API_IMAGE },
+				hostPorts: { app: 8080 },
+				projectName: PROJECT_NAME,
+				environment: ENVIRONMENT,
+				postgres: undefined,
+			}),
+		)
+
+		expect(Object.keys(parsed.services)).toEqual(['app', 'api'])
+		expect(parsed.services.app.image).toBe('ghcr.io/acme/web:sha-abc123')
+		expect(parsed.services.app.env_file).toEqual(['.env.app'])
+		expect(parsed.services.api.image).toBe(
+			'ghcr.io/acme/web-api:sha-abc123',
+		)
+		expect(parsed.services.api.env_file).toEqual(['.env.api'])
+		expect(parsed.services.api.healthcheck).toEqual({
+			test: ['CMD', 'wget', '-q', '-O-', 'http://localhost:3001/healthz'],
+			interval: '10s',
+			timeout: '3s',
+			retries: 6,
 		})
-		const parsed = parse(result)
+	})
+
+	it('publishes a host port only for the url-bearing service', () => {
+		const parsed = parse(
+			renderComposeFile({
+				services: { app: APP_SERVICE, api: API_SERVICE },
+				images: { app: IMAGE, api: API_IMAGE },
+				hostPorts: { app: 8080 },
+				projectName: PROJECT_NAME,
+				environment: ENVIRONMENT,
+				postgres: undefined,
+			}),
+		)
+
+		expect(parsed.services.app.ports).toEqual([
+			`127.0.0.1:8080:${CONTAINER_PORT}`,
+		])
+		expect(parsed.services.api).not.toHaveProperty('ports')
+	})
+
+	it('attaches user volumes and the postgres dependency to the first declared service only', () => {
+		const parsed = parse(
+			renderComposeFile({
+				services: { app: APP_SERVICE, api: API_SERVICE },
+				images: { app: IMAGE, api: API_IMAGE },
+				hostPorts: { app: 8080 },
+				volumes: [{ name: 'data', mount: '/var/lib/app' }],
+				projectName: PROJECT_NAME,
+				environment: ENVIRONMENT,
+				postgres: { mode: 'embedded' },
+			}),
+		)
+
+		expect(parsed.services.app.volumes).toEqual(['data:/var/lib/app'])
+		expect(parsed.services.app.depends_on).toEqual({
+			postgres: { condition: 'service_healthy' },
+		})
+		expect(parsed.services.api).not.toHaveProperty('volumes')
+		expect(parsed.services.api).not.toHaveProperty('depends_on')
+	})
+})
+
+describe('renderComposeFile - postgres service wiring', () => {
+	it('renders both postgres and postgres-backup sidecars in embedded mode', () => {
+		const parsed = parse(
+			renderComposeFile(baseInput({ postgres: { mode: 'embedded' } })),
+		)
 
 		expect(Object.keys(parsed.services)).toEqual([
 			'app',
@@ -408,37 +511,27 @@ describe('renderComposeFile - postgres service wiring', () => {
 	})
 
 	it('renders no postgres-related services or volumes when postgres config is undefined', () => {
-		const result = renderComposeFile({
-			...baseInput,
-			postgres: undefined,
-		})
-		const parsed = parse(result)
+		const parsed = parse(
+			renderComposeFile(baseInput({ postgres: undefined })),
+		)
 
 		expect(Object.keys(parsed.services)).toEqual(['app'])
 		expect(parsed).not.toHaveProperty('volumes')
 	})
 
 	it('renders no postgres sidecars when postgres mode is external', () => {
-		const result = renderComposeFile({
-			...baseInput,
-			postgres: {
-				mode: 'external',
-			},
-		})
-		const parsed = parse(result)
+		const parsed = parse(
+			renderComposeFile(baseInput({ postgres: { mode: 'external' } })),
+		)
 
 		expect(Object.keys(parsed.services)).toEqual(['app'])
 		expect(parsed).not.toHaveProperty('volumes')
 	})
 
 	it('declares app depends_on postgres service_healthy when postgres is embedded', () => {
-		const result = renderComposeFile({
-			...baseInput,
-			postgres: {
-				mode: 'embedded',
-			},
-		})
-		const parsed = parse(result)
+		const parsed = parse(
+			renderComposeFile(baseInput({ postgres: { mode: 'embedded' } })),
+		)
 
 		expect(parsed.services.app.depends_on).toEqual({
 			postgres: { condition: 'service_healthy' },
@@ -446,33 +539,17 @@ describe('renderComposeFile - postgres service wiring', () => {
 	})
 
 	it('omits app depends_on when postgres mode is external', () => {
-		const result = renderComposeFile({
-			...baseInput,
-			postgres: {
-				mode: 'external',
-			},
-		})
-		const parsed = parse(result)
+		const parsed = parse(
+			renderComposeFile(baseInput({ postgres: { mode: 'external' } })),
+		)
 
 		expect(parsed.services.app).not.toHaveProperty('depends_on')
 	})
 })
 
 describe('renderComposeFile - supabase service wiring', () => {
-	const baseInput = {
-		image: IMAGE,
-		hostPort: 8080,
-		projectName: PROJECT_NAME,
-		environment: ENVIRONMENT,
-		postgres: undefined,
-	} as const
-
 	it('renders the full self-host stack (db + auth + realtime + storage + kong + studio) plus the postgres-exporter and supabase-backup sidecars when services.supabase is declared', () => {
-		const result = renderComposeFile({
-			...baseInput,
-			supabase: {},
-		})
-		const parsed = parse(result)
+		const parsed = parse(renderComposeFile(baseInput({ supabase: {} })))
 
 		expect(Object.keys(parsed.services)).toEqual([
 			'app',
@@ -488,11 +565,7 @@ describe('renderComposeFile - supabase service wiring', () => {
 	})
 
 	it('pins each supabase service to its module image constant', () => {
-		const result = renderComposeFile({
-			...baseInput,
-			supabase: {},
-		})
-		const parsed = parse(result)
+		const parsed = parse(renderComposeFile(baseInput({ supabase: {} })))
 
 		expect(parsed.services.db.image).toBe(SUPABASE_POSTGRES_IMAGE)
 		expect(parsed.services.auth.image).toBe(SUPABASE_AUTH_IMAGE)
@@ -503,11 +576,7 @@ describe('renderComposeFile - supabase service wiring', () => {
 	})
 
 	it('mounts the supabase-db-data volume on the db service and declares it at the top level', () => {
-		const result = renderComposeFile({
-			...baseInput,
-			supabase: {},
-		})
-		const parsed = parse(result)
+		const parsed = parse(renderComposeFile(baseInput({ supabase: {} })))
 
 		expect(parsed.services.db.volumes).toEqual([
 			`${SUPABASE_DB_DATA_VOLUME}:${SUPABASE_DB_DATA_DIR}`,
@@ -517,11 +586,7 @@ describe('renderComposeFile - supabase service wiring', () => {
 	})
 
 	it('bind-mounts the postgres-exporter bootstrap SQL into /docker-entrypoint-initdb.d/ on the db service as read-only', () => {
-		const result = renderComposeFile({
-			...baseInput,
-			supabase: {},
-		})
-		const parsed = parse(result)
+		const parsed = parse(renderComposeFile(baseInput({ supabase: {} })))
 
 		expect(parsed.services.db.volumes).toContain(
 			`${POSTGRES_EXPORTER_INIT_HOST_PATH}:${POSTGRES_EXPORTER_INIT_MOUNT_PATH}:ro`,
@@ -529,18 +594,13 @@ describe('renderComposeFile - supabase service wiring', () => {
 	})
 
 	it('does not mount the postgres-exporter bootstrap SQL when supabase is omitted', () => {
-		const result = renderComposeFile(baseInput)
-		const parsed = parse(result)
+		const parsed = parse(renderComposeFile(baseInput()))
 
 		expect(parsed.services).not.toHaveProperty('db')
 	})
 
 	it('declares auth, realtime, storage, and kong as depending on db', () => {
-		const result = renderComposeFile({
-			...baseInput,
-			supabase: {},
-		})
-		const parsed = parse(result)
+		const parsed = parse(renderComposeFile(baseInput({ supabase: {} })))
 
 		expect(parsed.services.auth.depends_on).toEqual(['db'])
 		expect(parsed.services.realtime.depends_on).toEqual(['db'])
@@ -549,22 +609,14 @@ describe('renderComposeFile - supabase service wiring', () => {
 	})
 
 	it('omits depends_on on db (root) and studio (talks via kong)', () => {
-		const result = renderComposeFile({
-			...baseInput,
-			supabase: {},
-		})
-		const parsed = parse(result)
+		const parsed = parse(renderComposeFile(baseInput({ supabase: {} })))
 
 		expect(parsed.services.db).not.toHaveProperty('depends_on')
 		expect(parsed.services.studio).not.toHaveProperty('depends_on')
 	})
 
 	it('exposes no host ports on any supabase service - exposure is fronted by the VPS reverse proxy', () => {
-		const result = renderComposeFile({
-			...baseInput,
-			supabase: {},
-		})
-		const parsed = parse(result)
+		const parsed = parse(renderComposeFile(baseInput({ supabase: {} })))
 
 		const supabaseServiceNames = [
 			'db',
@@ -580,29 +632,27 @@ describe('renderComposeFile - supabase service wiring', () => {
 	})
 
 	it('leaves the app service unchanged when services.supabase is declared - no app↔supabase depends_on coupling', () => {
-		const result = renderComposeFile({
-			...baseInput,
-			supabase: {},
-		})
-		const parsed = parse(result)
+		const parsed = parse(renderComposeFile(baseInput({ supabase: {} })))
 
 		expect(parsed.services.app).toEqual({
 			image: 'ghcr.io/acme/web:sha-abc123',
 			restart: 'unless-stopped',
-			env_file: ['.env'],
+			env_file: ['.env.app'],
+			healthcheck: APP_HEALTHCHECK,
 			ports: [`127.0.0.1:8080:${CONTAINER_PORT}`],
 		})
 	})
 
 	it('produces an unchanged compose YAML when services.supabase is omitted', () => {
-		const withoutSupabase = renderComposeFile(baseInput)
+		const withoutSupabase = renderComposeFile(baseInput())
 
 		expect(parse(withoutSupabase)).toEqual({
 			services: {
 				app: {
 					image: 'ghcr.io/acme/web:sha-abc123',
 					restart: 'unless-stopped',
-					env_file: ['.env'],
+					env_file: ['.env.app'],
+					healthcheck: APP_HEALTHCHECK,
 					ports: [`127.0.0.1:8080:${CONTAINER_PORT}`],
 				},
 			},
@@ -613,14 +663,11 @@ describe('renderComposeFile - supabase service wiring', () => {
 	})
 
 	it('merges supabase services with the embedded postgres sidecar when both are declared', () => {
-		const result = renderComposeFile({
-			...baseInput,
-			postgres: {
-				mode: 'embedded',
-			},
-			supabase: {},
-		})
-		const parsed = parse(result)
+		const parsed = parse(
+			renderComposeFile(
+				baseInput({ postgres: { mode: 'embedded' }, supabase: {} }),
+			),
+		)
 
 		expect(Object.keys(parsed.services)).toEqual([
 			'app',
@@ -643,17 +690,8 @@ describe('renderComposeFile - supabase service wiring', () => {
 })
 
 describe('renderComposeFile - postgres-exporter sidecar wiring', () => {
-	const baseInput = {
-		image: IMAGE,
-		hostPort: 8080,
-		projectName: PROJECT_NAME,
-		environment: ENVIRONMENT,
-		postgres: undefined,
-	} as const
-
 	it('omits the postgres-exporter sidecar when services.supabase is not declared', () => {
-		const result = renderComposeFile(baseInput)
-		const parsed = parse(result)
+		const parsed = parse(renderComposeFile(baseInput()))
 
 		expect(parsed.services).not.toHaveProperty(
 			POSTGRES_EXPORTER_SERVICE_NAME,
@@ -661,11 +699,7 @@ describe('renderComposeFile - postgres-exporter sidecar wiring', () => {
 	})
 
 	it('pins the exporter sidecar to the module image constant', () => {
-		const result = renderComposeFile({
-			...baseInput,
-			supabase: {},
-		})
-		const parsed = parse(result)
+		const parsed = parse(renderComposeFile(baseInput({ supabase: {} })))
 
 		expect(parsed.services[POSTGRES_EXPORTER_SERVICE_NAME].image).toBe(
 			POSTGRES_EXPORTER_IMAGE,
@@ -673,11 +707,7 @@ describe('renderComposeFile - postgres-exporter sidecar wiring', () => {
 	})
 
 	it('binds the exporter port to the Tailscale interface via the TAILSCALE_IP env var', () => {
-		const result = renderComposeFile({
-			...baseInput,
-			supabase: {},
-		})
-		const parsed = parse(result)
+		const parsed = parse(renderComposeFile(baseInput({ supabase: {} })))
 
 		expect(parsed.services[POSTGRES_EXPORTER_SERVICE_NAME].ports).toEqual([
 			`\${${TAILSCALE_IP_ENV}}:${String(POSTGRES_EXPORTER_PORT)}:${String(POSTGRES_EXPORTER_PORT)}`,
@@ -685,11 +715,7 @@ describe('renderComposeFile - postgres-exporter sidecar wiring', () => {
 	})
 
 	it('passes the DSN through the documented DATA_SOURCE_NAME env channel', () => {
-		const result = renderComposeFile({
-			...baseInput,
-			supabase: {},
-		})
-		const parsed = parse(result)
+		const parsed = parse(renderComposeFile(baseInput({ supabase: {} })))
 
 		expect(
 			parsed.services[POSTGRES_EXPORTER_SERVICE_NAME].environment[
@@ -701,11 +727,7 @@ describe('renderComposeFile - postgres-exporter sidecar wiring', () => {
 	})
 
 	it('declares the exporter as depending on the supabase db service', () => {
-		const result = renderComposeFile({
-			...baseInput,
-			supabase: {},
-		})
-		const parsed = parse(result)
+		const parsed = parse(renderComposeFile(baseInput({ supabase: {} })))
 
 		expect(
 			parsed.services[POSTGRES_EXPORTER_SERVICE_NAME].depends_on,
@@ -713,11 +735,7 @@ describe('renderComposeFile - postgres-exporter sidecar wiring', () => {
 	})
 
 	it('keeps the exporter authenticated as the postgres_exporter role inside the DSN', () => {
-		const result = renderComposeFile({
-			...baseInput,
-			supabase: {},
-		})
-		const parsed = parse(result)
+		const parsed = parse(renderComposeFile(baseInput({ supabase: {} })))
 
 		const dsn =
 			parsed.services[POSTGRES_EXPORTER_SERVICE_NAME].environment[
@@ -728,27 +746,14 @@ describe('renderComposeFile - postgres-exporter sidecar wiring', () => {
 })
 
 describe('renderComposeFile - supabase-backup sidecar wiring', () => {
-	const baseInput = {
-		image: IMAGE,
-		hostPort: 8080,
-		projectName: PROJECT_NAME,
-		environment: ENVIRONMENT,
-		postgres: undefined,
-	} as const
-
 	it('omits the supabase-backup sidecar when services.supabase is not declared', () => {
-		const result = renderComposeFile(baseInput)
-		const parsed = parse(result)
+		const parsed = parse(renderComposeFile(baseInput()))
 
 		expect(parsed.services).not.toHaveProperty(SUPABASE_BACKUP_SERVICE_NAME)
 	})
 
 	it('pins the backup sidecar to the module image constant', () => {
-		const result = renderComposeFile({
-			...baseInput,
-			supabase: {},
-		})
-		const parsed = parse(result)
+		const parsed = parse(renderComposeFile(baseInput({ supabase: {} })))
 
 		expect(parsed.services[SUPABASE_BACKUP_SERVICE_NAME].image).toBe(
 			SUPABASE_BACKUP_IMAGE,
@@ -756,11 +761,7 @@ describe('renderComposeFile - supabase-backup sidecar wiring', () => {
 	})
 
 	it('declares the backup sidecar as depending on the supabase db service', () => {
-		const result = renderComposeFile({
-			...baseInput,
-			supabase: {},
-		})
-		const parsed = parse(result)
+		const parsed = parse(renderComposeFile(baseInput({ supabase: {} })))
 
 		expect(
 			parsed.services[SUPABASE_BACKUP_SERVICE_NAME].depends_on,
@@ -768,11 +769,7 @@ describe('renderComposeFile - supabase-backup sidecar wiring', () => {
 	})
 
 	it('does not expose the backup sidecar on a host port', () => {
-		const result = renderComposeFile({
-			...baseInput,
-			supabase: {},
-		})
-		const parsed = parse(result)
+		const parsed = parse(renderComposeFile(baseInput({ supabase: {} })))
 
 		expect(
 			parsed.services[SUPABASE_BACKUP_SERVICE_NAME],
@@ -780,11 +777,7 @@ describe('renderComposeFile - supabase-backup sidecar wiring', () => {
 	})
 
 	it('exposes BACKUP_R2_*, PGPASSWORD, and per-deploy PROJECT/ENV as shell env vars the script reads', () => {
-		const result = renderComposeFile({
-			...baseInput,
-			supabase: {},
-		})
-		const parsed = parse(result)
+		const parsed = parse(renderComposeFile(baseInput({ supabase: {} })))
 
 		expect(
 			parsed.services[SUPABASE_BACKUP_SERVICE_NAME].environment,
@@ -801,11 +794,7 @@ describe('renderComposeFile - supabase-backup sidecar wiring', () => {
 	})
 
 	it('drives the loop with `sh -c <script>` so a single entrypoint owns the schedule', () => {
-		const result = renderComposeFile({
-			...baseInput,
-			supabase: {},
-		})
-		const parsed = parse(result)
+		const parsed = parse(renderComposeFile(baseInput({ supabase: {} })))
 
 		const entrypoint =
 			parsed.services[SUPABASE_BACKUP_SERVICE_NAME].entrypoint
@@ -815,18 +804,20 @@ describe('renderComposeFile - supabase-backup sidecar wiring', () => {
 	})
 
 	it('renders the same script regardless of project or environment - per-deploy values flow through env vars', () => {
-		const a = renderComposeFile({
-			...baseInput,
-			projectName: 'a',
-			environment: 'development',
-			supabase: {},
-		})
-		const b = renderComposeFile({
-			...baseInput,
-			projectName: 'b',
-			environment: 'production',
-			supabase: {},
-		})
+		const a = renderComposeFile(
+			baseInput({
+				projectName: 'a',
+				environment: 'development',
+				supabase: {},
+			}),
+		)
+		const b = renderComposeFile(
+			baseInput({
+				projectName: 'b',
+				environment: 'production',
+				supabase: {},
+			}),
+		)
 
 		const scriptA =
 			parse(a).services[SUPABASE_BACKUP_SERVICE_NAME].entrypoint[2]
@@ -836,11 +827,7 @@ describe('renderComposeFile - supabase-backup sidecar wiring', () => {
 	})
 
 	it('emits a key matching the spec pattern pg_dump_<project>_<env>_<ts>.sql.gz from the PROJECT/ENV shell env vars', () => {
-		const result = renderComposeFile({
-			...baseInput,
-			supabase: {},
-		})
-		const parsed = parse(result)
+		const parsed = parse(renderComposeFile(baseInput({ supabase: {} })))
 
 		const script =
 			parsed.services[SUPABASE_BACKUP_SERVICE_NAME].entrypoint[2]
@@ -849,11 +836,7 @@ describe('renderComposeFile - supabase-backup sidecar wiring', () => {
 	})
 
 	it('pipes pg_dump through gzip into aws s3 cp against the BACKUP_R2 endpoint', () => {
-		const result = renderComposeFile({
-			...baseInput,
-			supabase: {},
-		})
-		const parsed = parse(result)
+		const parsed = parse(renderComposeFile(baseInput({ supabase: {} })))
 
 		const script =
 			parsed.services[SUPABASE_BACKUP_SERVICE_NAME].entrypoint[2]
@@ -865,11 +848,7 @@ describe('renderComposeFile - supabase-backup sidecar wiring', () => {
 	})
 
 	it('sleeps SUPABASE_BACKUP_INTERVAL_SECONDS between iterations (daily cadence)', () => {
-		const result = renderComposeFile({
-			...baseInput,
-			supabase: {},
-		})
-		const parsed = parse(result)
+		const parsed = parse(renderComposeFile(baseInput({ supabase: {} })))
 
 		const script =
 			parsed.services[SUPABASE_BACKUP_SERVICE_NAME].entrypoint[2]
@@ -880,11 +859,7 @@ describe('renderComposeFile - supabase-backup sidecar wiring', () => {
 	})
 
 	it('renders the sidecar with restart=unless-stopped so the loop survives single-pass failures', () => {
-		const result = renderComposeFile({
-			...baseInput,
-			supabase: {},
-		})
-		const parsed = parse(result)
+		const parsed = parse(renderComposeFile(baseInput({ supabase: {} })))
 
 		expect(parsed.services[SUPABASE_BACKUP_SERVICE_NAME].restart).toBe(
 			'unless-stopped',

@@ -20,6 +20,7 @@ import type {
 	DeployVolume,
 	HetznerVpsDeploySection,
 	PostgresServiceConfig,
+	UserServiceConfig,
 } from '#/config/types.ts'
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import type { VpsResourceOutcome } from '#/domain/deploy/resource-outcome.ts'
@@ -67,6 +68,9 @@ export interface HetznerVpsTargetConfig {
 	readonly hetzner: HetznerVpsDeploySection['hetzner']
 	readonly volumes: ReadonlyArray<DeployVolume>
 	readonly postgres: PostgresServiceConfig | undefined
+	// User workloads from [deploy.services.<name>], threaded into the compose
+	// renderer via deployContainer / stageRollout.
+	readonly services: Record<string, UserServiceConfig>
 	readonly infraStorage: InfraStorageRuntimeConfig
 	readonly stateStore: ObjectStoreClient
 	readonly certsStore: ObjectStoreClient
@@ -193,6 +197,7 @@ export class HetznerVpsTarget implements DeployTarget {
 				registryToken: input.registryToken,
 				volumes: this.config.volumes,
 				postgres: this.config.postgres,
+				services: this.config.services,
 			})
 
 			// Multi-tenant Caddy: read the existing config, drop any prior
@@ -269,6 +274,7 @@ export class HetznerVpsTarget implements DeployTarget {
 				registryToken: input.registryToken,
 				volumes: this.config.volumes,
 				postgres: this.config.postgres,
+				services: this.config.services,
 			})
 		} catch (err) {
 			if (allocated) await this.releaseAllocatedHostPort(projectName)

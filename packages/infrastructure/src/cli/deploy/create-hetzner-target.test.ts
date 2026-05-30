@@ -281,6 +281,21 @@ describe('createHetznerTarget', () => {
 		)
 	})
 
+	it('threads deploy.services through to the target config', async () => {
+		stubHetznerEnv()
+
+		const { HetznerVpsTarget } =
+			await import('#/adapters/hetzner/target.ts')
+
+		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_INFRA_STORAGE)
+
+		expect(HetznerVpsTarget).toHaveBeenCalledWith(
+			expect.objectContaining({
+				services: HETZNER_CONFIG.deploy.services,
+			}),
+		)
+	})
+
 	it('wires a DnsClient with reconcile + deleteByName methods', async () => {
 		stubHetznerEnv()
 
