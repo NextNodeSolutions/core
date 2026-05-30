@@ -20,6 +20,16 @@ export const APP_WITH_DOMAIN: DeployableConfig = {
 		vps: null,
 		volumes: [],
 		image: { source: 'build' },
+		services: {
+			app: {
+				port: 3000,
+				secrets: [],
+				needs: [],
+				dependsOn: [],
+				source: 'build',
+				target: 'app',
+			},
+		},
 	},
 }
 
@@ -43,6 +53,16 @@ export const APP_UPSTREAM_PUBLIC: DeployableConfig = {
 		vps: null,
 		volumes: [],
 		image: { source: 'upstream', ref: 'docker.io/library/nginx:1.27' },
+		services: {
+			app: {
+				port: 3000,
+				secrets: [],
+				needs: [],
+				dependsOn: [],
+				source: 'upstream',
+				ref: 'docker.io/library/nginx:1.27',
+			},
+		},
 	},
 }
 
@@ -69,6 +89,17 @@ export const APP_UPSTREAM_PRIVATE: DeployableConfig = {
 			source: 'upstream',
 			ref: 'docker.io/private/app:1.0',
 			registryAuthSecret: 'DOCKERHUB_TOKEN',
+		},
+		services: {
+			app: {
+				port: 3000,
+				secrets: [],
+				needs: [],
+				dependsOn: [],
+				source: 'upstream',
+				ref: 'docker.io/private/app:1.0',
+				registryAuthSecret: 'DOCKERHUB_TOKEN',
+			},
 		},
 	},
 }
@@ -97,6 +128,16 @@ export const APP_WITH_POSTGRES: DeployableConfig = {
 		vps: null,
 		volumes: [],
 		image: { source: 'build' },
+		services: {
+			app: {
+				port: 3000,
+				secrets: [],
+				needs: [],
+				dependsOn: [],
+				source: 'build',
+				target: 'app',
+			},
+		},
 	},
 }
 
@@ -124,6 +165,16 @@ export const APP_WITH_POSTGRES_EXTERNAL: DeployableConfig = {
 		vps: null,
 		volumes: [],
 		image: { source: 'build' },
+		services: {
+			app: {
+				port: 3000,
+				secrets: [],
+				needs: [],
+				dependsOn: [],
+				source: 'build',
+				target: 'app',
+			},
+		},
 	},
 }
 
@@ -152,6 +203,16 @@ export const APP_WITH_POSTGRES_CUSTOM_MIGRATE: DeployableConfig = {
 		vps: null,
 		volumes: [],
 		image: { source: 'build' },
+		services: {
+			app: {
+				port: 3000,
+				secrets: [],
+				needs: [],
+				dependsOn: [],
+				source: 'build',
+				target: 'app',
+			},
+		},
 	},
 }
 
@@ -175,6 +236,16 @@ export const APP_WITH_SECRETS: DeployableConfig = {
 		vps: null,
 		volumes: [],
 		image: { source: 'build' },
+		services: {
+			app: {
+				port: 3000,
+				secrets: [],
+				needs: [],
+				dependsOn: [],
+				source: 'build',
+				target: 'app',
+			},
+		},
 	},
 }
 

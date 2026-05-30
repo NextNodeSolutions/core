@@ -6,6 +6,7 @@ import type {
 	DeploySection,
 	DeployTargetType,
 	DeployVolume,
+	UserServiceConfig,
 } from '#/config/types.ts'
 
 export interface DeployProviderResult {
@@ -21,6 +22,7 @@ export interface DeployProviderValidator {
 		vps: string | null,
 		volumes: ReadonlyArray<DeployVolume>,
 		image: DeployImageConfig,
+		services: Record<string, UserServiceConfig>,
 	): DeployProviderResult
 }
 

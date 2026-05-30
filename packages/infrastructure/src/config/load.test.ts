@@ -7,6 +7,17 @@ import { loadConfig, parseConfig } from './load.ts'
 const FIXTURES = join(import.meta.dirname, 'fixtures')
 const fixture = (name: string): string => join(FIXTURES, name)
 
+const appConfig = (
+	services: Record<string, unknown>,
+): Record<string, unknown> => ({
+	project: {
+		name: 'my-app',
+		type: 'app',
+		domain: 'my-app.example.com',
+	},
+	deploy: { services },
+})
+
 describe('loadConfig', () => {
 	it('loads a minimal valid config with defaults', () => {
 		const config = loadConfig(fixture('valid.toml'))
@@ -67,6 +78,26 @@ describe('loadConfig', () => {
 
 		expect(config.environment.development).toBe(false)
 	})
+
+	it('parses a [deploy.services.app] sub-table from TOML', () => {
+		const config = loadConfig(fixture('deploy-services-app.toml'))
+
+		if (config.deploy === false || config.deploy.target !== 'hetzner-vps') {
+			throw new Error('expected a hetzner-vps deploy section')
+		}
+
+		expect(config.deploy.services).toEqual({
+			app: {
+				port: 3000,
+				url: 'example.com',
+				secrets: [],
+				needs: [],
+				dependsOn: [],
+				source: 'build',
+				target: 'app',
+			},
+		})
+	})
 })
 
 describe('parseConfig', () => {
@@ -100,6 +131,16 @@ describe('parseConfig', () => {
 				volumes: [],
 				hetzner: { serverType: 'cpx22', location: 'nbg1' },
 				image: { source: 'build' },
+				services: {
+					app: {
+						port: 3000,
+						secrets: [],
+						needs: [],
+						dependsOn: [],
+						source: 'build',
+						target: 'app',
+					},
+				},
 			})
 		})
 
@@ -707,6 +748,16 @@ describe('parseConfig', () => {
 				volumes: [],
 				hetzner: { serverType: 'cx23', location: 'nbg1' },
 				image: { source: 'build' },
+				services: {
+					app: {
+						port: 3000,
+						secrets: [],
+						needs: [],
+						dependsOn: [],
+						source: 'build',
+						target: 'app',
+					},
+				},
 			})
 		})
 
@@ -952,6 +1003,16 @@ describe('parseConfig', () => {
 				volumes: [{ name: 'data', mount: '/var/lib/app' }],
 				hetzner: { serverType: 'cpx22', location: 'nbg1' },
 				image: { source: 'build' },
+				services: {
+					app: {
+						port: 3000,
+						secrets: [],
+						needs: [],
+						dependsOn: [],
+						source: 'build',
+						target: 'app',
+					},
+				},
 			})
 		})
 	})
@@ -1199,6 +1260,197 @@ describe('parseConfig', () => {
 		})
 	})
 
+	describe('deploy.services', () => {
+		it('parses [deploy.services.app] build source and defaults port to 3000', () => {
+			const result = parseConfig(
+				appConfig({ app: { source: 'build', url: 'example.com' } }),
+			)
+
+			expect(result.ok).toBe(true)
+			if (!result.ok || result.config.deploy === false) return
+			if (result.config.deploy.target !== 'hetzner-vps') return
+
+			expect(result.config.deploy.services).toEqual({
+				app: {
+					port: 3000,
+					url: 'example.com',
+					secrets: [],
+					needs: [],
+					dependsOn: [],
+					source: 'build',
+					target: 'app',
+				},
+			})
+		})
+
+		it('defaults a build target to the service name and honors an explicit port', () => {
+			const result = parseConfig(
+				appConfig({ web: { source: 'build', port: 8080 } }),
+			)
+
+			expect(result.ok).toBe(true)
+			if (!result.ok || result.config.deploy === false) return
+			if (result.config.deploy.target !== 'hetzner-vps') return
+
+			expect(result.config.deploy.services['web']).toEqual({
+				port: 8080,
+				secrets: [],
+				needs: [],
+				dependsOn: [],
+				source: 'build',
+				target: 'web',
+			})
+		})
+
+		it('parses an upstream service with a ref', () => {
+			const result = parseConfig(
+				appConfig({
+					app: {
+						source: 'upstream',
+						ref: 'docker.n8n.io/n8nio/n8n:1.85.0',
+					},
+				}),
+			)
+
+			expect(result.ok).toBe(true)
+			if (!result.ok || result.config.deploy === false) return
+			if (result.config.deploy.target !== 'hetzner-vps') return
+
+			expect(result.config.deploy.services['app']).toEqual({
+				port: 3000,
+				secrets: [],
+				needs: [],
+				dependsOn: [],
+				source: 'upstream',
+				ref: 'docker.n8n.io/n8nio/n8n:1.85.0',
+			})
+		})
+
+		it('synthesizes services.app from the legacy [deploy.image] when no service is declared', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'my-app.example.com',
+				},
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok || result.config.deploy === false) return
+			if (result.config.deploy.target !== 'hetzner-vps') return
+
+			expect(result.config.deploy.services).toEqual({
+				app: {
+					port: 3000,
+					secrets: [],
+					needs: [],
+					dependsOn: [],
+					source: 'build',
+					target: 'app',
+				},
+			})
+		})
+
+		it('rejects ref alongside a build source', () => {
+			const result = parseConfig(
+				appConfig({ app: { source: 'build', ref: 'something' } }),
+			)
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'deploy.services.app.ref is only allowed when source = "upstream"',
+			)
+		})
+
+		it('rejects an upstream source without a ref', () => {
+			const result = parseConfig(
+				appConfig({ app: { source: 'upstream' } }),
+			)
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'deploy.services.app.ref is required and must be a non-empty string when source = "upstream"',
+			)
+		})
+
+		it('rejects build-only fields on an upstream source', () => {
+			const result = parseConfig(
+				appConfig({
+					app: { source: 'upstream', ref: 'foo', target: 'bar' },
+				}),
+			)
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'deploy.services.app.target is only allowed when source = "build"',
+			)
+		})
+
+		it('rejects more than one declared service in M1', () => {
+			const result = parseConfig(
+				appConfig({
+					app: { source: 'build' },
+					api: { source: 'build' },
+				}),
+			)
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toEqual(
+				expect.arrayContaining([
+					expect.stringContaining(
+						'M1 supports a single [deploy.services.<name>]',
+					),
+				]),
+			)
+		})
+
+		it('rejects a non-kebab service name', () => {
+			const result = parseConfig(
+				appConfig({ App_1: { source: 'build' } }),
+			)
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toEqual(
+				expect.arrayContaining([
+					expect.stringContaining(
+						'deploy.services name "App_1" must be lowercase alphanumeric',
+					),
+				]),
+			)
+		})
+
+		it('rejects [deploy.services] for cloudflare-pages targets', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-site',
+					type: 'static',
+					domain: 'my-site.example.com',
+				},
+				deploy: {
+					target: 'cloudflare-pages',
+					services: { app: { source: 'build' } },
+				},
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'[deploy.services] is not supported with deploy target "cloudflare-pages"',
+			)
+		})
+	})
+
 	describe('deploy target', () => {
 		it('infers hetzner-vps for app type with valid hetzner config', () => {
 			const result = parseConfig({
@@ -1222,6 +1474,16 @@ describe('parseConfig', () => {
 				volumes: [],
 				hetzner: { serverType: 'cpx22', location: 'nbg1' },
 				image: { source: 'build' },
+				services: {
+					app: {
+						port: 3000,
+						secrets: [],
+						needs: [],
+						dependsOn: [],
+						source: 'build',
+						target: 'app',
+					},
+				},
 			})
 		})
 
@@ -1283,6 +1545,16 @@ describe('parseConfig', () => {
 				volumes: [],
 				hetzner: { serverType: 'cax11', location: 'fsn1' },
 				image: { source: 'build' },
+				services: {
+					app: {
+						port: 3000,
+						secrets: [],
+						needs: [],
+						dependsOn: [],
+						source: 'build',
+						target: 'app',
+					},
+				},
 			})
 		})
 
@@ -1305,6 +1577,16 @@ describe('parseConfig', () => {
 				volumes: [],
 				hetzner: { serverType: 'cx23', location: 'nbg1' },
 				image: { source: 'build' },
+				services: {
+					app: {
+						port: 3000,
+						secrets: [],
+						needs: [],
+						dependsOn: [],
+						source: 'build',
+						target: 'app',
+					},
+				},
 			})
 		})
 
@@ -1328,6 +1610,16 @@ describe('parseConfig', () => {
 				volumes: [],
 				hetzner: { serverType: 'cx23', location: 'nbg1' },
 				image: { source: 'build' },
+				services: {
+					app: {
+						port: 3000,
+						secrets: [],
+						needs: [],
+						dependsOn: [],
+						source: 'build',
+						target: 'app',
+					},
+				},
 			})
 		})
 
@@ -1351,6 +1643,16 @@ describe('parseConfig', () => {
 				volumes: [],
 				hetzner: { serverType: 'cpx22', location: 'nbg1' },
 				image: { source: 'build' },
+				services: {
+					app: {
+						port: 3000,
+						secrets: [],
+						needs: [],
+						dependsOn: [],
+						source: 'build',
+						target: 'app',
+					},
+				},
 			})
 		})
 
@@ -1483,6 +1785,16 @@ describe('parseConfig', () => {
 				volumes: [],
 				hetzner: { serverType: 'cpx22', location: 'nbg1' },
 				image: { source: 'build' },
+				services: {
+					app: {
+						port: 3000,
+						secrets: [],
+						needs: [],
+						dependsOn: [],
+						source: 'build',
+						target: 'app',
+					},
+				},
 			})
 		})
 	})
