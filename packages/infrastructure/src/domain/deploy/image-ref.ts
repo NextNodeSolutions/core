@@ -112,25 +112,39 @@ export function parseImageRef(raw: string): ImageRef {
 	return { registry, repository, tag }
 }
 
-// M1 ships a single user workload keyed `app`: the migrate container and the
-// deploy summary read its image from the per-service IMAGE_REFS Record, and the
-// Hetzner adapter keys its `.env.app` file and host-port Record off the same
-// name. Lifted to per-service selection in M2 when workloads carry distinct
-// images.
-export const APP_SERVICE_NAME = 'app'
+// M1 ships exactly one user workload: config validation caps
+// [deploy.services.<name>] at a single entry. The migrate container, deploy
+// summary, per-service env file, host-port mapping and registry-token lookup
+// all target that sole workload — resolved here by its DECLARED name, never a
+// hardcoded `app`, so `[deploy.services.web]` deploys as written (the compose
+// renderer already keys everything off the declared name). Per-service
+// selection across many workloads lands in M2.
+export function resolveSoleService(
+	services: Record<string, UserServiceConfig>,
+): { readonly name: string; readonly service: UserServiceConfig } {
+	const [entry, ...rest] = Object.entries(services)
+	if (entry === undefined || rest.length > 0) {
+		throw new Error(
+			`expected exactly one [deploy.services.<name>], got ${Object.keys(services).length}: ${Object.keys(services).join(', ')}`,
+		)
+	}
+	const [name, service] = entry
+	return { name, service }
+}
 
 /**
- * Pick the `app` workload's image out of the per-service IMAGE_REFS Record.
- * Used by the migrate container (which runs the app image) and the deploy
- * summary. Throws when absent — a missing `app` entry is a wiring bug in the
- * IMAGE_REFS the pipeline forwarded, not a runtime condition.
+ * Pick one service's image out of the per-service IMAGE_REFS Record by its
+ * declared name. Used by the migrate container (which runs the app image) and
+ * the deploy summary. Throws when absent — a missing entry is a wiring bug in
+ * the IMAGE_REFS the pipeline forwarded, not a runtime condition.
  */
-export function selectAppImage(images: Record<string, ImageRef>): ImageRef {
-	const image = images[APP_SERVICE_NAME]
+export function selectServiceImage(
+	images: Record<string, ImageRef>,
+	service: string,
+): ImageRef {
+	const image = images[service]
 	if (!image) {
-		throw new Error(
-			`IMAGE_REFS is missing the "${APP_SERVICE_NAME}" service image`,
-		)
+		throw new Error(`IMAGE_REFS is missing the "${service}" service image`)
 	}
 	return image
 }

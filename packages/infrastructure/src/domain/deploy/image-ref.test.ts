@@ -5,7 +5,8 @@ import {
 	parseImageRef,
 	parseImageRefsEnv,
 	resolveServiceImageRefs,
-	selectAppImage,
+	resolveSoleService,
+	selectServiceImage,
 } from './image-ref.ts'
 
 import type { UserServiceConfig } from '#/config/types.ts'
@@ -340,16 +341,19 @@ describe('parseImageRefsEnv', () => {
 	})
 })
 
-describe('selectAppImage', () => {
-	it('returns the app workload image from the Record', () => {
+describe('selectServiceImage', () => {
+	it('returns the named service image from the Record', () => {
 		expect(
-			selectAppImage({
-				app: {
-					registry: 'ghcr.io',
-					repository: 'acme/web',
-					tag: 'sha-abc',
+			selectServiceImage(
+				{
+					web: {
+						registry: 'ghcr.io',
+						repository: 'acme/web',
+						tag: 'sha-abc',
+					},
 				},
-			}),
+				'web',
+			),
 		).toEqual({
 			registry: 'ghcr.io',
 			repository: 'acme/web',
@@ -357,15 +361,46 @@ describe('selectAppImage', () => {
 		})
 	})
 
-	it('throws when the app entry is absent', () => {
+	it('throws naming the missing service when its entry is absent', () => {
 		expect(() =>
-			selectAppImage({
-				worker: {
-					registry: 'docker.io',
-					repository: 'acme/worker',
-					tag: '2.0',
+			selectServiceImage(
+				{
+					worker: {
+						registry: 'docker.io',
+						repository: 'acme/worker',
+						tag: '2.0',
+					},
 				},
-			}),
+				'app',
+			),
 		).toThrow('IMAGE_REFS is missing the "app" service image')
+	})
+})
+
+describe('resolveSoleService', () => {
+	it('returns the sole entry under its declared name, not a hardcoded "app"', () => {
+		const web = buildService('web')
+
+		expect(resolveSoleService({ web })).toEqual({
+			name: 'web',
+			service: web,
+		})
+	})
+
+	it('throws when no service is declared', () => {
+		expect(() => resolveSoleService({})).toThrow(
+			'expected exactly one [deploy.services.<name>], got 0',
+		)
+	})
+
+	it('throws listing the names when more than one service is declared', () => {
+		expect(() =>
+			resolveSoleService({
+				web: buildService('web'),
+				worker: buildService('worker'),
+			}),
+		).toThrow(
+			'expected exactly one [deploy.services.<name>], got 2: web, worker',
+		)
 	})
 })

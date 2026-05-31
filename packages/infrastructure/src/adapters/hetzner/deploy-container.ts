@@ -1,4 +1,7 @@
-import { APP_SERVICE_NAME, selectAppImage } from '#/domain/deploy/image-ref.ts'
+import {
+	resolveSoleService,
+	selectServiceImage,
+} from '#/domain/deploy/image-ref.ts'
 import { formatComposeEnv } from '#/domain/hetzner/compose-env.ts'
 import {
 	CONTAINER_PORT,
@@ -99,6 +102,7 @@ export async function deployContainer(
 		postgres: input.postgres,
 	})
 
+	const { name } = resolveSoleService(input.services)
 	const silo = computeSilo(input.projectName, input.environment)
 	logger.info(`Deployed ${silo.id} on port ${input.hostPort}`)
 
@@ -110,7 +114,7 @@ export async function deployContainer(
 		deployed: {
 			kind: 'container',
 			name: input.environment,
-			imageRef: selectAppImage(input.images),
+			imageRef: selectServiceImage(input.images, name),
 			url: input.env.SITE_URL,
 			deployedAt: new Date(),
 		},
@@ -138,6 +142,7 @@ export async function stageRollout(
 	const envDirQ = shellEscape(envDir)
 	const composeFileQ = shellEscape(`${envDir}/compose.yaml`)
 	const siloIdQ = shellEscape(silo.id)
+	const { name } = resolveSoleService(input.services)
 
 	const allEnv = {
 		PORT: String(CONTAINER_PORT),
@@ -146,18 +151,16 @@ export async function stageRollout(
 	}
 	await session.exec(`mkdir -p ${envDirQ}`)
 	// Per-service env file (`.env.<name>`) is the isolation unit the compose
-	// `env_file` points at. M1 has the single `app` workload, so we write
-	// `.env.app`; the per-service fan-out lands with multi-service M2.
-	await session.writeFile(
-		`${envDir}/.env.${APP_SERVICE_NAME}`,
-		formatComposeEnv(allEnv),
-	)
+	// `env_file` points at — written under the service's DECLARED name so it
+	// matches the `env_file` the compose renderer emits. M1 has one workload;
+	// the per-service fan-out lands with multi-service M2.
+	await session.writeFile(`${envDir}/.env.${name}`, formatComposeEnv(allEnv))
 	await session.writeFile(
 		`${envDir}/compose.yaml`,
 		renderComposeFile({
 			services: input.services,
 			images: input.images,
-			hostPorts: { [APP_SERVICE_NAME]: input.hostPort },
+			hostPorts: { [name]: input.hostPort },
 			volumes: input.volumes,
 			projectName: input.projectName,
 			postgres: input.postgres,
@@ -168,7 +171,7 @@ export async function stageRollout(
 	if (input.registryToken !== undefined) {
 		await loginToRegistry(
 			session,
-			selectAppImage(input.images).registry,
+			selectServiceImage(input.images, name).registry,
 			input.registryToken,
 		)
 	}

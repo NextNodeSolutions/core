@@ -2,7 +2,7 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
 
-import { APP_SERVICE_NAME, parseImageRef } from '#/domain/deploy/image-ref.ts'
+import { parseImageRef, resolveSoleService } from '#/domain/deploy/image-ref.ts'
 import { hasProdGate } from '#/domain/pipeline/quality-matrix.ts'
 
 import { writeOutput } from './output.ts'
@@ -68,10 +68,9 @@ function resolveImageOutputs(config: NextNodeConfig): {
 	if (config.deploy === false) return { source: '', imageRefs: '' }
 	if (config.deploy.target !== 'hetzner-vps')
 		return { source: '', imageRefs: '' }
-	const service = config.deploy.services[APP_SERVICE_NAME]
-	if (service === undefined) return { source: '', imageRefs: '' }
+	const { name, service } = resolveSoleService(config.deploy.services)
 	if (service.source === 'upstream') {
-		const imageRefs = { [APP_SERVICE_NAME]: parseImageRef(service.ref) }
+		const imageRefs = { [name]: parseImageRef(service.ref) }
 		return { source: 'upstream', imageRefs: JSON.stringify(imageRefs) }
 	}
 	return { source: 'build', imageRefs: '' }

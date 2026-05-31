@@ -3,7 +3,11 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
 
-import { selectAppImage } from '#/domain/deploy/image-ref.ts'
+import { isHetznerDeployableConfig } from '#/config/types.ts'
+import {
+	resolveSoleService,
+	selectServiceImage,
+} from '#/domain/deploy/image-ref.ts'
 import { buildMigrateSummary } from '#/domain/deploy/migrate-summary.ts'
 import { DEFAULT_MIGRATE_COMMAND } from '#/domain/deploy/target.ts'
 
@@ -48,12 +52,13 @@ export async function migrateRemoteCommand(
 	const { target, env, input, environment } =
 		await resolveDeployContext(config)
 
-	if (!input.images) {
+	if (!isHetznerDeployableConfig(config) || !input.images) {
 		throw new Error(
-			'migrate-remote: images are required (postgres-backed apps must run on a container target)',
+			'migrate-remote: a hetzner-vps target with images is required (postgres-backed apps run on a container target)',
 		)
 	}
-	const migrateImage = selectAppImage(input.images)
+	const { name } = resolveSoleService(config.deploy.services)
+	const migrateImage = selectServiceImage(input.images, name)
 
 	await target.prepareRollout(config.project.name, input, env)
 
