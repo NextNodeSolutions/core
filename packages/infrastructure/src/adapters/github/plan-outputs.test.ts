@@ -26,7 +26,6 @@ const APP_CONFIG: NextNodeConfig = {
 		vps: null,
 		volumes: [],
 		hetzner: { serverType: 'cpx22', location: 'nbg1' },
-		image: { source: 'build' },
 		services: {
 			app: {
 				port: 3000,
@@ -126,10 +125,6 @@ describe('writePlanOutputs', () => {
 				vps: null,
 				volumes: [],
 				hetzner: { serverType: 'cpx22', location: 'nbg1' },
-				image: {
-					source: 'upstream',
-					ref: 'ghcr.io/acme/web:v1.2.3',
-				},
 				services: {
 					app: {
 						port: 3000,

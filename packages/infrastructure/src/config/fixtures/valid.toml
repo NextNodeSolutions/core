@@ -6,3 +6,6 @@ domain = "my-app.example.com"
 [deploy.hetzner]
 server_type = "cpx22"
 location = "nbg1"
+
+[deploy.services.app]
+source = "build"

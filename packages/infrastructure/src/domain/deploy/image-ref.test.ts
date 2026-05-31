@@ -206,11 +206,6 @@ describe('resolveServiceImageRefs', () => {
 				},
 			},
 			bakeTargets: ['app'],
-			primaryRef: {
-				registry: 'ghcr.io',
-				repository: 'acme/web-app',
-				tag: 'sha-abc1234',
-			},
 		})
 	})
 
@@ -230,11 +225,6 @@ describe('resolveServiceImageRefs', () => {
 				},
 			},
 			bakeTargets: [],
-			primaryRef: {
-				registry: 'docker.io',
-				repository: 'library/redis',
-				tag: '7',
-			},
 		})
 	})
 
@@ -267,20 +257,14 @@ describe('resolveServiceImageRefs', () => {
 				tag: 'sha-abc1234',
 			},
 		})
-		expect(result.primaryRef).toEqual({
-			registry: 'ghcr.io',
-			repository: 'acme/web-front',
-			tag: 'sha-abc1234',
-		})
 	})
 
-	it('reports no primary ref and no targets for an empty service set', () => {
+	it('reports no targets for an empty service set', () => {
 		expect(
 			resolveServiceImageRefs({}, 'acme/web', 'abc1234567890'),
 		).toEqual({
 			imageRefs: {},
 			bakeTargets: [],
-			primaryRef: undefined,
 		})
 	})
 })

@@ -2,14 +2,12 @@ import type { DeployProviderValidator } from './registry.ts'
 
 export const cloudflarePages: DeployProviderValidator = {
 	requiresDomain: false,
+	requiresServices: false,
 	validate(deployRecord, secrets, vps, volumes) {
-		const unsupported = ['image', 'services'].find(
-			field => deployRecord[field] !== undefined,
-		)
-		if (unsupported !== undefined) {
+		if (deployRecord['services'] !== undefined) {
 			return {
 				errors: [
-					`[deploy.${unsupported}] is not supported with deploy target "cloudflare-pages"`,
+					'[deploy.services] is not supported with deploy target "cloudflare-pages"',
 				],
 				deploy: undefined,
 			}

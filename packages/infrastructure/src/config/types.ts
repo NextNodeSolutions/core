@@ -110,48 +110,24 @@ interface BaseDeploySection {
 export interface HetznerVpsDeploySection extends BaseDeploySection {
 	readonly target: 'hetzner-vps'
 	readonly hetzner: HetznerDeployConfig
-	readonly image: DeployImageConfig
-	// Per-service workloads declared under [deploy.services.<name>]. During the
-	// M1 migration this is populated either from the explicit sub-tables or, when
-	// none are declared, synthesized as { app: … } from the legacy `image` field
-	// so every downstream consumer can already read `services`. `image` is
-	// dropped once every consumer reads `services` (M1.A-05).
+	// Per-service workloads declared under [deploy.services.<name>]. At least one
+	// service is required; each entry declares how its image is obtained
+	// (`build` | `upstream`), its port, and its runtime wiring.
 	readonly services: Record<string, UserServiceConfig>
 }
 
+// The image-source discriminators a [deploy.services.<name>] entry may declare:
+// `build` (built + pushed by the pipeline) or `upstream` (pulled verbatim from
+// a `ref`).
 export const DEPLOY_IMAGE_SOURCES = ['build', 'upstream'] as const
 export type DeployImageSource = (typeof DEPLOY_IMAGE_SOURCES)[number]
-
-// `registryAuthSecret` is the NAME of a GitHub secret whose value holds the
-// registry token used to `docker login` before pulling. Optional: omitted
-// for public upstream images. Build images always log in to GHCR with the
-// workflow's GITHUB_TOKEN, so this field is upstream-only.
-export type DeployImageConfig =
-	| { readonly source: 'build' }
-	| {
-			readonly source: 'upstream'
-			readonly ref: string
-			readonly registryAuthSecret?: string
-	  }
-
-export const DEFAULT_DEPLOY_IMAGE: DeployImageConfig = { source: 'build' }
-
-const DEPLOY_IMAGE_SOURCE_SET: ReadonlySet<string> = new Set(
-	DEPLOY_IMAGE_SOURCES,
-)
-
-export function isDeployImageSource(
-	value: unknown,
-): value is DeployImageSource {
-	return typeof value === 'string' && DEPLOY_IMAGE_SOURCE_SET.has(value)
-}
 
 // A single deployable workload declared under [deploy.services.<name>]. The
 // instance name (the table key) is a KEBAB identifier; `source` discriminates
 // how its image is obtained — `build` images are built + pushed by the pipeline
 // (optional context/dockerfile, `target` defaulting to the service name);
 // `upstream` images are pulled verbatim from `ref` (with an optional
-// registry-auth secret NAME, same contract as DeployImageConfig).
+// registry-auth secret NAME).
 export interface ServiceCommon {
 	readonly port: number
 	readonly url?: string

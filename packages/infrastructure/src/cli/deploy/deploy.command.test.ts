@@ -440,7 +440,7 @@ describe('deployCommand', () => {
 			vi.stubEnv('ALL_SECRETS', JSON.stringify({}))
 
 			await expect(deployCommand(APP_UPSTREAM_PRIVATE)).rejects.toThrow(
-				'Secret "DOCKERHUB_TOKEN" declared in deploy.image.registry_auth_secret but not found',
+				'Secret "DOCKERHUB_TOKEN" declared in deploy.services.app.registry_auth_secret but not found',
 			)
 		})
 	})

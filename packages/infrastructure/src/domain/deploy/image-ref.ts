@@ -190,9 +190,6 @@ export interface ServiceImageRefs {
 	// Instance names of the `build` services only — the explicit target list
 	// for a single multi-target `docker buildx bake`.
 	readonly bakeTargets: ReadonlyArray<string>
-	// The first declared service's ref, mirrored to the legacy single-image
-	// output during the M1 migration. Undefined only when no service exists.
-	readonly primaryRef: ImageRef | undefined
 }
 
 /**
@@ -208,7 +205,6 @@ export function resolveServiceImageRefs(
 ): ServiceImageRefs {
 	const imageRefs: Record<string, ImageRef> = {}
 	const bakeTargets: string[] = []
-	let primaryRef: ImageRef | undefined
 
 	for (const [name, service] of Object.entries(services)) {
 		const ref =
@@ -217,8 +213,7 @@ export function resolveServiceImageRefs(
 				: parseImageRef(service.ref)
 		imageRefs[name] = ref
 		if (service.source === 'build') bakeTargets.push(name)
-		primaryRef ??= ref
 	}
 
-	return { imageRefs, bakeTargets, primaryRef }
+	return { imageRefs, bakeTargets }
 }

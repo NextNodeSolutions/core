@@ -39,7 +39,6 @@ const MIXED_SERVICES: DeployableConfig = {
 		secrets: [],
 		vps: null,
 		volumes: [],
-		image: { source: 'build' },
 		services: {
 			front: {
 				port: 3000,
@@ -122,7 +121,7 @@ describe('computeImageRefCommand', () => {
 		vi.restoreAllMocks()
 	})
 
-	it('emits bake_targets, image_refs, bake_set and the legacy image_ref for a single build service', () => {
+	it('emits bake_targets, image_refs and bake_set for a single build service', () => {
 		computeImageRefCommand(APP_WITH_DOMAIN)
 
 		expect(readOutputs(outputFile)).toEqual({
@@ -131,7 +130,6 @@ describe('computeImageRefCommand', () => {
 				'{"app":{"registry":"ghcr.io","repository":"nextnodesolutions/core-app","tag":"sha-abc1234"}}',
 			bake_set:
 				'app.tags=ghcr.io/nextnodesolutions/core-app:sha-abc1234\napp.cache-from=type=gha,scope=app\napp.cache-to=type=gha,scope=app,mode=max',
-			image_ref: 'ghcr.io/nextnodesolutions/core-app:sha-abc1234',
 		})
 	})
 
@@ -143,7 +141,6 @@ describe('computeImageRefCommand', () => {
 			image_refs:
 				'{"app":{"registry":"docker.io","repository":"library/nginx","tag":"1.27"}}',
 			bake_set: '',
-			image_ref: 'docker.io/library/nginx:1.27',
 		})
 	})
 
@@ -156,7 +153,6 @@ describe('computeImageRefCommand', () => {
 				'{"front":{"registry":"ghcr.io","repository":"nextnodesolutions/core-front","tag":"sha-abc1234"},"api":{"registry":"ghcr.io","repository":"nextnodesolutions/core-api","tag":"sha-abc1234"},"worker":{"registry":"docker.io","repository":"acme/worker","tag":"2.0"}}',
 			bake_set:
 				'front.tags=ghcr.io/nextnodesolutions/core-front:sha-abc1234\nfront.cache-from=type=gha,scope=front\nfront.cache-to=type=gha,scope=front,mode=max\napi.tags=ghcr.io/nextnodesolutions/core-api:sha-abc1234\napi.cache-from=type=gha,scope=api\napi.cache-to=type=gha,scope=api,mode=max',
-			image_ref: 'ghcr.io/nextnodesolutions/core-front:sha-abc1234',
 		})
 	})
 

@@ -20,7 +20,7 @@ export function computeImageRefCommand(config: DeployableConfig): void {
 	const repository = requireEnv('GITHUB_REPOSITORY')
 	const sha = requireEnv('GITHUB_SHA')
 
-	const { imageRefs, bakeTargets, primaryRef } = resolveServiceImageRefs(
+	const { imageRefs, bakeTargets } = resolveServiceImageRefs(
 		config.deploy.services,
 		repository,
 		sha,
@@ -35,14 +35,6 @@ export function computeImageRefCommand(config: DeployableConfig): void {
 	logger.info(`bake_targets=${bakeTargetsCsv}`)
 	logger.info(`image_refs=${imageRefsJson}`)
 	logger.info(`bake_set=${bakeSet}`)
-
-	// Legacy single-image output, kept additively until M1.A-05 drops it. It
-	// mirrors the first declared service's ref (the single `app` during the
-	// migration); deploy.yml itself already consumes IMAGE_REFS as of M1.A-04.
-	if (!primaryRef) return
-	const legacyRef = formatImageRef(primaryRef)
-	writeOutput('image_ref', legacyRef)
-	logger.info(`image_ref=${legacyRef}`)
 }
 
 /**

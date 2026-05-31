@@ -2,7 +2,6 @@ import { cloudflarePages } from './cloudflare-pages.ts'
 import { hetznerVps } from './hetzner.ts'
 
 import type {
-	DeployImageConfig,
 	DeploySection,
 	DeployTargetType,
 	DeployVolume,
@@ -16,12 +15,13 @@ export interface DeployProviderResult {
 
 export interface DeployProviderValidator {
 	readonly requiresDomain: boolean
+	// Whether this target requires at least one [deploy.services.<name>] entry.
+	readonly requiresServices: boolean
 	validate(
 		deployRecord: Record<string, unknown>,
 		secrets: ReadonlyArray<string>,
 		vps: string | null,
 		volumes: ReadonlyArray<DeployVolume>,
-		image: DeployImageConfig,
 		services: Record<string, UserServiceConfig>,
 	): DeployProviderResult
 }

@@ -50,7 +50,6 @@ const HETZNER_CONFIG: HetznerDeployableConfig = {
 		vps: null,
 		volumes: [],
 		hetzner: { serverType: 'cpx22', location: 'nbg1' },
-		image: { source: 'build' },
 		services: {
 			app: {
 				port: 3000,

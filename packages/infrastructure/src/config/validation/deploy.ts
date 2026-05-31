@@ -1,5 +1,4 @@
 import {
-	DEFAULT_DEPLOY_IMAGE,
 	DEFAULT_DEPLOY_TARGETS,
 	DEFAULT_SERVICE_PORT,
 	DEPLOY_IMAGE_SOURCES,
@@ -20,7 +19,6 @@ import {
 	optional,
 	pipe,
 	regex,
-	transform,
 	variant,
 } from 'valibot'
 
@@ -34,7 +32,6 @@ import {
 } from './valibot.ts'
 
 import type {
-	DeployImageConfig,
 	DeploySection,
 	DeployTargetType,
 	DeployVolume,
@@ -122,75 +119,6 @@ function validateVolumes(deployRecord: Record<string, unknown>): {
 		volumes.push({ name, mount: result.section })
 	}
 	return { errors, volumes }
-}
-
-// --- image ---------------------------------------------------------------
-
-const IMAGE_NOT_TABLE = '[deploy.image] must be a table'
-const IMAGE_SOURCE_MSG = `deploy.image.source must be one of: ${DEPLOY_IMAGE_SOURCES.join(', ')}`
-const IMAGE_REF_BUILD_FORBIDDEN =
-	'deploy.image.ref is only allowed when deploy.image.source = "upstream"'
-const IMAGE_AUTH_BUILD_FORBIDDEN =
-	'deploy.image.registry_auth_secret is only allowed when deploy.image.source = "upstream"'
-const IMAGE_REF_REQUIRED =
-	'deploy.image.ref is required and must be a non-empty string when deploy.image.source = "upstream"'
-const IMAGE_AUTH_NONEMPTY =
-	'deploy.image.registry_auth_secret must be a non-empty string'
-
-const imageBuildSchema = pipe(
-	object({
-		source: optional(literal('build')),
-		ref: forbiddenField(IMAGE_REF_BUILD_FORBIDDEN),
-		registry_auth_secret: forbiddenField(IMAGE_AUTH_BUILD_FORBIDDEN),
-	}),
-	transform((): DeployImageConfig => ({ source: 'build' })),
-)
-
-// `ref` is `optional` (not required) so that a MISSING key still reaches the
-// outer `check` and surfaces IMAGE_REF_REQUIRED — a required entry would instead
-// emit valibot's generic "Invalid key" message for the absent key.
-const imageUpstreamSchema = pipe(
-	object({
-		source: literal('upstream'),
-		ref: optional(nonEmptyString(IMAGE_REF_REQUIRED)),
-		registry_auth_secret: optional(nonEmptyString(IMAGE_AUTH_NONEMPTY)),
-	}),
-	check(
-		input => typeof input.ref === 'string' && input.ref !== '',
-		IMAGE_REF_REQUIRED,
-	),
-	transform((input): DeployImageConfig => {
-		const ref = typeof input.ref === 'string' ? input.ref : ''
-		if (input.registry_auth_secret === undefined) {
-			return { source: 'upstream', ref }
-		}
-		return {
-			source: 'upstream',
-			ref,
-			registryAuthSecret: input.registry_auth_secret,
-		}
-	}),
-)
-
-const imageSchema = variant(
-	'source',
-	[imageBuildSchema, imageUpstreamSchema],
-	IMAGE_SOURCE_MSG,
-)
-
-function validateImage(deployRecord: Record<string, unknown>): {
-	errors: string[]
-	image: DeployImageConfig
-} {
-	const raw = deployRecord['image']
-	if (raw === undefined) return { errors: [], image: DEFAULT_DEPLOY_IMAGE }
-	if (!isRecord(raw))
-		return { errors: [IMAGE_NOT_TABLE], image: DEFAULT_DEPLOY_IMAGE }
-
-	const result = runSchema(imageSchema, raw)
-	if (!result.ok)
-		return { errors: result.errors, image: DEFAULT_DEPLOY_IMAGE }
-	return { errors: [], image: result.section }
 }
 
 // --- services ------------------------------------------------------------
@@ -351,43 +279,17 @@ const serviceSchema = (name: string): GenericSchema<unknown, ParsedService> => {
 	)
 }
 
-function synthesizeServiceFromImage(
-	image: DeployImageConfig,
-): UserServiceConfig {
-	const common = {
-		port: DEFAULT_SERVICE_PORT,
-		secrets: [],
-		needs: [],
-		dependsOn: [],
-	}
-	if (image.source === 'upstream') {
-		return {
-			...common,
-			source: 'upstream',
-			ref: image.ref,
-			...(image.registryAuthSecret !== undefined
-				? { registryAuthSecret: image.registryAuthSecret }
-				: {}),
-		}
-	}
-	return { ...common, source: 'build', target: 'app' }
-}
-
-// Resolve [deploy.services.<name>] into a typed Record. When the table is
-// absent, synthesize a single `app` service from the legacy `image` so every
-// downstream consumer can already read `services` during the M1 migration. M1
-// is single-service only — more than one declared service is rejected (the cap
-// is lifted in M2.A-01).
-function validateServices(
-	deployRecord: Record<string, unknown>,
-	image: DeployImageConfig,
-): { errors: string[]; services: Record<string, UserServiceConfig> } {
+// Resolve [deploy.services.<name>] into a typed Record. Returns an empty Record
+// when the table is absent — whether at least one service is *required* is a
+// provider decision (see `requiresServices`). M1 is single-service only — more
+// than one declared service is rejected (the cap is lifted in M2.A-01).
+function validateServices(deployRecord: Record<string, unknown>): {
+	errors: string[]
+	services: Record<string, UserServiceConfig>
+} {
 	const raw = deployRecord['services']
 	if (raw === undefined) {
-		return {
-			errors: [],
-			services: { app: synthesizeServiceFromImage(image) },
-		}
+		return { errors: [], services: {} }
 	}
 	if (!isRecord(raw)) {
 		return { errors: ['[deploy.services] must be a table'], services: {} }
@@ -440,6 +342,12 @@ export function validateDeploySection(
 	const deployRecord = isRecord(raw) ? raw : {}
 	const errors: string[] = []
 
+	if (deployRecord['image'] !== undefined) {
+		errors.push(
+			'deploy.image is an unknown field — migrate to [deploy.services.<name>]',
+		)
+	}
+
 	const rawTarget = deployRecord['target']
 	if (rawTarget !== undefined && !isDeployTarget(rawTarget)) {
 		return {
@@ -462,10 +370,7 @@ export function validateDeploySection(
 	const volumesResult = validateVolumes(deployRecord)
 	errors.push(...volumesResult.errors)
 
-	const imageResult = validateImage(deployRecord)
-	errors.push(...imageResult.errors)
-
-	const servicesResult = validateServices(deployRecord, imageResult.image)
+	const servicesResult = validateServices(deployRecord)
 	errors.push(...servicesResult.errors)
 
 	const provider = DEPLOY_PROVIDER_VALIDATORS[target]
@@ -474,7 +379,6 @@ export function validateDeploySection(
 		secretsResult.secrets,
 		vpsResult.vps,
 		volumesResult.volumes,
-		imageResult.image,
 		servicesResult.services,
 	)
 	errors.push(...providerResult.errors)
@@ -483,6 +387,14 @@ export function validateDeploySection(
 		errors.push(
 			'project.domain is required when deploy target is "hetzner-vps"',
 		)
+	}
+
+	if (
+		provider.requiresServices &&
+		servicesResult.errors.length === 0 &&
+		Object.keys(servicesResult.services).length === 0
+	) {
+		errors.push('at least one [deploy.services.<name>] is required')
 	}
 
 	if (errors.length > 0) return { ok: false, errors }

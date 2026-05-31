@@ -1,7 +1,10 @@
 import { getEnv, requireEnv, requireGithubRepository } from '#/cli/env.ts'
 import { resolveServices } from '#/cli/services/resolve.ts'
 import { isHetznerDeployableConfig } from '#/config/types.ts'
-import { parseImageRefsEnv } from '#/domain/deploy/image-ref.ts'
+import {
+	APP_SERVICE_NAME,
+	parseImageRefsEnv,
+} from '#/domain/deploy/image-ref.ts'
 import { buildDeployEnv } from '#/domain/deploy/target.ts'
 import { resolveEnvironment } from '#/domain/environment.ts'
 import { mergeServiceEnvs } from '#/domain/services/service.ts'
@@ -103,13 +106,18 @@ function resolveRegistryToken(
 	config: HetznerDeployableConfig,
 	repoSecrets: Readonly<Record<string, string>>,
 ): string | undefined {
-	const image = config.deploy.image
-	if (image.source === 'build') return requireEnv('GHCR_TOKEN')
-	if (image.registryAuthSecret === undefined) return undefined
-	const value = repoSecrets[image.registryAuthSecret]
+	const service = config.deploy.services[APP_SERVICE_NAME]
+	if (service === undefined) {
+		throw new Error(
+			`deploy.services.${APP_SERVICE_NAME} is required to resolve the registry token`,
+		)
+	}
+	if (service.source === 'build') return requireEnv('GHCR_TOKEN')
+	if (service.registryAuthSecret === undefined) return undefined
+	const value = repoSecrets[service.registryAuthSecret]
 	if (value === undefined) {
 		throw new Error(
-			`Secret "${image.registryAuthSecret}" declared in deploy.image.registry_auth_secret but not found in GitHub Secrets`,
+			`Secret "${service.registryAuthSecret}" declared in deploy.services.${APP_SERVICE_NAME}.registry_auth_secret but not found in GitHub Secrets`,
 		)
 	}
 	return value

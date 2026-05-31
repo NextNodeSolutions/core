@@ -49,7 +49,8 @@ function parseHetzner(rawHetzner: unknown): {
 
 export const hetznerVps: DeployProviderValidator = {
 	requiresDomain: true,
-	validate(deployRecord, secrets, vps, volumes, image, services) {
+	requiresServices: true,
+	validate(deployRecord, secrets, vps, volumes, services) {
 		const { errors, hetzner } = parseHetzner(deployRecord['hetzner'])
 		if (!hetzner) return { errors, deploy: undefined }
 		return {
@@ -60,7 +61,6 @@ export const hetznerVps: DeployProviderValidator = {
 				vps,
 				volumes,
 				hetzner,
-				image,
 				services,
 			},
 		}

@@ -2,6 +2,7 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
 
+import { APP_SERVICE_NAME } from '#/domain/deploy/image-ref.ts'
 import { hasProdGate } from '#/domain/pipeline/quality-matrix.ts'
 
 import { writeOutput } from './output.ts'
@@ -58,9 +59,10 @@ function resolveImageOutputs(config: NextNodeConfig): {
 } {
 	if (config.deploy === false) return { source: '', ref: '' }
 	if (config.deploy.target !== 'hetzner-vps') return { source: '', ref: '' }
-	const { image } = config.deploy
-	if (image.source === 'upstream')
-		return { source: 'upstream', ref: image.ref }
+	const service = config.deploy.services[APP_SERVICE_NAME]
+	if (service === undefined) return { source: '', ref: '' }
+	if (service.source === 'upstream')
+		return { source: 'upstream', ref: service.ref }
 	return { source: 'build', ref: '' }
 }
 
