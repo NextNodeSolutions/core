@@ -1,4 +1,5 @@
-import { isRecord, POSTGRES_MODES } from '#/config/types.ts'
+import { POSTGRES_MODES } from '#/config/types.ts'
+import { isRecord } from '#/kernel/guards.ts'
 import { picklist } from 'valibot'
 
 import { collectFieldErrors, optionalNonEmpty, runSchema } from '../valibot.ts'

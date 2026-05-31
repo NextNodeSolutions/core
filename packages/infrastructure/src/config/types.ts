@@ -323,10 +323,6 @@ export function isScriptValue(value: unknown): value is string | false {
 	return typeof value === 'string' || value === false
 }
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
 export function isDeployTarget(value: unknown): value is DeployTargetType {
 	return typeof value === 'string' && DEPLOY_TARGET_SET.has(value)
 }

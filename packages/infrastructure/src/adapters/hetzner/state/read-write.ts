@@ -1,5 +1,6 @@
-import { isRecord } from '#/config/types.ts'
 import { HTTP_PRECONDITION_FAILED } from '#/domain/http/status.ts'
+import { isRecord } from '#/kernel/guards.ts'
+import { parseJsonOrThrow } from '#/kernel/json.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
 import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
@@ -137,7 +138,7 @@ function parseConverged(
 }
 
 function parseState(raw: string, key: string): HcloudVpsState {
-	const data: unknown = JSON.parse(raw)
+	const data: unknown = parseJsonOrThrow(raw, `Invalid state at "${key}"`)
 	if (!isRecord(data)) {
 		throw new Error(`Invalid state at "${key}": not an object`)
 	}

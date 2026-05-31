@@ -1,4 +1,5 @@
-import { DEFAULT_HETZNER_CONFIG, isRecord } from '#/config/types.ts'
+import { DEFAULT_HETZNER_CONFIG } from '#/config/types.ts'
+import { isRecord } from '#/kernel/guards.ts'
 
 import type { HetznerDeployConfig } from '#/config/types.ts'
 import type { DeployProviderValidator } from './registry.ts'

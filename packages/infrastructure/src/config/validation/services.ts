@@ -1,4 +1,5 @@
-import { isRecord, SERVICE_NAMES } from '#/config/types.ts'
+import { SERVICE_NAMES } from '#/config/types.ts'
+import { isRecord } from '#/kernel/guards.ts'
 
 import { validatePostgresService } from './services/postgres.ts'
 import { validateR2Service } from './services/r2.ts'

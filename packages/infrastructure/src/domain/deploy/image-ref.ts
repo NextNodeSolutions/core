@@ -1,3 +1,6 @@
+import { isRecord } from '#/kernel/guards.ts'
+import { parseJsonOrThrow } from '#/kernel/json.ts'
+
 import type { UserServiceConfig } from '#/config/types.ts'
 import type { ImageRef } from './target.ts'
 
@@ -140,7 +143,7 @@ export function selectAppImage(images: Record<string, ImageRef>): ImageRef {
  * boundary fails loud here rather than as a broken `docker pull` on the VPS.
  */
 export function parseImageRefsEnv(raw: string): Record<string, ImageRef> {
-	const parsed = parseJson(raw)
+	const parsed = parseJsonOrThrow(raw, `Invalid IMAGE_REFS "${raw}"`)
 	if (!isRecord(parsed)) {
 		throw new Error(
 			`Invalid IMAGE_REFS "${raw}": expected a JSON object of service → image ref`,
@@ -158,14 +161,6 @@ export function parseImageRefsEnv(raw: string): Record<string, ImageRef> {
 		imageRefs[service] = parseImageRefObject(service, value)
 	}
 	return imageRefs
-}
-
-function parseJson(raw: string): unknown {
-	try {
-		return JSON.parse(raw)
-	} catch {
-		throw new Error(`Invalid IMAGE_REFS "${raw}": not valid JSON`)
-	}
 }
 
 function parseImageRefObject(service: string, value: unknown): ImageRef {
@@ -187,10 +182,6 @@ function parseImageRefObject(service: string, value: unknown): ImageRef {
 	// Round-trip through the canonical string parser so the same registry,
 	// repository and tag patterns gate every entry — one validation source.
 	return parseImageRef(`${registry}/${repository}:${tag}`)
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 export interface ServiceImageRefs {

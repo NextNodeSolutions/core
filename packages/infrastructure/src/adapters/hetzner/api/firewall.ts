@@ -1,5 +1,5 @@
-import { isRecord } from '#/config/types.ts'
 import { HTTP_NOT_FOUND } from '#/domain/http/status.ts'
+import { isRecord } from '#/kernel/guards.ts'
 
 import { HCLOUD_API_BASE, authHeaders, requireOk } from './base.ts'
 

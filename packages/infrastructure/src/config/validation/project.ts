@@ -1,8 +1,5 @@
-import {
-	isRecord,
-	KEBAB_IDENTIFIER_PATTERN,
-	PROJECT_TYPES,
-} from '#/config/types.ts'
+import { KEBAB_IDENTIFIER_PATTERN, PROJECT_TYPES } from '#/config/types.ts'
+import { isRecord } from '#/kernel/guards.ts'
 import { array, boolean, optional, picklist, pipe, regex } from 'valibot'
 
 import {

@@ -6,8 +6,8 @@ import {
 	DEPLOY_TARGETS,
 	KEBAB_IDENTIFIER_PATTERN,
 	isDeployTarget,
-	isRecord,
 } from '#/config/types.ts'
+import { isRecord } from '#/kernel/guards.ts'
 import {
 	array,
 	check,

@@ -80,17 +80,23 @@ src/
     build-output/     — Build output file injection
   config/             — nextnode.toml schema + loader (self-contained layer)
     providers/        — Per-target validation (strategy pattern)
+  kernel/             — Layer-agnostic floor: pure primitives, stdlib only, zero in-app deps
+    guards.ts         — isRecord (canonical record type guard)
+    json.ts           — parseJsonOrThrow (JSON.parse with a contextual error)
 ```
 
 ### Layer import rules — ENFORCED
 
-| Layer        | May import from                                  | STRICTLY FORBIDDEN                                                |
-| ------------ | ------------------------------------------------ | ----------------------------------------------------------------- |
-| `index.ts`   | `cli/*.command` only                             | `domain/`, `adapters/`, env vars, logger                          |
-| `cli/*`      | `domain/`, `adapters/`, `config/`, logger        | direct `node:fs`, `fetch`, raw `process.env` outside `cli/env.ts` |
-| `domain/*`   | other `domain/*`, `config/schema` (types only)   | `process.env`, `node:fs`, `fetch`, logger, any adapter            |
-| `adapters/*` | `config/schema` (types), `domain/*` (types only) | domain business logic, cross-adapter calls                        |
-| `config/*`   | nothing in-app (stdlib + smol-toml + valibot)    | domain, cli, adapters                                             |
+| Layer        | May import from                                            | STRICTLY FORBIDDEN                                                |
+| ------------ | ---------------------------------------------------------- | ----------------------------------------------------------------- |
+| `kernel/*`   | nothing in-app (Node stdlib only)                          | every in-app module — it is the layer-agnostic floor              |
+| `index.ts`   | `cli/*.command`, `kernel/*`                                | `domain/`, `adapters/`, env vars, logger                          |
+| `cli/*`      | `domain/`, `adapters/`, `config/`, `kernel/*`, logger      | direct `node:fs`, `fetch`, raw `process.env` outside `cli/env.ts` |
+| `domain/*`   | other `domain/*`, `kernel/*`, `config/schema` (types only) | `process.env`, `node:fs`, `fetch`, logger, any adapter            |
+| `adapters/*` | `kernel/*`, `config/schema` (types), `domain/*` (types)    | domain business logic, cross-adapter calls                        |
+| `config/*`   | `kernel/*` + stdlib + smol-toml + valibot (nothing else)   | domain, cli, adapters                                             |
+
+`kernel/*` is the floor below every layer: pure primitives (type guards, generic parsers) with **zero in-app imports** — Node stdlib only, no IO/env/logger. It exists so a runtime helper like `isRecord` can be shared across the `config`↔`domain` boundary that the "types only" rule otherwise blocks, instead of being copy-pasted. Anything provider- or domain-specific does NOT belong here — it stays in its layer.
 
 ### Hard rules per layer
 
