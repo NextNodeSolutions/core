@@ -41,7 +41,7 @@ jobs:
             has_postgres: ${{ steps.plan.outputs.has_postgres }}
             package_dir: ${{ steps.plan.outputs.package_dir }}
             image_source: ${{ steps.plan.outputs.image_source }}
-            upstream_image_ref: ${{ steps.plan.outputs.upstream_image_ref }}
+            upstream_image_refs: ${{ steps.plan.outputs.upstream_image_refs }}
         steps:
             - uses: NextNodeSolutions/core/.github/actions/setup@main
               with:
@@ -217,7 +217,7 @@ jobs:
                   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
                   R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
                   R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-                  IMAGE_REFS: ${{ needs.build-image.outputs.image_refs || needs.plan.outputs.upstream_image_ref }}
+                  IMAGE_REFS: ${{ needs.build-image.outputs.image_refs || needs.plan.outputs.upstream_image_refs }}
                   GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   ALL_SECRETS: ${{ toJSON(secrets) }}
 
@@ -254,6 +254,6 @@ jobs:
                   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
                   R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
                   R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-                  IMAGE_REFS: ${{ needs.build-image.outputs.image_refs || needs.plan.outputs.upstream_image_ref }}
+                  IMAGE_REFS: ${{ needs.build-image.outputs.image_refs || needs.plan.outputs.upstream_image_refs }}
                   GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   ALL_SECRETS: ${{ toJSON(secrets) }}

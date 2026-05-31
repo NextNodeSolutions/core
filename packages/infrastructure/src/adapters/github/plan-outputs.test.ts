@@ -2,6 +2,7 @@ import { readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { parseImageRefsEnv } from '#/domain/deploy/image-ref.ts'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { writePlanOutputs } from './plan-outputs.ts'
@@ -112,11 +113,11 @@ describe('writePlanOutputs', () => {
 			{ id: 'test', name: 'Test', cmd: 'pnpm test' },
 		])
 		expect(output).toBe(
-			`quality_matrix=${matrixJson}\nproject_name=my-app\nproject_type=app\nproject_filter=\npublish=false\ndevelopment_enabled=true\nhas_prod_gate=false\nhas_domain=false\nhas_postgres=false\ndomain=\nbuild_directory=apps/landing/dist\npackage_dir=apps/landing\nimage_source=build\nupstream_image_ref=\n`,
+			`quality_matrix=${matrixJson}\nproject_name=my-app\nproject_type=app\nproject_filter=\npublish=false\ndevelopment_enabled=true\nhas_prod_gate=false\nhas_domain=false\nhas_postgres=false\ndomain=\nbuild_directory=apps/landing/dist\npackage_dir=apps/landing\nimage_source=build\nupstream_image_refs=\n`,
 		)
 	})
 
-	it('writes image_source=upstream and upstream_image_ref for upstream images', () => {
+	it('writes image_source=upstream and upstream_image_refs JSON for upstream images', () => {
 		const config: NextNodeConfig = {
 			...APP_CONFIG,
 			deploy: {
@@ -148,7 +149,54 @@ describe('writePlanOutputs', () => {
 
 		const output = readFileSync(outputFile, 'utf-8')
 		expect(output).toContain('image_source=upstream\n')
-		expect(output).toContain('upstream_image_ref=ghcr.io/acme/web:v1.2.3\n')
+		expect(output).toContain(
+			'upstream_image_refs={"app":{"registry":"ghcr.io","repository":"acme/web","tag":"v1.2.3"}}\n',
+		)
+	})
+
+	it('emits upstream_image_refs that parseImageRefsEnv round-trips', () => {
+		const config: NextNodeConfig = {
+			...APP_CONFIG,
+			deploy: {
+				target: 'hetzner-vps',
+				secrets: [],
+				vps: null,
+				volumes: [],
+				hetzner: { serverType: 'cpx22', location: 'nbg1' },
+				services: {
+					app: {
+						port: 3000,
+						secrets: [],
+						needs: [],
+						dependsOn: [],
+						source: 'upstream',
+						ref: 'ghcr.io/acme/web:v1.2.3',
+					},
+				},
+			},
+		}
+
+		writePlanOutputs({
+			config,
+			pagesProjectName: 'my-app',
+			tasks: [],
+			buildDirectory: 'dist',
+			packageDir: '.',
+		})
+
+		const prefix = 'upstream_image_refs='
+		const line = readFileSync(outputFile, 'utf-8')
+			.split('\n')
+			.find(entry => entry.startsWith(prefix))
+		expect(line).toBeDefined()
+		const raw = line?.slice(prefix.length) ?? ''
+		expect(parseImageRefsEnv(raw)).toEqual({
+			app: {
+				registry: 'ghcr.io',
+				repository: 'acme/web',
+				tag: 'v1.2.3',
+			},
+		})
 	})
 
 	it('writes has_postgres=true when [services.postgres] is configured', () => {
@@ -184,7 +232,7 @@ describe('writePlanOutputs', () => {
 
 		const output = readFileSync(outputFile, 'utf-8')
 		expect(output).toContain('image_source=\n')
-		expect(output).toContain('upstream_image_ref=\n')
+		expect(output).toContain('upstream_image_refs=\n')
 	})
 
 	it('writes empty image outputs for cloudflare-pages deploys', () => {
@@ -209,7 +257,7 @@ describe('writePlanOutputs', () => {
 
 		const output = readFileSync(outputFile, 'utf-8')
 		expect(output).toContain('image_source=\n')
-		expect(output).toContain('upstream_image_ref=\n')
+		expect(output).toContain('upstream_image_refs=\n')
 	})
 
 	it('uses pagesProjectName as the project_name output (dev env)', () => {
