@@ -220,6 +220,14 @@ export async function bringUpDb(
  * `up -d --remove-orphans` with no positional service (M1 has one user
  * workload; the bare form generalises to the multi-service file in M2/M3) and
  * drops any orphan left by a previous deploy.
+ *
+ * Load-bearing invariant: both phases act on the SAME compose file rendered
+ * from the same `renderComposeFile` inputs, so the postgres block is
+ * byte-identical across phases and this bare `up` finds nothing to recreate for
+ * it (it only rotates the user services whose image changed). If a future
+ * change ever makes the backing-service rendering differ between phase 1 and
+ * phase 2, this `up` would recreate the DB it just `--wait`-ed healthy — keep
+ * the compose output for postgres/supabase deterministic across both phases.
  */
 export async function bringUpApp(
 	session: SshSession,
