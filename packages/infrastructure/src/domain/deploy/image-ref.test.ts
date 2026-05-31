@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest'
 import {
 	computeImageRef,
 	parseImageRef,
+	parseImageRefsEnv,
 	resolveServiceImageRefs,
+	selectAppImage,
 } from './image-ref.ts'
 
 import type { UserServiceConfig } from '#/config/types.ts'
@@ -280,5 +282,106 @@ describe('resolveServiceImageRefs', () => {
 			bakeTargets: [],
 			primaryRef: undefined,
 		})
+	})
+})
+
+describe('parseImageRefsEnv', () => {
+	it('parses a single-service IMAGE_REFS object into a typed Record', () => {
+		expect(
+			parseImageRefsEnv(
+				'{"app":{"registry":"ghcr.io","repository":"acme/web","tag":"sha-abc123"}}',
+			),
+		).toEqual({
+			app: {
+				registry: 'ghcr.io',
+				repository: 'acme/web',
+				tag: 'sha-abc123',
+			},
+		})
+	})
+
+	it('parses every entry of a multi-service IMAGE_REFS object', () => {
+		expect(
+			parseImageRefsEnv(
+				'{"front":{"registry":"ghcr.io","repository":"acme/web-front","tag":"sha-abc123"},"worker":{"registry":"docker.io","repository":"acme/worker","tag":"2.0"}}',
+			),
+		).toEqual({
+			front: {
+				registry: 'ghcr.io',
+				repository: 'acme/web-front',
+				tag: 'sha-abc123',
+			},
+			worker: {
+				registry: 'docker.io',
+				repository: 'acme/worker',
+				tag: '2.0',
+			},
+		})
+	})
+
+	it('throws when the value is not valid JSON', () => {
+		expect(() => parseImageRefsEnv('not-json')).toThrow(
+			'Invalid IMAGE_REFS "not-json": not valid JSON',
+		)
+	})
+
+	it('throws when the JSON is not an object', () => {
+		expect(() => parseImageRefsEnv('["app"]')).toThrow(
+			'expected a JSON object of service → image ref',
+		)
+	})
+
+	it('throws when the object has no entries', () => {
+		expect(() => parseImageRefsEnv('{}')).toThrow(
+			'at least one service image ref is required',
+		)
+	})
+
+	it('throws when an entry is missing a string field', () => {
+		expect(() =>
+			parseImageRefsEnv(
+				'{"app":{"registry":"ghcr.io","repository":"acme/web"}}',
+			),
+		).toThrow(
+			'Invalid IMAGE_REFS entry "app": registry, repository and tag must all be strings',
+		)
+	})
+
+	it('throws when an entry has a malformed ref field', () => {
+		expect(() =>
+			parseImageRefsEnv(
+				'{"app":{"registry":"ghcr.io","repository":"acme/web","tag":"bad tag"}}',
+			),
+		).toThrow('Invalid image ref')
+	})
+})
+
+describe('selectAppImage', () => {
+	it('returns the app workload image from the Record', () => {
+		expect(
+			selectAppImage({
+				app: {
+					registry: 'ghcr.io',
+					repository: 'acme/web',
+					tag: 'sha-abc',
+				},
+			}),
+		).toEqual({
+			registry: 'ghcr.io',
+			repository: 'acme/web',
+			tag: 'sha-abc',
+		})
+	})
+
+	it('throws when the app entry is absent', () => {
+		expect(() =>
+			selectAppImage({
+				worker: {
+					registry: 'docker.io',
+					repository: 'acme/worker',
+					tag: '2.0',
+				},
+			}),
+		).toThrow('IMAGE_REFS is missing the "app" service image')
 	})
 })

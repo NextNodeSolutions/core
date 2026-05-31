@@ -193,7 +193,7 @@ export class HetznerVpsTarget implements DeployTarget {
 				hostPort,
 				env,
 				secrets: input.secrets,
-				image: this.requireImage(input),
+				images: this.requireImages(input),
 				registryToken: input.registryToken,
 				volumes: this.config.volumes,
 				postgres: this.config.postgres,
@@ -270,7 +270,7 @@ export class HetznerVpsTarget implements DeployTarget {
 				hostPort,
 				env,
 				secrets: input.secrets,
-				image: this.requireImage(input),
+				images: this.requireImages(input),
 				registryToken: input.registryToken,
 				volumes: this.config.volumes,
 				postgres: this.config.postgres,
@@ -349,7 +349,7 @@ export class HetznerVpsTarget implements DeployTarget {
 		readonly hostPort: number
 		readonly allocated: boolean
 	}> {
-		this.requireImage(input)
+		this.requireImages(input)
 		const vpsName = this.config.vpsName
 		const hostname = resolveDeployDomain(
 			this.config.domain,
@@ -416,11 +416,11 @@ export class HetznerVpsTarget implements DeployTarget {
 		}
 	}
 
-	private requireImage(input: DeployInput): ImageRef {
-		if (!input.image) {
-			throw new Error('image is required for Hetzner VPS deploys')
+	private requireImages(input: DeployInput): Record<string, ImageRef> {
+		if (!input.images) {
+			throw new Error('images are required for Hetzner VPS deploys')
 		}
-		return input.image
+		return input.images
 	}
 
 	teardown(

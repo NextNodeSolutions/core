@@ -1,3 +1,4 @@
+import { APP_SERVICE_NAME, selectAppImage } from '#/domain/deploy/image-ref.ts'
 import { formatComposeEnv } from '#/domain/hetzner/compose-env.ts'
 import {
 	CONTAINER_PORT,
@@ -30,11 +31,6 @@ const logger = createLogger()
 
 const REGISTRY_TOKEN_USER = '__token__'
 
-// M1 deploys a single user workload named `app`: the image/host-port Records
-// fed to the compose renderer are keyed by it, and its env file is `.env.app`.
-// The Record source switches to the per-service IMAGE_REFS in M1.A-04.
-const APP_SERVICE_NAME = 'app'
-
 /**
  * Seconds the docker compose CLI's native `--wait` flag will block before
  * giving up on a service reporting `healthy`. 60s comfortably covers a
@@ -50,13 +46,14 @@ export interface DeployContainerInput {
 	readonly hostPort: number
 	readonly env: DeployEnv
 	readonly secrets: Readonly<Record<string, string>>
-	readonly image: ImageRef
+	// Image ref per declared service, keyed by instance name — sourced from the
+	// IMAGE_REFS env and passed straight to the compose renderer.
+	readonly images: Record<string, ImageRef>
 	readonly registryToken: string | undefined
 	readonly volumes: ReadonlyArray<DeployVolume>
 	readonly postgres: PostgresServiceConfig | undefined
 	// User workloads declared under [deploy.services.<name>]. The compose
-	// renderer loops these; M1.A-04 switches the image/host-port Records over
-	// to the per-service IMAGE_REFS source.
+	// renderer loops these, pairing each with its ref from `images`.
 	readonly services: Record<string, UserServiceConfig>
 }
 
@@ -113,7 +110,7 @@ export async function deployContainer(
 		deployed: {
 			kind: 'container',
 			name: input.environment,
-			imageRef: input.image,
+			imageRef: selectAppImage(input.images),
 			url: input.env.SITE_URL,
 			deployedAt: new Date(),
 		},
@@ -159,7 +156,7 @@ export async function stageRollout(
 		`${envDir}/compose.yaml`,
 		renderComposeFile({
 			services: input.services,
-			images: { [APP_SERVICE_NAME]: input.image },
+			images: input.images,
 			hostPorts: { [APP_SERVICE_NAME]: input.hostPort },
 			volumes: input.volumes,
 			projectName: input.projectName,
@@ -171,7 +168,7 @@ export async function stageRollout(
 	if (input.registryToken !== undefined) {
 		await loginToRegistry(
 			session,
-			input.image.registry,
+			selectAppImage(input.images).registry,
 			input.registryToken,
 		)
 	}

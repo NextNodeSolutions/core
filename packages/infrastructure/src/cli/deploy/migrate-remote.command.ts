@@ -3,6 +3,7 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
 
+import { selectAppImage } from '#/domain/deploy/image-ref.ts'
 import { buildMigrateSummary } from '#/domain/deploy/migrate-summary.ts'
 import { DEFAULT_MIGRATE_COMMAND } from '#/domain/deploy/target.ts'
 
@@ -47,11 +48,12 @@ export async function migrateRemoteCommand(
 	const { target, env, input, environment } =
 		await resolveDeployContext(config)
 
-	if (!input.image) {
+	if (!input.images) {
 		throw new Error(
-			'migrate-remote: image is required (postgres-backed apps must run on a container target)',
+			'migrate-remote: images are required (postgres-backed apps must run on a container target)',
 		)
 	}
+	const migrateImage = selectAppImage(input.images)
 
 	await target.prepareRollout(config.project.name, input, env)
 
@@ -70,7 +72,7 @@ export async function migrateRemoteCommand(
 	const migrateInput: MigrateInput = {
 		projectName: config.project.name,
 		environment,
-		image: input.image,
+		image: migrateImage,
 		migrateCommand: postgres.migrateCommand ?? DEFAULT_MIGRATE_COMMAND,
 	}
 

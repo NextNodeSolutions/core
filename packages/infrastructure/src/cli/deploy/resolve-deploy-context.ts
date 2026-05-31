@@ -1,7 +1,7 @@
 import { getEnv, requireEnv, requireGithubRepository } from '#/cli/env.ts'
 import { resolveServices } from '#/cli/services/resolve.ts'
 import { isHetznerDeployableConfig } from '#/config/types.ts'
-import { parseImageRef } from '#/domain/deploy/image-ref.ts'
+import { parseImageRefsEnv } from '#/domain/deploy/image-ref.ts'
 import { buildDeployEnv } from '#/domain/deploy/target.ts'
 import { resolveEnvironment } from '#/domain/environment.ts'
 import { mergeServiceEnvs } from '#/domain/services/service.ts'
@@ -92,7 +92,7 @@ export function buildDeployInput(
 	if (isHetznerDeployableConfig(config)) {
 		return {
 			secrets,
-			image: parseImageRef(requireEnv('IMAGE_REF')),
+			images: parseImageRefsEnv(requireEnv('IMAGE_REFS')),
 			registryToken: resolveRegistryToken(config, repoSecrets),
 		}
 	}

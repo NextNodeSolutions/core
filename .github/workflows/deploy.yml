@@ -149,7 +149,8 @@ jobs:
             PACKAGE_DIR: ${{ needs.plan.outputs.package_dir }}
         runs-on: ubuntu-latest
         outputs:
-            image_ref: ${{ steps.compute.outputs.image_ref }}
+            image_refs: ${{ steps.compute.outputs.image_refs }}
+            bake_set: ${{ steps.compute.outputs.bake_set }}
         steps:
             - uses: NextNodeSolutions/core/.github/actions/setup@main
               with:
@@ -177,12 +178,9 @@ jobs:
               uses: docker/bake-action@v6
               with:
                   files: ${{ env.PACKAGE_DIR }}/docker-compose.yml
-                  targets: app
+                  targets: ${{ steps.compute.outputs.bake_targets }}
                   push: true
-                  set: |
-                      app.tags=${{ steps.compute.outputs.image_ref }}
-                      app.cache-from=type=gha,scope=app
-                      app.cache-to=type=gha,scope=app,mode=max
+                  set: ${{ steps.compute.outputs.bake_set }}
 
     migrate:
         name: Migrate
@@ -219,7 +217,7 @@ jobs:
                   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
                   R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
                   R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-                  IMAGE_REF: ${{ needs.build-image.outputs.image_ref || needs.plan.outputs.upstream_image_ref }}
+                  IMAGE_REFS: ${{ needs.build-image.outputs.image_refs || needs.plan.outputs.upstream_image_ref }}
                   GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   ALL_SECRETS: ${{ toJSON(secrets) }}
 
@@ -256,6 +254,6 @@ jobs:
                   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
                   R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
                   R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-                  IMAGE_REF: ${{ needs.build-image.outputs.image_ref || needs.plan.outputs.upstream_image_ref }}
+                  IMAGE_REFS: ${{ needs.build-image.outputs.image_refs || needs.plan.outputs.upstream_image_ref }}
                   GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   ALL_SECRETS: ${{ toJSON(secrets) }}

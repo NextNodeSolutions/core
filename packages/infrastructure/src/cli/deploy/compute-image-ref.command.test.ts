@@ -69,13 +69,38 @@ const MIXED_SERVICES: DeployableConfig = {
 	},
 }
 
+// Parse a GITHUB_OUTPUT file, understanding both the plain `key=value` form and
+// the multiline `key<<DELIMITER … DELIMITER` heredoc form (used for bake_set).
 function readOutputs(file: string): Record<string, string> {
-	const lines = readFileSync(file, 'utf-8').split('\n').filter(Boolean)
-	const entries = lines.map((line): [string, string] => {
-		const separator = line.indexOf('=')
-		return [line.slice(0, separator), line.slice(separator + 1)]
-	})
-	return Object.fromEntries(entries)
+	const lines = readFileSync(file, 'utf-8').split('\n')
+	const outputs: Record<string, string> = {}
+	let index = 0
+
+	while (index < lines.length) {
+		const line = lines[index]
+		index++
+		if (!line) continue
+
+		const heredoc = /^(.+?)<<(.+)$/.exec(line)
+		if (!heredoc) {
+			const separator = line.indexOf('=')
+			outputs[line.slice(0, separator)] = line.slice(separator + 1)
+			continue
+		}
+
+		const key = heredoc[1]
+		const delimiter = heredoc[2]
+		if (key === undefined || delimiter === undefined) continue
+		const body: string[] = []
+		while (index < lines.length && lines[index] !== delimiter) {
+			body.push(lines[index] ?? '')
+			index++
+		}
+		index++ // consume the closing delimiter line
+		outputs[key] = body.join('\n')
+	}
+
+	return outputs
 }
 
 describe('computeImageRefCommand', () => {
@@ -97,24 +122,27 @@ describe('computeImageRefCommand', () => {
 		vi.restoreAllMocks()
 	})
 
-	it('emits bake_targets, image_refs and the legacy image_ref for a single build service', () => {
+	it('emits bake_targets, image_refs, bake_set and the legacy image_ref for a single build service', () => {
 		computeImageRefCommand(APP_WITH_DOMAIN)
 
 		expect(readOutputs(outputFile)).toEqual({
 			bake_targets: 'app',
 			image_refs:
 				'{"app":{"registry":"ghcr.io","repository":"nextnodesolutions/core-app","tag":"sha-abc1234"}}',
+			bake_set:
+				'app.tags=ghcr.io/nextnodesolutions/core-app:sha-abc1234\napp.cache-from=type=gha,scope=app\napp.cache-to=type=gha,scope=app,mode=max',
 			image_ref: 'ghcr.io/nextnodesolutions/core-app:sha-abc1234',
 		})
 	})
 
-	it('keeps an upstream service ref verbatim and leaves bake_targets empty', () => {
+	it('keeps an upstream service ref verbatim and leaves bake_targets and bake_set empty', () => {
 		computeImageRefCommand(APP_UPSTREAM_PUBLIC)
 
 		expect(readOutputs(outputFile)).toEqual({
 			bake_targets: '',
 			image_refs:
 				'{"app":{"registry":"docker.io","repository":"library/nginx","tag":"1.27"}}',
+			bake_set: '',
 			image_ref: 'docker.io/library/nginx:1.27',
 		})
 	})
@@ -126,6 +154,8 @@ describe('computeImageRefCommand', () => {
 			bake_targets: 'front,api',
 			image_refs:
 				'{"front":{"registry":"ghcr.io","repository":"nextnodesolutions/core-front","tag":"sha-abc1234"},"api":{"registry":"ghcr.io","repository":"nextnodesolutions/core-api","tag":"sha-abc1234"},"worker":{"registry":"docker.io","repository":"acme/worker","tag":"2.0"}}',
+			bake_set:
+				'front.tags=ghcr.io/nextnodesolutions/core-front:sha-abc1234\nfront.cache-from=type=gha,scope=front\nfront.cache-to=type=gha,scope=front,mode=max\napi.tags=ghcr.io/nextnodesolutions/core-api:sha-abc1234\napi.cache-from=type=gha,scope=api\napi.cache-to=type=gha,scope=api,mode=max',
 			image_ref: 'ghcr.io/nextnodesolutions/core-front:sha-abc1234',
 		})
 	})

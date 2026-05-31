@@ -821,7 +821,7 @@ describe('HetznerVpsTarget', () => {
 
 		const DEPLOY_INPUT = {
 			secrets: { DATABASE_URL: 'postgres://db:5432' },
-			image: DEPLOY_IMAGE,
+			images: { app: DEPLOY_IMAGE },
 			registryToken: 'ghs_fake_token',
 		}
 

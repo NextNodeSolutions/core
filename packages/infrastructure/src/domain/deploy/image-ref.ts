@@ -109,6 +109,90 @@ export function parseImageRef(raw: string): ImageRef {
 	return { registry, repository, tag }
 }
 
+// M1 ships a single user workload keyed `app`: the migrate container and the
+// deploy summary read its image from the per-service IMAGE_REFS Record, and the
+// Hetzner adapter keys its `.env.app` file and host-port Record off the same
+// name. Lifted to per-service selection in M2 when workloads carry distinct
+// images.
+export const APP_SERVICE_NAME = 'app'
+
+/**
+ * Pick the `app` workload's image out of the per-service IMAGE_REFS Record.
+ * Used by the migrate container (which runs the app image) and the deploy
+ * summary. Throws when absent — a missing `app` entry is a wiring bug in the
+ * IMAGE_REFS the pipeline forwarded, not a runtime condition.
+ */
+export function selectAppImage(images: Record<string, ImageRef>): ImageRef {
+	const image = images[APP_SERVICE_NAME]
+	if (!image) {
+		throw new Error(
+			`IMAGE_REFS is missing the "${APP_SERVICE_NAME}" service image`,
+		)
+	}
+	return image
+}
+
+/**
+ * Parse the `IMAGE_REFS` env var — a JSON object mapping each declared service
+ * to its `ImageRef` (`{registry, repository, tag}`), emitted by
+ * `compute-image-ref`. Every entry is validated through the same field
+ * patterns as `parseImageRef`, so a malformed ref crossing the GH Actions
+ * boundary fails loud here rather than as a broken `docker pull` on the VPS.
+ */
+export function parseImageRefsEnv(raw: string): Record<string, ImageRef> {
+	const parsed = parseJson(raw)
+	if (!isRecord(parsed)) {
+		throw new Error(
+			`Invalid IMAGE_REFS "${raw}": expected a JSON object of service → image ref`,
+		)
+	}
+	const entries = Object.entries(parsed)
+	if (entries.length === 0) {
+		throw new Error(
+			`Invalid IMAGE_REFS "${raw}": at least one service image ref is required`,
+		)
+	}
+
+	const imageRefs: Record<string, ImageRef> = {}
+	for (const [service, value] of entries) {
+		imageRefs[service] = parseImageRefObject(service, value)
+	}
+	return imageRefs
+}
+
+function parseJson(raw: string): unknown {
+	try {
+		return JSON.parse(raw)
+	} catch {
+		throw new Error(`Invalid IMAGE_REFS "${raw}": not valid JSON`)
+	}
+}
+
+function parseImageRefObject(service: string, value: unknown): ImageRef {
+	if (!isRecord(value)) {
+		throw new Error(
+			`Invalid IMAGE_REFS entry "${service}": expected an object with registry, repository and tag`,
+		)
+	}
+	const { registry, repository, tag } = value
+	if (
+		typeof registry !== 'string' ||
+		typeof repository !== 'string' ||
+		typeof tag !== 'string'
+	) {
+		throw new Error(
+			`Invalid IMAGE_REFS entry "${service}": registry, repository and tag must all be strings`,
+		)
+	}
+	// Round-trip through the canonical string parser so the same registry,
+	// repository and tag patterns gate every entry — one validation source.
+	return parseImageRef(`${registry}/${repository}:${tag}`)
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 export interface ServiceImageRefs {
 	// Image ref per declared service, by instance name.
 	readonly imageRefs: Record<string, ImageRef>
