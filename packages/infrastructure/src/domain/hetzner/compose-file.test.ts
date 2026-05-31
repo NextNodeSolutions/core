@@ -31,11 +31,7 @@ import {
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 
-import {
-	CONTAINER_PORT,
-	formatImageRef,
-	renderComposeFile,
-} from './compose-file.ts'
+import { formatImageRef, renderComposeFile } from './compose-file.ts'
 
 import type { UserServiceConfig } from '#/config/types.ts'
 import type { ImageRef } from '#/domain/deploy/target.ts'
@@ -84,12 +80,6 @@ function baseInput(
 	}
 }
 
-describe('CONTAINER_PORT', () => {
-	it('is the single source of truth for the app listening port', () => {
-		expect(CONTAINER_PORT).toBe(3000)
-	})
-})
-
 describe('formatImageRef', () => {
 	it('joins registry, repository, and tag', () => {
 		expect(formatImageRef(IMAGE)).toBe('ghcr.io/acme/web:sha-abc123')
@@ -127,7 +117,7 @@ describe('renderComposeFile', () => {
 					restart: 'unless-stopped',
 					env_file: ['.env.app'],
 					healthcheck: APP_HEALTHCHECK,
-					ports: [`127.0.0.1:8080:${CONTAINER_PORT}`],
+					ports: [`127.0.0.1:8080:${APP_SERVICE.port}`],
 				},
 			},
 		})
@@ -179,7 +169,7 @@ describe('renderComposeFile', () => {
 		)
 
 		expect(parsed.services.app.ports[0]).toBe(
-			`127.0.0.1:8080:${CONTAINER_PORT}`,
+			`127.0.0.1:8080:${APP_SERVICE.port}`,
 		)
 	})
 
@@ -320,7 +310,7 @@ describe('renderComposeFile', () => {
 		expect(parsed.services.app.env_file).toEqual(['.env.app'])
 		expect(parsed.services.app.healthcheck).toEqual(APP_HEALTHCHECK)
 		expect(parsed.services.app.ports).toEqual([
-			`127.0.0.1:8080:${CONTAINER_PORT}`,
+			`127.0.0.1:8080:${APP_SERVICE.port}`,
 		])
 	})
 
@@ -469,7 +459,7 @@ describe('renderComposeFile - multiple user services', () => {
 		)
 
 		expect(parsed.services.app.ports).toEqual([
-			`127.0.0.1:8080:${CONTAINER_PORT}`,
+			`127.0.0.1:8080:${APP_SERVICE.port}`,
 		])
 		expect(parsed.services.api).not.toHaveProperty('ports')
 	})
@@ -639,7 +629,7 @@ describe('renderComposeFile - supabase service wiring', () => {
 			restart: 'unless-stopped',
 			env_file: ['.env.app'],
 			healthcheck: APP_HEALTHCHECK,
-			ports: [`127.0.0.1:8080:${CONTAINER_PORT}`],
+			ports: [`127.0.0.1:8080:${APP_SERVICE.port}`],
 		})
 	})
 
@@ -653,7 +643,7 @@ describe('renderComposeFile - supabase service wiring', () => {
 					restart: 'unless-stopped',
 					env_file: ['.env.app'],
 					healthcheck: APP_HEALTHCHECK,
-					ports: [`127.0.0.1:8080:${CONTAINER_PORT}`],
+					ports: [`127.0.0.1:8080:${APP_SERVICE.port}`],
 				},
 			},
 		})

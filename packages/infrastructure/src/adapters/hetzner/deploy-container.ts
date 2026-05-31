@@ -3,10 +3,7 @@ import {
 	selectServiceImage,
 } from '#/domain/deploy/image-ref.ts'
 import { formatComposeEnv } from '#/domain/hetzner/compose-env.ts'
-import {
-	CONTAINER_PORT,
-	renderComposeFile,
-} from '#/domain/hetzner/compose-file.ts'
+import { renderComposeFile } from '#/domain/hetzner/compose-file.ts'
 import { computeSilo } from '#/domain/hetzner/env-silo.ts'
 import {
 	POSTGRES_BACKUP_SERVICE_NAME,
@@ -142,10 +139,14 @@ export async function stageRollout(
 	const envDirQ = shellEscape(envDir)
 	const composeFileQ = shellEscape(`${envDir}/compose.yaml`)
 	const siloIdQ = shellEscape(silo.id)
-	const { name } = resolveSoleService(input.services)
+	const { name, service } = resolveSoleService(input.services)
 
+	// The container listens on the service's declared port: the same value the
+	// compose port mapping publishes and the /healthz probe targets. Injecting
+	// a hardcoded port here instead would silently break any service that sets
+	// a non-default `port` (app on one port, mapping + healthcheck on another).
 	const allEnv = {
-		PORT: String(CONTAINER_PORT),
+		PORT: String(service.port),
 		...input.env,
 		...input.secrets,
 	}

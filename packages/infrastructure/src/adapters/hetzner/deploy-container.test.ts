@@ -1,9 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { bringUpApp, bringUpDb } from './deploy-container.ts'
+import { bringUpApp, bringUpDb, stageRollout } from './deploy-container.ts'
 
-import type { PostgresServiceConfig } from '#/config/types.ts'
-import type { BringUpInput } from './deploy-container.ts'
+import type {
+	PostgresServiceConfig,
+	UserServiceConfig,
+} from '#/config/types.ts'
+import type { ImageRef } from '#/domain/deploy/target.ts'
+import type { BringUpInput, DeployContainerInput } from './deploy-container.ts'
 import type { SshSession } from './ssh/session.types.ts'
 
 beforeEach(() => {
@@ -104,5 +108,88 @@ describe('bringUpApp', () => {
 		expect(session.exec).toHaveBeenCalledExactlyOnceWith(
 			expect.stringContaining("-p 'acme;rm -rf /-production'"),
 		)
+	})
+})
+
+describe('stageRollout', () => {
+	const IMAGE: ImageRef = {
+		registry: 'ghcr.io',
+		repository: 'acme/web',
+		tag: 'sha-abc123',
+	}
+
+	const stageInput = (
+		service: UserServiceConfig,
+		name: string,
+	): DeployContainerInput => ({
+		projectName: 'acme-web',
+		environment: 'production',
+		hostname: 'acme-web.example.com',
+		hostPort: 8080,
+		env: { SITE_URL: 'https://acme-web.example.com' },
+		secrets: {},
+		images: { [name]: IMAGE },
+		registryToken: undefined,
+		volumes: [],
+		postgres: undefined,
+		services: { [name]: service },
+	})
+
+	const writtenFile = (session: SshSession, path: string): string => {
+		const write = vi
+			.mocked(session.writeFile)
+			.mock.calls.find(([target]) => target === path)
+		expect(write).toBeDefined()
+		return write?.[1] ?? ''
+	}
+
+	it('injects the declared service.port as the PORT env var (not a hardcoded 3000)', async () => {
+		const session = recordingSession()
+
+		await stageRollout(
+			session,
+			stageInput(
+				{
+					port: 4000,
+					url: 'acme-web.example.com',
+					secrets: [],
+					needs: [],
+					dependsOn: [],
+					source: 'build',
+					target: 'app',
+				},
+				'app',
+			),
+		)
+
+		const env = writtenFile(
+			session,
+			'/opt/apps/acme-web/production/.env.app',
+		)
+		expect(env).toContain('PORT=4000')
+	})
+
+	it('writes the env file under the declared service name, not a hardcoded "app"', async () => {
+		const session = recordingSession()
+
+		await stageRollout(
+			session,
+			stageInput(
+				{
+					port: 3000,
+					secrets: [],
+					needs: [],
+					dependsOn: [],
+					source: 'build',
+					target: 'web',
+				},
+				'web',
+			),
+		)
+
+		const paths = vi
+			.mocked(session.writeFile)
+			.mock.calls.map(([target]) => target)
+		expect(paths).toContain('/opt/apps/acme-web/production/.env.web')
 	})
 })

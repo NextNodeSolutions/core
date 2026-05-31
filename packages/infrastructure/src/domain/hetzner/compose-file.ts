@@ -37,15 +37,6 @@ import type {
 } from '#/domain/services/supabase.ts'
 
 /**
- * Port the application container listens on.
- *
- * Single source of truth - consumed by:
- *   - renderComposeFile (port mapping in compose.yaml)
- *   - CLI deploy command (injected as PORT env var)
- */
-export const CONTAINER_PORT = 3000
-
-/**
  * A Docker named volume managed by the Docker daemon on the VPS local SSD
  * (under `/var/lib/docker/volumes/...`). NOT a Hetzner Block Volume —
  * Hetzner Volumes are not used by default (see `docs/infra-topology.md`).
