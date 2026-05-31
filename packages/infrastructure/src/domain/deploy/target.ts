@@ -59,7 +59,7 @@ export interface DeployInput {
 	// Image ref per declared service, keyed by instance name — parsed from the
 	// IMAGE_REFS env. Absent for static (Cloudflare Pages) targets, which build
 	// no images.
-	readonly images?: Record<string, ImageRef>
+	readonly images?: Readonly<Record<string, ImageRef>>
 	readonly registryToken: string | undefined
 }
 

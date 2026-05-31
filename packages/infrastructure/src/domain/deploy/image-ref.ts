@@ -120,7 +120,7 @@ export function parseImageRef(raw: string): ImageRef {
 // renderer already keys everything off the declared name). Per-service
 // selection across many workloads lands in M2.
 export function resolveSoleService(
-	services: Record<string, UserServiceConfig>,
+	services: Readonly<Record<string, UserServiceConfig>>,
 ): { readonly name: string; readonly service: UserServiceConfig } {
 	const [entry, ...rest] = Object.entries(services)
 	if (entry === undefined || rest.length > 0) {
@@ -139,7 +139,7 @@ export function resolveSoleService(
  * the IMAGE_REFS the pipeline forwarded, not a runtime condition.
  */
 export function selectServiceImage(
-	images: Record<string, ImageRef>,
+	images: Readonly<Record<string, ImageRef>>,
 	service: string,
 ): ImageRef {
 	const image = images[service]
@@ -213,7 +213,7 @@ export interface ServiceImageRefs {
  * their declared `ref` verbatim.
  */
 export function resolveServiceImageRefs(
-	services: Record<string, UserServiceConfig>,
+	services: Readonly<Record<string, UserServiceConfig>>,
 	repository: string,
 	sha: string,
 ): ServiceImageRefs {

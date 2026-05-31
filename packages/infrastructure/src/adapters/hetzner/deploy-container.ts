@@ -48,13 +48,13 @@ export interface DeployContainerInput {
 	readonly secrets: Readonly<Record<string, string>>
 	// Image ref per declared service, keyed by instance name — sourced from the
 	// IMAGE_REFS env and passed straight to the compose renderer.
-	readonly images: Record<string, ImageRef>
+	readonly images: Readonly<Record<string, ImageRef>>
 	readonly registryToken: string | undefined
 	readonly volumes: ReadonlyArray<DeployVolume>
 	readonly postgres: PostgresServiceConfig | undefined
 	// User workloads declared under [deploy.services.<name>]. The compose
 	// renderer loops these, pairing each with its ref from `images`.
-	readonly services: Record<string, UserServiceConfig>
+	readonly services: Readonly<Record<string, UserServiceConfig>>
 }
 
 export interface DeployContainerResult {

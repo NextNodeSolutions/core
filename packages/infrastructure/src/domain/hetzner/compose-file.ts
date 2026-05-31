@@ -48,11 +48,11 @@ export interface ComposeVolume {
 
 export interface ComposeFileInput {
 	// User workloads declared under [deploy.services.<name>], by instance name.
-	readonly services: Record<string, UserServiceConfig>
+	readonly services: Readonly<Record<string, UserServiceConfig>>
 	// Resolved image ref per service (build → computed, upstream → parsed).
-	readonly images: Record<string, ImageRef>
+	readonly images: Readonly<Record<string, ImageRef>>
 	// Allocated host port per service — consulted only for `url` services.
-	readonly hostPorts: Record<string, number>
+	readonly hostPorts: Readonly<Record<string, number>>
 	readonly volumes?: ReadonlyArray<ComposeVolume>
 	readonly postgres: PostgresServiceConfig | undefined
 	readonly supabase?: SupabaseServiceConfig
@@ -213,9 +213,9 @@ function buildPortMapping(
  * volume/dependency wiring lands with multi-service M2).
  */
 function buildUserServices(
-	services: Record<string, UserServiceConfig>,
-	images: Record<string, ImageRef>,
-	hostPorts: Record<string, number>,
+	services: Readonly<Record<string, UserServiceConfig>>,
+	images: Readonly<Record<string, ImageRef>>,
+	hostPorts: Readonly<Record<string, number>>,
 	userVolumes: ReadonlyArray<ComposeVolume> | undefined,
 	dependsOnPostgres: boolean,
 ): Record<string, ComposeService> {

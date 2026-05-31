@@ -70,7 +70,7 @@ export interface HetznerVpsTargetConfig {
 	readonly postgres: PostgresServiceConfig | undefined
 	// User workloads from [deploy.services.<name>], threaded into the compose
 	// renderer via deployContainer / stageRollout.
-	readonly services: Record<string, UserServiceConfig>
+	readonly services: Readonly<Record<string, UserServiceConfig>>
 	readonly infraStorage: InfraStorageRuntimeConfig
 	readonly stateStore: ObjectStoreClient
 	readonly certsStore: ObjectStoreClient
@@ -416,7 +416,9 @@ export class HetznerVpsTarget implements DeployTarget {
 		}
 	}
 
-	private requireImages(input: DeployInput): Record<string, ImageRef> {
+	private requireImages(
+		input: DeployInput,
+	): Readonly<Record<string, ImageRef>> {
 		if (!input.images) {
 			throw new Error('images are required for Hetzner VPS deploys')
 		}
