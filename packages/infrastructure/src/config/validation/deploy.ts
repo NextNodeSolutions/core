@@ -177,9 +177,18 @@ const serviceCommonEntries = (name: string): ServiceCommonEntries => ({
 		DEFAULT_SERVICE_PORT,
 	),
 	url: optionalNonEmpty(`deploy.services.${name}.url`),
-	secrets: stringArray(`deploy.services.${name}.secrets`),
-	needs: stringArray(`deploy.services.${name}.needs`),
-	depends_on: stringArray(`deploy.services.${name}.depends_on`),
+	secrets: stringArray(
+		`deploy.services.${name}.secrets must be an array of strings`,
+		`deploy.services.${name}.secrets entries must be non-empty strings`,
+	),
+	needs: stringArray(
+		`deploy.services.${name}.needs must be an array of strings`,
+		`deploy.services.${name}.needs entries must be non-empty strings`,
+	),
+	depends_on: stringArray(
+		`deploy.services.${name}.depends_on must be an array of strings`,
+		`deploy.services.${name}.depends_on entries must be non-empty strings`,
+	),
 })
 
 // Shape a validated service into its final UserServiceConfig. Called only on a

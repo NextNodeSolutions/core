@@ -66,11 +66,15 @@ export const optionalNonEmpty = (
 	msg: string,
 ): GenericSchema<unknown, string | undefined> => optional(nonEmptyString(msg))
 
-// An optional array-of-non-empty-strings field, defaulting to []. `msg` is
-// surfaced both when the value is not an array and when an entry is empty —
-// use it only where one message covers both levels.
-export const stringArray = (msg: string): GenericSchema<unknown, string[]> =>
-	optional(array(nonEmptyString(msg), msg), [])
+// An optional array-of-non-empty-strings field, defaulting to []. Takes a
+// distinct message per failure level — `notArrayMsg` when the value is not an
+// array, `entryMsg` when an entry is empty or non-string — so the two cases
+// surface separately instead of collapsing into one ambiguous string.
+export const stringArray = (
+	notArrayMsg: string,
+	entryMsg: string,
+): GenericSchema<unknown, string[]> =>
+	optional(array(nonEmptyString(entryMsg), notArrayMsg), [])
 
 // An optional `string | false` field with a fallback, surfacing `msg` on any
 // other type. The shape behind every "set to a command or `false` to disable"

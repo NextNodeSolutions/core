@@ -1226,6 +1226,28 @@ describe('parseConfig', () => {
 			)
 		})
 
+		it('reports distinct errors for a non-array list vs an empty entry', () => {
+			const notArray = parseConfig(
+				appConfig({ app: { source: 'build', secrets: 'SESSION_KEY' } }),
+			)
+			expect(notArray.ok).toBe(false)
+			if (!notArray.ok) {
+				expect(notArray.errors).toContain(
+					'deploy.services.app.secrets must be an array of strings',
+				)
+			}
+
+			const emptyEntry = parseConfig(
+				appConfig({ app: { source: 'build', needs: [''] } }),
+			)
+			expect(emptyEntry.ok).toBe(false)
+			if (!emptyEntry.ok) {
+				expect(emptyEntry.errors).toContain(
+					'deploy.services.app.needs entries must be non-empty strings',
+				)
+			}
+		})
+
 		it('rejects [deploy.services] for cloudflare-pages targets', () => {
 			const result = parseConfig({
 				project: {
