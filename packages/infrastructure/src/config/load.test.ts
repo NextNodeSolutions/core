@@ -1066,6 +1066,26 @@ describe('parseConfig', () => {
 			})
 		})
 
+		it('defaults a service with no source to build', () => {
+			const result = parseConfig(
+				appConfig({ app: { url: 'example.com' } }),
+			)
+
+			expect(result.ok).toBe(true)
+			if (!result.ok || result.config.deploy === false) return
+			if (result.config.deploy.target !== 'hetzner-vps') return
+
+			expect(result.config.deploy.services['app']).toEqual({
+				port: 3000,
+				url: 'example.com',
+				secrets: [],
+				needs: [],
+				dependsOn: [],
+				source: 'build',
+				target: 'app',
+			})
+		})
+
 		it('parses an upstream service with a ref', () => {
 			const result = parseConfig(
 				appConfig({
