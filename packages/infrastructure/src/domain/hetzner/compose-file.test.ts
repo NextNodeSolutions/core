@@ -155,6 +155,35 @@ describe('renderComposeFile', () => {
 		})
 	})
 
+	it('omits the healthcheck for an upstream service (image not built by NextNode)', () => {
+		const upstream: UserServiceConfig = {
+			port: 3000,
+			url: 'example.com',
+			secrets: [],
+			needs: [],
+			dependsOn: [],
+			source: 'upstream',
+			ref: 'docker.io/library/nginx:1.27',
+		}
+		const parsed = parse(
+			renderComposeFile(
+				baseInput({
+					services: { app: upstream },
+					images: {
+						app: {
+							registry: 'docker.io',
+							repository: 'library/nginx',
+							tag: '1.27',
+						},
+					},
+				}),
+			),
+		)
+
+		expect(parsed.services.app).not.toHaveProperty('healthcheck')
+		expect(parsed.services.app.image).toBe('docker.io/library/nginx:1.27')
+	})
+
 	it('binds to 127.0.0.1 only', () => {
 		const parsed = parse(
 			renderComposeFile(baseInput({ hostPorts: { app: 8081 } })),

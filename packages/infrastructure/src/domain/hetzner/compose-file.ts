@@ -79,15 +79,20 @@ interface ComposeService {
 	readonly image: string
 	readonly restart: string
 	readonly env_file: ReadonlyArray<string>
-	readonly healthcheck: ComposeHealthcheck
+	readonly healthcheck?: ComposeHealthcheck
 	readonly ports?: ReadonlyArray<string>
 	readonly volumes?: ReadonlyArray<string>
 	readonly depends_on?: Readonly<Record<string, ComposeServiceDependency>>
 }
 
-// Mandatory /healthz contract (D7): every user workload must answer a
-// liveness probe so compose owns bring-up readiness. `wget` is present in
-// the alpine/distroless-busybox bases NextNode app images build on.
+// /healthz contract (D7): a `build` service answers a liveness probe so compose
+// owns bring-up readiness. `wget` and the `/healthz` route are guaranteed by
+// the alpine/distroless-busybox bases NextNode builds its app images on. The
+// probe is deliberately NOT applied to `upstream` images: they are pulled
+// verbatim, so we can't assume they ship `wget` or answer `/healthz` — forcing
+// it would flag a healthy container `unhealthy` (and, once depends_on health
+// gating lands in M2, block its dependents). Upstream liveness stays the
+// image's own contract until a per-service healthcheck override exists.
 const HEALTHCHECK_INTERVAL = '10s'
 const HEALTHCHECK_TIMEOUT = '3s'
 const HEALTHCHECK_RETRIES = 6
@@ -201,10 +206,11 @@ function buildPortMapping(
 /**
  * Render the user workloads declared under [deploy.services.<name>]. Each
  * gets its own image, per-service env file (`.env.<name>` — the isolation
- * unit, D5) and mandatory /healthz healthcheck (D7). The FIRST declared
- * service is the primary app: it carries the user-declared volumes and the
- * embedded-postgres `service_healthy` dependency (M1 has exactly one user
- * service; per-service volume/dependency wiring lands with multi-service M2).
+ * unit, D5) and, for `build` services, a /healthz healthcheck (D7); `upstream`
+ * images get no forced probe. The FIRST declared service is the primary app:
+ * it carries the user-declared volumes and the embedded-postgres
+ * `service_healthy` dependency (M1 has exactly one user service; per-service
+ * volume/dependency wiring lands with multi-service M2).
  */
 function buildUserServices(
 	services: Record<string, UserServiceConfig>,
@@ -226,7 +232,12 @@ function buildUserServices(
 			image: formatImageRef(image),
 			restart: 'unless-stopped',
 			env_file: [`.env.${name}`],
-			healthcheck: buildHealthcheck(service.port),
+			// Only `build` images carry the /healthz + wget contract; upstream
+			// images are pulled verbatim and get no forced probe (see the
+			// HEALTHCHECK_* block above).
+			...(service.source === 'build' && {
+				healthcheck: buildHealthcheck(service.port),
+			}),
 			...buildPortMapping(service, hostPorts[name], name),
 			...(isPrimary &&
 				userVolumes && {
