@@ -13,7 +13,7 @@ const appConfig = (
 	project: {
 		name: 'my-app',
 		type: 'app',
-		domain: 'my-app.example.com',
+		domain: 'example.com',
 	},
 	deploy: { services },
 })
@@ -1226,6 +1226,50 @@ describe('parseConfig', () => {
 				},
 			})
 		})
+
+		it('rejects two services sharing a url', () => {
+			const result = parseConfig(
+				appConfig({
+					front: { source: 'build', url: 'example.com' },
+					api: { source: 'build', url: 'example.com' },
+				}),
+			)
+
+			if (result.ok) {
+				expect.unreachable(
+					'expected a duplicate-url validation failure',
+				)
+			}
+
+			expect(result.errors).toContain(
+				'deploy.services.api.url "example.com" duplicates deploy.services.front.url — each routed service needs a distinct url',
+			)
+		})
+
+		it.each([
+			{ url: 'foreign.com', label: 'an unrelated domain' },
+			{
+				url: 'notexample.com',
+				label: 'a suffix look-alike with no dot boundary',
+			},
+		])(
+			'rejects a service url ($label) outside project.domain',
+			({ url }) => {
+				const result = parseConfig(
+					appConfig({ api: { source: 'build', url } }),
+				)
+
+				if (result.ok) {
+					expect.unreachable(
+						'expected a url-ownership validation failure',
+					)
+				}
+
+				expect(result.errors).toContain(
+					`deploy.services.api.url "${url}" must belong to project.domain "example.com" (equal to it or a sub-domain)`,
+				)
+			},
+		)
 
 		it('rejects a non-kebab service name', () => {
 			const result = parseConfig(

@@ -333,7 +333,7 @@ function validateServices(deployRecord: Record<string, unknown>): {
 export function validateDeploySection(
 	raw: unknown,
 	projectType: DeployableProjectType,
-	hasDomain: boolean,
+	domain: string | undefined,
 ): ValidationResult<DeploySection> {
 	if (raw !== undefined && !isRecord(raw)) {
 		return { ok: false, errors: ['[deploy] must be a table'] }
@@ -380,10 +380,11 @@ export function validateDeploySection(
 		vpsResult.vps,
 		volumesResult.volumes,
 		servicesResult.services,
+		domain,
 	)
 	errors.push(...providerResult.errors)
 
-	if (provider.requiresDomain && !hasDomain) {
+	if (provider.requiresDomain && domain === undefined) {
 		errors.push(
 			'project.domain is required when deploy target is "hetzner-vps"',
 		)

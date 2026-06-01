@@ -23,6 +23,9 @@ export interface DeployProviderValidator {
 		vps: string | null,
 		volumes: ReadonlyArray<DeployVolume>,
 		services: Record<string, UserServiceConfig>,
+		// project.domain (undefined when unset) — the ACME/Caddy ownership root
+		// each routed service `url` must belong to. See validateServiceUrls.
+		domain: string | undefined,
 	): DeployProviderResult
 }
 

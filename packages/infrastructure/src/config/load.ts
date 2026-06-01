@@ -84,8 +84,11 @@ export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 		}
 	}
 
-	const hasDomain = projectResult.section.domain !== undefined
-	const deployResult = validateDeploySection(raw['deploy'], type, hasDomain)
+	const deployResult = validateDeploySection(
+		raw['deploy'],
+		type,
+		projectResult.section.domain,
+	)
 	if (!deployResult.ok) return { ok: false, errors: deployResult.errors }
 
 	const internalError = checkInternalCompatibility(

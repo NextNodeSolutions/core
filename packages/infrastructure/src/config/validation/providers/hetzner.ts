@@ -1,7 +1,7 @@
 import { DEFAULT_HETZNER_CONFIG } from '#/config/types.ts'
 import { isRecord } from '#/kernel/guards.ts'
 
-import type { HetznerDeployConfig } from '#/config/types.ts'
+import type { HetznerDeployConfig, UserServiceConfig } from '#/config/types.ts'
 import type { DeployProviderValidator } from './registry.ts'
 
 type FieldResult = { error?: string; value?: string }
@@ -47,14 +47,58 @@ function parseHetzner(rawHetzner: unknown): {
 	}
 }
 
+// Cross-service routing guard for the Caddy/ACME layer: every externally routed
+// service `url` must be unique — a duplicate would shadow the earlier Caddy
+// route — and must be project.domain itself or a sub-domain of it, since ACME
+// certs are only held for project.domain. Services without a `url` are
+// internal-only and contribute nothing here. When `domain` is undefined the
+// missing-domain error is already raised upstream, so ownership is left
+// unchecked rather than double-reported.
+function validateServiceUrls(
+	services: Record<string, UserServiceConfig>,
+	domain: string | undefined,
+): string[] {
+	const errors: string[] = []
+	const firstSeenBy = new Map<string, string>()
+
+	for (const [name, service] of Object.entries(services)) {
+		const { url } = service
+		if (url === undefined) continue
+
+		const owner = firstSeenBy.get(url)
+		if (owner === undefined) {
+			firstSeenBy.set(url, name)
+		} else {
+			errors.push(
+				`deploy.services.${name}.url "${url}" duplicates deploy.services.${owner}.url — each routed service needs a distinct url`,
+			)
+		}
+
+		if (
+			domain !== undefined &&
+			url !== domain &&
+			!url.endsWith(`.${domain}`)
+		) {
+			errors.push(
+				`deploy.services.${name}.url "${url}" must belong to project.domain "${domain}" (equal to it or a sub-domain)`,
+			)
+		}
+	}
+
+	return errors
+}
+
 export const hetznerVps: DeployProviderValidator = {
 	requiresDomain: true,
 	requiresServices: true,
-	validate(deployRecord, secrets, vps, volumes, services) {
+	validate(deployRecord, secrets, vps, volumes, services, domain) {
 		const { errors, hetzner } = parseHetzner(deployRecord['hetzner'])
-		if (!hetzner) return { errors, deploy: undefined }
+		const urlErrors = validateServiceUrls(services, domain)
+		if (!hetzner) {
+			return { errors: [...errors, ...urlErrors], deploy: undefined }
+		}
 		return {
-			errors: [],
+			errors: urlErrors,
 			deploy: {
 				target: 'hetzner-vps',
 				secrets,
