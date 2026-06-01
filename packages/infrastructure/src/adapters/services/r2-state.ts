@@ -1,4 +1,5 @@
-import { isRecord } from '#/config/types.ts'
+import { isRecord } from '#/kernel/guards.ts'
+import { parseJsonOrThrow } from '#/kernel/json.ts'
 
 import type { R2BucketBinding, R2ServiceState } from '#/domain/services/r2.ts'
 import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
@@ -35,7 +36,10 @@ function parseBucketBindings(
 }
 
 function parseState(raw: string, key: string): R2ServiceState {
-	const data: unknown = JSON.parse(raw)
+	const data: unknown = parseJsonOrThrow(
+		raw,
+		`Invalid R2 service state at "${key}"`,
+	)
 	if (!isRecord(data)) {
 		throw new Error(`Invalid R2 service state at "${key}": not an object`)
 	}

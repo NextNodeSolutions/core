@@ -42,7 +42,16 @@ const APP_CONFIG: NextNodeConfig = {
 		vps: null,
 		volumes: [],
 		hetzner: { serverType: 'cx23', location: 'nbg1' },
-		image: { source: 'build' },
+		services: {
+			app: {
+				port: 3000,
+				secrets: [],
+				needs: [],
+				dependsOn: [],
+				source: 'build',
+				target: 'app',
+			},
+		},
 	},
 	services: {},
 }

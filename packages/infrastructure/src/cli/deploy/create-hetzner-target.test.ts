@@ -50,7 +50,16 @@ const HETZNER_CONFIG: HetznerDeployableConfig = {
 		vps: null,
 		volumes: [],
 		hetzner: { serverType: 'cpx22', location: 'nbg1' },
-		image: { source: 'build' },
+		services: {
+			app: {
+				port: 3000,
+				secrets: [],
+				needs: [],
+				dependsOn: [],
+				source: 'build',
+				target: 'app',
+			},
+		},
 	},
 	services: {},
 }
@@ -267,6 +276,21 @@ describe('createHetznerTarget', () => {
 		expect(HetznerVpsTarget).toHaveBeenCalledWith(
 			expect.objectContaining({
 				volumes: [{ name: 'data', mount: '/var/lib/app' }],
+			}),
+		)
+	})
+
+	it('threads deploy.services through to the target config', async () => {
+		stubHetznerEnv()
+
+		const { HetznerVpsTarget } =
+			await import('#/adapters/hetzner/target.ts')
+
+		createHetznerTarget(HETZNER_CONFIG, 'production', FAKE_INFRA_STORAGE)
+
+		expect(HetznerVpsTarget).toHaveBeenCalledWith(
+			expect.objectContaining({
+				services: HETZNER_CONFIG.deploy.services,
 			}),
 		)
 	})

@@ -7,5 +7,8 @@ domain = "prod-only.example.com"
 server_type = "cpx22"
 location = "nbg1"
 
+[deploy.services.app]
+source = "build"
+
 [environment]
 development = false

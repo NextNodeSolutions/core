@@ -22,6 +22,7 @@ import { stringify } from 'yaml'
 import type {
 	PostgresServiceConfig,
 	SupabaseServiceConfig,
+	UserServiceConfig,
 } from '#/config/types.ts'
 import type { ImageRef } from '#/domain/deploy/target.ts'
 import type { PostgresExporterSidecarService } from '#/domain/services/postgres-exporter.ts'
@@ -36,15 +37,6 @@ import type {
 } from '#/domain/services/supabase.ts'
 
 /**
- * Port the application container listens on.
- *
- * Single source of truth - consumed by:
- *   - renderComposeFile (port mapping in compose.yaml)
- *   - CLI deploy command (injected as PORT env var)
- */
-export const CONTAINER_PORT = 3000
-
-/**
  * A Docker named volume managed by the Docker daemon on the VPS local SSD
  * (under `/var/lib/docker/volumes/...`). NOT a Hetzner Block Volume —
  * Hetzner Volumes are not used by default (see `docs/infra-topology.md`).
@@ -55,8 +47,12 @@ export interface ComposeVolume {
 }
 
 export interface ComposeFileInput {
-	readonly image: ImageRef
-	readonly hostPort: number
+	// User workloads declared under [deploy.services.<name>], by instance name.
+	readonly services: Readonly<Record<string, UserServiceConfig>>
+	// Resolved image ref per service (build → computed, upstream → parsed).
+	readonly images: Readonly<Record<string, ImageRef>>
+	// Allocated host port per service — consulted only for `url` services.
+	readonly hostPorts: Readonly<Record<string, number>>
 	readonly volumes?: ReadonlyArray<ComposeVolume>
 	readonly postgres: PostgresServiceConfig | undefined
 	readonly supabase?: SupabaseServiceConfig
@@ -72,13 +68,42 @@ interface ComposeServiceDependency {
 	readonly condition: 'service_healthy'
 }
 
+interface ComposeHealthcheck {
+	readonly test: ReadonlyArray<string>
+	readonly interval: string
+	readonly timeout: string
+	readonly retries: number
+}
+
 interface ComposeService {
 	readonly image: string
 	readonly restart: string
 	readonly env_file: ReadonlyArray<string>
-	readonly ports: ReadonlyArray<string>
+	readonly healthcheck?: ComposeHealthcheck
+	readonly ports?: ReadonlyArray<string>
 	readonly volumes?: ReadonlyArray<string>
 	readonly depends_on?: Readonly<Record<string, ComposeServiceDependency>>
+}
+
+// /healthz contract (D7): a `build` service answers a liveness probe so compose
+// owns bring-up readiness. `wget` and the `/healthz` route are guaranteed by
+// the alpine/distroless-busybox bases NextNode builds its app images on. The
+// probe is deliberately NOT applied to `upstream` images: they are pulled
+// verbatim, so we can't assume they ship `wget` or answer `/healthz` — forcing
+// it would flag a healthy container `unhealthy` (and, once depends_on health
+// gating lands in M2, block its dependents). Upstream liveness stays the
+// image's own contract until a per-service healthcheck override exists.
+const HEALTHCHECK_INTERVAL = '10s'
+const HEALTHCHECK_TIMEOUT = '3s'
+const HEALTHCHECK_RETRIES = 6
+
+function buildHealthcheck(port: number): ComposeHealthcheck {
+	return {
+		test: ['CMD', 'wget', '-q', '-O-', `http://localhost:${port}/healthz`],
+		interval: HEALTHCHECK_INTERVAL,
+		timeout: HEALTHCHECK_TIMEOUT,
+		retries: HEALTHCHECK_RETRIES,
+	}
 }
 
 type ComposeServiceLike =
@@ -160,6 +185,77 @@ function buildSupabaseServiceGroup(
 	}
 }
 
+function buildPortMapping(
+	service: UserServiceConfig,
+	hostPort: number | undefined,
+	name: string,
+): { ports?: ReadonlyArray<string> } {
+	// Only `url` services face the reverse proxy, so only they publish a host
+	// port; internal services are reached by siblings over the compose network.
+	if (service.url === undefined) return {}
+	if (hostPort === undefined) {
+		throw new Error(
+			`renderComposeFile: service "${name}" declares a url but has no allocated host port`,
+		)
+	}
+	return {
+		ports: [`127.0.0.1:${hostPort}:${service.port}`],
+	}
+}
+
+/**
+ * Render the user workloads declared under [deploy.services.<name>]. Each
+ * gets its own image, per-service env file (`.env.<name>` — the isolation
+ * unit, D5) and, for `build` services, a /healthz healthcheck (D7); `upstream`
+ * images get no forced probe. The FIRST declared service is the primary app:
+ * it carries the user-declared volumes and the embedded-postgres
+ * `service_healthy` dependency (M1 has exactly one user service; per-service
+ * volume/dependency wiring lands with multi-service M2).
+ */
+function buildUserServices(
+	services: Readonly<Record<string, UserServiceConfig>>,
+	images: Readonly<Record<string, ImageRef>>,
+	hostPorts: Readonly<Record<string, number>>,
+	userVolumes: ReadonlyArray<ComposeVolume> | undefined,
+	dependsOnPostgres: boolean,
+): Record<string, ComposeService> {
+	const result: Record<string, ComposeService> = {}
+	Object.entries(services).forEach(([name, service], index) => {
+		const image = images[name]
+		if (!image) {
+			throw new Error(
+				`renderComposeFile: missing image ref for service "${name}"`,
+			)
+		}
+		const isPrimary = index === 0
+		result[name] = {
+			image: formatImageRef(image),
+			restart: 'unless-stopped',
+			env_file: [`.env.${name}`],
+			// Only `build` images carry the /healthz + wget contract; upstream
+			// images are pulled verbatim and get no forced probe (see the
+			// HEALTHCHECK_* block above).
+			...(service.source === 'build' && {
+				healthcheck: buildHealthcheck(service.port),
+			}),
+			...buildPortMapping(service, hostPorts[name], name),
+			...(isPrimary &&
+				userVolumes && {
+					volumes: userVolumes.map(v => `${v.name}:${v.mount}`),
+				}),
+			...(isPrimary &&
+				dependsOnPostgres && {
+					depends_on: {
+						[POSTGRES_SIDECAR_SERVICE_NAME]: {
+							condition: 'service_healthy',
+						},
+					},
+				}),
+		}
+	})
+	return result
+}
+
 export function renderComposeFile(input: ComposeFileInput): string {
 	const userVolumes = input.volumes?.length ? input.volumes : undefined
 	const postgres = input.postgres
@@ -176,22 +272,13 @@ export function renderComposeFile(input: ComposeFileInput): string {
 
 	const config: ComposeConfig = {
 		services: {
-			app: {
-				image: formatImageRef(input.image),
-				restart: 'unless-stopped',
-				env_file: ['.env'],
-				ports: [`127.0.0.1:${input.hostPort}:${CONTAINER_PORT}`],
-				...(userVolumes && {
-					volumes: userVolumes.map(v => `${v.name}:${v.mount}`),
-				}),
-				...(postgres && {
-					depends_on: {
-						[POSTGRES_SIDECAR_SERVICE_NAME]: {
-							condition: 'service_healthy',
-						},
-					},
-				}),
-			},
+			...buildUserServices(
+				input.services,
+				input.images,
+				input.hostPorts,
+				userVolumes,
+				postgres !== null,
+			),
 			...postgres,
 			...supabase,
 		},

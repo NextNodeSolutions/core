@@ -1,3 +1,4 @@
+import { CADDY_CONFIG_PATH } from '#/adapters/hetzner/constants.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
 import type { SshSession } from '#/adapters/hetzner/ssh/session.types.ts'
@@ -6,7 +7,6 @@ const logger = createLogger()
 
 const VECTOR_TOML_PATH = '/etc/vector/vector.toml'
 const VECTOR_ENV_PATH = '/etc/vector/vector.env'
-const CADDY_CONFIG_PATH = '/etc/caddy/config.json'
 
 export interface ConvergenceInput {
 	readonly vpsName: string

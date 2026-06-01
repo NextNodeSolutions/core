@@ -1,3 +1,6 @@
+import { isRecord } from '#/kernel/guards.ts'
+import { parseJsonOrThrow } from '#/kernel/json.ts'
+
 import type { ObjectStorageBinding } from '#/domain/storage/binding.ts'
 
 export interface CaddyUpstream {
@@ -142,14 +145,10 @@ export function buildUpstreamRoute(upstream: CaddyUpstream): CaddyRoute {
 	}
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null
-}
-
 function extractRoutes(configJson: string): ReadonlyArray<unknown> {
 	if (!configJson.trim()) return []
 
-	const parsed: unknown = JSON.parse(configJson)
+	const parsed: unknown = parseJsonOrThrow(configJson, 'Caddy config')
 	if (!isRecord(parsed) || !isRecord(parsed.apps)) return []
 	if (!isRecord(parsed.apps.http) || !isRecord(parsed.apps.http.servers))
 		return []

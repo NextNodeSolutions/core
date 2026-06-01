@@ -1,4 +1,5 @@
-import { DEFAULT_HETZNER_CONFIG, isRecord } from '#/config/types.ts'
+import { DEFAULT_HETZNER_CONFIG } from '#/config/types.ts'
+import { isRecord } from '#/kernel/guards.ts'
 
 import type { HetznerDeployConfig } from '#/config/types.ts'
 import type { DeployProviderValidator } from './registry.ts'
@@ -48,7 +49,8 @@ function parseHetzner(rawHetzner: unknown): {
 
 export const hetznerVps: DeployProviderValidator = {
 	requiresDomain: true,
-	validate(deployRecord, secrets, vps, volumes, image) {
+	requiresServices: true,
+	validate(deployRecord, secrets, vps, volumes, services) {
 		const { errors, hetzner } = parseHetzner(deployRecord['hetzner'])
 		if (!hetzner) return { errors, deploy: undefined }
 		return {
@@ -59,7 +61,7 @@ export const hetznerVps: DeployProviderValidator = {
 				vps,
 				volumes,
 				hetzner,
-				image,
+				services,
 			},
 		}
 	},

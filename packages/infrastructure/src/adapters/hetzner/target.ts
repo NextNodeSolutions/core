@@ -20,6 +20,7 @@ import type {
 	DeployVolume,
 	HetznerVpsDeploySection,
 	PostgresServiceConfig,
+	UserServiceConfig,
 } from '#/config/types.ts'
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import type { VpsResourceOutcome } from '#/domain/deploy/resource-outcome.ts'
@@ -67,6 +68,9 @@ export interface HetznerVpsTargetConfig {
 	readonly hetzner: HetznerVpsDeploySection['hetzner']
 	readonly volumes: ReadonlyArray<DeployVolume>
 	readonly postgres: PostgresServiceConfig | undefined
+	// User workloads from [deploy.services.<name>], threaded into the compose
+	// renderer via deployContainer / stageRollout.
+	readonly services: Readonly<Record<string, UserServiceConfig>>
 	readonly infraStorage: InfraStorageRuntimeConfig
 	readonly stateStore: ObjectStoreClient
 	readonly certsStore: ObjectStoreClient
@@ -189,10 +193,11 @@ export class HetznerVpsTarget implements DeployTarget {
 				hostPort,
 				env,
 				secrets: input.secrets,
-				image: this.requireImage(input),
+				images: this.requireImages(input),
 				registryToken: input.registryToken,
 				volumes: this.config.volumes,
 				postgres: this.config.postgres,
+				services: this.config.services,
 			})
 
 			// Multi-tenant Caddy: read the existing config, drop any prior
@@ -265,10 +270,11 @@ export class HetznerVpsTarget implements DeployTarget {
 				hostPort,
 				env,
 				secrets: input.secrets,
-				image: this.requireImage(input),
+				images: this.requireImages(input),
 				registryToken: input.registryToken,
 				volumes: this.config.volumes,
 				postgres: this.config.postgres,
+				services: this.config.services,
 			})
 		} catch (err) {
 			if (allocated) await this.releaseAllocatedHostPort(projectName)
@@ -343,7 +349,7 @@ export class HetznerVpsTarget implements DeployTarget {
 		readonly hostPort: number
 		readonly allocated: boolean
 	}> {
-		this.requireImage(input)
+		this.requireImages(input)
 		const vpsName = this.config.vpsName
 		const hostname = resolveDeployDomain(
 			this.config.domain,
@@ -410,11 +416,13 @@ export class HetznerVpsTarget implements DeployTarget {
 		}
 	}
 
-	private requireImage(input: DeployInput): ImageRef {
-		if (!input.image) {
-			throw new Error('image is required for Hetzner VPS deploys')
+	private requireImages(
+		input: DeployInput,
+	): Readonly<Record<string, ImageRef>> {
+		if (!input.images) {
+			throw new Error('images are required for Hetzner VPS deploys')
 		}
-		return input.image
+		return input.images
 	}
 
 	teardown(

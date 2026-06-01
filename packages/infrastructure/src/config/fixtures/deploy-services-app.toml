@@ -9,3 +9,4 @@ location = "nbg1"
 
 [deploy.services.app]
 source = "build"
+url = "example.com"

@@ -1,4 +1,5 @@
 import { getEnv } from '#/cli/env.ts'
+import { parseJsonOrThrow } from '#/kernel/json.ts'
 
 function isStringRecord(value: unknown): value is Record<string, string> {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) {
@@ -16,7 +17,7 @@ function isStringRecord(value: unknown): value is Record<string, string> {
 export function readRepoSecrets(): Record<string, string> {
 	const raw = getEnv('ALL_SECRETS')
 	if (raw === undefined || raw === '') return {}
-	const parsed: unknown = JSON.parse(raw)
+	const parsed: unknown = parseJsonOrThrow(raw, 'ALL_SECRETS')
 	if (!isStringRecord(parsed)) {
 		throw new Error('ALL_SECRETS must be a JSON object with string values')
 	}

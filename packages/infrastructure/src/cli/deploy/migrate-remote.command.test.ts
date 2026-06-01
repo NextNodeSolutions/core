@@ -95,7 +95,16 @@ describe('migrateRemoteCommand', () => {
 		)
 		vi.stubEnv('TAILSCALE_AUTH_KEY', 'tskey-auth-test')
 		vi.stubEnv('GHCR_TOKEN', 'ghs_fake_token')
-		vi.stubEnv('IMAGE_REF', 'ghcr.io/acme/web:sha-abc123')
+		vi.stubEnv(
+			'IMAGE_REFS',
+			JSON.stringify({
+				app: {
+					registry: 'ghcr.io',
+					repository: 'acme/web',
+					tag: 'sha-abc123',
+				},
+			}),
+		)
 		vi.stubEnv('LOG_LEVEL', 'silent')
 		vi.stubEnv('GITHUB_STEP_SUMMARY', summaryFile)
 		vi.stubEnv(
@@ -130,10 +139,12 @@ describe('migrateRemoteCommand', () => {
 					DATABASE_URL:
 						'postgres://my_app:pg-password@postgres:5432/my_app',
 				},
-				image: {
-					registry: 'ghcr.io',
-					repository: 'acme/web',
-					tag: 'sha-abc123',
+				images: {
+					app: {
+						registry: 'ghcr.io',
+						repository: 'acme/web',
+						tag: 'sha-abc123',
+					},
 				},
 				registryToken: 'ghs_fake_token',
 			},
@@ -252,20 +263,20 @@ describe('migrateRemoteCommand', () => {
 		expect(summary).not.toContain('Pre-migrate snapshot')
 	})
 
-	it('throws when IMAGE_REF is missing', async () => {
-		vi.stubEnv('IMAGE_REF', '')
+	it('throws when IMAGE_REFS is missing', async () => {
+		vi.stubEnv('IMAGE_REFS', '')
 
 		await expect(migrateRemoteCommand(APP_WITH_POSTGRES)).rejects.toThrow(
-			'IMAGE_REF env var is required',
+			'IMAGE_REFS env var is required',
 		)
 		expect(mockPrepareRollout).not.toHaveBeenCalled()
 	})
 
-	it('throws when IMAGE_REF is malformed', async () => {
-		vi.stubEnv('IMAGE_REF', 'no-tag-here')
+	it('throws when IMAGE_REFS is malformed', async () => {
+		vi.stubEnv('IMAGE_REFS', 'no-tag-here')
 
 		await expect(migrateRemoteCommand(APP_WITH_POSTGRES)).rejects.toThrow(
-			/Invalid image ref/,
+			/Invalid IMAGE_REFS/,
 		)
 		expect(mockPrepareRollout).not.toHaveBeenCalled()
 	})

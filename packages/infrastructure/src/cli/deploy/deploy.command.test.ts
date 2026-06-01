@@ -277,7 +277,16 @@ describe('deployCommand', () => {
 			)
 			vi.stubEnv('TAILSCALE_AUTH_KEY', 'tskey-auth-test')
 			vi.stubEnv('GHCR_TOKEN', 'ghs_fake_token')
-			vi.stubEnv('IMAGE_REF', 'ghcr.io/acme/web:sha-abc123')
+			vi.stubEnv(
+				'IMAGE_REFS',
+				JSON.stringify({
+					app: {
+						registry: 'ghcr.io',
+						repository: 'acme/web',
+						tag: 'sha-abc123',
+					},
+				}),
+			)
 			mockHetznerDeploy.mockResolvedValue(HETZNER_DEPLOY_RESULT)
 		})
 
@@ -298,17 +307,19 @@ describe('deployCommand', () => {
 			expect(summary).toContain('hetzner-vps')
 		})
 
-		it('passes parsed IMAGE_REF and empty secrets to the target', async () => {
+		it('passes parsed IMAGE_REFS and empty secrets to the target', async () => {
 			await deployCommand(APP_WITH_DOMAIN)
 
 			expect(mockHetznerDeploy).toHaveBeenCalledWith(
 				'my-app',
 				{
 					secrets: {},
-					image: {
-						registry: 'ghcr.io',
-						repository: 'acme/web',
-						tag: 'sha-abc123',
+					images: {
+						app: {
+							registry: 'ghcr.io',
+							repository: 'acme/web',
+							tag: 'sha-abc123',
+						},
 					},
 					registryToken: 'ghs_fake_token',
 				},
@@ -350,24 +361,33 @@ describe('deployCommand', () => {
 			expect(stdoutWrites).toContain('::add-mask::postgres://db:5432\n')
 		})
 
-		it('throws when IMAGE_REF is missing', async () => {
-			vi.stubEnv('IMAGE_REF', '')
+		it('throws when IMAGE_REFS is missing', async () => {
+			vi.stubEnv('IMAGE_REFS', '')
 
 			await expect(deployCommand(APP_WITH_DOMAIN)).rejects.toThrow(
-				'IMAGE_REF env var is required',
+				'IMAGE_REFS env var is required',
 			)
 		})
 
-		it('throws when IMAGE_REF is malformed', async () => {
-			vi.stubEnv('IMAGE_REF', 'no-tag-here')
+		it('throws when IMAGE_REFS is malformed', async () => {
+			vi.stubEnv('IMAGE_REFS', 'no-tag-here')
 
 			await expect(deployCommand(APP_WITH_DOMAIN)).rejects.toThrow(
-				'Invalid image ref',
+				'Invalid IMAGE_REFS',
 			)
 		})
 
 		it('passes registryToken=undefined for public upstream images', async () => {
-			vi.stubEnv('IMAGE_REF', 'docker.io/library/nginx:1.27')
+			vi.stubEnv(
+				'IMAGE_REFS',
+				JSON.stringify({
+					app: {
+						registry: 'docker.io',
+						repository: 'library/nginx',
+						tag: '1.27',
+					},
+				}),
+			)
 			vi.stubEnv('GHCR_TOKEN', '')
 
 			await deployCommand(APP_UPSTREAM_PUBLIC)
@@ -380,7 +400,16 @@ describe('deployCommand', () => {
 		})
 
 		it('resolves registryToken from ALL_SECRETS for private upstream images', async () => {
-			vi.stubEnv('IMAGE_REF', 'docker.io/private/app:1.0')
+			vi.stubEnv(
+				'IMAGE_REFS',
+				JSON.stringify({
+					app: {
+						registry: 'docker.io',
+						repository: 'private/app',
+						tag: '1.0',
+					},
+				}),
+			)
 			vi.stubEnv('GHCR_TOKEN', '')
 			vi.stubEnv(
 				'ALL_SECRETS',
@@ -397,12 +426,21 @@ describe('deployCommand', () => {
 		})
 
 		it('throws when registry_auth_secret is missing from ALL_SECRETS', async () => {
-			vi.stubEnv('IMAGE_REF', 'docker.io/private/app:1.0')
+			vi.stubEnv(
+				'IMAGE_REFS',
+				JSON.stringify({
+					app: {
+						registry: 'docker.io',
+						repository: 'private/app',
+						tag: '1.0',
+					},
+				}),
+			)
 			vi.stubEnv('GHCR_TOKEN', '')
 			vi.stubEnv('ALL_SECRETS', JSON.stringify({}))
 
 			await expect(deployCommand(APP_UPSTREAM_PRIVATE)).rejects.toThrow(
-				'Secret "DOCKERHUB_TOKEN" declared in deploy.image.registry_auth_secret but not found',
+				'Secret "DOCKERHUB_TOKEN" declared in deploy.services.app.registry_auth_secret but not found',
 			)
 		})
 	})

@@ -1,6 +1,6 @@
 import { setTimeout as sleep } from 'node:timers/promises'
 
-import { isRecord } from '#/config/types.ts'
+import { isRecord } from '#/kernel/guards.ts'
 
 import type { MintedAuthkey, TailnetClient } from '#/domain/tailnet/client.ts'
 

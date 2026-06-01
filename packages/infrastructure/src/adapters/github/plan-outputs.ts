@@ -2,6 +2,7 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
 
+import { parseImageRef, resolveSoleService } from '#/domain/deploy/image-ref.ts'
 import { hasProdGate } from '#/domain/pipeline/quality-matrix.ts'
 
 import { writeOutput } from './output.ts'
@@ -44,24 +45,35 @@ export function writePlanOutputs({
 	writeOutput('build_directory', buildDirectory)
 	writeOutput('package_dir', packageDir)
 
-	const { source, ref } = resolveImageOutputs(config)
+	const { source, imageRefs } = resolveImageOutputs(config)
 	writeOutput('image_source', source)
-	writeOutput('upstream_image_ref', ref)
+	writeOutput('upstream_image_refs', imageRefs)
 
 	logger.info(`Quality matrix: ${matrixJson}`)
 	logger.info('Plan outputs written to GITHUB_OUTPUT')
 }
 
+// The upstream IMAGE_REFS the deploy + migrate jobs fall back to when no image
+// is built. Emitted as the SAME JSON shape `compute-image-ref` produces for
+// built services (`{ <service>: { registry, repository, tag } }`) so
+// `parseImageRefsEnv` consumes both paths identically — the bare ref string the
+// old `image_ref` carried is not valid JSON and broke the upstream deploy.
+// Parsing the declared ref here also fails a malformed upstream ref loudly at
+// plan time, not as a broken `docker pull` on the VPS. Empty for `build` (the
+// build-image job supplies `image_refs`) and for non-container targets.
 function resolveImageOutputs(config: NextNodeConfig): {
 	readonly source: string
-	readonly ref: string
+	readonly imageRefs: string
 } {
-	if (config.deploy === false) return { source: '', ref: '' }
-	if (config.deploy.target !== 'hetzner-vps') return { source: '', ref: '' }
-	const { image } = config.deploy
-	if (image.source === 'upstream')
-		return { source: 'upstream', ref: image.ref }
-	return { source: 'build', ref: '' }
+	if (config.deploy === false) return { source: '', imageRefs: '' }
+	if (config.deploy.target !== 'hetzner-vps')
+		return { source: '', imageRefs: '' }
+	const { name, service } = resolveSoleService(config.deploy.services)
+	if (service.source === 'upstream') {
+		const imageRefs = { [name]: parseImageRef(service.ref) }
+		return { source: 'upstream', imageRefs: JSON.stringify(imageRefs) }
+	}
+	return { source: 'build', imageRefs: '' }
 }
 
 /**

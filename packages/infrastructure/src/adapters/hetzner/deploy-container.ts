@@ -1,8 +1,9 @@
-import { formatComposeEnv } from '#/domain/hetzner/compose-env.ts'
 import {
-	CONTAINER_PORT,
-	renderComposeFile,
-} from '#/domain/hetzner/compose-file.ts'
+	resolveSoleService,
+	selectServiceImage,
+} from '#/domain/deploy/image-ref.ts'
+import { formatComposeEnv } from '#/domain/hetzner/compose-env.ts'
+import { renderComposeFile } from '#/domain/hetzner/compose-file.ts'
 import { computeSilo } from '#/domain/hetzner/env-silo.ts'
 import {
 	POSTGRES_BACKUP_SERVICE_NAME,
@@ -12,7 +13,11 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 import { shellEscape } from './ssh/shell-escape.ts'
 
-import type { DeployVolume, PostgresServiceConfig } from '#/config/types.ts'
+import type {
+	DeployVolume,
+	PostgresServiceConfig,
+	UserServiceConfig,
+} from '#/config/types.ts'
 import type { CaddyUpstream } from '#/domain/caddy/config.ts'
 import type {
 	ContainerDeployedEnvironment,
@@ -41,10 +46,15 @@ export interface DeployContainerInput {
 	readonly hostPort: number
 	readonly env: DeployEnv
 	readonly secrets: Readonly<Record<string, string>>
-	readonly image: ImageRef
+	// Image ref per declared service, keyed by instance name — sourced from the
+	// IMAGE_REFS env and passed straight to the compose renderer.
+	readonly images: Readonly<Record<string, ImageRef>>
 	readonly registryToken: string | undefined
 	readonly volumes: ReadonlyArray<DeployVolume>
 	readonly postgres: PostgresServiceConfig | undefined
+	// User workloads declared under [deploy.services.<name>]. The compose
+	// renderer loops these, pairing each with its ref from `images`.
+	readonly services: Readonly<Record<string, UserServiceConfig>>
 }
 
 export interface DeployContainerResult {
@@ -89,6 +99,7 @@ export async function deployContainer(
 		postgres: input.postgres,
 	})
 
+	const { name } = resolveSoleService(input.services)
 	const silo = computeSilo(input.projectName, input.environment)
 	logger.info(`Deployed ${silo.id} on port ${input.hostPort}`)
 
@@ -100,7 +111,7 @@ export async function deployContainer(
 		deployed: {
 			kind: 'container',
 			name: input.environment,
-			imageRef: input.image,
+			imageRef: selectServiceImage(input.images, name),
 			url: input.env.SITE_URL,
 			deployedAt: new Date(),
 		},
@@ -128,19 +139,29 @@ export async function stageRollout(
 	const envDirQ = shellEscape(envDir)
 	const composeFileQ = shellEscape(`${envDir}/compose.yaml`)
 	const siloIdQ = shellEscape(silo.id)
+	const { name, service } = resolveSoleService(input.services)
 
+	// The container listens on the service's declared port: the same value the
+	// compose port mapping publishes and the /healthz probe targets. Injecting
+	// a hardcoded port here instead would silently break any service that sets
+	// a non-default `port` (app on one port, mapping + healthcheck on another).
 	const allEnv = {
-		PORT: String(CONTAINER_PORT),
+		PORT: String(service.port),
 		...input.env,
 		...input.secrets,
 	}
 	await session.exec(`mkdir -p ${envDirQ}`)
-	await session.writeFile(`${envDir}/.env`, formatComposeEnv(allEnv))
+	// Per-service env file (`.env.<name>`) is the isolation unit the compose
+	// `env_file` points at — written under the service's DECLARED name so it
+	// matches the `env_file` the compose renderer emits. M1 has one workload;
+	// the per-service fan-out lands with multi-service M2.
+	await session.writeFile(`${envDir}/.env.${name}`, formatComposeEnv(allEnv))
 	await session.writeFile(
 		`${envDir}/compose.yaml`,
 		renderComposeFile({
-			image: input.image,
-			hostPort: input.hostPort,
+			services: input.services,
+			images: input.images,
+			hostPorts: { [name]: input.hostPort },
 			volumes: input.volumes,
 			projectName: input.projectName,
 			postgres: input.postgres,
@@ -151,7 +172,7 @@ export async function stageRollout(
 	if (input.registryToken !== undefined) {
 		await loginToRegistry(
 			session,
-			input.image.registry,
+			selectServiceImage(input.images, name).registry,
 			input.registryToken,
 		)
 	}
@@ -192,11 +213,21 @@ export async function bringUpDb(
 }
 
 /**
- * Phase 2: rotate the app container. `renderComposeFile` only ever emits
- * three services — `app`, `postgres`, `postgres-backup` — and the DB
- * pair is brought up in phase 1 (or absent altogether). So phase 2 is
- * unconditionally `up -d --remove-orphans app`: it rotates the single
- * non-DB service and drops any orphan left by a previous deploy.
+ * Phase 2: rotate the user workloads. The embedded-postgres pair is brought
+ * up in phase 1 (or is absent), and its compose `--wait` already gated it
+ * healthy — a re-`up` of the whole file leaves the healthy DB untouched and
+ * rotates every user service to its new image. So phase 2 is unconditionally
+ * `up -d --remove-orphans` with no positional service (M1 has one user
+ * workload; the bare form generalises to the multi-service file in M2/M3) and
+ * drops any orphan left by a previous deploy.
+ *
+ * Load-bearing invariant: both phases act on the SAME compose file rendered
+ * from the same `renderComposeFile` inputs, so the postgres block is
+ * byte-identical across phases and this bare `up` finds nothing to recreate for
+ * it (it only rotates the user services whose image changed). If a future
+ * change ever makes the backing-service rendering differ between phase 1 and
+ * phase 2, this `up` would recreate the DB it just `--wait`-ed healthy — keep
+ * the compose output for postgres/supabase deterministic across both phases.
  */
 export async function bringUpApp(
 	session: SshSession,
@@ -208,7 +239,7 @@ export async function bringUpApp(
 	const composeFileQ = shellEscape(composeFile)
 
 	await session.exec(
-		`docker compose -p ${siloIdQ} -f ${composeFileQ} up -d --remove-orphans app`,
+		`docker compose -p ${siloIdQ} -f ${composeFileQ} up -d --remove-orphans`,
 	)
 }
 

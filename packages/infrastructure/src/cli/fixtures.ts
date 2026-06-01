@@ -19,7 +19,16 @@ export const APP_WITH_DOMAIN: DeployableConfig = {
 		secrets: [],
 		vps: null,
 		volumes: [],
-		image: { source: 'build' },
+		services: {
+			app: {
+				port: 3000,
+				secrets: [],
+				needs: [],
+				dependsOn: [],
+				source: 'build',
+				target: 'app',
+			},
+		},
 	},
 }
 
@@ -42,7 +51,16 @@ export const APP_UPSTREAM_PUBLIC: DeployableConfig = {
 		secrets: [],
 		vps: null,
 		volumes: [],
-		image: { source: 'upstream', ref: 'docker.io/library/nginx:1.27' },
+		services: {
+			app: {
+				port: 3000,
+				secrets: [],
+				needs: [],
+				dependsOn: [],
+				source: 'upstream',
+				ref: 'docker.io/library/nginx:1.27',
+			},
+		},
 	},
 }
 
@@ -65,10 +83,16 @@ export const APP_UPSTREAM_PRIVATE: DeployableConfig = {
 		secrets: [],
 		vps: null,
 		volumes: [],
-		image: {
-			source: 'upstream',
-			ref: 'docker.io/private/app:1.0',
-			registryAuthSecret: 'DOCKERHUB_TOKEN',
+		services: {
+			app: {
+				port: 3000,
+				secrets: [],
+				needs: [],
+				dependsOn: [],
+				source: 'upstream',
+				ref: 'docker.io/private/app:1.0',
+				registryAuthSecret: 'DOCKERHUB_TOKEN',
+			},
 		},
 	},
 }
@@ -96,7 +120,16 @@ export const APP_WITH_POSTGRES: DeployableConfig = {
 		secrets: [],
 		vps: null,
 		volumes: [],
-		image: { source: 'build' },
+		services: {
+			app: {
+				port: 3000,
+				secrets: [],
+				needs: [],
+				dependsOn: [],
+				source: 'build',
+				target: 'app',
+			},
+		},
 	},
 }
 
@@ -123,7 +156,16 @@ export const APP_WITH_POSTGRES_EXTERNAL: DeployableConfig = {
 		secrets: [],
 		vps: null,
 		volumes: [],
-		image: { source: 'build' },
+		services: {
+			app: {
+				port: 3000,
+				secrets: [],
+				needs: [],
+				dependsOn: [],
+				source: 'build',
+				target: 'app',
+			},
+		},
 	},
 }
 
@@ -151,7 +193,16 @@ export const APP_WITH_POSTGRES_CUSTOM_MIGRATE: DeployableConfig = {
 		secrets: [],
 		vps: null,
 		volumes: [],
-		image: { source: 'build' },
+		services: {
+			app: {
+				port: 3000,
+				secrets: [],
+				needs: [],
+				dependsOn: [],
+				source: 'build',
+				target: 'app',
+			},
+		},
 	},
 }
 
@@ -174,7 +225,16 @@ export const APP_WITH_SECRETS: DeployableConfig = {
 		secrets: ['DATABASE_URL'],
 		vps: null,
 		volumes: [],
-		image: { source: 'build' },
+		services: {
+			app: {
+				port: 3000,
+				secrets: [],
+				needs: [],
+				dependsOn: [],
+				source: 'build',
+				target: 'app',
+			},
+		},
 	},
 }
 
