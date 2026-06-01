@@ -1,6 +1,11 @@
 import type { UserServiceConfig } from '#/config/types.ts'
 
 const URL_ENV_SUFFIX = '_URL'
+// Service `url`s are bare hostnames (validated against project.domain). The
+// injected env value carries the scheme so it is directly usable by app code
+// (`fetch(process.env.API_URL)`) and consistent with the deploy-wide SITE_URL,
+// which is also `https://`-prefixed.
+const URL_SCHEME = 'https://'
 
 /**
  * Turn a KEBAB service instance name into its URL env var key:
@@ -13,9 +18,9 @@ function toUrlEnvKey(serviceName: string): string {
 
 /**
  * Build the symmetric cross-service URL block injected into EVERY service's
- * `.env.<name>` (D5). One `<NAME>_URL` entry per service that declares a `url`;
- * internal-only services (no `url`) contribute none — no peer ever learns a
- * `<NAME>_URL` for them.
+ * `.env.<name>` (D5). One `<NAME>_URL` entry per service that declares a `url`,
+ * scheme-prefixed to `https://<url>`; internal-only services (no `url`)
+ * contribute none — no peer ever learns a `<NAME>_URL` for them.
  *
  * The SAME map is merged into every service (a service receives its own
  * `<NAME>_URL` too), so no service needs to know which peers depend on it:
@@ -29,7 +34,7 @@ export function buildServiceUrlEnv(
 	for (const [name, service] of Object.entries(services)) {
 		const { url } = service
 		if (url === undefined) continue
-		urlEnv[toUrlEnvKey(name)] = url
+		urlEnv[toUrlEnvKey(name)] = `${URL_SCHEME}${url}`
 	}
 
 	return urlEnv

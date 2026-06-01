@@ -24,15 +24,15 @@ const serviceWithSecrets = (secrets: string[]): UserServiceConfig => ({
 })
 
 describe('buildServiceUrlEnv', () => {
-	it('maps each url service to <NAME>_URL with its declared url', () => {
+	it('maps each url service to <NAME>_URL with its https-prefixed url', () => {
 		expect(
 			buildServiceUrlEnv({
 				front: buildService('example.com'),
 				api: buildService('api.example.com'),
 			}),
 		).toEqual({
-			FRONT_URL: 'example.com',
-			API_URL: 'api.example.com',
+			FRONT_URL: 'https://example.com',
+			API_URL: 'https://api.example.com',
 		})
 	})
 
@@ -41,7 +41,7 @@ describe('buildServiceUrlEnv', () => {
 			buildServiceUrlEnv({
 				'admin-api': buildService('admin.example.com'),
 			}),
-		).toEqual({ ADMIN_API_URL: 'admin.example.com' })
+		).toEqual({ ADMIN_API_URL: 'https://admin.example.com' })
 	})
 
 	it('omits services that declare no url', () => {
@@ -50,7 +50,7 @@ describe('buildServiceUrlEnv', () => {
 				front: buildService('example.com'),
 				worker: buildService(),
 			}),
-		).toEqual({ FRONT_URL: 'example.com' })
+		).toEqual({ FRONT_URL: 'https://example.com' })
 	})
 
 	it('returns an empty map when no service declares a url', () => {

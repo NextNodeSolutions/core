@@ -249,8 +249,8 @@ describe('stageRollout', () => {
 			writtenFile(session, `/opt/apps/acme-web/production/.env.${name}`),
 		)
 		for (const env of envFiles) {
-			expect(env).toContain('FRONT_URL=example.com')
-			expect(env).toContain('API_URL=api.example.com')
+			expect(env).toContain('FRONT_URL=https://example.com')
+			expect(env).toContain('API_URL=https://api.example.com')
 		}
 	})
 
