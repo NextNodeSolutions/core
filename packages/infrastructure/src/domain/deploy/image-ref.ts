@@ -112,26 +112,6 @@ export function parseImageRef(raw: string): ImageRef {
 	return { registry, repository, tag }
 }
 
-// M1 ships exactly one user workload: config validation caps
-// [deploy.services.<name>] at a single entry. The migrate container, deploy
-// summary, per-service env file, host-port mapping and registry-token lookup
-// all target that sole workload — resolved here by its DECLARED name, never a
-// hardcoded `app`, so `[deploy.services.web]` deploys as written (the compose
-// renderer already keys everything off the declared name). Per-service
-// selection across many workloads lands in M2.
-export function resolveSoleService(
-	services: Readonly<Record<string, UserServiceConfig>>,
-): { readonly name: string; readonly service: UserServiceConfig } {
-	const [entry, ...rest] = Object.entries(services)
-	if (entry === undefined || rest.length > 0) {
-		throw new Error(
-			`expected exactly one [deploy.services.<name>], got ${Object.keys(services).length}: ${Object.keys(services).join(', ')}`,
-		)
-	}
-	const [name, service] = entry
-	return { name, service }
-}
-
 /**
  * Pick one service's image out of the per-service IMAGE_REFS Record by its
  * declared name. Used by the migrate container (which runs the app image) and
