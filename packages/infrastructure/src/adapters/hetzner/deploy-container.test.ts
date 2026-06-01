@@ -451,13 +451,13 @@ describe('deployContainer', () => {
 			{ hostname: 'dev.api.example.com', dial: 'localhost:8081' },
 		])
 
-		const apiEnv =
-			vi
-				.mocked(session.writeFile)
-				.mock.calls.find(
-					([path]) =>
-						path === '/opt/apps/acme-web/development/.env.api',
-				)?.[1] ?? ''
+		const apiEnvCall = vi
+			.mocked(session.writeFile)
+			.mock.calls.find(
+				([path]) => path === '/opt/apps/acme-web/development/.env.api',
+			)
+		expect(apiEnvCall).toBeDefined()
+		const apiEnv = apiEnvCall?.[1] ?? ''
 		expect(apiEnv).toContain('FRONT_URL=https://dev.example.com')
 		expect(apiEnv).toContain('API_URL=https://dev.api.example.com')
 	})
