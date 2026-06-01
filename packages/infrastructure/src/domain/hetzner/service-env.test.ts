@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildServiceUrlEnv } from './service-env.ts'
+import { buildServiceSecretEnv, buildServiceUrlEnv } from './service-env.ts'
 
 import type { UserServiceConfig } from '#/config/types.ts'
 
@@ -8,6 +8,15 @@ const buildService = (url?: string): UserServiceConfig => ({
 	port: 3000,
 	...(url !== undefined && { url }),
 	secrets: [],
+	needs: [],
+	dependsOn: [],
+	source: 'build',
+	target: 'app',
+})
+
+const serviceWithSecrets = (secrets: string[]): UserServiceConfig => ({
+	port: 3000,
+	secrets,
 	needs: [],
 	dependsOn: [],
 	source: 'build',
@@ -55,5 +64,77 @@ describe('buildServiceUrlEnv', () => {
 
 	it('returns an empty map for an empty service set', () => {
 		expect(buildServiceUrlEnv({})).toEqual({})
+	})
+})
+
+describe('buildServiceSecretEnv', () => {
+	it('projects the pool through each service so it gets only its declared subset', () => {
+		expect(
+			buildServiceSecretEnv(
+				{
+					front: serviceWithSecrets(['SESSION_KEY']),
+					api: serviceWithSecrets(['JWT_SECRET']),
+				},
+				{ SESSION_KEY: 'sess-val', JWT_SECRET: 'jwt-val' },
+			),
+		).toEqual({
+			front: { SESSION_KEY: 'sess-val' },
+			api: { JWT_SECRET: 'jwt-val' },
+		})
+	})
+
+	it('broadcasts a secret no service claims (service-required, e.g. DATABASE_URL)', () => {
+		expect(
+			buildServiceSecretEnv(
+				{
+					front: serviceWithSecrets(['SESSION_KEY']),
+					api: serviceWithSecrets(['JWT_SECRET']),
+				},
+				{
+					SESSION_KEY: 'sess-val',
+					JWT_SECRET: 'jwt-val',
+					DATABASE_URL: 'postgres://db:5432',
+				},
+			),
+		).toEqual({
+			front: {
+				SESSION_KEY: 'sess-val',
+				DATABASE_URL: 'postgres://db:5432',
+			},
+			api: { JWT_SECRET: 'jwt-val', DATABASE_URL: 'postgres://db:5432' },
+		})
+	})
+
+	it('gives a service that declares no secrets only the broadcast set', () => {
+		expect(
+			buildServiceSecretEnv(
+				{
+					app: serviceWithSecrets(['SESSION_KEY']),
+					worker: serviceWithSecrets([]),
+				},
+				{ SESSION_KEY: 'sess-val', DATABASE_URL: 'postgres://db:5432' },
+			),
+		).toEqual({
+			app: {
+				SESSION_KEY: 'sess-val',
+				DATABASE_URL: 'postgres://db:5432',
+			},
+			worker: { DATABASE_URL: 'postgres://db:5432' },
+		})
+	})
+
+	it('omits a declared secret that is absent from the pool values', () => {
+		expect(
+			buildServiceSecretEnv(
+				{ app: serviceWithSecrets(['SESSION_KEY', 'MISSING']) },
+				{ SESSION_KEY: 'sess-val' },
+			),
+		).toEqual({ app: { SESSION_KEY: 'sess-val' } })
+	})
+
+	it('returns an empty map for an empty service set', () => {
+		expect(buildServiceSecretEnv({}, { SESSION_KEY: 'sess-val' })).toEqual(
+			{},
+		)
 	})
 })

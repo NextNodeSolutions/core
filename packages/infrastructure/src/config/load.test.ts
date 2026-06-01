@@ -1271,6 +1271,68 @@ describe('parseConfig', () => {
 			},
 		)
 
+		it('accepts service secrets that are all declared in [deploy.secrets]', () => {
+			const result = parseConfig({
+				project: { name: 'my-app', type: 'app', domain: 'example.com' },
+				deploy: {
+					secrets: ['SESSION_KEY', 'JWT_SECRET'],
+					services: {
+						front: {
+							source: 'build',
+							url: 'example.com',
+							secrets: ['SESSION_KEY'],
+						},
+						api: {
+							source: 'build',
+							url: 'api.example.com',
+							secrets: ['JWT_SECRET'],
+						},
+					},
+				},
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok || result.config.deploy === false) {
+				expect.unreachable('expected a successful hetzner-vps parse')
+			}
+			if (result.config.deploy.target !== 'hetzner-vps') {
+				expect.unreachable('expected the hetzner-vps deploy target')
+			}
+
+			expect(result.config.deploy.services['front']?.secrets).toEqual([
+				'SESSION_KEY',
+			])
+			expect(result.config.deploy.services['api']?.secrets).toEqual([
+				'JWT_SECRET',
+			])
+		})
+
+		it('rejects a service secret not declared in [deploy.secrets]', () => {
+			const result = parseConfig({
+				project: { name: 'my-app', type: 'app', domain: 'example.com' },
+				deploy: {
+					secrets: ['SESSION_KEY'],
+					services: {
+						app: {
+							source: 'build',
+							url: 'example.com',
+							secrets: ['UNKNOWN'],
+						},
+					},
+				},
+			})
+
+			if (result.ok) {
+				expect.unreachable(
+					'expected an unknown-secret validation failure',
+				)
+			}
+
+			expect(result.errors).toContain(
+				'deploy.services.app.secrets references unknown secret "UNKNOWN" — declare it in [deploy.secrets]',
+			)
+		})
+
 		it('rejects a non-kebab service name', () => {
 			const result = parseConfig(
 				appConfig({ App_1: { source: 'build' } }),

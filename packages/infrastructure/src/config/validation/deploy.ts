@@ -288,6 +288,31 @@ const serviceSchema = (name: string): GenericSchema<unknown, ParsedService> => {
 	)
 }
 
+// Every secret a service references in its `secrets` list must be declared in
+// the [deploy.secrets] pool — that pool is the single source of truth for what
+// the pipeline pulls from GitHub Secrets, and stageRollout projects it per
+// service (D5). A reference to an undeclared name would silently inject nothing,
+// so it is rejected. Skipped when [deploy.secrets] itself failed to parse, to
+// avoid cascading every reference into a spurious "unknown" error.
+function validateServiceSecretRefs(
+	services: Record<string, UserServiceConfig>,
+	secretsResult: { errors: string[]; secrets: ReadonlyArray<string> },
+): string[] {
+	if (secretsResult.errors.length > 0) return []
+
+	const pool = new Set(secretsResult.secrets)
+	const errors: string[] = []
+	for (const [name, service] of Object.entries(services)) {
+		for (const secret of service.secrets) {
+			if (pool.has(secret)) continue
+			errors.push(
+				`deploy.services.${name}.secrets references unknown secret "${secret}" — declare it in [deploy.secrets]`,
+			)
+		}
+	}
+	return errors
+}
+
 // Resolve [deploy.services.<name>] into a typed Record. Returns an empty Record
 // when the table is absent — whether at least one service is *required* is a
 // provider decision (see `requiresServices`). N services are accepted; each
@@ -372,6 +397,9 @@ export function validateDeploySection(
 
 	const servicesResult = validateServices(deployRecord)
 	errors.push(...servicesResult.errors)
+	errors.push(
+		...validateServiceSecretRefs(servicesResult.services, secretsResult),
+	)
 
 	const provider = DEPLOY_PROVIDER_VALIDATORS[target]
 	const providerResult = provider.validate(

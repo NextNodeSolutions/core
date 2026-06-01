@@ -33,6 +33,19 @@ const buildService = (port: number, url?: string): UserServiceConfig => ({
 	target: 'app',
 })
 
+// front declares SESSION_KEY, api declares JWT_SECRET; the deploy secrets pool
+// carries both. Per-service projection (D5) must hand each service only the
+// subset it declares.
+const secretService = (url: string, secrets: string[]): UserServiceConfig => ({
+	port: 3000,
+	url,
+	secrets,
+	needs: [],
+	dependsOn: [],
+	source: 'build',
+	target: 'app',
+})
+
 const BASE_INPUT: BringUpInput = {
 	projectName: 'acme-web',
 	environment: 'production',
@@ -247,5 +260,71 @@ describe('stageRollout', () => {
 		for (const env of envFiles) {
 			expect(env).not.toContain('WORKER_URL')
 		}
+	})
+
+	const secretInput = (
+		secrets: Readonly<Record<string, string>>,
+	): DeployContainerInput => ({
+		projectName: 'acme-web',
+		environment: 'production',
+		hostPorts: { front: 8080, api: 8081 },
+		env: { SITE_URL: 'https://example.com' },
+		secrets,
+		images: { front: IMAGE, api: IMAGE },
+		registryToken: undefined,
+		volumes: [],
+		postgres: undefined,
+		services: {
+			front: secretService('example.com', ['SESSION_KEY']),
+			api: secretService('api.example.com', ['JWT_SECRET']),
+		},
+	})
+
+	it("projects each service's declared secret into its own .env and withholds the others", async () => {
+		const session = recordingSession()
+
+		await stageRollout(
+			session,
+			secretInput({ SESSION_KEY: 'sess-val', JWT_SECRET: 'jwt-val' }),
+		)
+
+		const front = writtenFile(
+			session,
+			'/opt/apps/acme-web/production/.env.front',
+		)
+		const api = writtenFile(
+			session,
+			'/opt/apps/acme-web/production/.env.api',
+		)
+
+		expect(front).toContain('SESSION_KEY=sess-val')
+		expect(front).not.toContain('JWT_SECRET')
+		expect(api).toContain('JWT_SECRET=jwt-val')
+		expect(api).not.toContain('SESSION_KEY')
+	})
+
+	it('broadcasts a service-required secret no service declares (e.g. DATABASE_URL) into every .env', async () => {
+		const session = recordingSession()
+
+		await stageRollout(
+			session,
+			secretInput({
+				SESSION_KEY: 'sess-val',
+				JWT_SECRET: 'jwt-val',
+				DATABASE_URL: 'postgres://db:5432',
+			}),
+		)
+
+		const front = writtenFile(
+			session,
+			'/opt/apps/acme-web/production/.env.front',
+		)
+		const api = writtenFile(
+			session,
+			'/opt/apps/acme-web/production/.env.api',
+		)
+
+		expect(front).toContain('DATABASE_URL=postgres://db:5432')
+		expect(api).toContain('DATABASE_URL=postgres://db:5432')
 	})
 })

@@ -5,7 +5,10 @@ import {
 import { formatComposeEnv } from '#/domain/hetzner/compose-env.ts'
 import { renderComposeFile } from '#/domain/hetzner/compose-file.ts'
 import { computeSilo } from '#/domain/hetzner/env-silo.ts'
-import { buildServiceUrlEnv } from '#/domain/hetzner/service-env.ts'
+import {
+	buildServiceSecretEnv,
+	buildServiceUrlEnv,
+} from '#/domain/hetzner/service-env.ts'
 import { buildServiceUpstreams } from '#/domain/hetzner/service-upstreams.ts'
 import {
 	POSTGRES_BACKUP_SERVICE_NAME,
@@ -177,9 +180,11 @@ export async function stageRollout(
  * Write one `.env.<name>` per declared service — the per-service isolation
  * unit the compose `env_file` points at (D5). Every file carries the shared
  * deploy env, the symmetric cross-service URL block (so each service resolves
- * its peers by `<NAME>_URL`), the secrets pool, and its OWN declared port: a
- * hardcoded PORT here would break any service whose `port` differs from a
- * peer's (app on one port, mapping + healthcheck on another).
+ * its peers by `<NAME>_URL`), its projected secret subset (only the secrets the
+ * service declares, plus service-required ones like postgres `DATABASE_URL`),
+ * and its OWN declared port: a hardcoded PORT here would break any service whose
+ * `port` differs from a peer's (app on one port, mapping + healthcheck on
+ * another).
  */
 async function writeServiceEnvFiles(
 	session: SshSession,
@@ -187,6 +192,7 @@ async function writeServiceEnvFiles(
 	input: DeployContainerInput,
 ): Promise<void> {
 	const serviceUrls = buildServiceUrlEnv(input.services)
+	const serviceSecrets = buildServiceSecretEnv(input.services, input.secrets)
 
 	await Promise.all(
 		Object.entries(input.services).map(([name, service]) =>
@@ -196,7 +202,7 @@ async function writeServiceEnvFiles(
 					PORT: String(service.port),
 					...input.env,
 					...serviceUrls,
-					...input.secrets,
+					...serviceSecrets[name],
 				}),
 			),
 		),

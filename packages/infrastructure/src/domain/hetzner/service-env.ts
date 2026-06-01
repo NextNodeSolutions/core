@@ -34,3 +34,44 @@ export function buildServiceUrlEnv(
 
 	return urlEnv
 }
+
+/**
+ * Route the deploy secrets across the per-service `.env.<name>` files (D5).
+ *
+ * A user secret declared in `[deploy.secrets]` is isolated to the services that
+ * name it in their own `secrets` list: each service's env is the pool projected
+ * through its `secrets` (set intersection), so a leaked `.env.front` exposes only
+ * front's declared subset, never the whole pool.
+ *
+ * A secret that NO service claims is service-required — auto-injected by a
+ * backing service (e.g. postgres `DATABASE_URL`) rather than user-declared — and
+ * broadcasts to every service, preserving its existing injection path. The two
+ * sets are disjoint (a service's declared keys are, by definition, claimed), so
+ * the merge never collides.
+ *
+ * Returns one entry per service, keyed by instance name; a service that declares
+ * no secrets and runs without any backing service maps to an empty record.
+ */
+export function buildServiceSecretEnv(
+	services: Readonly<Record<string, UserServiceConfig>>,
+	secrets: Readonly<Record<string, string>>,
+): Record<string, Record<string, string>> {
+	const claimed = new Set(
+		Object.values(services).flatMap(service => service.secrets),
+	)
+	const broadcast = Object.fromEntries(
+		Object.entries(secrets).filter(([key]) => !claimed.has(key)),
+	)
+
+	const byService: Record<string, Record<string, string>> = {}
+	for (const [name, service] of Object.entries(services)) {
+		const declared = Object.fromEntries(
+			Object.entries(secrets).filter(([key]) =>
+				service.secrets.includes(key),
+			),
+		)
+		byService[name] = { ...broadcast, ...declared }
+	}
+
+	return byService
+}
