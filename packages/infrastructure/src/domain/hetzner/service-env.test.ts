@@ -26,44 +26,69 @@ const serviceWithSecrets = (secrets: string[]): UserServiceConfig => ({
 describe('buildServiceUrlEnv', () => {
 	it('maps each url service to <NAME>_URL with its https-prefixed url', () => {
 		expect(
-			buildServiceUrlEnv({
-				front: buildService('example.com'),
-				api: buildService('api.example.com'),
-			}),
+			buildServiceUrlEnv(
+				{
+					front: buildService('example.com'),
+					api: buildService('api.example.com'),
+				},
+				'production',
+			),
 		).toEqual({
 			FRONT_URL: 'https://example.com',
 			API_URL: 'https://api.example.com',
 		})
 	})
 
+	it('resolves each url to its dev hostname in development', () => {
+		expect(
+			buildServiceUrlEnv(
+				{
+					front: buildService('example.com'),
+					api: buildService('api.example.com'),
+				},
+				'development',
+			),
+		).toEqual({
+			FRONT_URL: 'https://dev.example.com',
+			API_URL: 'https://dev.api.example.com',
+		})
+	})
+
 	it('upper-snake-cases kebab service names into env var keys', () => {
 		expect(
-			buildServiceUrlEnv({
-				'admin-api': buildService('admin.example.com'),
-			}),
+			buildServiceUrlEnv(
+				{ 'admin-api': buildService('admin.example.com') },
+				'production',
+			),
 		).toEqual({ ADMIN_API_URL: 'https://admin.example.com' })
 	})
 
 	it('omits services that declare no url', () => {
 		expect(
-			buildServiceUrlEnv({
-				front: buildService('example.com'),
-				worker: buildService(),
-			}),
+			buildServiceUrlEnv(
+				{
+					front: buildService('example.com'),
+					worker: buildService(),
+				},
+				'production',
+			),
 		).toEqual({ FRONT_URL: 'https://example.com' })
 	})
 
 	it('returns an empty map when no service declares a url', () => {
 		expect(
-			buildServiceUrlEnv({
-				worker: buildService(),
-				cron: buildService(),
-			}),
+			buildServiceUrlEnv(
+				{
+					worker: buildService(),
+					cron: buildService(),
+				},
+				'production',
+			),
 		).toEqual({})
 	})
 
 	it('returns an empty map for an empty service set', () => {
-		expect(buildServiceUrlEnv({})).toEqual({})
+		expect(buildServiceUrlEnv({}, 'production')).toEqual({})
 	})
 })
 

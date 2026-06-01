@@ -105,7 +105,11 @@ export async function deployContainer(
 	})
 
 	const silo = computeSilo(input.projectName, input.environment)
-	const upstreams = buildServiceUpstreams(input.services, input.hostPorts)
+	const upstreams = buildServiceUpstreams(
+		input.services,
+		input.hostPorts,
+		input.environment,
+	)
 	logger.info(
 		`Deployed ${silo.id} with ${String(upstreams.length)} routed service(s)`,
 	)
@@ -192,7 +196,7 @@ async function writeServiceEnvFiles(
 	envDir: string,
 	input: DeployContainerInput,
 ): Promise<void> {
-	const serviceUrls = buildServiceUrlEnv(input.services)
+	const serviceUrls = buildServiceUrlEnv(input.services, input.environment)
 	const serviceSecrets = buildServiceSecretEnv(input.services, input.secrets)
 
 	await Promise.all(

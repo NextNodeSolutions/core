@@ -1,4 +1,7 @@
+import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
+
 import type { UserServiceConfig } from '#/config/types.ts'
+import type { AppEnvironment } from '#/domain/environment.ts'
 
 const URL_ENV_SUFFIX = '_URL'
 // Service `url`s are bare hostnames (validated against project.domain). The
@@ -19,8 +22,10 @@ function toUrlEnvKey(serviceName: string): string {
 /**
  * Build the symmetric cross-service URL block injected into EVERY service's
  * `.env.<name>` (D5). One `<NAME>_URL` entry per service that declares a `url`,
- * scheme-prefixed to `https://<url>`; internal-only services (no `url`)
- * contribute none — no peer ever learns a `<NAME>_URL` for them.
+ * resolved per environment and scheme-prefixed to `https://<host>` (so a peer's
+ * `API_URL` is `https://dev.api.example.com` in development); internal-only
+ * services (no `url`) contribute none — no peer ever learns a `<NAME>_URL` for
+ * them.
  *
  * The SAME map is merged into every service (a service receives its own
  * `<NAME>_URL` too), so no service needs to know which peers depend on it:
@@ -28,13 +33,15 @@ function toUrlEnvKey(serviceName: string): string {
  */
 export function buildServiceUrlEnv(
 	services: Readonly<Record<string, UserServiceConfig>>,
+	environment: AppEnvironment,
 ): Record<string, string> {
 	const urlEnv: Record<string, string> = {}
 
 	for (const [name, service] of Object.entries(services)) {
 		const { url } = service
 		if (url === undefined) continue
-		urlEnv[toUrlEnvKey(name)] = `${URL_SCHEME}${url}`
+		urlEnv[toUrlEnvKey(name)] =
+			`${URL_SCHEME}${resolveDeployDomain(url, environment)}`
 	}
 
 	return urlEnv

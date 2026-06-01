@@ -1,5 +1,8 @@
+import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
+
 import type { UserServiceConfig } from '#/config/types.ts'
 import type { CaddyUpstream } from '#/domain/caddy/config.ts'
+import type { AppEnvironment } from '#/domain/environment.ts'
 
 /**
  * Map a project's declared services to the Caddy upstreams that route external
@@ -8,6 +11,11 @@ import type { CaddyUpstream } from '#/domain/caddy/config.ts'
  * and contribute no Caddy route. Each routed service dials the host port it was
  * allocated, keyed by its instance name in `hostPorts`.
  *
+ * The `url` is the production hostname; the actual routed hostname is resolved
+ * per environment via `resolveDeployDomain` (so `api.example.com` routes at
+ * `dev.api.example.com` in development), keeping the Caddy route, the ACME cert
+ * subject derived from it, and the DNS record in lockstep.
+ *
  * A service that declares a `url` but has no entry in `hostPorts` is an
  * unroutable state (Caddy would have a subject with nothing to dial) — fail
  * loud rather than emit a dangling route.
@@ -15,6 +23,7 @@ import type { CaddyUpstream } from '#/domain/caddy/config.ts'
 export function buildServiceUpstreams(
 	services: Readonly<Record<string, UserServiceConfig>>,
 	hostPorts: Readonly<Record<string, number>>,
+	environment: AppEnvironment,
 ): ReadonlyArray<CaddyUpstream> {
 	const upstreams: CaddyUpstream[] = []
 
@@ -29,7 +38,10 @@ export function buildServiceUpstreams(
 			)
 		}
 
-		upstreams.push({ hostname: url, dial: `localhost:${port}` })
+		upstreams.push({
+			hostname: resolveDeployDomain(url, environment),
+			dial: `localhost:${port}`,
+		})
 	}
 
 	return upstreams

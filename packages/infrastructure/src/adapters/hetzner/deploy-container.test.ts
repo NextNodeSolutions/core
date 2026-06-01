@@ -426,4 +426,39 @@ describe('deployContainer', () => {
 			{ hostname: 'api.example.com', dial: 'localhost:8081' },
 		])
 	})
+
+	it('routes each service at its dev hostname in a development deploy', async () => {
+		const session = recordingSession()
+
+		const result = await deployContainer(session, {
+			projectName: 'acme-web',
+			environment: 'development',
+			hostPorts: { front: 8080, api: 8081 },
+			env: { SITE_URL: 'https://dev.example.com' },
+			secrets: {},
+			images: { front: IMAGE, api: IMAGE },
+			registryToken: undefined,
+			volumes: [],
+			postgres: undefined,
+			services: {
+				front: buildService(3000, 'example.com'),
+				api: buildService(4000, 'api.example.com'),
+			},
+		})
+
+		expect(result.upstreams).toEqual([
+			{ hostname: 'dev.example.com', dial: 'localhost:8080' },
+			{ hostname: 'dev.api.example.com', dial: 'localhost:8081' },
+		])
+
+		const apiEnv =
+			vi
+				.mocked(session.writeFile)
+				.mock.calls.find(
+					([path]) =>
+						path === '/opt/apps/acme-web/development/.env.api',
+				)?.[1] ?? ''
+		expect(apiEnv).toContain('FRONT_URL=https://dev.example.com')
+		expect(apiEnv).toContain('API_URL=https://dev.api.example.com')
+	})
 })
