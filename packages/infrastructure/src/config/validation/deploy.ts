@@ -290,8 +290,9 @@ const serviceSchema = (name: string): GenericSchema<unknown, ParsedService> => {
 
 // Resolve [deploy.services.<name>] into a typed Record. Returns an empty Record
 // when the table is absent — whether at least one service is *required* is a
-// provider decision (see `requiresServices`). M1 is single-service only — more
-// than one declared service is rejected (the cap is lifted in M2.A-01).
+// provider decision (see `requiresServices`). N services are accepted; each
+// entry is validated independently so one malformed service doesn't sink its
+// siblings.
 function validateServices(deployRecord: Record<string, unknown>): {
 	errors: string[]
 	services: Record<string, UserServiceConfig>
@@ -305,16 +306,6 @@ function validateServices(deployRecord: Record<string, unknown>): {
 	}
 
 	const entries = Object.entries(raw)
-	if (entries.length > 1) {
-		return {
-			errors: [
-				`M1 supports a single [deploy.services.<name>] (got ${entries.length}: ${entries
-					.map(([n]) => n)
-					.join(', ')}); multi-service lands in M2`,
-			],
-			services: {},
-		}
-	}
 
 	const errors: string[] = []
 	const services: Record<string, UserServiceConfig> = {}

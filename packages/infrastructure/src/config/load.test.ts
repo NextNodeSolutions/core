@@ -1189,24 +1189,42 @@ describe('parseConfig', () => {
 			)
 		})
 
-		it('rejects more than one declared service in M1', () => {
+		it('parses every declared service into the services Record', () => {
 			const result = parseConfig(
 				appConfig({
-					app: { source: 'build' },
-					api: { source: 'build' },
+					front: { source: 'build', url: 'example.com' },
+					api: { source: 'build', url: 'api.example.com' },
 				}),
 			)
 
-			expect(result.ok).toBe(false)
-			if (result.ok) return
+			expect(result.ok).toBe(true)
+			if (!result.ok || result.config.deploy === false) {
+				expect.unreachable('expected a successful hetzner-vps parse')
+			}
+			if (result.config.deploy.target !== 'hetzner-vps') {
+				expect.unreachable('expected the hetzner-vps deploy target')
+			}
 
-			expect(result.errors).toEqual(
-				expect.arrayContaining([
-					expect.stringContaining(
-						'M1 supports a single [deploy.services.<name>]',
-					),
-				]),
-			)
+			expect(result.config.deploy.services).toEqual({
+				front: {
+					port: 3000,
+					url: 'example.com',
+					secrets: [],
+					needs: [],
+					dependsOn: [],
+					source: 'build',
+					target: 'front',
+				},
+				api: {
+					port: 3000,
+					url: 'api.example.com',
+					secrets: [],
+					needs: [],
+					dependsOn: [],
+					source: 'build',
+					target: 'api',
+				},
+			})
 		})
 
 		it('rejects a non-kebab service name', () => {
