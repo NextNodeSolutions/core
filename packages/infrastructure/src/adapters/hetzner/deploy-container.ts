@@ -5,6 +5,7 @@ import {
 import { formatComposeEnv } from '#/domain/hetzner/compose-env.ts'
 import { renderComposeFile } from '#/domain/hetzner/compose-file.ts'
 import { computeSilo } from '#/domain/hetzner/env-silo.ts'
+import { buildServiceUpstreams } from '#/domain/hetzner/service-upstreams.ts'
 import {
 	POSTGRES_BACKUP_SERVICE_NAME,
 	POSTGRES_SIDECAR_SERVICE_NAME,
@@ -42,7 +43,6 @@ const POSTGRES_WAIT_TIMEOUT_SECONDS = 60
 export interface DeployContainerInput {
 	readonly projectName: string
 	readonly environment: AppEnvironment
-	readonly hostname: string
 	readonly hostPort: number
 	readonly env: DeployEnv
 	readonly secrets: Readonly<Record<string, string>>
@@ -58,7 +58,9 @@ export interface DeployContainerInput {
 }
 
 export interface DeployContainerResult {
-	readonly upstream: CaddyUpstream
+	// One Caddy upstream per service that declares a url; internal-only services
+	// (no url) contribute none. Empty when the project routes nothing externally.
+	readonly upstreams: ReadonlyArray<CaddyUpstream>
 	readonly deployed: ContainerDeployedEnvironment
 }
 
@@ -104,10 +106,9 @@ export async function deployContainer(
 	logger.info(`Deployed ${silo.id} on port ${input.hostPort}`)
 
 	return {
-		upstream: {
-			hostname: input.hostname,
-			dial: `localhost:${input.hostPort}`,
-		},
+		upstreams: buildServiceUpstreams(input.services, {
+			[name]: input.hostPort,
+		}),
 		deployed: {
 			kind: 'container',
 			name: input.environment,
