@@ -124,7 +124,7 @@ describe('stageRollout', () => {
 	): DeployContainerInput => ({
 		projectName: 'acme-web',
 		environment: 'production',
-		hostPort: 8080,
+		hostPorts: { [name]: 8080 },
 		env: { SITE_URL: 'https://acme-web.example.com' },
 		secrets: {},
 		images: { [name]: IMAGE },

@@ -348,7 +348,10 @@ describe('hostPorts', () => {
 			publicIp: '1.2.3.4',
 			tailnetIp: '100.1.2.3',
 			convergedAt: '2026-04-17T10:00:00.000Z',
-			hostPorts: { 'acme-web': 8080, 'beta-app': 8081 },
+			hostPorts: {
+				'acme-web': { front: 8080, api: 8081 },
+				'beta-app': { web: 8082 },
+			},
 		}
 		const stored: Record<string, string> = {}
 		vi.mocked(r2.put).mockImplementation(async (key, body) => {
@@ -383,19 +386,35 @@ describe('hostPorts', () => {
 		)
 	})
 
-	it('throws when a hostPorts entry is not an integer', async () => {
+	it('throws when a project entry is not an object', async () => {
 		vi.mocked(r2.get).mockResolvedValue({
 			body: JSON.stringify({
 				phase: 'created',
 				serverId: 7,
 				publicIp: '1.2.3.4',
-				hostPorts: { 'acme-web': '8080' },
+				hostPorts: { 'acme-web': 8080 },
 			}),
 			etag: '"e"',
 		})
 
 		await expect(readState(r2, 'acme-web')).rejects.toThrow(
-			/hostPorts\.acme-web must be an integer/,
+			/hostPorts\.acme-web must be an object/,
+		)
+	})
+
+	it('throws when a service port is not an integer', async () => {
+		vi.mocked(r2.get).mockResolvedValue({
+			body: JSON.stringify({
+				phase: 'created',
+				serverId: 7,
+				publicIp: '1.2.3.4',
+				hostPorts: { 'acme-web': { app: '8080' } },
+			}),
+			etag: '"e"',
+		})
+
+		await expect(readState(r2, 'acme-web')).rejects.toThrow(
+			/hostPorts\.acme-web\.app must be an integer/,
 		)
 	})
 })

@@ -43,7 +43,9 @@ const POSTGRES_WAIT_TIMEOUT_SECONDS = 60
 export interface DeployContainerInput {
 	readonly projectName: string
 	readonly environment: AppEnvironment
-	readonly hostPort: number
+	// Allocated host port per url service, keyed by instance name. Internal-only
+	// services (no url) hold no entry — they publish no host port.
+	readonly hostPorts: Readonly<Record<string, number>>
 	readonly env: DeployEnv
 	readonly secrets: Readonly<Record<string, string>>
 	// Image ref per declared service, keyed by instance name — sourced from the
@@ -103,12 +105,13 @@ export async function deployContainer(
 
 	const { name } = resolveSoleService(input.services)
 	const silo = computeSilo(input.projectName, input.environment)
-	logger.info(`Deployed ${silo.id} on port ${input.hostPort}`)
+	const upstreams = buildServiceUpstreams(input.services, input.hostPorts)
+	logger.info(
+		`Deployed ${silo.id} with ${String(upstreams.length)} routed service(s)`,
+	)
 
 	return {
-		upstreams: buildServiceUpstreams(input.services, {
-			[name]: input.hostPort,
-		}),
+		upstreams,
 		deployed: {
 			kind: 'container',
 			name: input.environment,
@@ -162,7 +165,7 @@ export async function stageRollout(
 		renderComposeFile({
 			services: input.services,
 			images: input.images,
-			hostPorts: { [name]: input.hostPort },
+			hostPorts: input.hostPorts,
 			volumes: input.volumes,
 			projectName: input.projectName,
 			postgres: input.postgres,

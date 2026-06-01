@@ -182,7 +182,7 @@ export class HetznerVpsTarget implements DeployTarget {
 	): Promise<DeployResult> {
 		const start = Date.now()
 		const vpsName = this.config.vpsName
-		const { session, hostPort, allocated } = await this.openRolloutSession(
+		const { session, hostPorts, allocated } = await this.openRolloutSession(
 			projectName,
 			input,
 		)
@@ -191,7 +191,7 @@ export class HetznerVpsTarget implements DeployTarget {
 			const { upstreams, deployed } = await deployContainer(session, {
 				projectName,
 				environment: this.config.environment,
-				hostPort,
+				hostPorts,
 				env,
 				secrets: input.secrets,
 				images: this.requireImages(input),
@@ -261,7 +261,7 @@ export class HetznerVpsTarget implements DeployTarget {
 		input: DeployInput,
 		env: DeployEnv,
 	): Promise<void> {
-		const { session, hostPort, allocated } = await this.openRolloutSession(
+		const { session, hostPorts, allocated } = await this.openRolloutSession(
 			projectName,
 			input,
 		)
@@ -270,7 +270,7 @@ export class HetznerVpsTarget implements DeployTarget {
 			await stageRollout(session, {
 				projectName,
 				environment: this.config.environment,
-				hostPort,
+				hostPorts,
 				env,
 				secrets: input.secrets,
 				images: this.requireImages(input),
@@ -348,7 +348,7 @@ export class HetznerVpsTarget implements DeployTarget {
 		input: DeployInput,
 	): Promise<{
 		readonly session: SshSession
-		readonly hostPort: number
+		readonly hostPorts: Readonly<Record<string, number>>
 		readonly allocated: boolean
 	}> {
 		this.requireImages(input)
@@ -361,16 +361,17 @@ export class HetznerVpsTarget implements DeployTarget {
 			)
 		}
 
-		const { port: hostPort, allocated } = allocateHostPort(
+		const { ports: hostPorts, allocated } = allocateHostPort(
 			existing.state.hostPorts,
 			projectName,
+			this.urlServiceNames(),
 		)
 		if (allocated) {
 			const updated: HcloudProvisionedState | HcloudConvergedState = {
 				...existing.state,
 				hostPorts: {
 					...existing.state.hostPorts,
-					[projectName]: hostPort,
+					[projectName]: hostPorts,
 				},
 			}
 			await writeState(this.r2, vpsName, updated, existing.etag)
@@ -383,7 +384,15 @@ export class HetznerVpsTarget implements DeployTarget {
 			expectedHostKeyFingerprint: existing.state.sshHostKeyFingerprint,
 		})
 
-		return { session, hostPort, allocated }
+		return { session, hostPorts, allocated }
+	}
+
+	// Instance names of the services that face the reverse proxy (declare a
+	// `url`) and therefore need a host port. Internal-only services expose none.
+	private urlServiceNames(): ReadonlyArray<string> {
+		return Object.entries(this.config.services)
+			.filter(([, service]) => service.url !== undefined)
+			.map(([name]) => name)
 	}
 
 	// Compensates a freshly-allocated host port when the rollout that

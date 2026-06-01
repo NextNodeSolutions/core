@@ -1090,7 +1090,9 @@ describe('HetznerVpsTarget', () => {
 
 				expect(putSpy).toHaveBeenCalledWith(
 					'hetzner/acme-web.json',
-					expect.stringContaining('"hostPorts":{"acme-web":8080}'),
+					expect.stringContaining(
+						'"hostPorts":{"acme-web":{"app":8080}}',
+					),
 					'etag-1',
 				)
 				putSpy.mockRestore()
@@ -1099,7 +1101,7 @@ describe('HetznerVpsTarget', () => {
 			it('reuses the same port on redeploy and skips state write', async () => {
 				seedState({
 					...CONVERGED_STATE,
-					hostPorts: { 'acme-web': 8080 },
+					hostPorts: { 'acme-web': { app: 8080 } },
 				})
 				const putSpy = vi.spyOn(mockStateStore, 'put')
 
@@ -1116,7 +1118,7 @@ describe('HetznerVpsTarget', () => {
 				const mockSession = createMockSession()
 				seedState({
 					...CONVERGED_STATE,
-					hostPorts: { 'first-project': 8080 },
+					hostPorts: { 'first-project': { app: 8080 } },
 				})
 				vi.mocked(mockedSsh).mockResolvedValueOnce(mockSession)
 
@@ -1134,8 +1136,8 @@ describe('HetznerVpsTarget', () => {
 				expect(persisted).toEqual(
 					expect.objectContaining({
 						hostPorts: {
-							'first-project': 8080,
-							'second-project': 8081,
+							'first-project': { app: 8080 },
+							'second-project': { app: 8081 },
 						},
 					}),
 				)
@@ -1171,7 +1173,7 @@ describe('HetznerVpsTarget', () => {
 				const mockSession = createMockSession()
 				seedState({
 					...CONVERGED_STATE,
-					hostPorts: { 'acme-web': 8080 },
+					hostPorts: { 'acme-web': { app: 8080 } },
 				})
 				vi.mocked(mockedSsh).mockResolvedValueOnce(mockSession)
 				vi.mocked(mockSession.writeFile).mockRejectedValueOnce(
@@ -1189,7 +1191,7 @@ describe('HetznerVpsTarget', () => {
 				)
 				expect(persisted).toEqual(
 					expect.objectContaining({
-						hostPorts: { 'acme-web': 8080 },
+						hostPorts: { 'acme-web': { app: 8080 } },
 					}),
 				)
 			})

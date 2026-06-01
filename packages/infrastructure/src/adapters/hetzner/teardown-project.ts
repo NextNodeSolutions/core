@@ -175,8 +175,8 @@ export async function releaseProjectHostPort(
 	state: HcloudProvisionedState | HcloudConvergedState,
 	etag: string,
 ): Promise<ResourceOutcome> {
-	const port = state.hostPorts[projectName]
-	if (port === undefined) {
+	const servicePorts = state.hostPorts[projectName]
+	if (servicePorts === undefined) {
 		logger.info(
 			`No host port to release for "${projectName}" on VPS "${vpsName}" (already absent)`,
 		)
@@ -188,10 +188,11 @@ export async function releaseProjectHostPort(
 		hostPorts: remaining,
 	}
 	await writeState(r2, vpsName, updated, etag)
+	const released = Object.values(servicePorts).join(', ')
 	logger.info(
-		`Released host port ${String(port)} for "${projectName}" on VPS "${vpsName}"`,
+		`Released host port(s) ${released} for "${projectName}" on VPS "${vpsName}"`,
 	)
-	return { handled: true, detail: `port ${String(port)} released` }
+	return { handled: true, detail: `port(s) ${released} released` }
 }
 
 /**
