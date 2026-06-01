@@ -333,55 +333,46 @@ describe('stageRollout', () => {
 		expect(api).toContain('DATABASE_URL=postgres://db:5432')
 	})
 
-	// The forwarded token authenticates every registry the deploy pulls from,
-	// not just the `build` services' GHCR: an upstream service on a different
-	// registry must get its own login, and services sharing a registry collapse
-	// to a single `docker login`.
-	it('logs in once per distinct image registry across every service, regardless of source', async () => {
+	// The forwarded token authenticates only credentialed registries. An
+	// all-upstream deploy that mixes a private registry (registry_auth_secret)
+	// with a public one must log into the private registry alone — logging into
+	// the public registry with the private token would fail or pollute config.
+	it('logs into the credentialed registry only, never a public upstream registry', async () => {
 		const session = recordingSession()
 		const upstreamService = (
 			port: number,
-			url: string,
+			ref: string,
+			registryAuthSecret?: string,
 		): UserServiceConfig => ({
 			port,
-			url,
 			secrets: [],
 			needs: [],
 			dependsOn: [],
 			source: 'upstream',
-			ref: 'docker.io/acme/api:v1',
+			ref,
+			...(registryAuthSecret !== undefined && { registryAuthSecret }),
 		})
 
 		await stageRollout(session, {
 			projectName: 'acme-web',
 			environment: 'production',
-			hostPorts: { front: 8080, api: 8081 },
+			hostPorts: {},
 			env: { SITE_URL: 'https://example.com' },
 			secrets: {},
 			images: {
-				front: {
-					registry: 'ghcr.io',
-					repository: 'acme/web',
-					tag: 'sha-abc1234',
-				},
-				api: {
+				web: { registry: 'ghcr.io', repository: 'acme/web', tag: 'v1' },
+				cache: {
 					registry: 'docker.io',
-					repository: 'acme/api',
-					tag: 'v1',
-				},
-				worker: {
-					registry: 'ghcr.io',
-					repository: 'acme/worker',
-					tag: 'sha-abc1234',
+					repository: 'library/redis',
+					tag: '7',
 				},
 			},
-			registryToken: 'tok',
+			registryToken: 'ghcr-token',
 			volumes: [],
 			postgres: undefined,
 			services: {
-				front: buildService(3000, 'example.com'),
-				api: upstreamService(4000, 'api.example.com'),
-				worker: buildService(5000),
+				web: upstreamService(3000, 'ghcr.io/acme/web:v1', 'GHCR_PAT'),
+				cache: upstreamService(4000, 'docker.io/library/redis:7'),
 			},
 		})
 
@@ -390,10 +381,10 @@ describe('stageRollout', () => {
 			.mock.calls.map(([command]) => command)
 			.filter(command => command.startsWith('docker login'))
 
-		expect(logins).toHaveLength(2)
-		expect(logins.some(command => command.includes("'ghcr.io'"))).toBe(true)
+		expect(logins).toHaveLength(1)
+		expect(logins[0]).toContain("'ghcr.io'")
 		expect(logins.some(command => command.includes("'docker.io'"))).toBe(
-			true,
+			false,
 		)
 	})
 })

@@ -211,13 +211,13 @@ async function writeServiceEnvFiles(
 }
 
 /**
- * Authenticate docker against every distinct registry this deploy pulls from,
- * using the single forwarded token. The token is only resolved (and this only
- * runs) when a login is actually needed: GHCR for `build` deploys, the shared
- * private registry for `upstream` deploys with a `registry_auth_secret`; public
- * upstream deploys carry no token and skip login entirely. Mixed sources are
- * rejected at validation, so one token authenticates them all, and build images
- * sharing GHCR dedupe to one `docker login`. Sequential by necessity:
+ * Authenticate docker against the registries whose images sit behind the single
+ * forwarded token, deduped (build images share GHCR, so one `docker login`).
+ * The token authenticates only credentialed registries, so we log into those
+ * alone: `build` images live on the private GHCR the GHCR token covers, and
+ * `upstream` images need a login only when they declare a `registry_auth_secret`.
+ * A public upstream registry is skipped — logging into it with another service's
+ * token would fail or pollute ~/.docker/config.json. Sequential by necessity:
  * concurrent `docker login` calls race on the shared ~/.docker/config.json.
  */
 async function loginToRegistries(
@@ -226,15 +226,24 @@ async function loginToRegistries(
 	token: string,
 ): Promise<void> {
 	const registries = new Set(
-		Object.keys(input.services).map(
-			name => selectServiceImage(input.images, name).registry,
-		),
+		Object.entries(input.services)
+			.filter(([, service]) => requiresRegistryLogin(service))
+			.map(([name]) => selectServiceImage(input.images, name).registry),
 	)
 
 	for (const registry of registries) {
 		// eslint-disable-next-line no-await-in-loop -- docker login serializes on ~/.docker/config.json
 		await loginToRegistry(session, registry, token)
 	}
+}
+
+// A service's image is pulled with credentials only when it is a `build` image
+// (private GHCR, covered by the GHCR token) or an `upstream` image declaring a
+// `registry_auth_secret`. Public upstream images are pulled anonymously and
+// must never be logged into with another service's token.
+function requiresRegistryLogin(service: UserServiceConfig): boolean {
+	if (service.source === 'build') return true
+	return service.registryAuthSecret !== undefined
 }
 
 /**
