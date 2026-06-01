@@ -1271,6 +1271,46 @@ describe('parseConfig', () => {
 			},
 		)
 
+		it('rejects services that mix build and upstream image sources', () => {
+			const result = parseConfig(
+				appConfig({
+					front: { source: 'build', url: 'example.com' },
+					api: {
+						source: 'upstream',
+						ref: 'docker.n8n.io/n8nio/n8n:1.85.0',
+						url: 'api.example.com',
+					},
+				}),
+			)
+
+			if (result.ok) {
+				expect.unreachable('expected a mixed-source validation failure')
+			}
+
+			expect(result.errors).toContain(
+				'deploy.services mixes image sources (build: front; upstream: api) — a Hetzner deploy builds or pulls all services together; declare a single source across services',
+			)
+		})
+
+		it('accepts multiple services that all share the upstream source', () => {
+			const result = parseConfig(
+				appConfig({
+					n8n: {
+						source: 'upstream',
+						ref: 'docker.n8n.io/n8nio/n8n:1.85.0',
+						url: 'example.com',
+					},
+					grafana: {
+						source: 'upstream',
+						ref: 'docker.io/grafana/grafana:11.0.0',
+						url: 'metrics.example.com',
+					},
+				}),
+			)
+
+			expect(result.ok).toBe(true)
+		})
+
 		it('accepts service secrets that are all declared in [deploy.secrets]', () => {
 			const result = parseConfig({
 				project: { name: 'my-app', type: 'app', domain: 'example.com' },

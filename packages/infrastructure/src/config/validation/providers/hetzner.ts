@@ -88,17 +88,46 @@ function validateServiceUrls(
 	return errors
 }
 
+// A Hetzner deploy builds every `build` service in one bake job and pulls every
+// `upstream` service from its registry. The pipeline forwards exactly one
+// IMAGE_REFS set per deploy (the build job's OR the plan's upstream refs, never
+// merged), so a project mixing both sources would leave the pulled services with
+// no image ref at deploy time. Reject mixed sources here — fail loud at parse
+// time rather than as a missing image on the VPS. Single-source projects
+// (including single-service ones) pass trivially.
+function validateServiceSources(
+	services: Record<string, UserServiceConfig>,
+): string[] {
+	const namesBySource = new Map<string, string[]>()
+	for (const [name, service] of Object.entries(services)) {
+		const names = namesBySource.get(service.source) ?? []
+		names.push(name)
+		namesBySource.set(service.source, names)
+	}
+	if (namesBySource.size <= 1) return []
+
+	const summary = [...namesBySource.entries()]
+		.map(([source, names]) => `${source}: ${names.join(', ')}`)
+		.join('; ')
+	return [
+		`deploy.services mixes image sources (${summary}) — a Hetzner deploy builds or pulls all services together; declare a single source across services`,
+	]
+}
+
 export const hetznerVps: DeployProviderValidator = {
 	requiresDomain: true,
 	requiresServices: true,
 	validate(deployRecord, secrets, vps, volumes, services, domain) {
 		const { errors, hetzner } = parseHetzner(deployRecord['hetzner'])
-		const urlErrors = validateServiceUrls(services, domain)
+		const serviceErrors = [
+			...validateServiceUrls(services, domain),
+			...validateServiceSources(services),
+		]
 		if (!hetzner) {
-			return { errors: [...errors, ...urlErrors], deploy: undefined }
+			return { errors: [...errors, ...serviceErrors], deploy: undefined }
 		}
 		return {
-			errors: urlErrors,
+			errors: serviceErrors,
 			deploy: {
 				target: 'hetzner-vps',
 				secrets,
