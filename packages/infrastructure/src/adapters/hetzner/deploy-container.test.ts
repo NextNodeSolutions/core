@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { bringUpApp, bringUpDb, stageRollout } from './deploy-container.ts'
+import {
+	bringUpApp,
+	bringUpDb,
+	deployContainer,
+	stageRollout,
+} from './deploy-container.ts'
 
 import type {
 	PostgresServiceConfig,
@@ -390,5 +395,44 @@ describe('stageRollout', () => {
 		expect(logins.some(command => command.includes("'docker.io'"))).toBe(
 			true,
 		)
+	})
+})
+
+describe('deployContainer', () => {
+	const IMAGE: ImageRef = {
+		registry: 'ghcr.io',
+		repository: 'acme/web',
+		tag: 'sha-abc123',
+	}
+
+	it('returns an image ref per declared service and an upstream per routed service', async () => {
+		const session = recordingSession()
+
+		const result = await deployContainer(session, {
+			projectName: 'acme-web',
+			environment: 'production',
+			hostPorts: { front: 8080, api: 8081 },
+			env: { SITE_URL: 'https://example.com' },
+			secrets: {},
+			images: { front: IMAGE, api: IMAGE, worker: IMAGE },
+			registryToken: undefined,
+			volumes: [],
+			postgres: undefined,
+			services: {
+				front: buildService(3000, 'example.com'),
+				api: buildService(4000, 'api.example.com'),
+				worker: buildService(5000),
+			},
+		})
+
+		expect(result.deployed.imageRefs).toEqual({
+			front: IMAGE,
+			api: IMAGE,
+			worker: IMAGE,
+		})
+		expect(result.upstreams).toEqual([
+			{ hostname: 'example.com', dial: 'localhost:8080' },
+			{ hostname: 'api.example.com', dial: 'localhost:8081' },
+		])
 	})
 })

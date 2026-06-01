@@ -1017,7 +1017,7 @@ describe('HetznerVpsTarget', () => {
 					kind: 'container',
 					name: 'production',
 					url: 'https://acme-web.example.com',
-					imageRef: DEPLOY_IMAGE,
+					imageRefs: { app: DEPLOY_IMAGE },
 				}),
 			)
 		})

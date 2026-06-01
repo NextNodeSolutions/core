@@ -252,10 +252,12 @@ describe('deployCommand', () => {
 					kind: 'container',
 					name: 'production',
 					url: 'https://example.com',
-					imageRef: {
-						registry: 'ghcr.io',
-						repository: 'acme/web',
-						tag: 'sha-abc123',
+					imageRefs: {
+						app: {
+							registry: 'ghcr.io',
+							repository: 'acme/web',
+							tag: 'sha-abc123',
+						},
 					},
 					deployedAt: new Date('2026-01-01'),
 				},

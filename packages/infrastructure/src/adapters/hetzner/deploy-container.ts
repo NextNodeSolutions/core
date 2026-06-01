@@ -1,7 +1,4 @@
-import {
-	resolveSoleService,
-	selectServiceImage,
-} from '#/domain/deploy/image-ref.ts'
+import { selectServiceImage } from '#/domain/deploy/image-ref.ts'
 import { formatComposeEnv } from '#/domain/hetzner/compose-env.ts'
 import { renderComposeFile } from '#/domain/hetzner/compose-file.ts'
 import { computeSilo } from '#/domain/hetzner/env-silo.ts'
@@ -107,19 +104,23 @@ export async function deployContainer(
 		postgres: input.postgres,
 	})
 
-	const { name } = resolveSoleService(input.services)
 	const silo = computeSilo(input.projectName, input.environment)
 	const upstreams = buildServiceUpstreams(input.services, input.hostPorts)
 	logger.info(
 		`Deployed ${silo.id} with ${String(upstreams.length)} routed service(s)`,
 	)
 
+	const imageRefs: Record<string, ImageRef> = {}
+	for (const name of Object.keys(input.services)) {
+		imageRefs[name] = selectServiceImage(input.images, name)
+	}
+
 	return {
 		upstreams,
 		deployed: {
 			kind: 'container',
 			name: input.environment,
-			imageRef: selectServiceImage(input.images, name),
+			imageRefs,
 			url: input.env.SITE_URL,
 			deployedAt: new Date(),
 		},

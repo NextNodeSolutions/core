@@ -29,11 +29,12 @@ function buildSummaryRows(
 	const rows: Array<SummaryRow> = [['**URL**', env.url]]
 
 	if (env.kind === 'container') {
-		const ref = env.imageRef
-		rows.push([
-			'**Image**',
-			`\`${ref.registry}/${ref.repository}:${ref.tag}\``,
-		])
+		for (const [name, ref] of Object.entries(env.imageRefs)) {
+			rows.push([
+				`**Image (${name})**`,
+				`\`${ref.registry}/${ref.repository}:${ref.tag}\``,
+			])
+		}
 	}
 
 	rows.push(['**Target**', targetName])
