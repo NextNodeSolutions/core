@@ -1448,5 +1448,40 @@ describe('HetznerVpsTarget', () => {
 
 			expect(result.durationMs).toBeGreaterThanOrEqual(0)
 		})
+
+		it('deletes a DNS record for every routed service in a project teardown', async () => {
+			seedState()
+
+			const target = new HetznerVpsTarget({
+				...TARGET_CONFIG,
+				services: {
+					front: {
+						port: 3000,
+						url: 'example.com',
+						secrets: [],
+						needs: [],
+						dependsOn: [],
+						source: 'build',
+						target: 'front',
+					},
+					api: {
+						port: 4000,
+						url: 'api.example.com',
+						secrets: [],
+						needs: [],
+						dependsOn: [],
+						source: 'build',
+						target: 'api',
+					},
+				} satisfies Record<string, UserServiceConfig>,
+			})
+
+			await target.teardown('acme-web', 'example.com', 'project', false)
+
+			expect(mockDeleteByName).toHaveBeenCalledWith([
+				{ zoneName: 'example.com', name: 'example.com' },
+				{ zoneName: 'example.com', name: 'api.example.com' },
+			])
+		})
 	})
 })

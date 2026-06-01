@@ -452,6 +452,7 @@ export class HetznerVpsTarget implements DeployTarget {
 			projectName,
 			vpsName: this.config.vpsName,
 			domain,
+			services: this.config.services,
 			target,
 			withVolumes,
 			environment: this.config.environment,

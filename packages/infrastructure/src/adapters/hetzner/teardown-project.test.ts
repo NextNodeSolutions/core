@@ -3,9 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
 	releaseProjectHostPort,
 	teardownProjectCaddyRoute,
+	teardownProjectCerts,
 	teardownProjectContainer,
+	teardownProjectDns,
 } from './teardown-project.ts'
 
+import type { DnsClient } from '#/domain/dns/client.ts'
 import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
 import type { SshSession } from './ssh/session.types.ts'
 import type { HcloudConvergedState } from './state/types.ts'
@@ -119,18 +122,18 @@ describe('teardownProjectContainer', () => {
 })
 
 describe('teardownProjectCaddyRoute', () => {
-	it('reports no domain when hostname is undefined', async () => {
+	it('reports no routed hostnames when the list is empty', async () => {
 		const session = createMockSession()
 
 		const outcome = await teardownProjectCaddyRoute(
 			session,
-			undefined,
+			[],
 			CADDY_CONTEXT,
 		)
 
 		expect(outcome).toEqual({
 			handled: false,
-			detail: 'no domain configured',
+			detail: 'no routed hostnames',
 		})
 	})
 
@@ -140,7 +143,7 @@ describe('teardownProjectCaddyRoute', () => {
 
 		const outcome = await teardownProjectCaddyRoute(
 			session,
-			'acme-web.example.com',
+			['acme-web.example.com'],
 			CADDY_CONTEXT,
 		)
 
@@ -181,13 +184,13 @@ describe('teardownProjectCaddyRoute', () => {
 
 		const outcome = await teardownProjectCaddyRoute(
 			session,
-			'acme-web.example.com',
+			['acme-web.example.com'],
 			CADDY_CONTEXT,
 		)
 
 		expect(outcome).toEqual({
 			handled: false,
-			detail: 'no route for project hostname',
+			detail: 'no route for project hostnames',
 		})
 	})
 
@@ -225,7 +228,7 @@ describe('teardownProjectCaddyRoute', () => {
 
 		const outcome = await teardownProjectCaddyRoute(
 			session,
-			'acme-web.example.com',
+			['acme-web.example.com'],
 			CADDY_CONTEXT,
 		)
 
@@ -287,7 +290,7 @@ describe('teardownProjectCaddyRoute', () => {
 
 		const outcome = await teardownProjectCaddyRoute(
 			session,
-			'acme-web.example.com',
+			['acme-web.example.com'],
 			CADDY_CONTEXT,
 		)
 
@@ -301,6 +304,132 @@ describe('teardownProjectCaddyRoute', () => {
 		expect(session.exec).toHaveBeenCalledWith(
 			'caddy reload --config /etc/caddy/config.json',
 		)
+	})
+
+	it('removes every routed hostname of a multi-service project, preserving siblings', async () => {
+		const session = createMockSession()
+		const route = (host: string, port: number): unknown => ({
+			match: [{ host: [host] }],
+			handle: [
+				{
+					handler: 'reverse_proxy',
+					upstreams: [{ dial: `localhost:${String(port)}` }],
+				},
+			],
+			terminal: true,
+		})
+		vi.mocked(session.readFile).mockResolvedValueOnce(
+			JSON.stringify({
+				apps: {
+					http: {
+						servers: {
+							https: {
+								listen: [':443'],
+								routes: [
+									route('example.com', 8080),
+									route('api.example.com', 8081),
+									route('other-project.example.com', 8082),
+								],
+							},
+						},
+					},
+				},
+			}),
+		)
+
+		const outcome = await teardownProjectCaddyRoute(
+			session,
+			['example.com', 'api.example.com'],
+			CADDY_CONTEXT,
+		)
+
+		expect(outcome.handled).toBe(true)
+		const writtenConfig = vi
+			.mocked(session.writeFile)
+			.mock.calls.find(([path]) => path === '/etc/caddy/config.json')?.[1]
+		expect(writtenConfig).toContain('"other-project.example.com"')
+		expect(writtenConfig).not.toContain('"example.com"')
+		expect(writtenConfig).not.toContain('"api.example.com"')
+	})
+})
+
+describe('teardownProjectDns', () => {
+	const createMockDns = (deleted: number): DnsClient => ({
+		reconcile: vi.fn(async () => undefined),
+		deleteByName: vi.fn(async () => deleted),
+	})
+
+	it('reports no routed hostnames when the list is empty', async () => {
+		const dns = createMockDns(0)
+
+		const outcome = await teardownProjectDns([], dns)
+
+		expect(outcome).toEqual({
+			handled: false,
+			detail: 'no routed hostnames',
+		})
+		expect(dns.deleteByName).not.toHaveBeenCalled()
+	})
+
+	it('deletes one lookup per routed hostname under the right zone', async () => {
+		const dns = createMockDns(2)
+
+		const outcome = await teardownProjectDns(
+			['example.com', 'api.example.com'],
+			dns,
+		)
+
+		expect(dns.deleteByName).toHaveBeenCalledWith([
+			{ zoneName: 'example.com', name: 'example.com' },
+			{ zoneName: 'example.com', name: 'api.example.com' },
+		])
+		expect(outcome).toEqual({
+			handled: true,
+			detail: '2 record(s) deleted',
+		})
+	})
+})
+
+describe('teardownProjectCerts', () => {
+	const certsR2WithKeys = (
+		keys: ReadonlyArray<string>,
+	): ObjectStoreClient => {
+		const r2 = createMockR2()
+		vi.mocked(r2.deleteByPrefix).mockImplementation(
+			async (_prefix, predicate) =>
+				keys.filter(key => predicate?.(key) ?? true).length,
+		)
+		return r2
+	}
+
+	it('reports no routed hostnames when the list is empty', async () => {
+		const r2 = createMockR2()
+
+		const outcome = await teardownProjectCerts(r2, 'nn-prod', [])
+
+		expect(outcome).toEqual({
+			handled: false,
+			detail: 'no routed hostnames',
+		})
+		expect(r2.deleteByPrefix).not.toHaveBeenCalled()
+	})
+
+	it("purges each routed hostname's cert objects, sparing sibling projects", async () => {
+		const r2 = certsR2WithKeys([
+			'nn-prod/certificates/acme/example.com/example.com.json',
+			'nn-prod/certificates/acme/api.example.com/api.example.com.crt',
+			'nn-prod/certificates/acme/other.example.com/other.example.com.json',
+		])
+
+		const outcome = await teardownProjectCerts(r2, 'nn-prod', [
+			'example.com',
+			'api.example.com',
+		])
+
+		expect(outcome).toEqual({
+			handled: true,
+			detail: '2 cert object(s) deleted',
+		})
 	})
 })
 

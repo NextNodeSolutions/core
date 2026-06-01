@@ -26,6 +26,7 @@ import {
 	teardownVpsState,
 } from './teardown-vps.ts'
 
+import type { UserServiceConfig } from '#/config/types.ts'
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import type { TeardownResult } from '#/domain/deploy/teardown-result.ts'
 import type { TeardownTarget } from '#/domain/deploy/teardown-target.ts'
@@ -42,6 +43,10 @@ export interface HetznerTeardownContext {
 	readonly projectName: string
 	readonly vpsName: string
 	readonly domain: string | undefined
+	// Declared deploy services — project teardown derives the routed hostnames
+	// to delete (DNS, certs, Caddy route) from each service's `url`, the same set
+	// deploy created, rather than the bare project domain.
+	readonly services: Readonly<Record<string, UserServiceConfig>>
 	readonly target: TeardownTarget
 	readonly withVolumes: boolean
 	readonly environment: AppEnvironment
@@ -200,9 +205,15 @@ async function teardownProjectWithSession(
 	existing: { state: HcloudConvergedState; etag: string },
 	startMs: number,
 ): Promise<TeardownResult> {
-	const projectHostname = ctx.domain
-		? resolveDeployDomain(ctx.domain, ctx.environment)
-		: undefined
+	// The hostnames this project routes — one per service that declares a `url`,
+	// resolved per environment, exactly the set deploy created (Caddy upstreams,
+	// cert subjects, DNS records). Deleting from this set keeps teardown
+	// symmetric with deploy; a url-less project routes nothing and gets none.
+	const projectHostnames = Object.values(ctx.services).flatMap(service =>
+		service.url === undefined
+			? []
+			: [resolveDeployDomain(service.url, ctx.environment)],
+	)
 
 	const outcome = await executeHandlers(VPS_PROJECT_MANAGED_RESOURCES, {
 		container: () =>
@@ -213,15 +224,15 @@ async function teardownProjectWithSession(
 				ctx.withVolumes,
 			),
 		caddy: () =>
-			teardownProjectCaddyRoute(session, projectHostname, {
+			teardownProjectCaddyRoute(session, projectHostnames, {
 				vpsName: ctx.vpsName,
 				infraStorage: ctx.infraStorage,
 				acmeEmail: ctx.acmeEmail,
 				internal: ctx.internal,
 			}),
 		certs: () =>
-			teardownProjectCerts(ctx.certsR2, ctx.vpsName, projectHostname),
-		dns: () => teardownProjectDns(projectHostname, ctx.dns),
+			teardownProjectCerts(ctx.certsR2, ctx.vpsName, projectHostnames),
+		dns: () => teardownProjectDns(projectHostnames, ctx.dns),
 		state: () =>
 			releaseProjectHostPort(
 				ctx.r2,
