@@ -327,4 +327,68 @@ describe('stageRollout', () => {
 		expect(front).toContain('DATABASE_URL=postgres://db:5432')
 		expect(api).toContain('DATABASE_URL=postgres://db:5432')
 	})
+
+	// The forwarded token authenticates every registry the deploy pulls from,
+	// not just the `build` services' GHCR: an upstream service on a different
+	// registry must get its own login, and services sharing a registry collapse
+	// to a single `docker login`.
+	it('logs in once per distinct image registry across every service, regardless of source', async () => {
+		const session = recordingSession()
+		const upstreamService = (
+			port: number,
+			url: string,
+		): UserServiceConfig => ({
+			port,
+			url,
+			secrets: [],
+			needs: [],
+			dependsOn: [],
+			source: 'upstream',
+			ref: 'docker.io/acme/api:v1',
+		})
+
+		await stageRollout(session, {
+			projectName: 'acme-web',
+			environment: 'production',
+			hostPorts: { front: 8080, api: 8081 },
+			env: { SITE_URL: 'https://example.com' },
+			secrets: {},
+			images: {
+				front: {
+					registry: 'ghcr.io',
+					repository: 'acme/web',
+					tag: 'sha-abc1234',
+				},
+				api: {
+					registry: 'docker.io',
+					repository: 'acme/api',
+					tag: 'v1',
+				},
+				worker: {
+					registry: 'ghcr.io',
+					repository: 'acme/worker',
+					tag: 'sha-abc1234',
+				},
+			},
+			registryToken: 'tok',
+			volumes: [],
+			postgres: undefined,
+			services: {
+				front: buildService(3000, 'example.com'),
+				api: upstreamService(4000, 'api.example.com'),
+				worker: buildService(5000),
+			},
+		})
+
+		const logins = vi
+			.mocked(session.execWithStdin)
+			.mock.calls.map(([command]) => command)
+			.filter(command => command.startsWith('docker login'))
+
+		expect(logins).toHaveLength(2)
+		expect(logins.some(command => command.includes("'ghcr.io'"))).toBe(true)
+		expect(logins.some(command => command.includes("'docker.io'"))).toBe(
+			true,
+		)
+	})
 })

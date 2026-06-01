@@ -210,12 +210,14 @@ async function writeServiceEnvFiles(
 }
 
 /**
- * Authenticate docker against the registries the pipeline pushed this deploy's
- * `build` images to, using the single forwarded token. Build images share the
- * GHCR registry, so the set dedupes to one `docker login` in practice;
- * `upstream` images carry their own auth and are pulled without this token.
- * Sequential by necessity: concurrent `docker login` calls race on the shared
- * ~/.docker/config.json.
+ * Authenticate docker against every distinct registry this deploy pulls from,
+ * using the single forwarded token. The token is only resolved (and this only
+ * runs) when a login is actually needed: GHCR for `build` deploys, the shared
+ * private registry for `upstream` deploys with a `registry_auth_secret`; public
+ * upstream deploys carry no token and skip login entirely. Mixed sources are
+ * rejected at validation, so one token authenticates them all, and build images
+ * sharing GHCR dedupe to one `docker login`. Sequential by necessity:
+ * concurrent `docker login` calls race on the shared ~/.docker/config.json.
  */
 async function loginToRegistries(
 	session: SshSession,
@@ -223,9 +225,9 @@ async function loginToRegistries(
 	token: string,
 ): Promise<void> {
 	const registries = new Set(
-		Object.entries(input.services)
-			.filter(([, service]) => service.source === 'build')
-			.map(([name]) => selectServiceImage(input.images, name).registry),
+		Object.keys(input.services).map(
+			name => selectServiceImage(input.images, name).registry,
+		),
 	)
 
 	for (const registry of registries) {
