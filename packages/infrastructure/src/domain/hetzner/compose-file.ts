@@ -90,9 +90,10 @@ interface ComposeService {
 // the alpine/distroless-busybox bases NextNode builds its app images on. The
 // probe is deliberately NOT applied to `upstream` images: they are pulled
 // verbatim, so we can't assume they ship `wget` or answer `/healthz` — forcing
-// it would flag a healthy container `unhealthy` (and, once depends_on health
-// gating lands in M2, block its dependents). Upstream liveness stays the
-// image's own contract until a per-service healthcheck override exists.
+// it would flag a healthy container `unhealthy` and, because depends_on health
+// gating now blocks dependents on `service_healthy`, stall any sibling that
+// gates on this upstream service. Upstream liveness stays the image's own
+// contract until a per-service healthcheck override exists.
 const HEALTHCHECK_INTERVAL = '10s'
 const HEALTHCHECK_TIMEOUT = '3s'
 const HEALTHCHECK_RETRIES = 6
