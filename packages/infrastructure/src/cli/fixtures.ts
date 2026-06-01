@@ -124,7 +124,7 @@ export const APP_WITH_POSTGRES: DeployableConfig = {
 			app: {
 				port: 3000,
 				secrets: [],
-				needs: [],
+				needs: ['postgres'],
 				dependsOn: [],
 				source: 'build',
 				target: 'app',
@@ -160,7 +160,7 @@ export const APP_WITH_POSTGRES_EXTERNAL: DeployableConfig = {
 			app: {
 				port: 3000,
 				secrets: [],
-				needs: [],
+				needs: ['postgres'],
 				dependsOn: [],
 				source: 'build',
 				target: 'app',
@@ -197,7 +197,7 @@ export const APP_WITH_POSTGRES_CUSTOM_MIGRATE: DeployableConfig = {
 			app: {
 				port: 3000,
 				secrets: [],
-				needs: [],
+				needs: ['postgres'],
 				dependsOn: [],
 				source: 'build',
 				target: 'app',
