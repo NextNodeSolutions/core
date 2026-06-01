@@ -1333,6 +1333,59 @@ describe('parseConfig', () => {
 			)
 		})
 
+		it('accepts a depends_on referencing a declared sibling service', () => {
+			const result = parseConfig({
+				project: { name: 'my-app', type: 'app', domain: 'example.com' },
+				deploy: {
+					services: {
+						front: {
+							source: 'build',
+							url: 'example.com',
+							depends_on: ['api'],
+						},
+						api: { source: 'build', url: 'api.example.com' },
+					},
+				},
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok || result.config.deploy === false) {
+				expect.unreachable('expected a successful hetzner-vps parse')
+			}
+			if (result.config.deploy.target !== 'hetzner-vps') {
+				expect.unreachable('expected the hetzner-vps deploy target')
+			}
+
+			expect(result.config.deploy.services['front']?.dependsOn).toEqual([
+				'api',
+			])
+		})
+
+		it('rejects a depends_on referencing an undeclared service', () => {
+			const result = parseConfig({
+				project: { name: 'my-app', type: 'app', domain: 'example.com' },
+				deploy: {
+					services: {
+						front: {
+							source: 'build',
+							url: 'example.com',
+							depends_on: ['nonexistent'],
+						},
+					},
+				},
+			})
+
+			if (result.ok) {
+				expect.unreachable(
+					'expected an unknown-service depends_on validation failure',
+				)
+			}
+
+			expect(result.errors).toContain(
+				'deploy.services.front.depends_on references unknown service "nonexistent" — declare it in [deploy.services]',
+			)
+		})
+
 		it('rejects a non-kebab service name', () => {
 			const result = parseConfig(
 				appConfig({ App_1: { source: 'build' } }),

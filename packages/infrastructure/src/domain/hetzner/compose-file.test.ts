@@ -493,6 +493,69 @@ describe('renderComposeFile - multiple user services', () => {
 		expect(parsed.services.api).not.toHaveProperty('ports')
 	})
 
+	it('gates a service on each sibling it lists in depends_on', () => {
+		const parsed = parse(
+			renderComposeFile({
+				services: {
+					app: { ...APP_SERVICE, dependsOn: ['api'] },
+					api: API_SERVICE,
+				},
+				images: { app: IMAGE, api: API_IMAGE },
+				hostPorts: { app: 8080 },
+				projectName: PROJECT_NAME,
+				environment: ENVIRONMENT,
+				postgres: undefined,
+			}),
+		)
+
+		expect(parsed.services.app.depends_on).toEqual({
+			api: { condition: 'service_healthy' },
+		})
+		expect(parsed.services.api).not.toHaveProperty('depends_on')
+	})
+
+	it('gates a non-primary service on its declared sibling', () => {
+		const parsed = parse(
+			renderComposeFile({
+				services: {
+					app: APP_SERVICE,
+					api: { ...API_SERVICE, dependsOn: ['app'] },
+				},
+				images: { app: IMAGE, api: API_IMAGE },
+				hostPorts: { app: 8080 },
+				projectName: PROJECT_NAME,
+				environment: ENVIRONMENT,
+				postgres: undefined,
+			}),
+		)
+
+		expect(parsed.services.api.depends_on).toEqual({
+			app: { condition: 'service_healthy' },
+		})
+		expect(parsed.services.app).not.toHaveProperty('depends_on')
+	})
+
+	it('merges inter-service depends_on with the embedded-postgres dependency on the primary', () => {
+		const parsed = parse(
+			renderComposeFile({
+				services: {
+					app: { ...APP_SERVICE, dependsOn: ['api'] },
+					api: API_SERVICE,
+				},
+				images: { app: IMAGE, api: API_IMAGE },
+				hostPorts: { app: 8080 },
+				projectName: PROJECT_NAME,
+				environment: ENVIRONMENT,
+				postgres: { mode: 'embedded' },
+			}),
+		)
+
+		expect(parsed.services.app.depends_on).toEqual({
+			api: { condition: 'service_healthy' },
+			postgres: { condition: 'service_healthy' },
+		})
+	})
+
 	it('attaches user volumes and the postgres dependency to the first declared service only', () => {
 		const parsed = parse(
 			renderComposeFile({

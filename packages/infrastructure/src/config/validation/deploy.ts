@@ -313,6 +313,31 @@ function validateServiceSecretRefs(
 	return errors
 }
 
+// Every sibling a service lists in `depends_on` must itself be a declared
+// [deploy.services.<name>] — compose turns each entry into a startup gate (D7),
+// and a gate on a non-existent service would never resolve. Backing
+// dependencies (the `needs` field, e.g. postgres) are wired separately in M3.
+// Skipped when any service failed to parse: the declared-name pool would be
+// incomplete, turning a sibling's parse error into a spurious "unknown service".
+function validateServiceDependsOnRefs(servicesResult: {
+	errors: string[]
+	services: Record<string, UserServiceConfig>
+}): string[] {
+	if (servicesResult.errors.length > 0) return []
+
+	const declared = new Set(Object.keys(servicesResult.services))
+	const errors: string[] = []
+	for (const [name, service] of Object.entries(servicesResult.services)) {
+		for (const ref of service.dependsOn) {
+			if (declared.has(ref)) continue
+			errors.push(
+				`deploy.services.${name}.depends_on references unknown service "${ref}" — declare it in [deploy.services]`,
+			)
+		}
+	}
+	return errors
+}
+
 // Resolve [deploy.services.<name>] into a typed Record. Returns an empty Record
 // when the table is absent — whether at least one service is *required* is a
 // provider decision (see `requiresServices`). N services are accepted; each
@@ -400,6 +425,7 @@ export function validateDeploySection(
 	errors.push(
 		...validateServiceSecretRefs(servicesResult.services, secretsResult),
 	)
+	errors.push(...validateServiceDependsOnRefs(servicesResult))
 
 	const provider = DEPLOY_PROVIDER_VALIDATORS[target]
 	const providerResult = provider.validate(

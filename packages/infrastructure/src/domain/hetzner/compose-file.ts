@@ -203,14 +203,37 @@ function buildPortMapping(
 	}
 }
 
+// Translate a service's startup ordering into compose `depends_on` gates (D7):
+// every sibling listed in `dependsOn` must reach `service_healthy` before this
+// service starts, and the primary additionally waits on the embedded postgres
+// sidecar. Returns an empty object when the service has no dependencies, so the
+// `depends_on` key is omitted from the rendered block entirely.
+function buildDependsOn(
+	service: UserServiceConfig,
+	isPrimary: boolean,
+	dependsOnPostgres: boolean,
+): { depends_on?: Readonly<Record<string, ComposeServiceDependency>> } {
+	const dependencies: Record<string, ComposeServiceDependency> = {}
+	for (const sibling of service.dependsOn) {
+		dependencies[sibling] = { condition: 'service_healthy' }
+	}
+	if (isPrimary && dependsOnPostgres) {
+		dependencies[POSTGRES_SIDECAR_SERVICE_NAME] = {
+			condition: 'service_healthy',
+		}
+	}
+	if (Object.keys(dependencies).length === 0) return {}
+	return { depends_on: dependencies }
+}
+
 /**
  * Render the user workloads declared under [deploy.services.<name>]. Each
  * gets its own image, per-service env file (`.env.<name>` — the isolation
  * unit, D5) and, for `build` services, a /healthz healthcheck (D7); `upstream`
- * images get no forced probe. The FIRST declared service is the primary app:
- * it carries the user-declared volumes and the embedded-postgres
- * `service_healthy` dependency (M1 has exactly one user service; per-service
- * volume/dependency wiring lands with multi-service M2).
+ * images get no forced probe. Every service gates on the siblings it lists in
+ * `dependsOn` (D7); the FIRST declared service is the primary app, which also
+ * carries the user-declared volumes and the embedded-postgres `service_healthy`
+ * dependency.
  */
 function buildUserServices(
 	services: Readonly<Record<string, UserServiceConfig>>,
@@ -243,14 +266,7 @@ function buildUserServices(
 				userVolumes && {
 					volumes: userVolumes.map(v => `${v.name}:${v.mount}`),
 				}),
-			...(isPrimary &&
-				dependsOnPostgres && {
-					depends_on: {
-						[POSTGRES_SIDECAR_SERVICE_NAME]: {
-							condition: 'service_healthy',
-						},
-					},
-				}),
+			...buildDependsOn(service, isPrimary, dependsOnPostgres),
 		}
 	})
 	return result
