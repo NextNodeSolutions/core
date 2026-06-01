@@ -23,6 +23,16 @@ const POSTGRES_CONFIG: PostgresServiceConfig = {
 	mode: 'embedded',
 }
 
+const buildService = (port: number, url?: string): UserServiceConfig => ({
+	port,
+	...(url !== undefined && { url }),
+	secrets: [],
+	needs: [],
+	dependsOn: [],
+	source: 'build',
+	target: 'app',
+})
+
 const BASE_INPUT: BringUpInput = {
 	projectName: 'acme-web',
 	environment: 'production',
@@ -190,5 +200,52 @@ describe('stageRollout', () => {
 			.mocked(session.writeFile)
 			.mock.calls.map(([target]) => target)
 		expect(paths).toContain('/opt/apps/acme-web/production/.env.web')
+	})
+
+	// front + api route externally (each gets a url + host port); worker is
+	// internal-only (no url). renderComposeFile needs an image per service and a
+	// host port per url service, so all three are wired here.
+	const multiServiceInput = (): DeployContainerInput => ({
+		projectName: 'acme-web',
+		environment: 'production',
+		hostPorts: { front: 8080, api: 8081 },
+		env: { SITE_URL: 'https://example.com' },
+		secrets: {},
+		images: { front: IMAGE, api: IMAGE, worker: IMAGE },
+		registryToken: undefined,
+		volumes: [],
+		postgres: undefined,
+		services: {
+			front: buildService(3000, 'example.com'),
+			api: buildService(4000, 'api.example.com'),
+			worker: buildService(5000),
+		},
+	})
+
+	it('cross-injects every service url into each per-service env file', async () => {
+		const session = recordingSession()
+
+		await stageRollout(session, multiServiceInput())
+
+		const envFiles = ['front', 'api', 'worker'].map(name =>
+			writtenFile(session, `/opt/apps/acme-web/production/.env.${name}`),
+		)
+		for (const env of envFiles) {
+			expect(env).toContain('FRONT_URL=example.com')
+			expect(env).toContain('API_URL=api.example.com')
+		}
+	})
+
+	it('never injects a <NAME>_URL for a service that declares no url', async () => {
+		const session = recordingSession()
+
+		await stageRollout(session, multiServiceInput())
+
+		const envFiles = ['front', 'api', 'worker'].map(name =>
+			writtenFile(session, `/opt/apps/acme-web/production/.env.${name}`),
+		)
+		for (const env of envFiles) {
+			expect(env).not.toContain('WORKER_URL')
+		}
 	})
 })

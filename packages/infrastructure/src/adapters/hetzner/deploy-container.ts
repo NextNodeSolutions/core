@@ -5,6 +5,7 @@ import {
 import { formatComposeEnv } from '#/domain/hetzner/compose-env.ts'
 import { renderComposeFile } from '#/domain/hetzner/compose-file.ts'
 import { computeSilo } from '#/domain/hetzner/env-silo.ts'
+import { buildServiceUrlEnv } from '#/domain/hetzner/service-env.ts'
 import { buildServiceUpstreams } from '#/domain/hetzner/service-upstreams.ts'
 import {
 	POSTGRES_BACKUP_SERVICE_NAME,
@@ -143,23 +144,9 @@ export async function stageRollout(
 	const envDirQ = shellEscape(envDir)
 	const composeFileQ = shellEscape(`${envDir}/compose.yaml`)
 	const siloIdQ = shellEscape(silo.id)
-	const { name, service } = resolveSoleService(input.services)
 
-	// The container listens on the service's declared port: the same value the
-	// compose port mapping publishes and the /healthz probe targets. Injecting
-	// a hardcoded port here instead would silently break any service that sets
-	// a non-default `port` (app on one port, mapping + healthcheck on another).
-	const allEnv = {
-		PORT: String(service.port),
-		...input.env,
-		...input.secrets,
-	}
 	await session.exec(`mkdir -p ${envDirQ}`)
-	// Per-service env file (`.env.<name>`) is the isolation unit the compose
-	// `env_file` points at — written under the service's DECLARED name so it
-	// matches the `env_file` the compose renderer emits. M1 has one workload;
-	// the per-service fan-out lands with multi-service M2.
-	await session.writeFile(`${envDir}/.env.${name}`, formatComposeEnv(allEnv))
+	await writeServiceEnvFiles(session, envDir, input)
 	await session.writeFile(
 		`${envDir}/compose.yaml`,
 		renderComposeFile({
@@ -174,11 +161,7 @@ export async function stageRollout(
 	)
 
 	if (input.registryToken !== undefined) {
-		await loginToRegistry(
-			session,
-			selectServiceImage(input.images, name).registry,
-			input.registryToken,
-		)
+		await loginToRegistries(session, input, input.registryToken)
 	}
 
 	await session.exec(`docker compose -p ${siloIdQ} -f ${composeFileQ} pull`)
@@ -188,6 +171,61 @@ export async function stageRollout(
 		environment: input.environment,
 		postgres: input.postgres,
 	})
+}
+
+/**
+ * Write one `.env.<name>` per declared service — the per-service isolation
+ * unit the compose `env_file` points at (D5). Every file carries the shared
+ * deploy env, the symmetric cross-service URL block (so each service resolves
+ * its peers by `<NAME>_URL`), the secrets pool, and its OWN declared port: a
+ * hardcoded PORT here would break any service whose `port` differs from a
+ * peer's (app on one port, mapping + healthcheck on another).
+ */
+async function writeServiceEnvFiles(
+	session: SshSession,
+	envDir: string,
+	input: DeployContainerInput,
+): Promise<void> {
+	const serviceUrls = buildServiceUrlEnv(input.services)
+
+	await Promise.all(
+		Object.entries(input.services).map(([name, service]) =>
+			session.writeFile(
+				`${envDir}/.env.${name}`,
+				formatComposeEnv({
+					PORT: String(service.port),
+					...input.env,
+					...serviceUrls,
+					...input.secrets,
+				}),
+			),
+		),
+	)
+}
+
+/**
+ * Authenticate docker against the registries the pipeline pushed this deploy's
+ * `build` images to, using the single forwarded token. Build images share the
+ * GHCR registry, so the set dedupes to one `docker login` in practice;
+ * `upstream` images carry their own auth and are pulled without this token.
+ * Sequential by necessity: concurrent `docker login` calls race on the shared
+ * ~/.docker/config.json.
+ */
+async function loginToRegistries(
+	session: SshSession,
+	input: DeployContainerInput,
+	token: string,
+): Promise<void> {
+	const registries = new Set(
+		Object.entries(input.services)
+			.filter(([, service]) => service.source === 'build')
+			.map(([name]) => selectServiceImage(input.images, name).registry),
+	)
+
+	for (const registry of registries) {
+		// eslint-disable-next-line no-await-in-loop -- docker login serializes on ~/.docker/config.json
+		await loginToRegistry(session, registry, token)
+	}
 }
 
 /**
