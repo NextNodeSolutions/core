@@ -151,18 +151,28 @@ export class HetznerVpsTarget implements DeployTarget {
 				`Invariant: expected deployable state for VPS "${vpsName}"`,
 			)
 		}
+		const { state } = existing
 
-		const records = computeVpsDnsRecords({
-			domain,
-			environment: this.config.environment,
-			publicIp: existing.state.publicIp,
-			internal: this.config.internal,
-			tailnetIp: existing.state.tailnetIp,
-		})
+		// One A record per routed service (a service declaring a `url`), at its
+		// per-environment hostname — the same set buildServiceUpstreams routes and
+		// composeCaddyConfig requests certs for. A project routes via its service
+		// urls, not the bare project `domain`, so the records derive from them;
+		// internal-only services (no url) get no record.
+		const records = Object.values(this.config.services).flatMap(service =>
+			service.url === undefined
+				? []
+				: computeVpsDnsRecords({
+						domain: service.url,
+						environment: this.config.environment,
+						publicIp: state.publicIp,
+						internal: this.config.internal,
+						tailnetIp: state.tailnetIp,
+					}),
+		)
 
 		await this.config.dns.reconcile(records)
 		logger.info(
-			`DNS reconciled for "${projectName}" on VPS "${vpsName}" (${this.config.environment})`,
+			`DNS reconciled for "${projectName}" (${domain}) on VPS "${vpsName}" (${this.config.environment}): ${String(records.length)} record(s)`,
 		)
 	}
 

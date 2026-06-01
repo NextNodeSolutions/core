@@ -1227,6 +1227,62 @@ describe('HetznerVpsTarget', () => {
 			])
 		})
 
+		it('emits one A record per routed service, skipping url-less services', async () => {
+			seedState({ ...CONVERGED_STATE, publicIp: '5.6.7.8' })
+
+			const target = new HetznerVpsTarget({
+				...TARGET_CONFIG,
+				services: {
+					front: {
+						port: 3000,
+						url: 'example.com',
+						secrets: [],
+						needs: [],
+						dependsOn: [],
+						source: 'build',
+						target: 'front',
+					},
+					api: {
+						port: 4000,
+						url: 'api.example.com',
+						secrets: [],
+						needs: [],
+						dependsOn: [],
+						source: 'build',
+						target: 'api',
+					},
+					worker: {
+						port: 5000,
+						secrets: [],
+						needs: [],
+						dependsOn: [],
+						source: 'build',
+						target: 'worker',
+					},
+				} satisfies Record<string, UserServiceConfig>,
+			})
+			await target.reconcileDns('acme-web', 'example.com')
+
+			expect(mockReconcile).toHaveBeenCalledWith([
+				{
+					zoneName: 'example.com',
+					name: 'example.com',
+					type: 'A',
+					content: '5.6.7.8',
+					proxied: true,
+					ttl: 1,
+				},
+				{
+					zoneName: 'example.com',
+					name: 'api.example.com',
+					type: 'A',
+					content: '5.6.7.8',
+					proxied: true,
+					ttl: 1,
+				},
+			])
+		})
+
 		it('uses dev subdomain for development environment', async () => {
 			seedState({ ...CONVERGED_STATE, publicIp: '5.6.7.8' })
 
