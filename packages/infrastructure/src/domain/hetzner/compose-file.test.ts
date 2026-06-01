@@ -514,6 +514,53 @@ describe('renderComposeFile - multiple user services', () => {
 		expect(parsed.services.api).not.toHaveProperty('depends_on')
 	})
 
+	it('gates on service_started for an upstream sibling that has no healthcheck', () => {
+		const gateway: UserServiceConfig = {
+			port: 3002,
+			secrets: [],
+			needs: [],
+			dependsOn: [],
+			source: 'upstream',
+			ref: 'docker.io/acme/gateway:1.0',
+		}
+		const parsed = parse(
+			renderComposeFile({
+				services: {
+					web: {
+						port: 3000,
+						secrets: [],
+						needs: [],
+						dependsOn: ['gateway'],
+						source: 'upstream',
+						ref: 'docker.io/acme/web:1.0',
+					},
+					gateway,
+				},
+				images: {
+					web: {
+						registry: 'docker.io',
+						repository: 'acme/web',
+						tag: '1.0',
+					},
+					gateway: {
+						registry: 'docker.io',
+						repository: 'acme/gateway',
+						tag: '1.0',
+					},
+				},
+				hostPorts: {},
+				projectName: PROJECT_NAME,
+				environment: ENVIRONMENT,
+				postgres: undefined,
+			}),
+		)
+
+		expect(parsed.services.web.depends_on).toEqual({
+			gateway: { condition: 'service_started' },
+		})
+		expect(parsed.services.gateway).not.toHaveProperty('healthcheck')
+	})
+
 	it('gates a non-primary service on its declared sibling', () => {
 		const parsed = parse(
 			renderComposeFile({

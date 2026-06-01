@@ -65,7 +65,10 @@ export function formatImageRef(image: ImageRef): string {
 }
 
 interface ComposeServiceDependency {
-	readonly condition: 'service_healthy'
+	// `service_healthy` for a sibling that exposes a healthcheck (build /healthz
+	// services, the postgres sidecar); `service_started` for one that does not
+	// (upstream images), since a health gate on it would never resolve.
+	readonly condition: 'service_healthy' | 'service_started'
 }
 
 interface ComposeHealthcheck {
@@ -205,18 +208,24 @@ function buildPortMapping(
 }
 
 // Translate a service's startup ordering into compose `depends_on` gates (D7):
-// every sibling listed in `dependsOn` must reach `service_healthy` before this
-// service starts, and the primary additionally waits on the embedded postgres
-// sidecar. Returns an empty object when the service has no dependencies, so the
+// each sibling listed in `dependsOn` must come up before this service starts,
+// and the primary additionally waits on the embedded postgres sidecar. A build
+// sibling (or postgres) exposes a healthcheck so it is gated on
+// `service_healthy`; an upstream sibling carries no forced probe, so gating it
+// on `service_healthy` would never resolve — it is gated on `service_started`.
+// Returns an empty object when the service has no dependencies, so the
 // `depends_on` key is omitted from the rendered block entirely.
 function buildDependsOn(
 	service: UserServiceConfig,
+	services: Readonly<Record<string, UserServiceConfig>>,
 	isPrimary: boolean,
 	dependsOnPostgres: boolean,
 ): { depends_on?: Readonly<Record<string, ComposeServiceDependency>> } {
 	const dependencies: Record<string, ComposeServiceDependency> = {}
 	for (const sibling of service.dependsOn) {
-		dependencies[sibling] = { condition: 'service_healthy' }
+		dependencies[sibling] = {
+			condition: siblingCondition(services[sibling]),
+		}
 	}
 	if (isPrimary && dependsOnPostgres) {
 		dependencies[POSTGRES_SIDECAR_SERVICE_NAME] = {
@@ -225,6 +234,16 @@ function buildDependsOn(
 	}
 	if (Object.keys(dependencies).length === 0) return {}
 	return { depends_on: dependencies }
+}
+
+// Only services that expose a healthcheck can be gated on `service_healthy`:
+// `build` images carry the /healthz probe, `upstream` images do not. Gate an
+// upstream sibling (or an unknown one) on `service_started` so the dependency
+// can resolve instead of hanging the deploy on a health state that never comes.
+function siblingCondition(
+	sibling: UserServiceConfig | undefined,
+): ComposeServiceDependency['condition'] {
+	return sibling?.source === 'build' ? 'service_healthy' : 'service_started'
 }
 
 /**
@@ -267,7 +286,7 @@ function buildUserServices(
 				userVolumes && {
 					volumes: userVolumes.map(v => `${v.name}:${v.mount}`),
 				}),
-			...buildDependsOn(service, isPrimary, dependsOnPostgres),
+			...buildDependsOn(service, services, isPrimary, dependsOnPostgres),
 		}
 	})
 	return result
