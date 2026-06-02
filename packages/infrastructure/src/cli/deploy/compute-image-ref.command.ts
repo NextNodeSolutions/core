@@ -1,15 +1,28 @@
-import { writeMultilineOutput, writeOutput } from '#/adapters/github/output.ts'
+import { join } from 'node:path'
+
+import { writeBakeFile } from '#/adapters/build-output/bake-file.ts'
+import { writeOutput } from '#/adapters/github/output.ts'
 import { requireEnv } from '#/cli/env.ts'
 import { isHetznerDeployableConfig } from '#/config/types.ts'
+import { renderBakeFile } from '#/domain/deploy/bake-file.ts'
 import { resolveServiceImageRefs } from '#/domain/deploy/image-ref.ts'
-import { formatImageRef } from '#/domain/hetzner/compose-file.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
 import type { DeployableConfig } from '#/config/types.ts'
-import type { ImageRef } from '#/domain/deploy/target.ts'
 
 const logger = createLogger()
 
+// Written at the repo root (the bake-action working directory) so the bake
+// target contexts resolve against the workspace. Emitted as the `bake_file`
+// output the build job feeds to `docker/bake-action`'s `files:` input.
+const BAKE_FILE_NAME = 'docker-bake.json'
+
+/**
+ * Render the docker-bake definition from `nextnode.toml` and write it to the
+ * workspace root, then publish the per-service `image_refs` the deploy +
+ * migrate jobs consume. `nextnode.toml` is the single source of truth for
+ * build shape: the caller ships no docker-compose.yml.
+ */
 export function computeImageRefCommand(config: DeployableConfig): void {
 	if (!isHetznerDeployableConfig(config)) {
 		throw new Error(
@@ -19,6 +32,8 @@ export function computeImageRefCommand(config: DeployableConfig): void {
 
 	const repository = requireEnv('GITHUB_REPOSITORY')
 	const sha = requireEnv('GITHUB_SHA')
+	const packageDir = requireEnv('PACKAGE_DIR')
+	const workspace = requireEnv('GITHUB_WORKSPACE')
 
 	const { imageRefs, bakeTargets } = resolveServiceImageRefs(
 		config.deploy.services,
@@ -26,41 +41,17 @@ export function computeImageRefCommand(config: DeployableConfig): void {
 		sha,
 	)
 
-	const bakeTargetsCsv = bakeTargets.join(',')
-	const imageRefsJson = JSON.stringify(imageRefs)
-	const bakeSet = formatBakeSet(imageRefs, bakeTargets)
-	writeOutput('bake_targets', bakeTargetsCsv)
-	writeOutput('image_refs', imageRefsJson)
-	writeMultilineOutput('bake_set', bakeSet)
-	logger.info(`bake_targets=${bakeTargetsCsv}`)
-	logger.info(`image_refs=${imageRefsJson}`)
-	logger.info(`bake_set=${bakeSet}`)
-}
+	const bakeDefinition = renderBakeFile({
+		services: config.deploy.services,
+		imageRefs,
+		bakeTargets,
+		packageDir,
+	})
+	writeBakeFile(join(workspace, BAKE_FILE_NAME), bakeDefinition)
 
-/**
- * Render the multi-line `set:` value docker/bake-action consumes — one
- * `<target>.tags` line per build service plus its GHA layer-cache scope. Built
- * here (not in YAML) so the workflow stays free of per-target string logic, and
- * generated from the same `imageRefs` Record the deploy jobs read. Upstream
- * services never appear: they are not in `bakeTargets`.
- */
-function formatBakeSet(
-	imageRefs: Record<string, ImageRef>,
-	bakeTargets: ReadonlyArray<string>,
-): string {
-	return bakeTargets
-		.map(target => {
-			const ref = imageRefs[target]
-			if (!ref) {
-				throw new Error(
-					`bake target "${target}" has no resolved image ref`,
-				)
-			}
-			return [
-				`${target}.tags=${formatImageRef(ref)}`,
-				`${target}.cache-from=type=gha,scope=${target}`,
-				`${target}.cache-to=type=gha,scope=${target},mode=max`,
-			].join('\n')
-		})
-		.join('\n')
+	const imageRefsJson = JSON.stringify(imageRefs)
+	writeOutput('image_refs', imageRefsJson)
+	writeOutput('bake_file', BAKE_FILE_NAME)
+	logger.info(`image_refs=${imageRefsJson}`)
+	logger.info(`bake_file=${BAKE_FILE_NAME}`)
 }

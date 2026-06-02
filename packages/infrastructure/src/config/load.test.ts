@@ -94,7 +94,6 @@ describe('loadConfig', () => {
 				needs: [],
 				dependsOn: [],
 				source: 'build',
-				target: 'app',
 			},
 		})
 	})
@@ -138,7 +137,6 @@ describe('parseConfig', () => {
 						needs: [],
 						dependsOn: [],
 						source: 'build',
-						target: 'app',
 					},
 				},
 			})
@@ -759,7 +757,6 @@ describe('parseConfig', () => {
 						needs: [],
 						dependsOn: [],
 						source: 'build',
-						target: 'app',
 					},
 				},
 			})
@@ -1017,7 +1014,6 @@ describe('parseConfig', () => {
 						needs: [],
 						dependsOn: [],
 						source: 'build',
-						target: 'app',
 					},
 				},
 			})
@@ -1042,12 +1038,11 @@ describe('parseConfig', () => {
 					needs: [],
 					dependsOn: [],
 					source: 'build',
-					target: 'app',
 				},
 			})
 		})
 
-		it('defaults a build target to the service name and honors an explicit port', () => {
+		it('honors an explicit port and omits the build target when unset', () => {
 			const result = parseConfig(
 				appConfig({ web: { source: 'build', port: 8080 } }),
 			)
@@ -1062,7 +1057,25 @@ describe('parseConfig', () => {
 				needs: [],
 				dependsOn: [],
 				source: 'build',
-				target: 'web',
+			})
+		})
+
+		it('keeps an explicit build target stage when declared', () => {
+			const result = parseConfig(
+				appConfig({ app: { source: 'build', target: 'runtime' } }),
+			)
+
+			expect(result.ok).toBe(true)
+			if (!result.ok || result.config.deploy === false) return
+			if (result.config.deploy.target !== 'hetzner-vps') return
+
+			expect(result.config.deploy.services['app']).toEqual({
+				port: 3000,
+				secrets: [],
+				needs: [],
+				dependsOn: [],
+				source: 'build',
+				target: 'runtime',
 			})
 		})
 
@@ -1082,7 +1095,6 @@ describe('parseConfig', () => {
 				needs: [],
 				dependsOn: [],
 				source: 'build',
-				target: 'app',
 			})
 		})
 
@@ -1213,7 +1225,6 @@ describe('parseConfig', () => {
 					needs: [],
 					dependsOn: [],
 					source: 'build',
-					target: 'front',
 				},
 				api: {
 					port: 3000,
@@ -1222,7 +1233,6 @@ describe('parseConfig', () => {
 					needs: [],
 					dependsOn: [],
 					source: 'build',
-					target: 'api',
 				},
 			})
 		})
@@ -1517,7 +1527,6 @@ describe('parseConfig', () => {
 						needs: [],
 						dependsOn: [],
 						source: 'build',
-						target: 'app',
 					},
 				},
 			})
@@ -1588,7 +1597,6 @@ describe('parseConfig', () => {
 						needs: [],
 						dependsOn: [],
 						source: 'build',
-						target: 'app',
 					},
 				},
 			})
@@ -1620,7 +1628,6 @@ describe('parseConfig', () => {
 						needs: [],
 						dependsOn: [],
 						source: 'build',
-						target: 'app',
 					},
 				},
 			})
@@ -1655,7 +1662,6 @@ describe('parseConfig', () => {
 						needs: [],
 						dependsOn: [],
 						source: 'build',
-						target: 'app',
 					},
 				},
 			})
@@ -1690,7 +1696,6 @@ describe('parseConfig', () => {
 						needs: [],
 						dependsOn: [],
 						source: 'build',
-						target: 'app',
 					},
 				},
 			})
@@ -1832,7 +1837,6 @@ describe('parseConfig', () => {
 						needs: [],
 						dependsOn: [],
 						source: 'build',
-						target: 'app',
 					},
 				},
 			})

@@ -57,6 +57,15 @@ export function computeImageRef(input: ComputeImageRefInput): ImageRef {
 }
 
 /**
+ * Render an `ImageRef` back into its canonical `registry/repository:tag`
+ * string — the inverse of `parseImageRef`. Used for compose `image:` lines
+ * and docker-bake `tags`.
+ */
+export function formatImageRef(image: ImageRef): string {
+	return `${image.registry}/${image.repository}:${image.tag}`
+}
+
+/**
  * Parse a Docker image reference string into its components.
  *
  * Expected format: `registry/repository:tag`

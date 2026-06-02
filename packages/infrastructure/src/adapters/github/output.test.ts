@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { writeMultilineOutput, writeOutput } from './output.ts'
+import { writeOutput } from './output.ts'
 
 describe('writeOutput', () => {
 	let outputFile: string
@@ -31,42 +31,5 @@ describe('writeOutput', () => {
 		vi.stubEnv('GITHUB_OUTPUT', undefined)
 
 		expect(() => writeOutput('a', '1')).toThrow('GITHUB_OUTPUT env var')
-	})
-})
-
-describe('writeMultilineOutput', () => {
-	let outputFile: string
-
-	beforeEach(() => {
-		const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
-		outputFile = join(tmpdir(), `gh-output-${id}.txt`)
-		vi.stubEnv('GITHUB_OUTPUT', outputFile)
-	})
-
-	afterEach(() => {
-		rmSync(outputFile, { force: true })
-		vi.unstubAllEnvs()
-	})
-
-	it('wraps a multiline value in the GitHub Actions heredoc form', () => {
-		writeMultilineOutput('bake_set', 'app.tags=img\napp.cache-from=gha')
-
-		expect(readFileSync(outputFile, 'utf-8')).toBe(
-			'bake_set<<GHA_OUTPUT_EOF\napp.tags=img\napp.cache-from=gha\nGHA_OUTPUT_EOF\n',
-		)
-	})
-
-	it('throws when the value collides with the heredoc delimiter', () => {
-		expect(() =>
-			writeMultilineOutput('bake_set', 'before GHA_OUTPUT_EOF after'),
-		).toThrow('collides with the heredoc delimiter')
-	})
-
-	it('throws when GITHUB_OUTPUT is not set', () => {
-		vi.stubEnv('GITHUB_OUTPUT', undefined)
-
-		expect(() => writeMultilineOutput('a', 'x')).toThrow(
-			'GITHUB_OUTPUT env var',
-		)
 	})
 })

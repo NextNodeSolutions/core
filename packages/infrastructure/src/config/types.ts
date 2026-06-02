@@ -125,9 +125,9 @@ export type DeployImageSource = (typeof DEPLOY_IMAGE_SOURCES)[number]
 // A single deployable workload declared under [deploy.services.<name>]. The
 // instance name (the table key) is a KEBAB identifier; `source` discriminates
 // how its image is obtained — `build` images are built + pushed by the pipeline
-// (optional context/dockerfile, `target` defaulting to the service name);
-// `upstream` images are pulled verbatim from `ref` (with an optional
-// registry-auth secret NAME).
+// (optional context/dockerfile/target; an omitted `target` builds the
+// Dockerfile's final stage); `upstream` images are pulled verbatim from `ref`
+// (with an optional registry-auth secret NAME).
 export interface ServiceCommon {
 	readonly port: number
 	readonly url?: string
@@ -144,7 +144,9 @@ export interface BuildServiceConfig {
 	readonly source: 'build'
 	readonly context?: string
 	readonly dockerfile?: string
-	readonly target: string
+	// Docker build STAGE to target (`--target`). Omitted builds the
+	// Dockerfile's final stage — the default for a single-app image.
+	readonly target?: string
 }
 
 export interface UpstreamServiceConfig {

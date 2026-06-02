@@ -1,4 +1,4 @@
-import { formatImageRef } from '#/domain/hetzner/compose-file.ts'
+import { formatImageRef } from '#/domain/deploy/image-ref.ts'
 import { computeSilo } from '#/domain/hetzner/env-silo.ts'
 import { POSTGRES_BACKUP_SERVICE_NAME } from '#/domain/services/postgres.ts'
 import { createLogger } from '@nextnode-solutions/logger'

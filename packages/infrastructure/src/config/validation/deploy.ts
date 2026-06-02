@@ -225,7 +225,7 @@ function toUserService(name: string, parsed: ParsedService): UserServiceConfig {
 		...(parsed.dockerfile !== undefined
 			? { dockerfile: parsed.dockerfile }
 			: {}),
-		target: parsed.target ?? name,
+		...(parsed.target !== undefined ? { target: parsed.target } : {}),
 	}
 }
 

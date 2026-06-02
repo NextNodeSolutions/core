@@ -1,3 +1,4 @@
+import { formatImageRef } from '#/domain/deploy/image-ref.ts'
 import {
 	POSTGRES_EXPORTER_SERVICE_NAME,
 	buildPostgresExporterInitMount,
@@ -58,10 +59,6 @@ export interface ComposeFileInput {
 	readonly supabase?: SupabaseServiceConfig
 	readonly projectName: string
 	readonly environment: string
-}
-
-export function formatImageRef(image: ImageRef): string {
-	return `${image.registry}/${image.repository}:${image.tag}`
 }
 
 interface ComposeServiceDependency {

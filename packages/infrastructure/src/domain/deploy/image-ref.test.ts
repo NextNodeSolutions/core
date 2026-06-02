@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
 	computeImageRef,
+	formatImageRef,
 	parseImageRef,
 	parseImageRefsEnv,
 	resolveServiceImageRefs,
@@ -26,6 +27,38 @@ const upstreamService = (ref: string): UserServiceConfig => ({
 	dependsOn: [],
 	source: 'upstream',
 	ref,
+})
+
+describe('formatImageRef', () => {
+	it('joins registry, repository, and tag', () => {
+		expect(
+			formatImageRef({
+				registry: 'ghcr.io',
+				repository: 'acme/web',
+				tag: 'sha-abc123',
+			}),
+		).toBe('ghcr.io/acme/web:sha-abc123')
+	})
+
+	it('handles Docker Hub style refs', () => {
+		expect(
+			formatImageRef({
+				registry: 'docker.io',
+				repository: 'library/nginx',
+				tag: 'latest',
+			}),
+		).toBe('docker.io/library/nginx:latest')
+	})
+
+	it('handles nested repository paths', () => {
+		expect(
+			formatImageRef({
+				registry: 'ghcr.io',
+				repository: 'org/team/service',
+				tag: 'v1.2.3',
+			}),
+		).toBe('ghcr.io/org/team/service:v1.2.3')
+	})
 })
 
 describe('computeImageRef', () => {

@@ -229,10 +229,13 @@ Follow the global CLAUDE.md rules verbatim:
 
 ## Deployment
 
-- Dockerfile + `docker-compose.yml` at the package root follow the
-  hetzner-caller convention (`services.app`, `build.context` points at
-  the monorepo root so pnpm workspaces resolve, no `image:` / `ports:` /
-  `env_file:` / `restart:` — all injected by the infra pipeline).
+- A single `Dockerfile` at the package root is the only build artifact the
+  package ships. `nextnode.toml`'s `[deploy.services.app]` is the single
+  source of truth for build shape: the infra pipeline generates the
+  `docker-bake.json` from it (context = monorepo root so pnpm workspaces
+  resolve, dockerfile = `packages/monitoring/Dockerfile`, final stage). There
+  is no `docker-compose.yml` — `image:` / `ports:` / `env_file:` / `restart:`
+  are all injected by the infra pipeline at deploy time.
 - The container binds `$PORT=3000`; the VPS-side Caddy reverse-proxies
   `monitoring.nextnode.fr` to `127.0.0.1:<computeHostPort('production')>`.
 - Secrets (`GITHUB_APP_PRIVATE_KEY`, `HETZNER_API_TOKEN`, `CLOUDFLARE_API_TOKEN`,
