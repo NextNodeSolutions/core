@@ -31,7 +31,7 @@ import {
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 
-import { formatImageRef, renderComposeFile } from './compose-file.ts'
+import { renderComposeFile } from './compose-file.ts'
 
 import type { UserServiceConfig } from '#/config/types.ts'
 import type { ImageRef } from '#/domain/deploy/target.ts'
@@ -79,32 +79,6 @@ function baseInput(
 		...overrides,
 	}
 }
-
-describe('formatImageRef', () => {
-	it('joins registry, repository, and tag', () => {
-		expect(formatImageRef(IMAGE)).toBe('ghcr.io/acme/web:sha-abc123')
-	})
-
-	it('handles Docker Hub style refs', () => {
-		expect(
-			formatImageRef({
-				registry: 'docker.io',
-				repository: 'library/nginx',
-				tag: 'latest',
-			}),
-		).toBe('docker.io/library/nginx:latest')
-	})
-
-	it('handles nested repository paths', () => {
-		expect(
-			formatImageRef({
-				registry: 'ghcr.io',
-				repository: 'org/team/service',
-				tag: 'v1.2.3',
-			}),
-		).toBe('ghcr.io/org/team/service:v1.2.3')
-	})
-})
 
 describe('renderComposeFile', () => {
 	it('renders the user service with image, per-service env file, healthcheck, and port mapping', () => {

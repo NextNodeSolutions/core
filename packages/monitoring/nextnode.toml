@@ -18,5 +18,15 @@ secrets = [
 server_type = "cx33"
 location = "nbg1"
 
+# Single build service. Defaults reconstruct the monorepo build: context = repo
+# root, dockerfile = packages/monitoring/Dockerfile, final Dockerfile stage,
+# port 3000. nextnode.toml is the single source of truth — no docker-compose.yml.
+# `url` claims the bare project domain so the service is routed: with
+# internal = true it gets a tailnet-IP A-record, an internal-cert Caddy upstream,
+# and a published host port forwarding to the container's :3000.
+[deploy.services.app]
+source = "build"
+url = "monitoring.nextnode.fr"
+
 [environment]
 development = false

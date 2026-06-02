@@ -150,7 +150,7 @@ jobs:
         runs-on: ubuntu-latest
         outputs:
             image_refs: ${{ steps.compute.outputs.image_refs }}
-            bake_set: ${{ steps.compute.outputs.bake_set }}
+            bake_file: ${{ steps.compute.outputs.bake_file }}
         steps:
             - uses: NextNodeSolutions/core/.github/actions/setup@main
               with:
@@ -166,21 +166,20 @@ jobs:
                   username: ${{ github.actor }}
                   password: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Compute image ref
+            - name: Render bake definition from nextnode.toml
               id: compute
               run: node src/index.ts compute-image-ref
               working-directory: .infra/packages/infrastructure
               env:
+                  PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
                   GITHUB_REPOSITORY: ${{ github.repository }}
                   GITHUB_SHA: ${{ github.sha }}
 
             - name: Build and push
               uses: docker/bake-action@v6
               with:
-                  files: ${{ env.PACKAGE_DIR }}/docker-compose.yml
-                  targets: ${{ steps.compute.outputs.bake_targets }}
+                  files: ${{ steps.compute.outputs.bake_file }}
                   push: true
-                  set: ${{ steps.compute.outputs.bake_set }}
 
     migrate:
         name: Migrate

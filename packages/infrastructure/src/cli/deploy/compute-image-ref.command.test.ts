@@ -1,4 +1,4 @@
-import { readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -7,152 +7,78 @@ import {
 	APP_WITH_DOMAIN,
 	STATIC_WITH_DOMAIN,
 } from '#/cli/fixtures.ts'
+import { parseJsonOrThrow } from '#/kernel/json.ts'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { computeImageRefCommand } from './compute-image-ref.command.ts'
 
-import type { DeployableConfig } from '#/config/types.ts'
-
 const REPOSITORY = 'NextNodeSolutions/Core'
 const SHA = 'abc1234567890abcdef1234567890abcdef12345'
+const PACKAGE_DIR = 'packages/monitoring'
+const APP_IMAGE_REF =
+	'{"app":{"registry":"ghcr.io","repository":"nextnodesolutions/core-app","tag":"sha-abc1234"}}'
 
-// A multi-service deployment (front + api build, worker upstream). The M1
-// validator caps declarations at a single service, but the command operates on
-// an already-parsed config, so the test feeds the shape directly to exercise
-// the per-service loop that M2/M3 rely on.
-const MIXED_SERVICES: DeployableConfig = {
-	project: {
-		type: 'app',
-		name: 'my-app',
-		domain: 'example.com',
-		redirectDomains: [],
-		filter: false,
-		internal: false,
-	},
-	scripts: { lint: 'lint', test: 'test', build: 'build' },
-	package: false,
-	environment: { development: true },
-	services: {},
-	deploy: {
-		target: 'hetzner-vps',
-		hetzner: { serverType: 'cx23', location: 'nbg1' },
-		secrets: [],
-		vps: null,
-		volumes: [],
-		services: {
-			front: {
-				port: 3000,
-				secrets: [],
-				needs: [],
-				dependsOn: [],
-				source: 'build',
-				target: 'front',
-			},
-			api: {
-				port: 3001,
-				secrets: [],
-				needs: [],
-				dependsOn: [],
-				source: 'build',
-				target: 'api',
-			},
-			worker: {
-				port: 3002,
-				secrets: [],
-				needs: [],
-				dependsOn: [],
-				source: 'upstream',
-				ref: 'docker.io/acme/worker:2.0',
-			},
-		},
-	},
-}
-
-// Parse a GITHUB_OUTPUT file, understanding both the plain `key=value` form and
-// the multiline `key<<DELIMITER … DELIMITER` heredoc form (used for bake_set).
+// GITHUB_OUTPUT entries are all written with the single-line `key=value` form,
+// so a JSON value (no `=`, no newline) parses cleanly on the first separator.
 function readOutputs(file: string): Record<string, string> {
-	const lines = readFileSync(file, 'utf-8').split('\n')
 	const outputs: Record<string, string> = {}
-	let index = 0
-
-	while (index < lines.length) {
-		const line = lines[index]
-		index++
+	for (const line of readFileSync(file, 'utf-8').split('\n')) {
 		if (!line) continue
-
-		const heredoc = /^(.+?)<<(.+)$/.exec(line)
-		if (!heredoc) {
-			const separator = line.indexOf('=')
-			outputs[line.slice(0, separator)] = line.slice(separator + 1)
-			continue
-		}
-
-		const key = heredoc[1]
-		const delimiter = heredoc[2]
-		if (key === undefined || delimiter === undefined) continue
-		const body: string[] = []
-		while (index < lines.length && lines[index] !== delimiter) {
-			body.push(lines[index] ?? '')
-			index++
-		}
-		index++ // consume the closing delimiter line
-		outputs[key] = body.join('\n')
+		const separator = line.indexOf('=')
+		outputs[line.slice(0, separator)] = line.slice(separator + 1)
 	}
-
 	return outputs
 }
 
 describe('computeImageRefCommand', () => {
+	let workspace: string
 	let outputFile: string
 
 	beforeEach(() => {
-		outputFile = join(
-			tmpdir(),
-			`gh-output-${String(Date.now())}-${Math.random().toString(36).slice(2)}.txt`,
-		)
+		workspace = mkdtempSync(join(tmpdir(), 'compute-image-ref-'))
+		outputFile = join(workspace, 'gh-output.txt')
 		vi.stubEnv('GITHUB_OUTPUT', outputFile)
 		vi.stubEnv('GITHUB_REPOSITORY', REPOSITORY)
 		vi.stubEnv('GITHUB_SHA', SHA)
+		vi.stubEnv('PACKAGE_DIR', PACKAGE_DIR)
+		vi.stubEnv('GITHUB_WORKSPACE', workspace)
+		vi.stubEnv('LOG_LEVEL', 'silent')
 	})
 
 	afterEach(() => {
-		rmSync(outputFile, { force: true })
+		rmSync(workspace, { recursive: true, force: true })
 		vi.unstubAllEnvs()
 		vi.restoreAllMocks()
 	})
 
-	it('emits bake_targets, image_refs and bake_set for a single build service', () => {
+	it('emits image_refs and the bake_file path for a build deployment', () => {
 		computeImageRefCommand(APP_WITH_DOMAIN)
 
 		expect(readOutputs(outputFile)).toEqual({
-			bake_targets: 'app',
-			image_refs:
-				'{"app":{"registry":"ghcr.io","repository":"nextnodesolutions/core-app","tag":"sha-abc1234"}}',
-			bake_set:
-				'app.tags=ghcr.io/nextnodesolutions/core-app:sha-abc1234\napp.cache-from=type=gha,scope=app\napp.cache-to=type=gha,scope=app,mode=max',
+			image_refs: APP_IMAGE_REF,
+			bake_file: 'docker-bake.json',
 		})
 	})
 
-	it('keeps an upstream service ref verbatim and leaves bake_targets and bake_set empty', () => {
-		computeImageRefCommand(APP_UPSTREAM_PUBLIC)
+	it('writes the docker-bake definition to the workspace root', () => {
+		computeImageRefCommand(APP_WITH_DOMAIN)
 
-		expect(readOutputs(outputFile)).toEqual({
-			bake_targets: '',
-			image_refs:
-				'{"app":{"registry":"docker.io","repository":"library/nginx","tag":"1.27"}}',
-			bake_set: '',
-		})
-	})
-
-	it('bakes only build services and parses upstream refs in a mixed deployment', () => {
-		computeImageRefCommand(MIXED_SERVICES)
-
-		expect(readOutputs(outputFile)).toEqual({
-			bake_targets: 'front,api',
-			image_refs:
-				'{"front":{"registry":"ghcr.io","repository":"nextnodesolutions/core-front","tag":"sha-abc1234"},"api":{"registry":"ghcr.io","repository":"nextnodesolutions/core-api","tag":"sha-abc1234"},"worker":{"registry":"docker.io","repository":"acme/worker","tag":"2.0"}}',
-			bake_set:
-				'front.tags=ghcr.io/nextnodesolutions/core-front:sha-abc1234\nfront.cache-from=type=gha,scope=front\nfront.cache-to=type=gha,scope=front,mode=max\napi.tags=ghcr.io/nextnodesolutions/core-api:sha-abc1234\napi.cache-from=type=gha,scope=api\napi.cache-to=type=gha,scope=api,mode=max',
+		const bake = parseJsonOrThrow(
+			readFileSync(join(workspace, 'docker-bake.json'), 'utf-8'),
+			'docker-bake.json',
+		)
+		expect(bake).toEqual({
+			group: { default: { targets: ['app'] } },
+			target: {
+				app: {
+					context: '.',
+					dockerfile: 'packages/monitoring/Dockerfile',
+					target: 'app',
+					tags: ['ghcr.io/nextnodesolutions/core-app:sha-abc1234'],
+					'cache-from': ['type=gha,scope=app'],
+					'cache-to': ['type=gha,scope=app,mode=max'],
+				},
+			},
 		})
 	})
 
@@ -160,6 +86,12 @@ describe('computeImageRefCommand', () => {
 		expect(() => {
 			computeImageRefCommand(STATIC_WITH_DOMAIN)
 		}).toThrow('compute-image-ref requires a hetzner-vps deploy target')
+	})
+
+	it('throws for an all-upstream deployment — compute-image-ref runs only for build sources', () => {
+		expect(() => {
+			computeImageRefCommand(APP_UPSTREAM_PUBLIC)
+		}).toThrow('no build services to bake')
 	})
 
 	it('throws when GITHUB_REPOSITORY is not set', () => {
@@ -176,6 +108,22 @@ describe('computeImageRefCommand', () => {
 		expect(() => {
 			computeImageRefCommand(APP_WITH_DOMAIN)
 		}).toThrow('GITHUB_SHA env var')
+	})
+
+	it('throws when PACKAGE_DIR is not set', () => {
+		vi.stubEnv('PACKAGE_DIR', undefined)
+
+		expect(() => {
+			computeImageRefCommand(APP_WITH_DOMAIN)
+		}).toThrow('PACKAGE_DIR env var')
+	})
+
+	it('throws when GITHUB_WORKSPACE is not set', () => {
+		vi.stubEnv('GITHUB_WORKSPACE', undefined)
+
+		expect(() => {
+			computeImageRefCommand(APP_WITH_DOMAIN)
+		}).toThrow('GITHUB_WORKSPACE env var')
 	})
 
 	it('propagates domain validation errors for a malformed repository', () => {
