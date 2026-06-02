@@ -12,9 +12,11 @@ import type { DeployableConfig } from '#/config/types.ts'
 
 const logger = createLogger()
 
-// Written at the repo root (the bake-action working directory) so the bake
-// target contexts resolve against the workspace. Emitted as the `bake_file`
-// output the build job feeds to `docker/bake-action`'s `files:` input.
+// Written at the workspace root and emitted by basename as the `bake_file`
+// output the build job feeds to `docker/bake-action`'s `files:` input. The
+// build step runs Bake with `source: .` so it executes from the workspace —
+// making this a relative lookup and resolving each target's `context: "."`
+// against the repo root.
 const BAKE_FILE_NAME = 'docker-bake.json'
 
 /**

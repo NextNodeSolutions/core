@@ -178,6 +178,10 @@ jobs:
             - name: Build and push
               uses: docker/bake-action@v6
               with:
+                  # Bake from the workspace (where the compute step wrote
+                  # docker-bake.json), not bake-action v6's default Git context
+                  # which ignores runtime-generated files. `.` is the build context.
+                  source: .
                   files: ${{ steps.compute.outputs.bake_file }}
                   push: true
 

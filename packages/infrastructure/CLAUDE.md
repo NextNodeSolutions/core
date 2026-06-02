@@ -87,14 +87,14 @@ src/
 
 ### Layer import rules — ENFORCED
 
-| Layer        | May import from                                            | STRICTLY FORBIDDEN                                                |
-| ------------ | ---------------------------------------------------------- | ----------------------------------------------------------------- |
-| `kernel/*`   | nothing in-app (Node stdlib only)                          | every in-app module — it is the layer-agnostic floor              |
-| `index.ts`   | `cli/*.command`, `kernel/*`                                | `domain/`, `adapters/`, env vars, logger                          |
-| `cli/*`      | `domain/`, `adapters/`, `config/`, `kernel/*`, logger      | direct `node:fs`, `fetch`, raw `process.env` outside `cli/env.ts` |
-| `domain/*`   | other `domain/*`, `kernel/*`, `config/schema` (types only) | `process.env`, `node:fs`, `fetch`, logger, any adapter            |
-| `adapters/*` | `kernel/*`, `config/schema` (types), `domain/*` (types)    | domain business logic, cross-adapter calls                        |
-| `config/*`   | `kernel/*` + stdlib + smol-toml + valibot (nothing else)   | domain, cli, adapters                                             |
+| Layer        | May import from                                                                               | STRICTLY FORBIDDEN                                                |
+| ------------ | --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `kernel/*`   | nothing in-app (Node stdlib only)                                                             | every in-app module — it is the layer-agnostic floor              |
+| `index.ts`   | `cli/*.command`, `kernel/*`                                                                   | `domain/`, `adapters/`, env vars, logger                          |
+| `cli/*`      | `domain/`, `adapters/`, `config/`, `kernel/*`, logger                                         | direct `node:fs`, `fetch`, raw `process.env` outside `cli/env.ts` |
+| `domain/*`   | other `domain/*`, `kernel/*`, `config/schema` (types only)                                    | `process.env`, `node:fs`, `fetch`, logger, any adapter            |
+| `adapters/*` | `kernel/*`, `config/schema` (types), `domain/*` (types + pure formatters/renderers/selectors) | domain business _decisions_, cross-adapter calls                  |
+| `config/*`   | `kernel/*` + stdlib + smol-toml + valibot (nothing else)                                      | domain, cli, adapters                                             |
 
 `kernel/*` is the floor below every layer: pure primitives (type guards, generic parsers) with **zero in-app imports** — Node stdlib only, no IO/env/logger. It exists so a runtime helper like `isRecord` can be shared across the `config`↔`domain` boundary that the "types only" rule otherwise blocks, instead of being copy-pasted. Anything provider- or domain-specific does NOT belong here — it stays in its layer.
 
@@ -103,6 +103,7 @@ src/
 - **`index.ts` is the command registry + dispatcher.** It imports command functions, maps them by name, reads `process.argv[2]`, and calls the matched command. Throws on missing or unknown command — no silent defaults.
 - **Domain is 100% pure.** Functions take inputs, return outputs. No side effects, no env reads, no logger calls. Domain tests should never need stubs beyond plain value fixtures.
 - **Adapters never contain business decisions.** They translate between the outside world (fs, HTTP, GitHub Actions) and domain types. A conditional inside an adapter that goes beyond "did the IO succeed?" is a smell — push it into the domain.
+- **Adapters MAY call pure `domain/*` helpers to translate.** Importing a pure, side-effect-free domain formatter / renderer / selector (e.g. `formatImageRef`, `renderComposeFile`, `selectServiceImage`) to turn a domain value into the string or structure the outside world expects is translation, not a business decision — it is allowed. The ban is on _decisions_: any branch beyond "did the IO succeed?", or any policy/env-driven choice, must live in `domain/`. The "types only" wording in the table is about not pulling in stateful or decision-bearing domain code — not about banning pure value renderers (which the adapters layer already relies on throughout).
 - **CLI commands are orchestrators.** They read env vars (via `cli/env.ts`), call domain functions, pass results to adapters, and log at milestones. They hold ZERO business logic — all decisions live in `domain/`.
 - **Infrastructure-specific strings (shell commands, file paths, URLs) live in the CLI layer**, not the domain. The domain exposes a parameter (e.g. `prodGateCommand` on `PipelineContext`); the CLI injects the concrete value.
 
