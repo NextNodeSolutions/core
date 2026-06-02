@@ -154,6 +154,66 @@ describe('writePlanOutputs', () => {
 		)
 	})
 
+	it('emits one upstream ref per service for a multi-service upstream deploy', () => {
+		const config: NextNodeConfig = {
+			...APP_CONFIG,
+			deploy: {
+				target: 'hetzner-vps',
+				secrets: [],
+				vps: null,
+				volumes: [],
+				hetzner: { serverType: 'cpx22', location: 'nbg1' },
+				services: {
+					n8n: {
+						port: 3000,
+						url: 'example.com',
+						secrets: [],
+						needs: [],
+						dependsOn: [],
+						source: 'upstream',
+						ref: 'docker.n8n.io/n8nio/n8n:1.85.0',
+					},
+					grafana: {
+						port: 3000,
+						url: 'metrics.example.com',
+						secrets: [],
+						needs: [],
+						dependsOn: [],
+						source: 'upstream',
+						ref: 'docker.io/grafana/grafana:11.0.0',
+					},
+				},
+			},
+		}
+
+		writePlanOutputs({
+			config,
+			pagesProjectName: 'my-app',
+			tasks: [],
+			buildDirectory: 'dist',
+			packageDir: '.',
+		})
+
+		const prefix = 'upstream_image_refs='
+		const line = readFileSync(outputFile, 'utf-8')
+			.split('\n')
+			.find(entry => entry.startsWith(prefix))
+		expect(line).toBeDefined()
+		const raw = line?.slice(prefix.length) ?? ''
+		expect(parseImageRefsEnv(raw)).toEqual({
+			n8n: {
+				registry: 'docker.n8n.io',
+				repository: 'n8nio/n8n',
+				tag: '1.85.0',
+			},
+			grafana: {
+				registry: 'docker.io',
+				repository: 'grafana/grafana',
+				tag: '11.0.0',
+			},
+		})
+	})
+
 	it('emits upstream_image_refs that parseImageRefsEnv round-trips', () => {
 		const config: NextNodeConfig = {
 			...APP_CONFIG,

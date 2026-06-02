@@ -22,10 +22,45 @@ import {
 	APP_WITH_POSTGRES_EXTERNAL,
 } from '#/cli/fixtures.ts'
 
+import type { DeployableConfig } from '#/config/types.ts'
 import type { MigrateResult, SnapshotResult } from '#/domain/deploy/target.ts'
 
 const MIGRATE_RESULT: MigrateResult = { durationMs: 1234 }
 const SNAPSHOT_RESULT: SnapshotResult = { durationMs: 4321 }
+
+// front + api both build; only api owns the schema (needs = ["postgres"]). The
+// migrate image must be api's, never front's.
+const APP_MULTI_SERVICE_POSTGRES: DeployableConfig = {
+	...APP_WITH_POSTGRES,
+	project: { ...APP_WITH_POSTGRES.project, domain: 'example.com' },
+	deploy: {
+		target: 'hetzner-vps',
+		hetzner: { serverType: 'cx23', location: 'nbg1' },
+		secrets: [],
+		vps: null,
+		volumes: [],
+		services: {
+			front: {
+				port: 3000,
+				url: 'example.com',
+				secrets: [],
+				needs: [],
+				dependsOn: [],
+				source: 'build',
+				target: 'front',
+			},
+			api: {
+				port: 4000,
+				url: 'api.example.com',
+				secrets: [],
+				needs: ['postgres'],
+				dependsOn: [],
+				source: 'build',
+				target: 'api',
+			},
+		},
+	},
+}
 
 import { migrateRemoteCommand } from './migrate-remote.command.ts'
 
@@ -192,6 +227,36 @@ describe('migrateRemoteCommand', () => {
 			},
 			migrateCommand: 'pnpm drizzle-kit migrate',
 		})
+	})
+
+	it('runs the migration with the schema-owning service image in a multi-service deploy', async () => {
+		vi.stubEnv(
+			'IMAGE_REFS',
+			JSON.stringify({
+				front: {
+					registry: 'ghcr.io',
+					repository: 'acme/web-front',
+					tag: 'sha-front0',
+				},
+				api: {
+					registry: 'ghcr.io',
+					repository: 'acme/web-api',
+					tag: 'sha-api00',
+				},
+			}),
+		)
+
+		await migrateRemoteCommand(APP_MULTI_SERVICE_POSTGRES)
+
+		expect(mockRunMigrate).toHaveBeenCalledExactlyOnceWith(
+			expect.objectContaining({
+				image: {
+					registry: 'ghcr.io',
+					repository: 'acme/web-api',
+					tag: 'sha-api00',
+				},
+			}),
+		)
 	})
 
 	it('passes the configured migrate command when [services.postgres].migrate_command is set', async () => {

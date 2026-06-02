@@ -288,10 +288,61 @@ const serviceSchema = (name: string): GenericSchema<unknown, ParsedService> => {
 	)
 }
 
+// Every secret a service references in its `secrets` list must be declared in
+// the [deploy.secrets] pool — that pool is the single source of truth for what
+// the pipeline pulls from GitHub Secrets, and stageRollout projects it per
+// service (D5). A reference to an undeclared name would silently inject nothing,
+// so it is rejected. Skipped when [deploy.secrets] itself failed to parse, to
+// avoid cascading every reference into a spurious "unknown" error.
+function validateServiceSecretRefs(
+	services: Record<string, UserServiceConfig>,
+	secretsResult: { errors: string[]; secrets: ReadonlyArray<string> },
+): string[] {
+	if (secretsResult.errors.length > 0) return []
+
+	const pool = new Set(secretsResult.secrets)
+	const errors: string[] = []
+	for (const [name, service] of Object.entries(services)) {
+		for (const secret of service.secrets) {
+			if (pool.has(secret)) continue
+			errors.push(
+				`deploy.services.${name}.secrets references unknown secret "${secret}" — declare it in [deploy.secrets]`,
+			)
+		}
+	}
+	return errors
+}
+
+// Every sibling a service lists in `depends_on` must itself be a declared
+// [deploy.services.<name>] — compose turns each entry into a startup gate (D7),
+// and a gate on a non-existent service would never resolve. Backing
+// dependencies (the `needs` field, e.g. postgres) are wired separately in M3.
+// Skipped when any service failed to parse: the declared-name pool would be
+// incomplete, turning a sibling's parse error into a spurious "unknown service".
+function validateServiceDependsOnRefs(servicesResult: {
+	errors: string[]
+	services: Record<string, UserServiceConfig>
+}): string[] {
+	if (servicesResult.errors.length > 0) return []
+
+	const declared = new Set(Object.keys(servicesResult.services))
+	const errors: string[] = []
+	for (const [name, service] of Object.entries(servicesResult.services)) {
+		for (const ref of service.dependsOn) {
+			if (declared.has(ref)) continue
+			errors.push(
+				`deploy.services.${name}.depends_on references unknown service "${ref}" — declare it in [deploy.services]`,
+			)
+		}
+	}
+	return errors
+}
+
 // Resolve [deploy.services.<name>] into a typed Record. Returns an empty Record
 // when the table is absent — whether at least one service is *required* is a
-// provider decision (see `requiresServices`). M1 is single-service only — more
-// than one declared service is rejected (the cap is lifted in M2.A-01).
+// provider decision (see `requiresServices`). N services are accepted; each
+// entry is validated independently so one malformed service doesn't sink its
+// siblings.
 function validateServices(deployRecord: Record<string, unknown>): {
 	errors: string[]
 	services: Record<string, UserServiceConfig>
@@ -305,16 +356,6 @@ function validateServices(deployRecord: Record<string, unknown>): {
 	}
 
 	const entries = Object.entries(raw)
-	if (entries.length > 1) {
-		return {
-			errors: [
-				`M1 supports a single [deploy.services.<name>] (got ${entries.length}: ${entries
-					.map(([n]) => n)
-					.join(', ')}); multi-service lands in M2`,
-			],
-			services: {},
-		}
-	}
 
 	const errors: string[] = []
 	const services: Record<string, UserServiceConfig> = {}
@@ -342,7 +383,7 @@ function validateServices(deployRecord: Record<string, unknown>): {
 export function validateDeploySection(
 	raw: unknown,
 	projectType: DeployableProjectType,
-	hasDomain: boolean,
+	domain: string | undefined,
 ): ValidationResult<DeploySection> {
 	if (raw !== undefined && !isRecord(raw)) {
 		return { ok: false, errors: ['[deploy] must be a table'] }
@@ -381,6 +422,10 @@ export function validateDeploySection(
 
 	const servicesResult = validateServices(deployRecord)
 	errors.push(...servicesResult.errors)
+	errors.push(
+		...validateServiceSecretRefs(servicesResult.services, secretsResult),
+	)
+	errors.push(...validateServiceDependsOnRefs(servicesResult))
 
 	const provider = DEPLOY_PROVIDER_VALIDATORS[target]
 	const providerResult = provider.validate(
@@ -389,10 +434,11 @@ export function validateDeploySection(
 		vpsResult.vps,
 		volumesResult.volumes,
 		servicesResult.services,
+		domain,
 	)
 	errors.push(...providerResult.errors)
 
-	if (provider.requiresDomain && !hasDomain) {
+	if (provider.requiresDomain && domain === undefined) {
 		errors.push(
 			'project.domain is required when deploy target is "hetzner-vps"',
 		)

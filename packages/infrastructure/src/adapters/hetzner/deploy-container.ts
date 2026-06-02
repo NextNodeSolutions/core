@@ -1,10 +1,12 @@
-import {
-	resolveSoleService,
-	selectServiceImage,
-} from '#/domain/deploy/image-ref.ts'
+import { selectServiceImage } from '#/domain/deploy/image-ref.ts'
 import { formatComposeEnv } from '#/domain/hetzner/compose-env.ts'
 import { renderComposeFile } from '#/domain/hetzner/compose-file.ts'
 import { computeSilo } from '#/domain/hetzner/env-silo.ts'
+import {
+	buildServiceSecretEnv,
+	buildServiceUrlEnv,
+} from '#/domain/hetzner/service-env.ts'
+import { buildServiceUpstreams } from '#/domain/hetzner/service-upstreams.ts'
 import {
 	POSTGRES_BACKUP_SERVICE_NAME,
 	POSTGRES_SIDECAR_SERVICE_NAME,
@@ -42,8 +44,9 @@ const POSTGRES_WAIT_TIMEOUT_SECONDS = 60
 export interface DeployContainerInput {
 	readonly projectName: string
 	readonly environment: AppEnvironment
-	readonly hostname: string
-	readonly hostPort: number
+	// Allocated host port per url service, keyed by instance name. Internal-only
+	// services (no url) hold no entry — they publish no host port.
+	readonly hostPorts: Readonly<Record<string, number>>
 	readonly env: DeployEnv
 	readonly secrets: Readonly<Record<string, string>>
 	// Image ref per declared service, keyed by instance name — sourced from the
@@ -58,7 +61,9 @@ export interface DeployContainerInput {
 }
 
 export interface DeployContainerResult {
-	readonly upstream: CaddyUpstream
+	// One Caddy upstream per service that declares a url; internal-only services
+	// (no url) contribute none. Empty when the project routes nothing externally.
+	readonly upstreams: ReadonlyArray<CaddyUpstream>
 	readonly deployed: ContainerDeployedEnvironment
 }
 
@@ -99,19 +104,27 @@ export async function deployContainer(
 		postgres: input.postgres,
 	})
 
-	const { name } = resolveSoleService(input.services)
 	const silo = computeSilo(input.projectName, input.environment)
-	logger.info(`Deployed ${silo.id} on port ${input.hostPort}`)
+	const upstreams = buildServiceUpstreams(
+		input.services,
+		input.hostPorts,
+		input.environment,
+	)
+	logger.info(
+		`Deployed ${silo.id} with ${String(upstreams.length)} routed service(s)`,
+	)
+
+	const imageRefs: Record<string, ImageRef> = {}
+	for (const name of Object.keys(input.services)) {
+		imageRefs[name] = selectServiceImage(input.images, name)
+	}
 
 	return {
-		upstream: {
-			hostname: input.hostname,
-			dial: `localhost:${input.hostPort}`,
-		},
+		upstreams,
 		deployed: {
 			kind: 'container',
 			name: input.environment,
-			imageRef: selectServiceImage(input.images, name),
+			imageRefs,
 			url: input.env.SITE_URL,
 			deployedAt: new Date(),
 		},
@@ -139,29 +152,15 @@ export async function stageRollout(
 	const envDirQ = shellEscape(envDir)
 	const composeFileQ = shellEscape(`${envDir}/compose.yaml`)
 	const siloIdQ = shellEscape(silo.id)
-	const { name, service } = resolveSoleService(input.services)
 
-	// The container listens on the service's declared port: the same value the
-	// compose port mapping publishes and the /healthz probe targets. Injecting
-	// a hardcoded port here instead would silently break any service that sets
-	// a non-default `port` (app on one port, mapping + healthcheck on another).
-	const allEnv = {
-		PORT: String(service.port),
-		...input.env,
-		...input.secrets,
-	}
 	await session.exec(`mkdir -p ${envDirQ}`)
-	// Per-service env file (`.env.<name>`) is the isolation unit the compose
-	// `env_file` points at — written under the service's DECLARED name so it
-	// matches the `env_file` the compose renderer emits. M1 has one workload;
-	// the per-service fan-out lands with multi-service M2.
-	await session.writeFile(`${envDir}/.env.${name}`, formatComposeEnv(allEnv))
+	await writeServiceEnvFiles(session, envDir, input)
 	await session.writeFile(
 		`${envDir}/compose.yaml`,
 		renderComposeFile({
 			services: input.services,
 			images: input.images,
-			hostPorts: { [name]: input.hostPort },
+			hostPorts: input.hostPorts,
 			volumes: input.volumes,
 			projectName: input.projectName,
 			postgres: input.postgres,
@@ -170,11 +169,7 @@ export async function stageRollout(
 	)
 
 	if (input.registryToken !== undefined) {
-		await loginToRegistry(
-			session,
-			selectServiceImage(input.images, name).registry,
-			input.registryToken,
-		)
+		await loginToRegistries(session, input, input.registryToken)
 	}
 
 	await session.exec(`docker compose -p ${siloIdQ} -f ${composeFileQ} pull`)
@@ -184,6 +179,75 @@ export async function stageRollout(
 		environment: input.environment,
 		postgres: input.postgres,
 	})
+}
+
+/**
+ * Write one `.env.<name>` per declared service — the per-service isolation
+ * unit the compose `env_file` points at (D5). Every file carries the shared
+ * deploy env, the symmetric cross-service URL block (so each service resolves
+ * its peers by `<NAME>_URL`), its projected secret subset (only the secrets the
+ * service declares, plus service-required ones like postgres `DATABASE_URL`),
+ * and its OWN declared port: a hardcoded PORT here would break any service whose
+ * `port` differs from a peer's (app on one port, mapping + healthcheck on
+ * another).
+ */
+async function writeServiceEnvFiles(
+	session: SshSession,
+	envDir: string,
+	input: DeployContainerInput,
+): Promise<void> {
+	const serviceUrls = buildServiceUrlEnv(input.services, input.environment)
+	const serviceSecrets = buildServiceSecretEnv(input.services, input.secrets)
+
+	await Promise.all(
+		Object.entries(input.services).map(([name, service]) =>
+			session.writeFile(
+				`${envDir}/.env.${name}`,
+				formatComposeEnv({
+					PORT: String(service.port),
+					...input.env,
+					...serviceUrls,
+					...serviceSecrets[name],
+				}),
+			),
+		),
+	)
+}
+
+/**
+ * Authenticate docker against the registries whose images sit behind the single
+ * forwarded token, deduped (build images share GHCR, so one `docker login`).
+ * The token authenticates only credentialed registries, so we log into those
+ * alone: `build` images live on the private GHCR the GHCR token covers, and
+ * `upstream` images need a login only when they declare a `registry_auth_secret`.
+ * A public upstream registry is skipped — logging into it with another service's
+ * token would fail or pollute ~/.docker/config.json. Sequential by necessity:
+ * concurrent `docker login` calls race on the shared ~/.docker/config.json.
+ */
+async function loginToRegistries(
+	session: SshSession,
+	input: DeployContainerInput,
+	token: string,
+): Promise<void> {
+	const registries = new Set(
+		Object.entries(input.services)
+			.filter(([, service]) => requiresRegistryLogin(service))
+			.map(([name]) => selectServiceImage(input.images, name).registry),
+	)
+
+	for (const registry of registries) {
+		// eslint-disable-next-line no-await-in-loop -- docker login serializes on ~/.docker/config.json
+		await loginToRegistry(session, registry, token)
+	}
+}
+
+// A service's image is pulled with credentials only when it is a `build` image
+// (private GHCR, covered by the GHCR token) or an `upstream` image declaring a
+// `registry_auth_secret`. Public upstream images are pulled anonymously and
+// must never be logged into with another service's token.
+function requiresRegistryLogin(service: UserServiceConfig): boolean {
+	if (service.source === 'build') return true
+	return service.registryAuthSecret !== undefined
 }
 
 /**

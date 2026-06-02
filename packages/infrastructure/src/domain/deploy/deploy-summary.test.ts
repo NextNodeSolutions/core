@@ -15,10 +15,12 @@ describe('buildDeploySummary', () => {
 					name: 'development',
 					url: 'https://dev.vps-e2e.nextnode.fr',
 					deployedAt: new Date('2026-04-17T12:00:00Z'),
-					imageRef: {
-						registry: 'ghcr.io',
-						repository: 'nextnodessolutions/test-e2e',
-						tag: 'sha-abc1234',
+					imageRefs: {
+						app: {
+							registry: 'ghcr.io',
+							repository: 'nextnodessolutions/test-e2e',
+							tag: 'sha-abc1234',
+						},
 					},
 				},
 			],
@@ -30,11 +32,46 @@ describe('buildDeploySummary', () => {
 			'### :rocket: Deployed `test-e2e` to development',
 		)
 		expect(summary).toContain('https://dev.vps-e2e.nextnode.fr')
+		expect(summary).toContain('**Image (app)**')
 		expect(summary).toContain(
 			'`ghcr.io/nextnodessolutions/test-e2e:sha-abc1234`',
 		)
 		expect(summary).toContain('hetzner-vps')
 		expect(summary).toContain('12.3s')
+	})
+
+	it('renders one image row per service for a multi-service deploy', () => {
+		const result: DeployResult = {
+			projectName: 'acme-web',
+			durationMs: 8_000,
+			deployedEnvironments: [
+				{
+					kind: 'container',
+					name: 'production',
+					url: 'https://example.com',
+					deployedAt: new Date('2026-04-17T12:00:00Z'),
+					imageRefs: {
+						front: {
+							registry: 'ghcr.io',
+							repository: 'acme/web-front',
+							tag: 'sha-abc1234',
+						},
+						api: {
+							registry: 'ghcr.io',
+							repository: 'acme/web-api',
+							tag: 'sha-abc1234',
+						},
+					},
+				},
+			],
+		}
+
+		const summary = buildDeploySummary(result, 'hetzner-vps')
+
+		expect(summary).toContain('**Image (front)**')
+		expect(summary).toContain('`ghcr.io/acme/web-front:sha-abc1234`')
+		expect(summary).toContain('**Image (api)**')
+		expect(summary).toContain('`ghcr.io/acme/web-api:sha-abc1234`')
 	})
 
 	it('renders a static deploy without image ref', () => {

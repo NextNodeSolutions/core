@@ -13,7 +13,7 @@ const appConfig = (
 	project: {
 		name: 'my-app',
 		type: 'app',
-		domain: 'my-app.example.com',
+		domain: 'example.com',
 	},
 	deploy: { services },
 })
@@ -1189,23 +1189,240 @@ describe('parseConfig', () => {
 			)
 		})
 
-		it('rejects more than one declared service in M1', () => {
+		it('parses every declared service into the services Record', () => {
 			const result = parseConfig(
 				appConfig({
-					app: { source: 'build' },
-					api: { source: 'build' },
+					front: { source: 'build', url: 'example.com' },
+					api: { source: 'build', url: 'api.example.com' },
 				}),
 			)
 
-			expect(result.ok).toBe(false)
-			if (result.ok) return
+			expect(result.ok).toBe(true)
+			if (!result.ok || result.config.deploy === false) {
+				expect.unreachable('expected a successful hetzner-vps parse')
+			}
+			if (result.config.deploy.target !== 'hetzner-vps') {
+				expect.unreachable('expected the hetzner-vps deploy target')
+			}
 
-			expect(result.errors).toEqual(
-				expect.arrayContaining([
-					expect.stringContaining(
-						'M1 supports a single [deploy.services.<name>]',
-					),
-				]),
+			expect(result.config.deploy.services).toEqual({
+				front: {
+					port: 3000,
+					url: 'example.com',
+					secrets: [],
+					needs: [],
+					dependsOn: [],
+					source: 'build',
+					target: 'front',
+				},
+				api: {
+					port: 3000,
+					url: 'api.example.com',
+					secrets: [],
+					needs: [],
+					dependsOn: [],
+					source: 'build',
+					target: 'api',
+				},
+			})
+		})
+
+		it('rejects two services sharing a url', () => {
+			const result = parseConfig(
+				appConfig({
+					front: { source: 'build', url: 'example.com' },
+					api: { source: 'build', url: 'example.com' },
+				}),
+			)
+
+			if (result.ok) {
+				expect.unreachable(
+					'expected a duplicate-url validation failure',
+				)
+			}
+
+			expect(result.errors).toContain(
+				'deploy.services.api.url "example.com" duplicates deploy.services.front.url — each routed service needs a distinct url',
+			)
+		})
+
+		it.each([
+			{ url: 'foreign.com', label: 'an unrelated domain' },
+			{
+				url: 'notexample.com',
+				label: 'a suffix look-alike with no dot boundary',
+			},
+		])(
+			'rejects a service url ($label) outside project.domain',
+			({ url }) => {
+				const result = parseConfig(
+					appConfig({ api: { source: 'build', url } }),
+				)
+
+				if (result.ok) {
+					expect.unreachable(
+						'expected a url-ownership validation failure',
+					)
+				}
+
+				expect(result.errors).toContain(
+					`deploy.services.api.url "${url}" must belong to project.domain "example.com" (equal to it or a sub-domain)`,
+				)
+			},
+		)
+
+		it('rejects services that mix build and upstream image sources', () => {
+			const result = parseConfig(
+				appConfig({
+					front: { source: 'build', url: 'example.com' },
+					api: {
+						source: 'upstream',
+						ref: 'docker.n8n.io/n8nio/n8n:1.85.0',
+						url: 'api.example.com',
+					},
+				}),
+			)
+
+			if (result.ok) {
+				expect.unreachable('expected a mixed-source validation failure')
+			}
+
+			expect(result.errors).toContain(
+				'deploy.services mixes image sources (build: front; upstream: api) — a Hetzner deploy builds or pulls all services together; declare a single source across services',
+			)
+		})
+
+		it('accepts multiple services that all share the upstream source', () => {
+			const result = parseConfig(
+				appConfig({
+					n8n: {
+						source: 'upstream',
+						ref: 'docker.n8n.io/n8nio/n8n:1.85.0',
+						url: 'example.com',
+					},
+					grafana: {
+						source: 'upstream',
+						ref: 'docker.io/grafana/grafana:11.0.0',
+						url: 'metrics.example.com',
+					},
+				}),
+			)
+
+			expect(result.ok).toBe(true)
+		})
+
+		it('accepts service secrets that are all declared in [deploy.secrets]', () => {
+			const result = parseConfig({
+				project: { name: 'my-app', type: 'app', domain: 'example.com' },
+				deploy: {
+					secrets: ['SESSION_KEY', 'JWT_SECRET'],
+					services: {
+						front: {
+							source: 'build',
+							url: 'example.com',
+							secrets: ['SESSION_KEY'],
+						},
+						api: {
+							source: 'build',
+							url: 'api.example.com',
+							secrets: ['JWT_SECRET'],
+						},
+					},
+				},
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok || result.config.deploy === false) {
+				expect.unreachable('expected a successful hetzner-vps parse')
+			}
+			if (result.config.deploy.target !== 'hetzner-vps') {
+				expect.unreachable('expected the hetzner-vps deploy target')
+			}
+
+			expect(result.config.deploy.services['front']?.secrets).toEqual([
+				'SESSION_KEY',
+			])
+			expect(result.config.deploy.services['api']?.secrets).toEqual([
+				'JWT_SECRET',
+			])
+		})
+
+		it('rejects a service secret not declared in [deploy.secrets]', () => {
+			const result = parseConfig({
+				project: { name: 'my-app', type: 'app', domain: 'example.com' },
+				deploy: {
+					secrets: ['SESSION_KEY'],
+					services: {
+						app: {
+							source: 'build',
+							url: 'example.com',
+							secrets: ['UNKNOWN'],
+						},
+					},
+				},
+			})
+
+			if (result.ok) {
+				expect.unreachable(
+					'expected an unknown-secret validation failure',
+				)
+			}
+
+			expect(result.errors).toContain(
+				'deploy.services.app.secrets references unknown secret "UNKNOWN" — declare it in [deploy.secrets]',
+			)
+		})
+
+		it('accepts a depends_on referencing a declared sibling service', () => {
+			const result = parseConfig({
+				project: { name: 'my-app', type: 'app', domain: 'example.com' },
+				deploy: {
+					services: {
+						front: {
+							source: 'build',
+							url: 'example.com',
+							depends_on: ['api'],
+						},
+						api: { source: 'build', url: 'api.example.com' },
+					},
+				},
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok || result.config.deploy === false) {
+				expect.unreachable('expected a successful hetzner-vps parse')
+			}
+			if (result.config.deploy.target !== 'hetzner-vps') {
+				expect.unreachable('expected the hetzner-vps deploy target')
+			}
+
+			expect(result.config.deploy.services['front']?.dependsOn).toEqual([
+				'api',
+			])
+		})
+
+		it('rejects a depends_on referencing an undeclared service', () => {
+			const result = parseConfig({
+				project: { name: 'my-app', type: 'app', domain: 'example.com' },
+				deploy: {
+					services: {
+						front: {
+							source: 'build',
+							url: 'example.com',
+							depends_on: ['nonexistent'],
+						},
+					},
+				},
+			})
+
+			if (result.ok) {
+				expect.unreachable(
+					'expected an unknown-service depends_on validation failure',
+				)
+			}
+
+			expect(result.errors).toContain(
+				'deploy.services.front.depends_on references unknown service "nonexistent" — declare it in [deploy.services]',
 			)
 		})
 

@@ -5,7 +5,6 @@ import {
 	parseImageRef,
 	parseImageRefsEnv,
 	resolveServiceImageRefs,
-	resolveSoleService,
 	selectServiceImage,
 } from './image-ref.ts'
 
@@ -374,33 +373,5 @@ describe('selectServiceImage', () => {
 				'app',
 			),
 		).toThrow('IMAGE_REFS is missing the "app" service image')
-	})
-})
-
-describe('resolveSoleService', () => {
-	it('returns the sole entry under its declared name, not a hardcoded "app"', () => {
-		const web = buildService('web')
-
-		expect(resolveSoleService({ web })).toEqual({
-			name: 'web',
-			service: web,
-		})
-	})
-
-	it('throws when no service is declared', () => {
-		expect(() => resolveSoleService({})).toThrow(
-			'expected exactly one [deploy.services.<name>], got 0',
-		)
-	})
-
-	it('throws listing the names when more than one service is declared', () => {
-		expect(() =>
-			resolveSoleService({
-				web: buildService('web'),
-				worker: buildService('worker'),
-			}),
-		).toThrow(
-			'expected exactly one [deploy.services.<name>], got 2: web, worker',
-		)
 	})
 })

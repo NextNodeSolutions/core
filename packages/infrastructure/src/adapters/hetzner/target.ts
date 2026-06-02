@@ -151,18 +151,28 @@ export class HetznerVpsTarget implements DeployTarget {
 				`Invariant: expected deployable state for VPS "${vpsName}"`,
 			)
 		}
+		const { state } = existing
 
-		const records = computeVpsDnsRecords({
-			domain,
-			environment: this.config.environment,
-			publicIp: existing.state.publicIp,
-			internal: this.config.internal,
-			tailnetIp: existing.state.tailnetIp,
-		})
+		// One A record per routed service (a service declaring a `url`), at its
+		// per-environment hostname — the same set buildServiceUpstreams routes and
+		// composeCaddyConfig requests certs for. A project routes via its service
+		// urls, not the bare project `domain`, so the records derive from them;
+		// internal-only services (no url) get no record.
+		const records = Object.values(this.config.services).flatMap(service =>
+			service.url === undefined
+				? []
+				: computeVpsDnsRecords({
+						domain: service.url,
+						environment: this.config.environment,
+						publicIp: state.publicIp,
+						internal: this.config.internal,
+						tailnetIp: state.tailnetIp,
+					}),
+		)
 
 		await this.config.dns.reconcile(records)
 		logger.info(
-			`DNS reconciled for "${projectName}" on VPS "${vpsName}" (${this.config.environment})`,
+			`DNS reconciled for "${projectName}" (${domain}) on VPS "${vpsName}" (${this.config.environment}): ${String(records.length)} record(s)`,
 		)
 	}
 
@@ -182,15 +192,16 @@ export class HetznerVpsTarget implements DeployTarget {
 	): Promise<DeployResult> {
 		const start = Date.now()
 		const vpsName = this.config.vpsName
-		const { session, hostname, hostPort, allocated } =
-			await this.openRolloutSession(projectName, input)
+		const { session, hostPorts, allocated } = await this.openRolloutSession(
+			projectName,
+			input,
+		)
 
 		try {
-			const { upstream, deployed } = await deployContainer(session, {
+			const { upstreams, deployed } = await deployContainer(session, {
 				projectName,
 				environment: this.config.environment,
-				hostname,
-				hostPort,
+				hostPorts,
 				env,
 				secrets: input.secrets,
 				images: this.requireImages(input),
@@ -201,15 +212,16 @@ export class HetznerVpsTarget implements DeployTarget {
 			})
 
 			// Multi-tenant Caddy: read the existing config, drop any prior
-			// upstream for THIS project's hostname (re-deploy case), then add
-			// the fresh one. Upstreams from other projects on this VPS are
+			// upstreams for THIS project's hostnames (re-deploy case), then add
+			// the fresh ones. Upstreams from other projects on this VPS are
 			// preserved untouched.
 			const existingConfig = await session.readFile(CADDY_CONFIG_PATH)
 			const existingUpstreams = extractUpstreams(existingConfig ?? '')
+			const deployedHostnames = new Set(upstreams.map(u => u.hostname))
 			const otherUpstreams = existingUpstreams.filter(
-				u => u.hostname !== upstream.hostname,
+				u => !deployedHostnames.has(u.hostname),
 			)
-			const mergedUpstreams = [...otherUpstreams, upstream]
+			const mergedUpstreams = [...otherUpstreams, ...upstreams]
 
 			const caddyConfig = JSON.stringify(
 				composeCaddyConfig({
@@ -259,15 +271,16 @@ export class HetznerVpsTarget implements DeployTarget {
 		input: DeployInput,
 		env: DeployEnv,
 	): Promise<void> {
-		const { session, hostname, hostPort, allocated } =
-			await this.openRolloutSession(projectName, input)
+		const { session, hostPorts, allocated } = await this.openRolloutSession(
+			projectName,
+			input,
+		)
 
 		try {
 			await stageRollout(session, {
 				projectName,
 				environment: this.config.environment,
-				hostname,
-				hostPort,
+				hostPorts,
 				env,
 				secrets: input.secrets,
 				images: this.requireImages(input),
@@ -345,16 +358,11 @@ export class HetznerVpsTarget implements DeployTarget {
 		input: DeployInput,
 	): Promise<{
 		readonly session: SshSession
-		readonly hostname: string
-		readonly hostPort: number
+		readonly hostPorts: Readonly<Record<string, number>>
 		readonly allocated: boolean
 	}> {
 		this.requireImages(input)
 		const vpsName = this.config.vpsName
-		const hostname = resolveDeployDomain(
-			this.config.domain,
-			this.config.environment,
-		)
 
 		const existing = await readState(this.r2, vpsName)
 		if (!existing || existing.state.phase === 'created') {
@@ -363,16 +371,17 @@ export class HetznerVpsTarget implements DeployTarget {
 			)
 		}
 
-		const { port: hostPort, allocated } = allocateHostPort(
+		const { ports: hostPorts, allocated } = allocateHostPort(
 			existing.state.hostPorts,
 			projectName,
+			this.urlServiceNames(),
 		)
 		if (allocated) {
 			const updated: HcloudProvisionedState | HcloudConvergedState = {
 				...existing.state,
 				hostPorts: {
 					...existing.state.hostPorts,
-					[projectName]: hostPort,
+					[projectName]: hostPorts,
 				},
 			}
 			await writeState(this.r2, vpsName, updated, existing.etag)
@@ -385,7 +394,15 @@ export class HetznerVpsTarget implements DeployTarget {
 			expectedHostKeyFingerprint: existing.state.sshHostKeyFingerprint,
 		})
 
-		return { session, hostname, hostPort, allocated }
+		return { session, hostPorts, allocated }
+	}
+
+	// Instance names of the services that face the reverse proxy (declare a
+	// `url`) and therefore need a host port. Internal-only services expose none.
+	private urlServiceNames(): ReadonlyArray<string> {
+		return Object.entries(this.config.services)
+			.filter(([, service]) => service.url !== undefined)
+			.map(([name]) => name)
 	}
 
 	// Compensates a freshly-allocated host port when the rollout that
@@ -435,6 +452,7 @@ export class HetznerVpsTarget implements DeployTarget {
 			projectName,
 			vpsName: this.config.vpsName,
 			domain,
+			services: this.config.services,
 			target,
 			withVolumes,
 			environment: this.config.environment,

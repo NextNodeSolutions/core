@@ -71,7 +71,9 @@ interface BaseDeployedEnvironment {
 
 export interface ContainerDeployedEnvironment extends BaseDeployedEnvironment {
 	readonly kind: 'container'
-	readonly imageRef: ImageRef
+	// Image deployed per declared service, keyed by instance name — one entry
+	// per [deploy.services.<name>]. The deploy summary renders one row each.
+	readonly imageRefs: Readonly<Record<string, ImageRef>>
 }
 
 export interface StaticDeployedEnvironment extends BaseDeployedEnvironment {

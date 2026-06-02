@@ -84,11 +84,11 @@ export async function teardownProjectContainer(
  */
 export async function teardownProjectCaddyRoute(
 	session: SshSession,
-	projectHostname: string | undefined,
+	projectHostnames: ReadonlyArray<string>,
 	caddy: TeardownCaddyContext,
 ): Promise<ResourceOutcome> {
-	if (!projectHostname) {
-		return { handled: false, detail: 'no domain configured' }
+	if (projectHostnames.length === 0) {
+		return { handled: false, detail: 'no routed hostnames' }
 	}
 
 	const currentConfig = await session.readFile(CADDY_CONFIG_PATH)
@@ -96,15 +96,14 @@ export async function teardownProjectCaddyRoute(
 		return { handled: false, detail: 'no caddy config' }
 	}
 
+	const targets = new Set(projectHostnames)
 	const upstreams = extractUpstreams(currentConfig)
-	const hasProjectRoute = upstreams.some(u => u.hostname === projectHostname)
-	if (!hasProjectRoute) {
-		return { handled: false, detail: 'no route for project hostname' }
-	}
-
 	const remaining: ReadonlyArray<CaddyUpstream> = upstreams.filter(
-		u => u.hostname !== projectHostname,
+		u => !targets.has(u.hostname),
 	)
+	if (remaining.length === upstreams.length) {
+		return { handled: false, detail: 'no route for project hostnames' }
+	}
 
 	const nextConfig =
 		remaining.length === 0
@@ -124,9 +123,9 @@ export async function teardownProjectCaddyRoute(
 	await session.writeFile(CADDY_CONFIG_PATH, nextConfig)
 	await session.exec(`caddy reload --config ${CADDY_CONFIG_PATH}`)
 	logger.info(
-		`Caddy route for "${projectHostname}" removed (${String(remaining.length)} upstream(s) remaining on VPS "${caddy.vpsName}")`,
+		`Caddy route(s) for ${projectHostnames.join(', ')} removed (${String(remaining.length)} upstream(s) remaining on VPS "${caddy.vpsName}")`,
 	)
-	return { handled: true, detail: 'route removed, Caddy reloaded' }
+	return { handled: true, detail: 'route(s) removed, Caddy reloaded' }
 }
 
 /**
@@ -144,20 +143,20 @@ export async function teardownProjectCaddyRoute(
 export async function teardownProjectCerts(
 	certsR2: ObjectStoreClient,
 	vpsName: string,
-	projectHostname: string | undefined,
+	projectHostnames: ReadonlyArray<string>,
 ): Promise<ResourceOutcome> {
-	if (!projectHostname) {
-		return { handled: false, detail: 'no domain configured' }
+	if (projectHostnames.length === 0) {
+		return { handled: false, detail: 'no routed hostnames' }
 	}
 	const listPrefix = `${vpsName}/certificates/`
-	const hostSegment = `/${projectHostname}/`
-	const hostFilePrefix = `/${projectHostname}.`
-	const deletedCount = await certsR2.deleteByPrefix(
-		listPrefix,
-		key => key.includes(hostSegment) || key.includes(hostFilePrefix),
-	)
+	const matchesHost = (key: string): boolean =>
+		projectHostnames.some(
+			hostname =>
+				key.includes(`/${hostname}/`) || key.includes(`/${hostname}.`),
+		)
+	const deletedCount = await certsR2.deleteByPrefix(listPrefix, matchesHost)
 	logger.info(
-		`R2 certs purged for "${projectHostname}" on VPS "${vpsName}" (${String(deletedCount)} object(s))`,
+		`R2 certs purged for ${projectHostnames.join(', ')} on VPS "${vpsName}" (${String(deletedCount)} object(s))`,
 	)
 	return {
 		handled: deletedCount > 0,
@@ -175,8 +174,8 @@ export async function releaseProjectHostPort(
 	state: HcloudProvisionedState | HcloudConvergedState,
 	etag: string,
 ): Promise<ResourceOutcome> {
-	const port = state.hostPorts[projectName]
-	if (port === undefined) {
+	const servicePorts = state.hostPorts[projectName]
+	if (servicePorts === undefined) {
 		logger.info(
 			`No host port to release for "${projectName}" on VPS "${vpsName}" (already absent)`,
 		)
@@ -188,10 +187,11 @@ export async function releaseProjectHostPort(
 		hostPorts: remaining,
 	}
 	await writeState(r2, vpsName, updated, etag)
+	const released = Object.values(servicePorts).join(', ')
 	logger.info(
-		`Released host port ${String(port)} for "${projectName}" on VPS "${vpsName}"`,
+		`Released host port(s) ${released} for "${projectName}" on VPS "${vpsName}"`,
 	)
-	return { handled: true, detail: `port ${String(port)} released` }
+	return { handled: true, detail: `port(s) ${released} released` }
 }
 
 /**
@@ -199,18 +199,18 @@ export async function releaseProjectHostPort(
  * teardown — does NOT touch sibling projects on the same VPS.
  */
 export async function teardownProjectDns(
-	projectHostname: string | undefined,
+	projectHostnames: ReadonlyArray<string>,
 	dns: DnsClient,
 ): Promise<ResourceOutcome> {
-	if (!projectHostname) {
-		return { handled: false, detail: 'no domain configured' }
+	if (projectHostnames.length === 0) {
+		return { handled: false, detail: 'no routed hostnames' }
 	}
-	const deletedCount = await dns.deleteByName([
-		{
-			zoneName: extractRootDomain(projectHostname),
-			name: projectHostname,
-		},
-	])
+	const deletedCount = await dns.deleteByName(
+		projectHostnames.map(hostname => ({
+			zoneName: extractRootDomain(hostname),
+			name: hostname,
+		})),
+	)
 	return {
 		handled: deletedCount > 0,
 		detail: `${String(deletedCount)} record(s) deleted`,

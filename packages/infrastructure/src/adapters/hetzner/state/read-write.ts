@@ -70,7 +70,7 @@ function requireBase(
 function parseHostPorts(
 	data: Record<string, unknown>,
 	key: string,
-): Readonly<Record<string, number>> {
+): Readonly<Record<string, Readonly<Record<string, number>>>> {
 	const raw = data.hostPorts
 	if (raw === undefined) return {}
 	if (!isRecord(raw)) {
@@ -78,16 +78,33 @@ function parseHostPorts(
 			`Invalid state at "${key}": hostPorts must be an object`,
 		)
 	}
-	const result: Record<string, number> = {}
-	for (const [project, port] of Object.entries(raw)) {
-		if (typeof port !== 'number' || !Number.isInteger(port)) {
-			throw new Error(
-				`Invalid state at "${key}": hostPorts.${project} must be an integer`,
-			)
-		}
-		result[project] = port
+	const result: Record<string, Record<string, number>> = {}
+	for (const [project, servicePorts] of Object.entries(raw)) {
+		result[project] = parseServicePorts(servicePorts, project, key)
 	}
 	return result
+}
+
+function parseServicePorts(
+	raw: unknown,
+	project: string,
+	key: string,
+): Record<string, number> {
+	if (!isRecord(raw)) {
+		throw new Error(
+			`Invalid state at "${key}": hostPorts.${project} must be an object`,
+		)
+	}
+	const ports: Record<string, number> = {}
+	for (const [service, port] of Object.entries(raw)) {
+		if (typeof port !== 'number' || !Number.isInteger(port)) {
+			throw new Error(
+				`Invalid state at "${key}": hostPorts.${project}.${service} must be an integer`,
+			)
+		}
+		ports[service] = port
+	}
+	return ports
 }
 
 function parseCreated(

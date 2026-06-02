@@ -1017,7 +1017,7 @@ describe('HetznerVpsTarget', () => {
 					kind: 'container',
 					name: 'production',
 					url: 'https://acme-web.example.com',
-					imageRef: DEPLOY_IMAGE,
+					imageRefs: { app: DEPLOY_IMAGE },
 				}),
 			)
 		})
@@ -1090,7 +1090,9 @@ describe('HetznerVpsTarget', () => {
 
 				expect(putSpy).toHaveBeenCalledWith(
 					'hetzner/acme-web.json',
-					expect.stringContaining('"hostPorts":{"acme-web":8080}'),
+					expect.stringContaining(
+						'"hostPorts":{"acme-web":{"app":8080}}',
+					),
 					'etag-1',
 				)
 				putSpy.mockRestore()
@@ -1099,7 +1101,7 @@ describe('HetznerVpsTarget', () => {
 			it('reuses the same port on redeploy and skips state write', async () => {
 				seedState({
 					...CONVERGED_STATE,
-					hostPorts: { 'acme-web': 8080 },
+					hostPorts: { 'acme-web': { app: 8080 } },
 				})
 				const putSpy = vi.spyOn(mockStateStore, 'put')
 
@@ -1116,7 +1118,7 @@ describe('HetznerVpsTarget', () => {
 				const mockSession = createMockSession()
 				seedState({
 					...CONVERGED_STATE,
-					hostPorts: { 'first-project': 8080 },
+					hostPorts: { 'first-project': { app: 8080 } },
 				})
 				vi.mocked(mockedSsh).mockResolvedValueOnce(mockSession)
 
@@ -1134,8 +1136,8 @@ describe('HetznerVpsTarget', () => {
 				expect(persisted).toEqual(
 					expect.objectContaining({
 						hostPorts: {
-							'first-project': 8080,
-							'second-project': 8081,
+							'first-project': { app: 8080 },
+							'second-project': { app: 8081 },
 						},
 					}),
 				)
@@ -1171,7 +1173,7 @@ describe('HetznerVpsTarget', () => {
 				const mockSession = createMockSession()
 				seedState({
 					...CONVERGED_STATE,
-					hostPorts: { 'acme-web': 8080 },
+					hostPorts: { 'acme-web': { app: 8080 } },
 				})
 				vi.mocked(mockedSsh).mockResolvedValueOnce(mockSession)
 				vi.mocked(mockSession.writeFile).mockRejectedValueOnce(
@@ -1189,7 +1191,7 @@ describe('HetznerVpsTarget', () => {
 				)
 				expect(persisted).toEqual(
 					expect.objectContaining({
-						hostPorts: { 'acme-web': 8080 },
+						hostPorts: { 'acme-web': { app: 8080 } },
 					}),
 				)
 			})
@@ -1221,6 +1223,119 @@ describe('HetznerVpsTarget', () => {
 					content: '5.6.7.8',
 					proxied: true,
 					ttl: 1,
+				},
+			])
+		})
+
+		it('emits one A record per routed service, skipping url-less services', async () => {
+			seedState({ ...CONVERGED_STATE, publicIp: '5.6.7.8' })
+
+			const target = new HetznerVpsTarget({
+				...TARGET_CONFIG,
+				services: {
+					front: {
+						port: 3000,
+						url: 'example.com',
+						secrets: [],
+						needs: [],
+						dependsOn: [],
+						source: 'build',
+						target: 'front',
+					},
+					api: {
+						port: 4000,
+						url: 'api.example.com',
+						secrets: [],
+						needs: [],
+						dependsOn: [],
+						source: 'build',
+						target: 'api',
+					},
+					worker: {
+						port: 5000,
+						secrets: [],
+						needs: [],
+						dependsOn: [],
+						source: 'build',
+						target: 'worker',
+					},
+				} satisfies Record<string, UserServiceConfig>,
+			})
+			await target.reconcileDns('acme-web', 'example.com')
+
+			expect(mockReconcile).toHaveBeenCalledWith([
+				{
+					zoneName: 'example.com',
+					name: 'example.com',
+					type: 'A',
+					content: '5.6.7.8',
+					proxied: true,
+					ttl: 1,
+				},
+				{
+					zoneName: 'example.com',
+					name: 'api.example.com',
+					type: 'A',
+					content: '5.6.7.8',
+					proxied: true,
+					ttl: 1,
+				},
+			])
+		})
+
+		it('emits a dev-resolved record for every routed service in development', async () => {
+			seedState({ ...CONVERGED_STATE, publicIp: '5.6.7.8' })
+
+			const target = new HetznerVpsTarget({
+				...TARGET_CONFIG,
+				environment: 'development',
+				services: {
+					front: {
+						port: 3000,
+						url: 'example.com',
+						secrets: [],
+						needs: [],
+						dependsOn: [],
+						source: 'build',
+						target: 'front',
+					},
+					api: {
+						port: 4000,
+						url: 'api.example.com',
+						secrets: [],
+						needs: [],
+						dependsOn: [],
+						source: 'build',
+						target: 'api',
+					},
+					worker: {
+						port: 5000,
+						secrets: [],
+						needs: [],
+						dependsOn: [],
+						source: 'build',
+						target: 'worker',
+					},
+				} satisfies Record<string, UserServiceConfig>,
+			})
+			await target.reconcileDns('acme-web', 'example.com')
+
+			expect(mockReconcile).toHaveBeenCalledWith([
+				{
+					zoneName: 'example.com',
+					name: 'dev.example.com',
+					type: 'A',
+					content: '5.6.7.8',
+					proxied: false,
+					ttl: 300,
+				},
+				{
+					zoneName: 'example.com',
+					name: 'dev.api.example.com',
+					type: 'A',
+					content: '5.6.7.8',
+					proxied: false,
+					ttl: 300,
 				},
 			])
 		})
@@ -1389,6 +1504,41 @@ describe('HetznerVpsTarget', () => {
 			)
 
 			expect(result.durationMs).toBeGreaterThanOrEqual(0)
+		})
+
+		it('deletes a DNS record for every routed service in a project teardown', async () => {
+			seedState()
+
+			const target = new HetznerVpsTarget({
+				...TARGET_CONFIG,
+				services: {
+					front: {
+						port: 3000,
+						url: 'example.com',
+						secrets: [],
+						needs: [],
+						dependsOn: [],
+						source: 'build',
+						target: 'front',
+					},
+					api: {
+						port: 4000,
+						url: 'api.example.com',
+						secrets: [],
+						needs: [],
+						dependsOn: [],
+						source: 'build',
+						target: 'api',
+					},
+				} satisfies Record<string, UserServiceConfig>,
+			})
+
+			await target.teardown('acme-web', 'example.com', 'project', false)
+
+			expect(mockDeleteByName).toHaveBeenCalledWith([
+				{ zoneName: 'example.com', name: 'example.com' },
+				{ zoneName: 'example.com', name: 'api.example.com' },
+			])
 		})
 	})
 })

@@ -296,7 +296,7 @@ async function convergeAndWriteState(
 		publicIp: string
 		tailnetIp: string
 		sshHostKeyFingerprint?: string | undefined
-		hostPorts: Readonly<Record<string, number>>
+		hostPorts: Readonly<Record<string, Readonly<Record<string, number>>>>
 	},
 	etag: string,
 ): Promise<ResourceOutcome> {

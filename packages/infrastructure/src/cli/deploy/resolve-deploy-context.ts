@@ -1,10 +1,7 @@
 import { getEnv, requireEnv, requireGithubRepository } from '#/cli/env.ts'
 import { resolveServices } from '#/cli/services/resolve.ts'
 import { isHetznerDeployableConfig } from '#/config/types.ts'
-import {
-	parseImageRefsEnv,
-	resolveSoleService,
-} from '#/domain/deploy/image-ref.ts'
+import { parseImageRefsEnv } from '#/domain/deploy/image-ref.ts'
 import { buildDeployEnv } from '#/domain/deploy/target.ts'
 import { resolveEnvironment } from '#/domain/environment.ts'
 import { mergeServiceEnvs } from '#/domain/services/service.ts'
@@ -16,6 +13,7 @@ import { pickSecrets, readRepoSecrets } from './secrets.ts'
 import type {
 	DeployableConfig,
 	HetznerDeployableConfig,
+	UserServiceConfig,
 } from '#/config/types.ts'
 import type {
 	DeployEnv,
@@ -102,17 +100,52 @@ export function buildDeployInput(
 	return { secrets, registryToken: undefined }
 }
 
+// A deploy forwards exactly one registry token, and the services are
+// homogeneous in source (mixed sources are rejected at validation). Any `build`
+// service means every image lives on GHCR, authenticated with the GHCR token; an
+// all-upstream deploy authenticates with the shared registry_auth_secret (or
+// none, for public images).
 function resolveRegistryToken(
 	config: HetznerDeployableConfig,
 	repoSecrets: Readonly<Record<string, string>>,
 ): string | undefined {
-	const { name, service } = resolveSoleService(config.deploy.services)
-	if (service.source === 'build') return requireEnv('GHCR_TOKEN')
-	if (service.registryAuthSecret === undefined) return undefined
-	const value = repoSecrets[service.registryAuthSecret]
+	const services = Object.values(config.deploy.services)
+	if (services.some(service => service.source === 'build')) {
+		return requireEnv('GHCR_TOKEN')
+	}
+	return resolveUpstreamRegistryToken(config.deploy.services, repoSecrets)
+}
+
+// Resolve the single registry token shared by every upstream service. Returns
+// undefined when no service declares a registry_auth_secret (public images).
+// Throws when services declare DIFFERENT auth secrets — a deploy forwards one
+// token, so two private registries cannot both be authenticated.
+function resolveUpstreamRegistryToken(
+	services: Readonly<Record<string, UserServiceConfig>>,
+	repoSecrets: Readonly<Record<string, string>>,
+): string | undefined {
+	const declaringBySecret = new Map<string, string>()
+	for (const [name, service] of Object.entries(services)) {
+		if (service.source !== 'upstream') continue
+		const secret = service.registryAuthSecret
+		if (secret === undefined) continue
+		if (!declaringBySecret.has(secret)) declaringBySecret.set(secret, name)
+	}
+
+	if (declaringBySecret.size > 1) {
+		throw new Error(
+			`deploy.services declare multiple distinct registry_auth_secret values (${[...declaringBySecret.keys()].join(', ')}); a deploy forwards a single registry token — use one secret across services`,
+		)
+	}
+
+	const entry = declaringBySecret.entries().next().value
+	if (entry === undefined) return undefined
+
+	const [secret, name] = entry
+	const value = repoSecrets[secret]
 	if (value === undefined) {
 		throw new Error(
-			`Secret "${service.registryAuthSecret}" declared in deploy.services.${name}.registry_auth_secret but not found in GitHub Secrets`,
+			`Secret "${secret}" declared in deploy.services.${name}.registry_auth_secret but not found in GitHub Secrets`,
 		)
 	}
 	return value

@@ -76,6 +76,30 @@ describe('composeCaddyConfig', () => {
 		])
 	})
 
+	it('fans multiple upstreams into one route and one TLS subject each', () => {
+		const config = composeCaddyConfig({
+			internal: false,
+			storage: STORAGE,
+			upstreams: [
+				{ hostname: 'example.com', dial: 'localhost:8080' },
+				{ hostname: 'api.example.com', dial: 'localhost:8081' },
+			],
+			acmeEmail: 'test@example.com',
+		})
+
+		expect(config.apps.http.servers.https.routes).toHaveLength(2)
+		expect(
+			config.apps.http.servers.https.routes.map(route => route.match),
+		).toEqual([
+			[{ host: ['example.com'] }],
+			[{ host: ['api.example.com'] }],
+		])
+		expect(config.apps.tls.automation.policies[0]?.subjects).toStrictEqual([
+			'example.com',
+			'api.example.com',
+		])
+	})
+
 	it('uses DNS-01 challenge for internal projects with env placeholder for CF token', () => {
 		const config = composeCaddyConfig({
 			internal: true,

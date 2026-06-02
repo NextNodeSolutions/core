@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { bringUpApp, bringUpDb, stageRollout } from './deploy-container.ts'
+import {
+	bringUpApp,
+	bringUpDb,
+	deployContainer,
+	stageRollout,
+} from './deploy-container.ts'
 
 import type {
 	PostgresServiceConfig,
@@ -22,6 +27,29 @@ afterEach(() => {
 const POSTGRES_CONFIG: PostgresServiceConfig = {
 	mode: 'embedded',
 }
+
+const buildService = (port: number, url?: string): UserServiceConfig => ({
+	port,
+	...(url !== undefined && { url }),
+	secrets: [],
+	needs: [],
+	dependsOn: [],
+	source: 'build',
+	target: 'app',
+})
+
+// front declares SESSION_KEY, api declares JWT_SECRET; the deploy secrets pool
+// carries both. Per-service projection (D5) must hand each service only the
+// subset it declares.
+const secretService = (url: string, secrets: string[]): UserServiceConfig => ({
+	port: 3000,
+	url,
+	secrets,
+	needs: [],
+	dependsOn: [],
+	source: 'build',
+	target: 'app',
+})
 
 const BASE_INPUT: BringUpInput = {
 	projectName: 'acme-web',
@@ -124,8 +152,7 @@ describe('stageRollout', () => {
 	): DeployContainerInput => ({
 		projectName: 'acme-web',
 		environment: 'production',
-		hostname: 'acme-web.example.com',
-		hostPort: 8080,
+		hostPorts: { [name]: 8080 },
 		env: { SITE_URL: 'https://acme-web.example.com' },
 		secrets: {},
 		images: { [name]: IMAGE },
@@ -191,5 +218,247 @@ describe('stageRollout', () => {
 			.mocked(session.writeFile)
 			.mock.calls.map(([target]) => target)
 		expect(paths).toContain('/opt/apps/acme-web/production/.env.web')
+	})
+
+	// front + api route externally (each gets a url + host port); worker is
+	// internal-only (no url). renderComposeFile needs an image per service and a
+	// host port per url service, so all three are wired here.
+	const multiServiceInput = (): DeployContainerInput => ({
+		projectName: 'acme-web',
+		environment: 'production',
+		hostPorts: { front: 8080, api: 8081 },
+		env: { SITE_URL: 'https://example.com' },
+		secrets: {},
+		images: { front: IMAGE, api: IMAGE, worker: IMAGE },
+		registryToken: undefined,
+		volumes: [],
+		postgres: undefined,
+		services: {
+			front: buildService(3000, 'example.com'),
+			api: buildService(4000, 'api.example.com'),
+			worker: buildService(5000),
+		},
+	})
+
+	it('cross-injects every service url into each per-service env file', async () => {
+		const session = recordingSession()
+
+		await stageRollout(session, multiServiceInput())
+
+		const envFiles = ['front', 'api', 'worker'].map(name =>
+			writtenFile(session, `/opt/apps/acme-web/production/.env.${name}`),
+		)
+		for (const env of envFiles) {
+			expect(env).toContain('FRONT_URL=https://example.com')
+			expect(env).toContain('API_URL=https://api.example.com')
+		}
+	})
+
+	it('never injects a <NAME>_URL for a service that declares no url', async () => {
+		const session = recordingSession()
+
+		await stageRollout(session, multiServiceInput())
+
+		const envFiles = ['front', 'api', 'worker'].map(name =>
+			writtenFile(session, `/opt/apps/acme-web/production/.env.${name}`),
+		)
+		for (const env of envFiles) {
+			expect(env).not.toContain('WORKER_URL')
+		}
+	})
+
+	const secretInput = (
+		secrets: Readonly<Record<string, string>>,
+	): DeployContainerInput => ({
+		projectName: 'acme-web',
+		environment: 'production',
+		hostPorts: { front: 8080, api: 8081 },
+		env: { SITE_URL: 'https://example.com' },
+		secrets,
+		images: { front: IMAGE, api: IMAGE },
+		registryToken: undefined,
+		volumes: [],
+		postgres: undefined,
+		services: {
+			front: secretService('example.com', ['SESSION_KEY']),
+			api: secretService('api.example.com', ['JWT_SECRET']),
+		},
+	})
+
+	it("projects each service's declared secret into its own .env and withholds the others", async () => {
+		const session = recordingSession()
+
+		await stageRollout(
+			session,
+			secretInput({ SESSION_KEY: 'sess-val', JWT_SECRET: 'jwt-val' }),
+		)
+
+		const front = writtenFile(
+			session,
+			'/opt/apps/acme-web/production/.env.front',
+		)
+		const api = writtenFile(
+			session,
+			'/opt/apps/acme-web/production/.env.api',
+		)
+
+		expect(front).toContain('SESSION_KEY=sess-val')
+		expect(front).not.toContain('JWT_SECRET')
+		expect(api).toContain('JWT_SECRET=jwt-val')
+		expect(api).not.toContain('SESSION_KEY')
+	})
+
+	it('broadcasts a service-required secret no service declares (e.g. DATABASE_URL) into every .env', async () => {
+		const session = recordingSession()
+
+		await stageRollout(
+			session,
+			secretInput({
+				SESSION_KEY: 'sess-val',
+				JWT_SECRET: 'jwt-val',
+				DATABASE_URL: 'postgres://db:5432',
+			}),
+		)
+
+		const front = writtenFile(
+			session,
+			'/opt/apps/acme-web/production/.env.front',
+		)
+		const api = writtenFile(
+			session,
+			'/opt/apps/acme-web/production/.env.api',
+		)
+
+		expect(front).toContain('DATABASE_URL=postgres://db:5432')
+		expect(api).toContain('DATABASE_URL=postgres://db:5432')
+	})
+
+	// The forwarded token authenticates only credentialed registries. An
+	// all-upstream deploy that mixes a private registry (registry_auth_secret)
+	// with a public one must log into the private registry alone — logging into
+	// the public registry with the private token would fail or pollute config.
+	it('logs into the credentialed registry only, never a public upstream registry', async () => {
+		const session = recordingSession()
+		const upstreamService = (
+			port: number,
+			ref: string,
+			registryAuthSecret?: string,
+		): UserServiceConfig => ({
+			port,
+			secrets: [],
+			needs: [],
+			dependsOn: [],
+			source: 'upstream',
+			ref,
+			...(registryAuthSecret !== undefined && { registryAuthSecret }),
+		})
+
+		await stageRollout(session, {
+			projectName: 'acme-web',
+			environment: 'production',
+			hostPorts: {},
+			env: { SITE_URL: 'https://example.com' },
+			secrets: {},
+			images: {
+				web: { registry: 'ghcr.io', repository: 'acme/web', tag: 'v1' },
+				cache: {
+					registry: 'docker.io',
+					repository: 'library/redis',
+					tag: '7',
+				},
+			},
+			registryToken: 'ghcr-token',
+			volumes: [],
+			postgres: undefined,
+			services: {
+				web: upstreamService(3000, 'ghcr.io/acme/web:v1', 'GHCR_PAT'),
+				cache: upstreamService(4000, 'docker.io/library/redis:7'),
+			},
+		})
+
+		const logins = vi
+			.mocked(session.execWithStdin)
+			.mock.calls.map(([command]) => command)
+			.filter(command => command.startsWith('docker login'))
+
+		expect(logins).toHaveLength(1)
+		expect(logins[0]).toContain("'ghcr.io'")
+		expect(logins.some(command => command.includes("'docker.io'"))).toBe(
+			false,
+		)
+	})
+})
+
+describe('deployContainer', () => {
+	const IMAGE: ImageRef = {
+		registry: 'ghcr.io',
+		repository: 'acme/web',
+		tag: 'sha-abc123',
+	}
+
+	it('returns an image ref per declared service and an upstream per routed service', async () => {
+		const session = recordingSession()
+
+		const result = await deployContainer(session, {
+			projectName: 'acme-web',
+			environment: 'production',
+			hostPorts: { front: 8080, api: 8081 },
+			env: { SITE_URL: 'https://example.com' },
+			secrets: {},
+			images: { front: IMAGE, api: IMAGE, worker: IMAGE },
+			registryToken: undefined,
+			volumes: [],
+			postgres: undefined,
+			services: {
+				front: buildService(3000, 'example.com'),
+				api: buildService(4000, 'api.example.com'),
+				worker: buildService(5000),
+			},
+		})
+
+		expect(result.deployed.imageRefs).toEqual({
+			front: IMAGE,
+			api: IMAGE,
+			worker: IMAGE,
+		})
+		expect(result.upstreams).toEqual([
+			{ hostname: 'example.com', dial: 'localhost:8080' },
+			{ hostname: 'api.example.com', dial: 'localhost:8081' },
+		])
+	})
+
+	it('routes each service at its dev hostname in a development deploy', async () => {
+		const session = recordingSession()
+
+		const result = await deployContainer(session, {
+			projectName: 'acme-web',
+			environment: 'development',
+			hostPorts: { front: 8080, api: 8081 },
+			env: { SITE_URL: 'https://dev.example.com' },
+			secrets: {},
+			images: { front: IMAGE, api: IMAGE },
+			registryToken: undefined,
+			volumes: [],
+			postgres: undefined,
+			services: {
+				front: buildService(3000, 'example.com'),
+				api: buildService(4000, 'api.example.com'),
+			},
+		})
+
+		expect(result.upstreams).toEqual([
+			{ hostname: 'dev.example.com', dial: 'localhost:8080' },
+			{ hostname: 'dev.api.example.com', dial: 'localhost:8081' },
+		])
+
+		const apiEnvCall = vi
+			.mocked(session.writeFile)
+			.mock.calls.find(
+				([path]) => path === '/opt/apps/acme-web/development/.env.api',
+			)
+		expect(apiEnvCall).toBeDefined()
+		const apiEnv = apiEnvCall?.[1] ?? ''
+		expect(apiEnv).toContain('FRONT_URL=https://dev.example.com')
+		expect(apiEnv).toContain('API_URL=https://dev.api.example.com')
 	})
 })

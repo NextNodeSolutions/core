@@ -2,12 +2,13 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
 
-import { parseImageRef, resolveSoleService } from '#/domain/deploy/image-ref.ts'
+import { parseImageRef } from '#/domain/deploy/image-ref.ts'
 import { hasProdGate } from '#/domain/pipeline/quality-matrix.ts'
 
 import { writeOutput } from './output.ts'
 
 import type { NextNodeConfig } from '#/config/types.ts'
+import type { ImageRef } from '#/domain/deploy/target.ts'
 import type { QualityTask } from '#/domain/pipeline/quality-matrix.ts'
 
 const SKIP_MATRIX: ReadonlyArray<QualityTask> = [
@@ -58,9 +59,13 @@ export function writePlanOutputs({
 // built services (`{ <service>: { registry, repository, tag } }`) so
 // `parseImageRefsEnv` consumes both paths identically — the bare ref string the
 // old `image_ref` carried is not valid JSON and broke the upstream deploy.
-// Parsing the declared ref here also fails a malformed upstream ref loudly at
-// plan time, not as a broken `docker pull` on the VPS. Empty for `build` (the
-// build-image job supplies `image_refs`) and for non-container targets.
+// Parsing each declared ref here also fails a malformed upstream ref loudly at
+// plan time, not as a broken `docker pull` on the VPS.
+//
+// Mixed sources are rejected at config validation, so the declared services are
+// homogeneous: either every service is `upstream` — emit one ref per service so
+// the deploy/migrate jobs pull them all — or every service is `build`, in which
+// case the build-image job supplies `image_refs` and there is nothing to emit.
 function resolveImageOutputs(config: NextNodeConfig): {
 	readonly source: string
 	readonly imageRefs: string
@@ -68,12 +73,17 @@ function resolveImageOutputs(config: NextNodeConfig): {
 	if (config.deploy === false) return { source: '', imageRefs: '' }
 	if (config.deploy.target !== 'hetzner-vps')
 		return { source: '', imageRefs: '' }
-	const { name, service } = resolveSoleService(config.deploy.services)
-	if (service.source === 'upstream') {
-		const imageRefs = { [name]: parseImageRef(service.ref) }
-		return { source: 'upstream', imageRefs: JSON.stringify(imageRefs) }
+
+	const upstreamRefs: Record<string, ImageRef> = {}
+	for (const [name, service] of Object.entries(config.deploy.services)) {
+		if (service.source !== 'upstream') continue
+		upstreamRefs[name] = parseImageRef(service.ref)
 	}
-	return { source: 'build', imageRefs: '' }
+
+	if (Object.keys(upstreamRefs).length === 0) {
+		return { source: 'build', imageRefs: '' }
+	}
+	return { source: 'upstream', imageRefs: JSON.stringify(upstreamRefs) }
 }
 
 /**
