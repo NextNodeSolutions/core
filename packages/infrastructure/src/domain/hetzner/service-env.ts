@@ -49,43 +49,55 @@ export function buildServiceUrlEnv(
 
 /**
  * Route the deploy secrets across the per-service `.env.<name>` files (D5),
- * least-privilege by construction — a service receives ONLY the secrets it needs:
- *
- *   - a USER secret (declared in some service's `secrets` list) goes only to the
- *     services that name it in their own `secrets`;
- *   - a BACKING secret (produced by a service like postgres — identified by being
- *     present in `origins`, which maps each backing key to its producer's name)
- *     goes only to the services that declare `needs = [<producer>]`.
- *
- * The two channels are disjoint (a key is backing iff it appears in `origins`),
- * so there is no broadcast: a `DATABASE_URL` from postgres lands only in the
- * `.env.<name>` of services that declare `needs = ["postgres"]`, never in a
- * front service that does not. The shared `.env` the DB sidecar + migrate read
- * is built separately (see `selectBackingSecrets`).
- *
- * Returns one entry per service, keyed by instance name; a service that needs
- * and declares nothing maps to an empty record.
+ * least-privilege by construction: each service receives only the secrets it
+ * needs (see `projectSecretsForService` for the rule). One entry per service,
+ * keyed by instance name; a service that needs and declares nothing maps to an
+ * empty record. The shared `.env` the DB sidecar + migrate read is built
+ * separately — see `selectBackingSecrets`.
  */
 export function buildServiceSecretEnv(
 	services: Readonly<Record<string, UserServiceConfig>>,
 	secrets: Readonly<Record<string, string>>,
 	origins: Readonly<Record<string, string>>,
 ): Record<string, Record<string, string>> {
-	const byService: Record<string, Record<string, string>> = {}
-	for (const [name, service] of Object.entries(services)) {
-		const projected: Record<string, string> = {}
-		for (const [key, value] of Object.entries(secrets)) {
-			const producer = origins[key]
-			const wanted =
-				producer === undefined
-					? service.secrets.includes(key) // user secret → declared only
-					: service.needs.includes(producer) // backing → needs only
-			if (wanted) projected[key] = value
-		}
-		byService[name] = projected
-	}
+	return Object.fromEntries(
+		Object.entries(services).map(
+			([name, service]): [string, Record<string, string>] => [
+				name,
+				projectSecretsForService(service, secrets, origins),
+			],
+		),
+	)
+}
 
-	return byService
+/**
+ * The least-privilege secret subset a single service receives. The deploy
+ * secrets arrive on two disjoint channels, each with its own rule:
+ *
+ *   - a BACKING secret — produced by another service, so `origins` names its
+ *     producer (e.g. `DATABASE_URL` → `postgres`) — is included only when the
+ *     service declares `needs = [<producer>]`;
+ *   - a USER secret — no producer in `origins` — is included only when the
+ *     service lists it in its own `secrets`.
+ *
+ * So a postgres `DATABASE_URL` reaches only services that declare
+ * `needs = ["postgres"]`, never a front service that does not (no broadcast).
+ */
+function projectSecretsForService(
+	service: UserServiceConfig,
+	secrets: Readonly<Record<string, string>>,
+	origins: Readonly<Record<string, string>>,
+): Record<string, string> {
+	const projected: Record<string, string> = {}
+	for (const [key, value] of Object.entries(secrets)) {
+		const producer = origins[key]
+		const included =
+			producer === undefined
+				? service.secrets.includes(key)
+				: service.needs.includes(producer)
+		if (included) projected[key] = value
+	}
+	return projected
 }
 
 /**

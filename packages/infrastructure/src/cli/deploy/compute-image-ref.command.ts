@@ -2,7 +2,7 @@ import { join } from 'node:path'
 
 import { writeBakeFile } from '#/adapters/build-output/bake-file.ts'
 import { writeOutput } from '#/adapters/github/output.ts'
-import { getEnv, requireEnv } from '#/cli/env.ts'
+import { getEnv, readJsonRecordEnv, requireEnv } from '#/cli/env.ts'
 import { isHetznerDeployableConfig } from '#/config/types.ts'
 import { renderBakeFile } from '#/domain/deploy/bake-file.ts'
 import {
@@ -12,8 +12,6 @@ import {
 import { resolveServiceImageRefs } from '#/domain/deploy/image-ref.ts'
 import { resolveEnvironment } from '#/domain/environment.ts'
 import { createLogger } from '@nextnode-solutions/logger'
-
-import { readRepoVars } from './vars.ts'
 
 import type { DeployableConfig } from '#/config/types.ts'
 
@@ -61,7 +59,7 @@ export function computeImageRefCommand(config: DeployableConfig): void {
 	const autoArgs = computePublicBuildArgs(config.project.domain, environment)
 	const buildArgs = resolveBuildArgs(
 		config.deploy.services,
-		readRepoVars(),
+		readJsonRecordEnv('ALL_VARS'),
 		autoArgs,
 	)
 

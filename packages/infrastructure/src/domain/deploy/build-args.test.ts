@@ -92,9 +92,9 @@ describe('resolveBuildArgs', () => {
 		expect(result).toEqual({})
 	})
 
-	it('omits a build service that ends up with no args (no auto args, no declarations)', () => {
+	it('maps a build service with no args to an empty record (the bake renderer omits the args key)', () => {
 		const result = resolveBuildArgs({ app: buildService() }, {}, {})
 
-		expect(result).toEqual({})
+		expect(result).toEqual({ app: {} })
 	})
 })

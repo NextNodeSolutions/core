@@ -23,12 +23,11 @@ export function computePublicBuildArgs(
 }
 
 /**
- * Resolve the docker-bake build args for every build service: the infra's
- * `autoArgs` (injected into all build targets) plus each service's
- * dev-declared `build_args` NAMES resolved against the GitHub Variables map.
- * Fail loud when a declared name is absent from `vars` — that is a CI config
- * bug (a Variable was never set), not a value to default away. Upstream
- * services and build services that end up with no args contribute no entry.
+ * The docker-bake build args for every build service: the infra's `autoArgs`
+ * (injected into all build targets) plus the service's own dev-declared
+ * `build_args`. Keyed by service name; upstream services contribute no entry.
+ * The bake renderer omits the target's `args` key when a service maps to an
+ * empty record, so no empty-filtering is needed here.
  */
 export function resolveBuildArgs(
 	services: Readonly<Record<string, UserServiceConfig>>,
@@ -38,17 +37,31 @@ export function resolveBuildArgs(
 	const resolved: Record<string, Record<string, string>> = {}
 	for (const [name, service] of Object.entries(services)) {
 		if (service.source !== 'build') continue
-		const args: Record<string, string> = { ...autoArgs }
-		for (const key of service.buildArgs ?? []) {
-			const value = vars[key]
-			if (value === undefined) {
-				throw new Error(
-					`service "${name}" declares build_arg "${key}" but it is absent from GitHub Variables`,
-				)
-			}
-			args[key] = value
+		resolved[name] = {
+			...autoArgs,
+			...resolveDeclaredBuildArgs(name, service.buildArgs ?? [], vars),
 		}
-		if (Object.keys(args).length > 0) resolved[name] = args
 	}
 	return resolved
+}
+
+// Resolve a build service's declared `build_args` NAMES against the GitHub
+// Variables map, failing loud when one is absent — a declared Variable that was
+// never set is a CI config bug, not a value to default away.
+function resolveDeclaredBuildArgs(
+	serviceName: string,
+	names: ReadonlyArray<string>,
+	vars: Readonly<Record<string, string>>,
+): Record<string, string> {
+	const args: Record<string, string> = {}
+	for (const key of names) {
+		const value = vars[key]
+		if (value === undefined) {
+			throw new Error(
+				`service "${serviceName}" declares build_arg "${key}" but it is absent from GitHub Variables`,
+			)
+		}
+		args[key] = value
+	}
+	return args
 }

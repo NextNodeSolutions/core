@@ -1,4 +1,9 @@
-import { getEnv, requireEnv, requireGithubRepository } from '#/cli/env.ts'
+import {
+	getEnv,
+	readJsonRecordEnv,
+	requireEnv,
+	requireGithubRepository,
+} from '#/cli/env.ts'
 import { resolveServices } from '#/cli/services/resolve.ts'
 import { isHetznerDeployableConfig } from '#/config/types.ts'
 import { parseImageRefsEnv } from '#/domain/deploy/image-ref.ts'
@@ -8,7 +13,7 @@ import { mergeServiceEnvs } from '#/domain/services/service.ts'
 
 import { buildRuntimeTarget } from './build-runtime-target.ts'
 import { loadInfraStorageForConfig } from './load-infra-storage.ts'
-import { pickSecrets, readRepoSecrets } from './secrets.ts'
+import { pickSecrets } from './secrets.ts'
 
 import type {
 	DeployableConfig,
@@ -55,7 +60,7 @@ export async function resolveDeployContext(
 	)
 	const cfToken = requireEnv('CLOUDFLARE_API_TOKEN')
 	const repository = requireGithubRepository()
-	const repoSecrets = readRepoSecrets()
+	const repoSecrets = readJsonRecordEnv('ALL_SECRETS')
 
 	const infraStorage = await loadInfraStorageForConfig(config)
 	const target = buildRuntimeTarget(config, environment, infraStorage)
