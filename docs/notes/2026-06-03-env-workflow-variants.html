@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>deploy.yml — comment l'env circule, et les variantes de wiring</title>
+<script>
+(function () {
+  try {
+    var stored = localStorage.getItem('np-theme');
+    var theme = stored || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', theme);
+  } catch (e) { document.documentElement.setAttribute('data-theme', 'light'); }
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --np-bg: oklch(98.4% 0.003 247.86); --np-bg-soft: oklch(96.8% 0.007 247.84);
+  --np-text: oklch(20.8% 0.042 265.76); --np-text-muted: oklch(55.4% 0.046 257.42);
+  --np-border: oklch(92.9% 0.013 255.51); --np-border-soft: oklch(96.8% 0.007 247.84);
+  --np-accent: oklch(70.4% 0.14 182.503); --np-accent-bg: oklch(95.3% 0.051 180.801); --np-accent-hover: oklch(60% 0.118 184.704);
+  --np-highlight: #F97316; --np-success: #16A34A; --np-warn: #D97706; --np-danger: #DC2626;
+  --np-add-bg: #DCFCE7; --np-add-text: #166534; --np-add-border: #BBF7D0;
+  --np-del-bg: #FEE2E2; --np-del-text: #991B1B; --np-del-border: #FECACA;
+  --np-edit-bg: #FFF8C5; --np-edit-text: #854D0E; --np-edit-border: #FDE68A;
+  --np-shadow-soft: 0 2px 6px rgba(0,0,0,.06); --np-shadow-pop: 0 4px 16px rgba(0,0,0,.12);
+  --np-radius: 8px; --np-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --np-sans: "DM Sans", -apple-system, BlinkMacSystemFont, system-ui, sans-serif; --np-display: "Plus Jakarta Sans", "DM Sans", sans-serif;
+}
+[data-theme="dark"] {
+  --np-bg: oklch(20.8% 0.042 265.76); --np-bg-soft: oklch(27.9% 0.041 260.03);
+  --np-text: oklch(98.4% 0.003 247.86); --np-text-muted: oklch(70.4% 0.04 256.79);
+  --np-border: oklch(37.2% 0.044 257.29); --np-border-soft: oklch(27.9% 0.041 260.03);
+  --np-accent: oklch(77.7% 0.152 181.912); --np-accent-bg: oklch(38.6% 0.063 188.416); --np-accent-hover: oklch(85.5% 0.138 181.071);
+  --np-highlight: #FB923C; --np-success: #4ADE80; --np-warn: #FBBF24; --np-danger: #F87171;
+  --np-add-bg: rgba(74,222,128,.18); --np-add-text: #86EFAC; --np-add-border: rgba(74,222,128,.40);
+  --np-del-bg: rgba(248,113,113,.18); --np-del-text: #FCA5A5; --np-del-border: rgba(248,113,113,.40);
+  --np-edit-bg: rgba(251,191,36,.18); --np-edit-text: #FCD34D; --np-edit-border: rgba(251,191,36,.40);
+  --np-shadow-soft: 0 2px 6px rgba(0,0,0,.40); --np-shadow-pop: 0 4px 16px rgba(0,0,0,.55);
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--np-bg); color: var(--np-text); font-family: var(--np-sans); font-size: 15px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+a { color: var(--np-accent-hover); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.layout { display: grid; grid-template-columns: 216px 1fr; max-width: 1120px; margin: 0 auto; }
+.sidebar { position: sticky; top: 0; height: 100vh; overflow: auto; padding: 28px 16px 28px 20px; border-right: 1px solid var(--np-border); font-size: 12.5px; }
+.sidebar::-webkit-scrollbar { width: 5px; } .sidebar::-webkit-scrollbar-thumb { background: var(--np-border); border-radius: 3px; }
+.sidebar .brand { font-family: var(--np-display); font-weight: 800; font-size: 14px; margin-bottom: 2px; }
+.sidebar .brand .dot { color: var(--np-accent); }
+.sidebar .sub { color: var(--np-text-muted); font-size: 11px; margin-bottom: 16px; }
+.sidebar nav a { display: flex; gap: 8px; padding: 5px 8px; border-radius: 6px; color: var(--np-text-muted); margin-bottom: 1px; line-height: 1.3; }
+.sidebar nav a .num { font-family: var(--np-mono); font-size: 10px; opacity: .6; min-width: 16px; }
+.sidebar nav a:hover { background: var(--np-bg-soft); text-decoration: none; color: var(--np-text); }
+.sidebar nav a.active { color: var(--np-accent-hover); background: var(--np-accent-bg); font-weight: 600; }
+.progress-wrap { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--np-border); }
+.progress-bar { height: 5px; background: var(--np-bg-soft); border-radius: 3px; overflow: hidden; }
+.progress-bar > i { display: block; height: 100%; width: 0; background: var(--np-accent); transition: width .2s; }
+.progress-label { font-size: 10.5px; color: var(--np-text-muted); margin-top: 6px; font-family: var(--np-mono); }
+.main { padding: 36px 40px 120px; min-width: 0; }
+section { scroll-margin-top: 20px; margin-bottom: 44px; }
+h1 { font-family: var(--np-display); font-weight: 800; font-size: 28px; line-height: 1.15; letter-spacing: -.02em; margin: 6px 0 14px; }
+h2 { font-family: var(--np-display); font-weight: 700; font-size: 20px; letter-spacing: -.01em; margin: 0 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--np-border); }
+h2 .badge { font-family: var(--np-mono); font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 999px; vertical-align: middle; margin-left: 8px; }
+h3 { font-size: 14px; font-weight: 600; margin: 20px 0 8px; font-family: var(--np-mono); text-transform: uppercase; letter-spacing: .04em; color: var(--np-text-muted); }
+p { margin: 0 0 12px; }
+.eyebrow { font-family: var(--np-mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--np-accent-hover); }
+.muted { color: var(--np-text-muted); } strong { font-weight: 600; }
+.prompt-box { margin: 16px 0 0; padding: 12px 14px; border-radius: var(--np-radius); background: var(--np-bg-soft); border: 1px solid var(--np-border); border-left: 4px solid var(--np-accent); font-size: 13.5px; }
+.prompt-box .q { font-family: var(--np-mono); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--np-text-muted); display: block; margin-bottom: 4px; }
+.tldr { padding: 16px 18px; border-radius: var(--np-radius); background: var(--np-bg-soft); border: 1px solid var(--np-border); border-left: 4px solid var(--np-accent); }
+.tldr p:last-child { margin-bottom: 0; }
+
+/* flow */
+.srcband { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 6px 0 0; }
+.src { border: 1px solid var(--np-border); border-radius: var(--np-radius); background: var(--np-bg); padding: 10px 12px; text-align: center; }
+.src .t { font-family: var(--np-mono); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--np-text-muted); }
+.src .n { font-weight: 700; font-size: 13px; margin-top: 2px; }
+.src .sub { font-size: 11px; color: var(--np-text-muted); }
+.src.toml { border-top: 3px solid var(--np-accent); }
+.src.sec { border-top: 3px solid var(--np-danger); }
+.src.var { border-top: 3px solid var(--np-success); }
+.connect { text-align: center; font-family: var(--np-mono); font-size: 10.5px; color: var(--np-text-muted); margin: 8px 0; letter-spacing: .04em; }
+.lanes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.lane { border: 1px solid var(--np-border); border-radius: var(--np-radius); overflow: hidden; background: var(--np-bg-soft); }
+.lane > header { padding: 10px 14px; border-bottom: 1px solid var(--np-border); background: var(--np-bg); display: flex; align-items: center; gap: 8px; }
+.lane > header .tag { font-family: var(--np-mono); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; padding: 2px 7px; border-radius: 999px; }
+.lane.build > header .tag { background: var(--np-edit-bg); color: var(--np-edit-text); border: 1px solid var(--np-edit-border); }
+.lane.run > header .tag { background: var(--np-add-bg); color: var(--np-add-text); border: 1px solid var(--np-add-border); }
+.lane > header b { font-family: var(--np-display); font-size: 14px; }
+.lane > header .job { font-family: var(--np-mono); font-size: 11px; color: var(--np-text-muted); margin-left: auto; }
+.lane .body { padding: 14px; }
+.fnode { border: 1px solid var(--np-border); border-radius: 6px; background: var(--np-bg); padding: 8px 11px; font-size: 12.5px; }
+.fnode .k { font-family: var(--np-mono); font-size: 10.5px; color: var(--np-accent-hover); }
+.fnode code { font-size: 11.5px; }
+.fnode.inline { border-color: var(--np-edit-border); background: var(--np-edit-bg); color: var(--np-edit-text); font-weight: 600; }
+.fnode.live { border-color: var(--np-add-border); background: var(--np-add-bg); color: var(--np-add-text); font-weight: 600; }
+.fdown { text-align: center; color: var(--np-text-muted); font-size: 13px; margin: 5px 0; }
+.lane .foot { padding: 8px 14px; border-top: 1px dashed var(--np-border); font-size: 11.5px; color: var(--np-text-muted); font-family: var(--np-mono); }
+
+/* variant header strip */
+.vhead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.vhead .meta { font-size: 12.5px; color: var(--np-text-muted); }
+
+/* code + diff (rich-blocks recipe) */
+pre { margin: 0; padding: 14px 16px; background: var(--np-bg-soft); border: 1px solid var(--np-border); border-radius: var(--np-radius); overflow-x: auto; font-family: var(--np-mono); font-size: 12.5px; line-height: 1.65; color: var(--np-text); tab-size: 2; }
+pre code, pre code.hljs { background: transparent; padding: 0; font: inherit; color: inherit; }
+:not(pre) > code { font-family: var(--np-mono); font-size: .9em; padding: 1px 6px; background: var(--np-bg-soft); border: 1px solid var(--np-border); border-radius: 4px; color: var(--np-text); }
+.code-block { margin: 0 0 14px; border: 1px solid var(--np-border); border-radius: var(--np-radius); overflow: hidden; background: var(--np-bg-soft); }
+.code-block__head { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: var(--np-bg); border-bottom: 1px solid var(--np-border); font-family: var(--np-mono); font-size: 12px; color: var(--np-text-muted); }
+.code-block__file { flex: 1; font-weight: 600; color: var(--np-text); }
+.code-block__lang { font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--np-accent-hover); padding: 1px 6px; background: var(--np-accent-bg); border-radius: 3px; }
+.code-block__copy { font: inherit; font-size: 11px; padding: 2px 8px; background: transparent; border: 1px solid var(--np-border); border-radius: 4px; color: var(--np-text-muted); cursor: pointer; }
+.code-block__copy:hover { color: var(--np-accent-hover); border-color: var(--np-accent); }
+.code-block__copy.is-copied { color: var(--np-add-text); border-color: var(--np-add-border); }
+.code-block pre { margin: 0; border: 0; border-radius: 0; background: var(--np-bg-soft); }
+.diff { font-family: var(--np-mono); font-size: 12.5px; line-height: 1.5; background: var(--np-bg-soft); border: 1px solid var(--np-border); border-radius: var(--np-radius); overflow: hidden; margin-bottom: 14px; }
+.diff[data-file]::before { content: attr(data-file); display: block; padding: 8px 12px; background: var(--np-bg); border-bottom: 1px solid var(--np-border); font-weight: 600; }
+.diff .line { display: block; padding: 0 12px; white-space: pre; }
+.diff .line.hunk { color: var(--np-text-muted); background: var(--np-bg); }
+.diff .line.add { background: var(--np-add-bg); color: var(--np-add-text); }
+.diff .line.add::before { content: '+ '; opacity: .7; }
+.diff .line.del { background: var(--np-del-bg); color: var(--np-del-text); }
+.diff .line.del::before { content: '- '; opacity: .7; }
+.diff .line.ctx::before { content: '  '; }
+
+/* pros-cons */
+.pc { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 4px 0 0; }
+.pc ul { margin: 0; padding-left: 18px; font-size: 13px; }
+.pc li { margin-bottom: 4px; }
+.pc .h { font-family: var(--np-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
+.pc .pros .h { color: var(--np-add-text); } .pc .cons .h { color: var(--np-del-text); }
+@media (max-width: 640px) { .pc { grid-template-columns: 1fr; } }
+
+/* pills */
+.pill { display: inline-block; padding: 1px 8px; font-size: 11px; font-weight: 600; line-height: 1.6; border-radius: 999px; border: 1px solid var(--np-border); background: var(--np-bg-soft); color: var(--np-text-muted); white-space: nowrap; }
+.pill.success { background: var(--np-add-bg); color: var(--np-add-text); border-color: var(--np-add-border); }
+.pill.warn { background: var(--np-edit-bg); color: var(--np-edit-text); border-color: var(--np-edit-border); }
+.pill.danger { background: var(--np-del-bg); color: var(--np-del-text); border-color: var(--np-del-border); }
+.pill.accent { background: var(--np-accent-bg); color: var(--np-accent-hover); border-color: var(--np-accent); }
+
+/* callout */
+.callout { border: 1px solid var(--np-border); border-left: 4px solid var(--np-highlight); border-radius: var(--np-radius); background: var(--np-bg-soft); padding: 14px 16px; margin: 16px 0; }
+.callout.accent { border-left-color: var(--np-accent); }
+.callout.danger { border-left-color: var(--np-danger); }
+.callout .ct { font-weight: 700; font-family: var(--np-display); display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.callout p:last-child { margin-bottom: 0; }
+
+/* table */
+.tbl-wrap { overflow-x: auto; border: 1px solid var(--np-border); border-radius: var(--np-radius); }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--np-border); vertical-align: top; }
+th { font-family: var(--np-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--np-text-muted); background: var(--np-bg-soft); }
+tbody tr:last-child td { border-bottom: 0; } tbody tr:hover { background: var(--np-bg-soft); }
+tr.reco td { background: var(--np-accent-bg); }
+td.fw { font-weight: 600; white-space: nowrap; } td code, th code { white-space: nowrap; }
+.yes { color: var(--np-success); font-weight: 700; } .no { color: var(--np-danger); font-weight: 700; }
+
+.np-theme-toggle { position: fixed; top: 14px; right: 16px; z-index: 50; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--np-border); background: var(--np-bg-soft); color: var(--np-text); cursor: pointer; font-size: 15px; box-shadow: var(--np-shadow-soft); }
+@media (max-width: 1024px) { .layout { grid-template-columns: 1fr; } .sidebar { display: none; } }
+@media (max-width: 780px) { .main { padding: 24px 18px 80px; } .srcband, .lanes { grid-template-columns: 1fr; } h1 { font-size: 22px; } }
+</style>
+</head>
+<body>
+<button class="np-theme-toggle" aria-label="Basculer le thème">◐</button>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">NextNode<span class="dot">.</span></div>
+    <div class="sub">deploy.yml · env wiring · 2026-06-03</div>
+    <nav>
+      <a href="#flux"><span class="num">01</span> Le flux end-to-end</a>
+      <a href="#varA"><span class="num">A</span> Allow-list <code>build_vars</code></a>
+      <a href="#varB"><span class="num">B</span> Pass-through <code>vars</code></a>
+      <a href="#varC"><span class="num">C</span> Convention préfixe</a>
+      <a href="#secret"><span class="num">+</span> Secret au build</a>
+      <a href="#piege"><span class="num">!</span> Le piège <code>environment:</code></a>
+      <a href="#comparatif"><span class="num">=</span> Comparatif & reco</a>
+    </nav>
+    <div class="progress-wrap"><div class="progress-bar"><i></i></div><div class="progress-label">Lecture <span id="pct">0</span>%</div></div>
+  </aside>
+
+  <main class="main">
+    <header>
+      <div class="eyebrow">GitHub Actions · deploy.yml · circulation des variables</div>
+      <h1>Comment l'env circule dans le workflow,<br>et 3 façons de le câbler</h1>
+      <p class="muted">Uniquement le workflow : d'où viennent les valeurs, par quel job elles transitent, et où elles atterrissent (build args vs <code>env_file</code>). Puis trois wirings concrets à choisir.</p>
+      <div class="prompt-box"><span class="q">Demande</span> « Montre-moi exactement comment ça va fonctionner — le workflow uniquement — et propose-moi plusieurs workflows pour notre utilisation. »</div>
+    </header>
+
+    <!-- 01 FLUX -->
+    <section id="flux">
+      <h2>01 · Le flux end-to-end</h2>
+      <p>Trois origines, jamais commitées dans le repo. Chacune entre dans le pipeline par un canal distinct et ressort dans <strong>une</strong> des deux phases.</p>
+
+      <div class="srcband">
+        <div class="src toml"><div class="t">nextnode.toml · forme</div><div class="n">project.domain</div><div class="sub">→ dérive <code>SITE_URL</code></div></div>
+        <div class="src var"><div class="t">GitHub · public</div><div class="n">Variables (<code>vars</code>)</div><div class="sub"><code>toJSON(vars)</code></div></div>
+        <div class="src sec"><div class="t">GitHub · sensible</div><div class="n">Secrets</div><div class="sub"><code>toJSON(secrets)</code></div></div>
+      </div>
+      <div class="connect">│ domain → les deux lanes &nbsp;·&nbsp; Variables → lane BUILD &nbsp;·&nbsp; Secrets → lane RUNTIME │</div>
+
+      <div class="lanes">
+        <div class="lane build">
+          <header><span class="tag">phase build</span><b>Image (gelé)</b><span class="job">job: build-image</span></header>
+          <div class="body">
+            <div class="fnode"><div class="k">step compute-image-ref</div>résout le map <code>build_args</code> = N entrées (<code>SITE_URL</code>, <code>R2_CDN_URL</code>, <code>ANALYTICS_ID</code>, …) ⟵ <code>ALL_VARS</code></div>
+            <div class="fdown">▼</div>
+            <div class="fnode"><div class="k">écrit</div><code>docker-bake.json</code> → <code>target.app.args</code></div>
+            <div class="fdown">▼</div>
+            <div class="fnode"><div class="k">docker buildx bake</div><code>--build-arg</code> → Dockerfile <code>ARG</code> → <code>ENV</code></div>
+            <div class="fdown">▼</div>
+            <div class="fnode inline">RUN build → framework INLINE dans <code>dist/</code></div>
+          </div>
+          <div class="foot">gelé dans l'image · une valeur par build</div>
+        </div>
+
+        <div class="lane run">
+          <header><span class="tag">phase runtime</span><b>Conteneur (vivant)</b><span class="job">job: deploy</span></header>
+          <div class="body">
+            <div class="fnode"><div class="k">map runtime_env</div>secrets ⟵ <code>ALL_SECRETS</code> · <code>PORT</code> ⟵ service · public ⟵ <code>vars</code> · URLs inter-services</div>
+            <div class="fdown">▼</div>
+            <div class="fnode"><div class="k">écrit sur le VPS</div><code>/opt/apps/&lt;app&gt;/&lt;env&gt;/.env.app</code></div>
+            <div class="fdown">▼</div>
+            <div class="fnode"><div class="k">compose</div><code>env_file: [.env.app]</code></div>
+            <div class="fdown">▼</div>
+            <div class="fnode live">process.env lu À CHAQUE REQUÊTE</div>
+          </div>
+          <div class="foot">variable par environnement · même image</div>
+        </div>
+      </div>
+
+      <div class="callout accent">
+        <div class="ct">Ce qu'il faut retenir du flux</div>
+        <p>La lane <strong>BUILD</strong> n'existe que dans le job <code>build-image</code> et n'a aujourd'hui aucune entrée (PR #18 a retiré les args). La lane <strong>RUNTIME</strong> (job <code>deploy</code>) est intacte. <strong>Tout le wiring à décider concerne donc le seul job <code>build-image</code></strong> : comment remplir le <strong>map des build args</strong> — N variables, toutes au même rang. Le classement se fait par <em>quand la valeur est lue</em>, pas par son nom : <code>PORT</code> lu au démarrage → runtime ; <code>R2_CDN_URL</code> / <code>SITE_URL</code> lus à la config ou inlinés → build. Les variantes ne diffèrent que sur le remplissage de ce map.</p>
+      </div>
+
+      <h3>Le job build-image aujourd'hui (le point de départ)</h3>
+      <figure class="code-block">
+        <figcaption class="code-block__head"><span class="code-block__file">.github/workflows/deploy.yml · job build-image (extrait actuel)</span><span class="code-block__lang">YAML</span><button class="code-block__copy" type="button">Copy</button></figcaption>
+<pre><code class="language-yaml">    - name: Render bake definition from nextnode.toml
+      id: compute
+      run: node src/index.ts compute-image-ref
+      env:
+        PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        GITHUB_SHA: ${{ github.sha }}
+        # ← aucune env applicative. Le build ne voit rien.
+
+    - name: Build and push
+      uses: docker/bake-action@v6
+      with:
+        source: .
+        files: ${{ steps.compute.outputs.bake_file }}
+        push: true</code></pre>
+      </figure>
+    </section>
+
+    <!-- VARIANT A -->
+    <section id="varA">
+      <h2>Variante A · allow-list <code>build_vars</code> <span class="badge pill accent">recommandée</span></h2>
+      <div class="vhead"><span class="pill">toml: 1 champ (noms)</span><span class="pill">renderer: +args</span><span class="meta">Seules les variables explicitement listées deviennent des build args. Valeurs dans GitHub Variables.</span></div>
+
+      <h3>1 · toml — noms seulement (jamais de valeur)</h3>
+      <figure class="code-block">
+        <figcaption class="code-block__head"><span class="code-block__file">nextnode.toml</span><span class="code-block__lang">TOML</span><button class="code-block__copy" type="button">Copy</button></figcaption>
+<pre><code class="language-toml">[deploy]
+secrets    = ["DATABASE_URL"]                       # ← GitHub Secrets   (runtime)
+build_vars = ["SITE_URL", "R2_CDN_URL", "ANALYTICS_ID"]  # NOMS des args de build
+# Toutes au même rang : chaque nom est résolu contre le MÊME pool de valeurs
+# (Variable GitHub, ou calculée par l'infra). Aucune variable n'est privilégiée.</code></pre>
+      </figure>
+
+      <h3>2 · workflow — le job build-image gagne 2 env</h3>
+      <div class="diff" data-file=".github/workflows/deploy.yml · step compute (build-image)">
+@@ env: @@
+   PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
++  PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
+   GITHUB_REPOSITORY: ${{ github.repository }}
+   GITHUB_SHA: ${{ github.sha }}
++  ALL_VARS: ${{ toJSON(vars) }}
+      </div>
+      <p class="muted" style="font-size:13px">Le step « Build and push » <strong>ne change pas</strong> : les args sont déjà dans le JSON que <code>files:</code> charge.</p>
+
+      <h3>3 · ce que compute-image-ref rend</h3>
+      <figure class="code-block">
+        <figcaption class="code-block__head"><span class="code-block__file">docker-bake.json (généré)</span><span class="code-block__lang">JSON</span><button class="code-block__copy" type="button">Copy</button></figcaption>
+<pre><code class="language-json">{
+  "target": {
+    "app": {
+      "context": ".",
+      "dockerfile": "packages/fleursdaujourdhui/Dockerfile",
+      "args": {
+        "SITE_URL": "https://fleursdaujourdhui.fr",
+        "R2_CDN_URL": "https://cdn.fleursdaujourdhui.fr",
+        "ANALYTICS_ID": "G-XXXX"
+      },
+      "tags": ["ghcr.io/.../fleursdaujourdhui:sha-…"]
+    }
+  }
+}</code></pre>
+      </figure>
+
+      <h3>4 · contrat Dockerfile (commun à toutes les variantes)</h3>
+      <figure class="code-block">
+        <figcaption class="code-block__head"><span class="code-block__file">packages/fleursdaujourdhui/Dockerfile (étape build)</span><span class="code-block__lang">Dockerfile</span><button class="code-block__copy" type="button">Copy</button></figcaption>
+<pre><code class="language-dockerfile">FROM deps AS build
+COPY --from=prepare /repo/out/full/ ./
+ARG SITE_URL
+ARG R2_CDN_URL
+ARG ANALYTICS_ID
+ENV SITE_URL=$SITE_URL R2_CDN_URL=$R2_CDN_URL ANALYTICS_ID=$ANALYTICS_ID
+RUN pnpm exec turbo build --filter=@nextnode-solutions/fleursdaujourdhui</code></pre>
+      </figure>
+
+      <div class="pc">
+        <div class="pros"><div class="h">+ Pour</div><ul><li>Exposition minimale : <strong>seul le nécessaire</strong> entre dans l'image</li><li>Auditable : on lit la liste des args dans le toml</li><li>Symétrique de <code>secrets = [...]</code> — même mental model</li><li>Valeurs jamais commitées</li></ul></div>
+        <div class="cons"><div class="h">− Contre</div><ul><li>1 champ de schema à ajouter + valider</li><li>Le dev doit déclarer chaque nom (léger)</li></ul></div>
+      </div>
+    </section>
+
+    <!-- VARIANT B -->
+    <section id="varB">
+      <h2>Variante B · pass-through de toutes les <code>vars</code></h2>
+      <div class="vhead"><span class="pill">toml: zéro</span><span class="pill">renderer: +args</span><span class="meta">Toute Variable GitHub devient un build arg. Aucun champ toml.</span></div>
+
+      <h3>workflow — identique à A pour l'env</h3>
+      <div class="diff" data-file=".github/workflows/deploy.yml · step compute (build-image)">
+@@ env: @@
+   PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
++  PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
+   GITHUB_REPOSITORY: ${{ github.repository }}
+   GITHUB_SHA: ${{ github.sha }}
++  ALL_VARS: ${{ toJSON(vars) }}
+      </div>
+      <p>La différence est dans <code>compute-image-ref</code> : au lieu de piocher une allow-list, il <strong>émet un arg par clé présente dans <code>ALL_VARS</code></strong> (plus toute valeur calculée par l'infra). Pas de <code>build_vars</code>, pas de toml. Toutes les vars sont traitées à l'identique.</p>
+
+      <div class="pc">
+        <div class="pros"><div class="h">+ Pour</div><ul><li><strong>Zéro</strong> champ toml, zéro maintenance</li><li>Une nouvelle var → dispo au build sans toucher au repo</li></ul></div>
+        <div class="cons"><div class="h">− Contre</div><ul><li><strong>Toutes</strong> les <code>vars</code> gravées dans les layers, même inutiles → bruit + surface</li><li>Implicite : rien n'indique ce qui finit dans l'image</li><li>Une <code>var</code> mal classée (qui aurait dû être secrète) fuite dans l'image</li></ul></div>
+      </div>
+      <div class="callout"><div class="ct">⚠️ Le risque clé</div><p>Le pass-through supprime la barrière qui empêche une valeur sensible mal rangée en <code>vars</code> d'être gravée dans l'image. L'allow-list (A) garde cette barrière.</p></div>
+    </section>
+
+    <!-- VARIANT C -->
+    <section id="varC">
+      <h2>Variante C · convention par préfixe</h2>
+      <div class="vhead"><span class="pill">toml: zéro</span><span class="pill">renderer: +args</span><span class="meta">Toute Variable préfixée (ex. <code>BUILD_*</code>) devient un build arg — le préfixe EST l'allow-list. Aucune var privilégiée, aucun champ toml.</span></div>
+
+      <h3>workflow — mêmes 2 env qu'en A/B</h3>
+      <div class="diff" data-file=".github/workflows/deploy.yml · step compute (build-image)">
+@@ env: @@
+   PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
++  PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
+   GITHUB_REPOSITORY: ${{ github.repository }}
+   GITHUB_SHA: ${{ github.sha }}
++  ALL_VARS: ${{ toJSON(vars) }}
+      </div>
+      <p><code>compute-image-ref</code> émet un arg pour <strong>chaque clé de <code>ALL_VARS</code> commençant par <code>BUILD_</code></strong> (préfixe retiré du nom de l'arg). Toutes au même rang :</p>
+      <figure class="code-block">
+        <figcaption class="code-block__head"><span class="code-block__file">GitHub Variables (repo) → docker-bake.json</span><span class="code-block__lang">JSON</span><button class="code-block__copy" type="button">Copy</button></figcaption>
+<pre><code class="language-json">// vars: BUILD_SITE_URL, BUILD_R2_CDN_URL, BUILD_ANALYTICS_ID, NODE_VERSION
+// → seules les BUILD_* passent, préfixe retiré :
+"args": { "SITE_URL": "…", "R2_CDN_URL": "…", "ANALYTICS_ID": "…" }
+// NODE_VERSION (sans préfixe) reste runtime / ignorée au build</code></pre>
+      </figure>
+
+      <div class="pc">
+        <div class="pros"><div class="h">+ Pour</div><ul><li><strong>Zéro</strong> champ toml, mais scopé (≠ B qui prend tout)</li><li>Une var de build se reconnaît à son préfixe</li><li>Barrière préservée : une var sensible non préfixée ne fuite pas dans l'image</li></ul></div>
+        <div class="cons"><div class="h">− Contre</div><ul><li>Convention implicite à documenter (le préfixe)</li><li>Renomme les Variables (préfixe <code>BUILD_</code>)</li><li>Collision si une var légitime commence par <code>BUILD_</code> sans être un arg</li></ul></div>
+      </div>
+    </section>
+
+    <!-- SECRET AT BUILD -->
+    <section id="secret">
+      <h2>+ Annexe · un secret nécessaire AU build</h2>
+      <p>Cas rare (ex. token privé d'un registre npm lu pendant <code>pnpm install</code>). <strong>Jamais</strong> un build arg — ça grave dans les layers. La voie sûre = un <strong>secret mount BuildKit</strong> : présent pendant le <code>RUN</code>, absent de l'image finale.</p>
+
+      <h3>workflow + bake target</h3>
+      <figure class="code-block">
+        <figcaption class="code-block__head"><span class="code-block__file">deploy.yml + docker-bake.json</span><span class="code-block__lang">YAML</span><button class="code-block__copy" type="button">Copy</button></figcaption>
+<pre><code class="language-yaml"># 1) le secret arrive en env du step bake (jamais en arg)
+    - name: Build and push
+      uses: docker/bake-action@v6
+      env:
+        NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      with:
+        source: .
+        files: ${{ steps.compute.outputs.bake_file }}
+        push: true
+
+# 2) la target bake déclare le secret depuis cet env
+#    "target": { "app": { "secret": ["id=npm,env=NPM_TOKEN"], ... } }</code></pre>
+      </figure>
+      <figure class="code-block">
+        <figcaption class="code-block__head"><span class="code-block__file">Dockerfile — mount, pas de layer</span><span class="code-block__lang">Dockerfile</span><button class="code-block__copy" type="button">Copy</button></figcaption>
+<pre><code class="language-dockerfile">RUN --mount=type=secret,id=npm \
+    NPM_TOKEN="$(cat /run/secrets/npm)" pnpm install --frozen-lockfile
+# NPM_TOKEN n'apparaît dans AUCUN layer ni dans docker history</code></pre>
+      </figure>
+      <div class="callout danger"><div class="ct">🔒 Invariant</div><p>Un secret au build = <code>--mount=type=secret</code>. Un secret en <code>ARG</code>/<code>build-arg</code> est un bug de sécurité (lisible via <code>docker history</code> + poussé sur GHCR).</p></div>
+    </section>
+
+    <!-- PIEGE -->
+    <section id="piege">
+      <h2>! Le piège <code>environment:</code> (à connaître avant de choisir)</h2>
+      <p>Les Variables GitHub existent à deux niveaux. Ça décide où poser <code>R2_CDN_URL</code> et si le build est gaté.</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Niveau de la Variable</th><th>Visible par build-image ?</th><th>Per-env (dev/prod) ?</th><th>Effet sur le build</th></tr></thead>
+          <tbody>
+            <tr><td class="fw">Repo / Org</td><td class="yes">oui, toujours</td><td class="no">non (même valeur partout)</td><td>aucun — build non gaté</td></tr>
+            <tr><td class="fw">Environnement (dev/prod)</td><td class="no">non, sauf si le job déclare <code>environment:</code></td><td class="yes">oui</td><td><strong>déclarer <code>environment:</code> soumet le build aux règles de protection</strong> → build gaté derrière l'approbation prod</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout"><div class="ct">Conséquence concrète</div><p>Aujourd'hui <code>build-image</code> n'a <strong>pas</strong> de clé <code>environment:</code> (seul <code>deploy</code> en a une, pour le prod gate). Si <code>R2_CDN_URL</code> a la <strong>même valeur</strong> dev/prod → la poser en Variable <strong>repo</strong> → visible sans rien gater. Si elle <strong>diffère</strong> par env → il faut une Variable d'environnement + <code>environment: ${{ inputs.environment }}</code> sur <code>build-image</code>, ce qui <strong>place la construction derrière le gate prod</strong> (souvent indésirable : on veut builder, puis gater). Pour fleursdaujourdhui, <code>R2_CDN_URL</code> est très probablement identique partout → <strong>Variable repo, build non gaté.</strong></p></div>
+    </section>
+
+    <!-- COMPARATIF -->
+    <section id="comparatif">
+      <h2>= Comparatif & recommandation</h2>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Variante</th><th>Quels args (uniformes)</th><th>Champ toml</th><th>Renderer / step</th><th>Exposition image</th><th>Scope</th></tr></thead>
+          <tbody>
+            <tr class="reco"><td class="fw">A · allow-list</td><td>les noms listés</td><td><code>build_vars</code> (noms)</td><td>+args dans le JSON</td><td class="yes">minimale</td><td>explicite par projet</td></tr>
+            <tr><td class="fw">B · pass-through</td><td>toutes les <code>vars</code></td><td>aucun</td><td>+args dans le JSON</td><td class="no">toutes les vars</td><td>tout</td></tr>
+            <tr><td class="fw">C · préfixe</td><td>les <code>vars</code> préfixées (<code>BUILD_*</code>)</td><td>aucun</td><td>+args dans le JSON</td><td class="yes">scopée au préfixe</td><td>par convention</td></tr>
+            <tr><td class="fw">+ secret build</td><td>GitHub Secrets</td><td>—</td><td>mount BuildKit</td><td class="yes">nulle (pas de layer)</td><td>n/a</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout accent">
+        <div class="ct">🎯 Recommandation pour NextNode</div>
+        <p><strong>Variante A</strong>, valeurs en Variables <strong>repo/org</strong> (build non gaté) : explicite, auditable, exposition minimale, symétrique du <code>secrets = [...]</code>. Toutes les vars de build y sont au même rang — tu listes les noms, l'infra résout les valeurs (Variable ou calcul). <strong>C (préfixe)</strong> évite le champ toml si tu préfères une convention <code>BUILD_*</code>. <strong>B</strong> seulement avec très peu de <code>vars</code>. Orthogonal : l'input <code>set:</code> de bake-action peut surcharger n'importe quel arg par run, sans toucher au reste. Difficulté A : <span class="pill accent">I3</span> dans <code>@nextnode/core</code>.</p>
+      </div>
+      <p class="muted" style="font-size:13px">À confirmer pour fleursdaujourdhui (repo hors monorepo <code>core</code>) : valeur de <code>R2_CDN_URL</code> identique dev/prod ? sinon le piège <code>environment:</code> s'applique.</p>
+    </section>
+  </main>
+</div>
+
+<link id="hljs-light" rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-light.min.css">
+<link id="hljs-dark" rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css" disabled>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>
+(function () {
+  var btn = document.querySelector('.np-theme-toggle');
+  btn.addEventListener('click', function () {
+    var cur = document.documentElement.getAttribute('data-theme') || 'light';
+    var next = cur === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    try { localStorage.setItem('np-theme', next); } catch (e) {}
+    document.dispatchEvent(new CustomEvent('np:theme-change', { detail: { theme: next } }));
+  });
+})();
+document.querySelectorAll('.diff').forEach(function (el) {
+  var raw = el.textContent.trimEnd();
+  el.innerHTML = raw.split('\n').map(function (l) {
+    var cls = l.startsWith('@@') ? 'hunk' : l.startsWith('+') ? 'add' : l.startsWith('-') ? 'del' : 'ctx';
+    var body = (cls === 'add' || cls === 'del') ? l.slice(1) : l;
+    return '<span class="line ' + cls + '">' + body.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</span>';
+  }).join('');
+});
+(function () {
+  if (!document.querySelector('pre > code[class*="language-"]')) return;
+  function applyTheme(t) { document.getElementById('hljs-light').disabled = (t === 'dark'); document.getElementById('hljs-dark').disabled = (t !== 'dark'); }
+  hljs.highlightAll();
+  applyTheme(document.documentElement.dataset.theme || 'light');
+  document.addEventListener('np:theme-change', function (e) { applyTheme(e.detail.theme); });
+  document.querySelectorAll('.code-block__copy').forEach(function (btn) {
+    btn.addEventListener('click', async function () {
+      var fig = btn.closest('.code-block'); var code = fig ? fig.querySelector('pre code').innerText : '';
+      try { await navigator.clipboard.writeText(code); var p = btn.textContent; btn.textContent = 'Copied'; btn.classList.add('is-copied'); setTimeout(function () { btn.textContent = p; btn.classList.remove('is-copied'); }, 1200); } catch (e) {}
+    });
+  });
+})();
+(function () {
+  var links = Array.prototype.slice.call(document.querySelectorAll('.sidebar nav a'));
+  var map = {}; links.forEach(function (a) { map[a.getAttribute('href').slice(1)] = a; });
+  var obs = new IntersectionObserver(function (entries) {
+    entries.forEach(function (en) { if (en.isIntersecting) { links.forEach(function (a) { a.classList.remove('active'); }); if (map[en.target.id]) map[en.target.id].classList.add('active'); } });
+  }, { rootMargin: '-20% 0px -65% 0px' });
+  document.querySelectorAll('section[id]').forEach(function (s) { obs.observe(s); });
+  var bar = document.querySelector('.progress-bar > i'); var pct = document.getElementById('pct');
+  function onScroll() { var h = document.documentElement; var max = h.scrollHeight - h.clientHeight; var p = max > 0 ? Math.round((h.scrollTop / max) * 100) : 0; bar.style.width = p + '%'; pct.textContent = p; }
+  window.addEventListener('scroll', onScroll, { passive: true }); onScroll();
+})();
+</script>
+</body>
+</html>
