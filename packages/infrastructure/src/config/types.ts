@@ -99,7 +99,6 @@ export interface DeployVolume {
 }
 
 interface BaseDeploySection {
-	readonly secrets: ReadonlyArray<string>
 	// Override the VPS hostname this project deploys onto. When `null`, the
 	// CLI resolves a shared default per environment (see resolveVpsName).
 	// Only consumed by the hetzner-vps target; cloudflare-pages ignores it.
@@ -109,6 +108,11 @@ interface BaseDeploySection {
 
 export interface HetznerVpsDeploySection extends BaseDeploySection {
 	readonly target: 'hetzner-vps'
+	// The pool of GitHub Secret NAMES the pipeline pulls. NOT declared in the
+	// toml for hetzner-vps — DERIVED at validation as the union of every
+	// service's `secrets` (each service declares only what it needs, per-service
+	// least privilege). Consumed by `pickSecrets` + the GITHUB_ENV write.
+	readonly secrets: ReadonlyArray<string>
 	readonly hetzner: HetznerDeployConfig
 	// Per-service workloads declared under [deploy.services.<name>]. At least one
 	// service is required; each entry declares how its image is obtained
@@ -169,6 +173,10 @@ export const DEFAULT_SERVICE_PORT = 3000
 
 export interface CloudflarePagesDeploySection extends BaseDeploySection {
 	readonly target: 'cloudflare-pages'
+	// The pool of GitHub Secret NAMES synced to the Pages project. Declared
+	// directly in `[deploy].secrets` — a Pages deploy is a single unit with no
+	// per-service split, so there is nothing to derive and no leak to prevent.
+	readonly secrets: ReadonlyArray<string>
 }
 
 export type DeploySection =

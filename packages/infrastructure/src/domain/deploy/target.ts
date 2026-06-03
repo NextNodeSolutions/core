@@ -56,6 +56,13 @@ export function buildDeployEnv(
 
 export interface DeployInput {
 	readonly secrets: Readonly<Record<string, string>>
+	// Provenance for `secrets`: maps each BACKING-service secret key to the name
+	// of the service that produced it (e.g. `DATABASE_URL` → `postgres`). User
+	// secrets are absent. Lets the container target project backing secrets by
+	// `needs` (least privilege) and build the shared `.env` the DB sidecar +
+	// migrate read. An EMPTY map for targets with no backing services (Cloudflare
+	// Pages ignores it) — provenance is always a map, never absent.
+	readonly secretOrigins: Readonly<Record<string, string>>
 	// Image ref per declared service, keyed by instance name — parsed from the
 	// IMAGE_REFS env. Absent for static (Cloudflare Pages) targets, which build
 	// no images.

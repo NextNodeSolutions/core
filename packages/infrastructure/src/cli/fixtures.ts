@@ -255,13 +255,15 @@ export const APP_WITH_SECRETS: DeployableConfig = {
 	deploy: {
 		target: 'hetzner-vps',
 		hetzner: { serverType: 'cx23', location: 'nbg1' },
+		// hetzner pool is DERIVED = union of every service's secrets, so the
+		// declared secret lives on the service that needs it.
 		secrets: ['DATABASE_URL'],
 		vps: null,
 		volumes: [],
 		services: {
 			app: {
 				port: 3000,
-				secrets: [],
+				secrets: ['DATABASE_URL'],
 				needs: [],
 				dependsOn: [],
 				source: 'build',

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildServiceSecretEnv, buildServiceUrlEnv } from './service-env.ts'
+import {
+	buildServiceSecretEnv,
+	buildServiceUrlEnv,
+	selectBackingSecrets,
+} from './service-env.ts'
 
 import type { UserServiceConfig } from '#/config/types.ts'
 
@@ -14,10 +18,12 @@ const buildService = (url?: string): UserServiceConfig => ({
 	target: 'app',
 })
 
-const serviceWithSecrets = (secrets: string[]): UserServiceConfig => ({
+const service = (
+	opts: { secrets?: string[]; needs?: string[] } = {},
+): UserServiceConfig => ({
 	port: 3000,
-	secrets,
-	needs: [],
+	secrets: opts.secrets ?? [],
+	needs: opts.needs ?? [],
 	dependsOn: [],
 	source: 'build',
 	target: 'app',
@@ -93,14 +99,15 @@ describe('buildServiceUrlEnv', () => {
 })
 
 describe('buildServiceSecretEnv', () => {
-	it('projects the pool through each service so it gets only its declared subset', () => {
+	it('projects a user secret only to the services that declare it', () => {
 		expect(
 			buildServiceSecretEnv(
 				{
-					front: serviceWithSecrets(['SESSION_KEY']),
-					api: serviceWithSecrets(['JWT_SECRET']),
+					front: service({ secrets: ['SESSION_KEY'] }),
+					api: service({ secrets: ['JWT_SECRET'] }),
 				},
 				{ SESSION_KEY: 'sess-val', JWT_SECRET: 'jwt-val' },
+				{},
 			),
 		).toEqual({
 			front: { SESSION_KEY: 'sess-val' },
@@ -108,57 +115,98 @@ describe('buildServiceSecretEnv', () => {
 		})
 	})
 
-	it('broadcasts a secret no service claims (service-required, e.g. DATABASE_URL)', () => {
+	it('projects a backing secret only to services that declare needs on its producer (no broadcast)', () => {
 		expect(
 			buildServiceSecretEnv(
 				{
-					front: serviceWithSecrets(['SESSION_KEY']),
-					api: serviceWithSecrets(['JWT_SECRET']),
+					front: service({ needs: [] }),
+					api: service({ needs: ['postgres'] }),
 				},
-				{
-					SESSION_KEY: 'sess-val',
-					JWT_SECRET: 'jwt-val',
-					DATABASE_URL: 'postgres://db:5432',
-				},
+				{ DATABASE_URL: 'postgres://db:5432' },
+				{ DATABASE_URL: 'postgres' },
 			),
 		).toEqual({
-			front: {
-				SESSION_KEY: 'sess-val',
-				DATABASE_URL: 'postgres://db:5432',
-			},
-			api: { JWT_SECRET: 'jwt-val', DATABASE_URL: 'postgres://db:5432' },
+			// front declares no needs → never receives the postgres DATABASE_URL
+			front: {},
+			api: { DATABASE_URL: 'postgres://db:5432' },
 		})
 	})
 
-	it('gives a service that declares no secrets only the broadcast set', () => {
+	it('withholds a backing secret from a sibling that needs a different service', () => {
 		expect(
 			buildServiceSecretEnv(
 				{
-					app: serviceWithSecrets(['SESSION_KEY']),
-					worker: serviceWithSecrets([]),
+					api: service({ needs: ['postgres'] }),
+					assets: service({ needs: ['r2'] }),
 				},
-				{ SESSION_KEY: 'sess-val', DATABASE_URL: 'postgres://db:5432' },
+				{
+					DATABASE_URL: 'postgres://db:5432',
+					R2_ACCESS_KEY_ID: 'r2-key',
+				},
+				{ DATABASE_URL: 'postgres', R2_ACCESS_KEY_ID: 'r2' },
 			),
 		).toEqual({
-			app: {
-				SESSION_KEY: 'sess-val',
+			api: { DATABASE_URL: 'postgres://db:5432' },
+			assets: { R2_ACCESS_KEY_ID: 'r2-key' },
+		})
+	})
+
+	it('combines a needs-projected backing secret with a declared user secret', () => {
+		expect(
+			buildServiceSecretEnv(
+				{
+					api: service({
+						secrets: ['JWT_SECRET'],
+						needs: ['postgres'],
+					}),
+				},
+				{ JWT_SECRET: 'jwt-val', DATABASE_URL: 'postgres://db:5432' },
+				{ DATABASE_URL: 'postgres' },
+			),
+		).toEqual({
+			api: {
+				JWT_SECRET: 'jwt-val',
 				DATABASE_URL: 'postgres://db:5432',
 			},
-			worker: { DATABASE_URL: 'postgres://db:5432' },
 		})
 	})
 
 	it('omits a declared secret that is absent from the pool values', () => {
 		expect(
 			buildServiceSecretEnv(
-				{ app: serviceWithSecrets(['SESSION_KEY', 'MISSING']) },
+				{ app: service({ secrets: ['SESSION_KEY', 'MISSING'] }) },
 				{ SESSION_KEY: 'sess-val' },
+				{},
 			),
 		).toEqual({ app: { SESSION_KEY: 'sess-val' } })
 	})
 
 	it('returns an empty map for an empty service set', () => {
-		expect(buildServiceSecretEnv({}, { SESSION_KEY: 'sess-val' })).toEqual(
+		expect(
+			buildServiceSecretEnv({}, { SESSION_KEY: 'sess-val' }, {}),
+		).toEqual({})
+	})
+})
+
+describe('selectBackingSecrets', () => {
+	it('keeps only secrets produced by a backing service, dropping user secrets', () => {
+		expect(
+			selectBackingSecrets(
+				{
+					DATABASE_URL: 'postgres://db:5432',
+					POSTGRES_PASSWORD: 'pg-pw',
+					SESSION_KEY: 'sess-val',
+				},
+				{ DATABASE_URL: 'postgres', POSTGRES_PASSWORD: 'postgres' },
+			),
+		).toEqual({
+			DATABASE_URL: 'postgres://db:5432',
+			POSTGRES_PASSWORD: 'pg-pw',
+		})
+	})
+
+	it('returns an empty map when no secret has a backing origin', () => {
+		expect(selectBackingSecrets({ SESSION_KEY: 'sess-val' }, {})).toEqual(
 			{},
 		)
 	})

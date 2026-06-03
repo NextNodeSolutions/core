@@ -48,42 +48,59 @@ export function buildServiceUrlEnv(
 }
 
 /**
- * Route the deploy secrets across the per-service `.env.<name>` files (D5).
+ * Route the deploy secrets across the per-service `.env.<name>` files (D5),
+ * least-privilege by construction — a service receives ONLY the secrets it needs:
  *
- * A user secret declared in `[deploy.secrets]` is isolated to the services that
- * name it in their own `secrets` list: each service's env is the pool projected
- * through its `secrets` (set intersection), so a leaked `.env.front` exposes only
- * front's declared subset, never the whole pool.
+ *   - a USER secret (declared in some service's `secrets` list) goes only to the
+ *     services that name it in their own `secrets`;
+ *   - a BACKING secret (produced by a service like postgres — identified by being
+ *     present in `origins`, which maps each backing key to its producer's name)
+ *     goes only to the services that declare `needs = [<producer>]`.
  *
- * A secret that NO service claims is service-required — auto-injected by a
- * backing service (e.g. postgres `DATABASE_URL`) rather than user-declared — and
- * broadcasts to every service, preserving its existing injection path. The two
- * sets are disjoint (a service's declared keys are, by definition, claimed), so
- * the merge never collides.
+ * The two channels are disjoint (a key is backing iff it appears in `origins`),
+ * so there is no broadcast: a `DATABASE_URL` from postgres lands only in the
+ * `.env.<name>` of services that declare `needs = ["postgres"]`, never in a
+ * front service that does not. The shared `.env` the DB sidecar + migrate read
+ * is built separately (see `selectBackingSecrets`).
  *
- * Returns one entry per service, keyed by instance name; a service that declares
- * no secrets and runs without any backing service maps to an empty record.
+ * Returns one entry per service, keyed by instance name; a service that needs
+ * and declares nothing maps to an empty record.
  */
 export function buildServiceSecretEnv(
 	services: Readonly<Record<string, UserServiceConfig>>,
 	secrets: Readonly<Record<string, string>>,
+	origins: Readonly<Record<string, string>>,
 ): Record<string, Record<string, string>> {
-	const claimed = new Set(
-		Object.values(services).flatMap(service => service.secrets),
-	)
-	const broadcast = Object.fromEntries(
-		Object.entries(secrets).filter(([key]) => !claimed.has(key)),
-	)
-
 	const byService: Record<string, Record<string, string>> = {}
 	for (const [name, service] of Object.entries(services)) {
-		const declared = Object.fromEntries(
-			Object.entries(secrets).filter(([key]) =>
-				service.secrets.includes(key),
-			),
-		)
-		byService[name] = { ...broadcast, ...declared }
+		const projected: Record<string, string> = {}
+		for (const [key, value] of Object.entries(secrets)) {
+			const producer = origins[key]
+			const wanted =
+				producer === undefined
+					? service.secrets.includes(key) // user secret → declared only
+					: service.needs.includes(producer) // backing → needs only
+			if (wanted) projected[key] = value
+		}
+		byService[name] = projected
 	}
 
 	return byService
+}
+
+/**
+ * Select the BACKING-service secrets (those a `Service` produced, identified via
+ * `origins`) for the shared `.env` the embedded-postgres sidecar
+ * (`env_file: ['.env']`), the backup sidecar (`${VAR}` compose interpolation),
+ * and the ephemeral migrate container (`--env-file .env`) read. User secrets are
+ * excluded on purpose: the DB/backup/migrate infra needs `DATABASE_URL`,
+ * `POSTGRES_PASSWORD`, `R2_*` — never the app's `SESSION_KEY`.
+ */
+export function selectBackingSecrets(
+	secrets: Readonly<Record<string, string>>,
+	origins: Readonly<Record<string, string>>,
+): Record<string, string> {
+	return Object.fromEntries(
+		Object.entries(secrets).filter(([key]) => origins[key] !== undefined),
+	)
 }

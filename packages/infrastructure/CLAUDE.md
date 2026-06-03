@@ -135,6 +135,43 @@ build = "build"     # or false to disable
 
 All scripts default to their key name. Set to `false` to skip.
 
+## Deploy env: build args, secrets & needs (per service)
+
+A deployable declares its env wiring PER SERVICE under `[deploy.services.<name>]`.
+The dev declares only NAMES — values always live in GitHub (Secrets / Variables),
+**never** in `nextnode.toml`. There are two distinct "doors":
+
+- **BUILD door** — values inlined into the image at build time (Astro `site`,
+  `NEXT_PUBLIC_*`, `VITE_*`). A `.env` does NOT traverse the Docker build (the
+  root `.dockerignore` excludes it); only build args do.
+    - `build_args = ["ANALYTICS_ID", …]` lists the dev's extra build arg NAMES,
+      resolved against `ALL_VARS` (`toJSON(vars)`, repo/org-level Variables) and
+      written to the service's docker-bake target. Fail loud if a name is absent.
+    - `SITE_URL` is **auto-injected** by the infra into every build target (from
+      `project.domain`, env-resolved via `computeSiteUrl`) — the dev never lists
+      it. `computeSiteUrl` is the single source shared with the runtime
+      `contributeEnv().SITE_URL`, so build-baked and runtime values cannot drift.
+    - **Secrets must NEVER be build args** — they would bake into image layers /
+      `docker history` / GHCR. Build-time secrets use `RUN --mount=type=secret`.
+
+- **RUNTIME door** — values injected via compose `env_file` at run time.
+    - `secrets = ["STRIPE_SECRET_KEY", …]` lists runtime secret NAMES, resolved
+      from `ALL_SECRETS` and projected into THIS service's `.env.<name>` only.
+    - The hetzner-vps secret pool is **DERIVED** = union of every service's
+      `secrets` (a top-level `[deploy].secrets` is rejected — it would re-introduce
+      a shared pool). cloudflare-pages has no services, so it keeps
+      `[deploy].secrets` directly.
+    - `needs = ["postgres"]` opts a service into a backing service's secrets. A
+      backing secret (e.g. postgres `DATABASE_URL`) is projected ONLY into the
+      `.env.<name>` of services that declare `needs` on its producer — **no
+      broadcast**, so a front service never sees the database URL. Provenance
+      (secret key → producing service) is the `secretOrigins` map threaded from
+      `resolve-deploy-context` → `DeployInput` → the container target.
+    - The embedded-postgres sidecar (`env_file: ['.env']`), the backup sidecar
+      (`${VAR}` compose interpolation) and the ephemeral migrate container
+      (`--env-file .env`) read a SHARED `.env` carrying the BACKING env only
+      (`POSTGRES_*`, `R2_*`, `DATABASE_URL`) — never the app's user secrets.
+
 ## How It Runs
 
 Called by `.github/workflows/pipeline.yml` via `workflow_call`:

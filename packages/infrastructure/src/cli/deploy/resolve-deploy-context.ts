@@ -70,9 +70,14 @@ export async function resolveDeployContext(
 	})
 
 	const targetEnv = await target.contributeEnv(config.project.name)
-	const servicesEnv = mergeServiceEnvs(
-		await Promise.all(services.map(service => service.loadEnv())),
+	const serviceEnvs = await Promise.all(
+		services.map(async service => ({
+			name: service.name,
+			env: await service.loadEnv(),
+		})),
 	)
+	const servicesEnv = mergeServiceEnvs(serviceEnvs.map(entry => entry.env))
+	const secretOrigins = buildSecretOrigins(serviceEnvs)
 	const userSecretsEnv: ServiceEnv = {
 		public: {},
 		secret: pickSecrets(repoSecrets, config.deploy.secrets),
@@ -80,24 +85,46 @@ export async function resolveDeployContext(
 	const merged = mergeServiceEnvs([targetEnv, servicesEnv, userSecretsEnv])
 
 	const env = buildDeployEnv(merged.public)
-	const input = buildDeployInput(config, merged.secret, repoSecrets)
+	const input = buildDeployInput(
+		config,
+		merged.secret,
+		repoSecrets,
+		secretOrigins,
+	)
 
 	return { target, env, input, environment, merged, repoSecrets }
+}
+
+// Map every backing service's secret keys back to the service that produced
+// them (`DATABASE_URL` → `postgres`, `R2_ACCESS_KEY_ID` → `r2`). The container
+// target uses this provenance to project each backing secret only to the
+// services that declare `needs = [<producer>]`. Public env carries no
+// provenance — only secrets are projected per service.
+function buildSecretOrigins(
+	serviceEnvs: ReadonlyArray<{ name: string; env: ServiceEnv }>,
+): Record<string, string> {
+	return Object.fromEntries(
+		serviceEnvs.flatMap(({ name, env }) =>
+			Object.keys(env.secret).map((key): [string, string] => [key, name]),
+		),
+	)
 }
 
 export function buildDeployInput(
 	config: DeployableConfig,
 	secrets: Readonly<Record<string, string>>,
 	repoSecrets: Readonly<Record<string, string>>,
+	secretOrigins: Readonly<Record<string, string>> = {},
 ): DeployInput {
 	if (isHetznerDeployableConfig(config)) {
 		return {
 			secrets,
+			secretOrigins,
 			images: parseImageRefsEnv(requireEnv('IMAGE_REFS')),
 			registryToken: resolveRegistryToken(config, repoSecrets),
 		}
 	}
-	return { secrets, registryToken: undefined }
+	return { secrets, secretOrigins, registryToken: undefined }
 }
 
 // A deploy forwards exactly one registry token, and the services are
