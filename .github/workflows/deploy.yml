@@ -172,8 +172,13 @@ jobs:
               working-directory: .infra/packages/infrastructure
               env:
                   PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
+                  PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
                   GITHUB_REPOSITORY: ${{ github.repository }}
                   GITHUB_SHA: ${{ github.sha }}
+                  # Public GitHub Variables (repo/org-level — env-level Variables
+                  # need `environment:`, which would gate the build behind prod
+                  # approval). Resolved per service against its `build_args`.
+                  ALL_VARS: ${{ toJSON(vars) }}
 
             - name: Build and push
               uses: docker/bake-action@v6

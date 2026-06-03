@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Env build-time vs runtime — mécanisme & toutes les voies (NextNode)</title>
+<script>
+(function () {
+  try {
+    var stored = localStorage.getItem('np-theme');
+    var theme = stored || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', theme);
+  } catch (e) {
+    document.documentElement.setAttribute('data-theme', 'light');
+  }
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --np-bg:          oklch(98.4% 0.003 247.86);
+  --np-bg-soft:     oklch(96.8% 0.007 247.84);
+  --np-text:        oklch(20.8% 0.042 265.76);
+  --np-text-muted:  oklch(55.4% 0.046 257.42);
+  --np-border:      oklch(92.9% 0.013 255.51);
+  --np-border-soft: oklch(96.8% 0.007 247.84);
+  --np-accent:      oklch(70.4% 0.14 182.503);
+  --np-accent-bg:   oklch(95.3% 0.051 180.801);
+  --np-accent-hover:oklch(60% 0.118 184.704);
+  --np-highlight:   #F97316;
+  --np-success:     #16A34A;
+  --np-warn:        #D97706;
+  --np-danger:      #DC2626;
+  --np-add-bg:      #DCFCE7;
+  --np-add-text:    #166534;
+  --np-add-border:  #BBF7D0;
+  --np-del-bg:      #FEE2E2;
+  --np-del-text:    #991B1B;
+  --np-del-border:  #FECACA;
+  --np-edit-bg:     #FFF8C5;
+  --np-edit-text:   #854D0E;
+  --np-edit-border: #FDE68A;
+  --np-shadow-soft: 0 2px 6px rgba(0,0,0,.06);
+  --np-shadow-pop:  0 4px 16px rgba(0,0,0,.12);
+  --np-radius:      8px;
+  --np-mono:        "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --np-sans:        "DM Sans", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --np-display:     "Plus Jakarta Sans", "DM Sans", sans-serif;
+}
+[data-theme="dark"] {
+  --np-bg:          oklch(20.8% 0.042 265.76);
+  --np-bg-soft:     oklch(27.9% 0.041 260.03);
+  --np-text:        oklch(98.4% 0.003 247.86);
+  --np-text-muted:  oklch(70.4% 0.04 256.79);
+  --np-border:      oklch(37.2% 0.044 257.29);
+  --np-border-soft: oklch(27.9% 0.041 260.03);
+  --np-accent:      oklch(77.7% 0.152 181.912);
+  --np-accent-bg:   oklch(38.6% 0.063 188.416);
+  --np-accent-hover:oklch(85.5% 0.138 181.071);
+  --np-highlight:   #FB923C;
+  --np-success:     #4ADE80;
+  --np-warn:        #FBBF24;
+  --np-danger:      #F87171;
+  --np-add-bg:      rgba(74,222,128,.18);
+  --np-add-text:    #86EFAC;
+  --np-add-border:  rgba(74,222,128,.40);
+  --np-del-bg:      rgba(248,113,113,.18);
+  --np-del-text:    #FCA5A5;
+  --np-del-border:  rgba(248,113,113,.40);
+  --np-edit-bg:     rgba(251,191,36,.18);
+  --np-edit-text:   #FCD34D;
+  --np-edit-border: rgba(251,191,36,.40);
+  --np-shadow-soft: 0 2px 6px rgba(0,0,0,.40);
+  --np-shadow-pop:  0 4px 16px rgba(0,0,0,.55);
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--np-bg); color: var(--np-text); font-family: var(--np-sans); font-size: 15px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+a { color: var(--np-accent-hover); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.layout { display: grid; grid-template-columns: 216px 1fr; max-width: 1120px; margin: 0 auto; }
+.sidebar { position: sticky; top: 0; height: 100vh; overflow: auto; padding: 28px 16px 28px 20px; border-right: 1px solid var(--np-border); font-size: 12.5px; }
+.sidebar::-webkit-scrollbar { width: 5px; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--np-border); border-radius: 3px; }
+.sidebar .brand { font-family: var(--np-display); font-weight: 800; font-size: 14px; margin-bottom: 2px; }
+.sidebar .brand .dot { color: var(--np-accent); }
+.sidebar .sub { color: var(--np-text-muted); font-size: 11px; margin-bottom: 16px; }
+.sidebar nav a { display: flex; gap: 8px; padding: 5px 8px; border-radius: 6px; color: var(--np-text-muted); margin-bottom: 1px; line-height: 1.3; }
+.sidebar nav a .num { font-family: var(--np-mono); font-size: 10px; opacity: .6; min-width: 16px; }
+.sidebar nav a:hover { background: var(--np-bg-soft); text-decoration: none; color: var(--np-text); }
+.sidebar nav a.active { color: var(--np-accent-hover); background: var(--np-accent-bg); font-weight: 600; }
+.progress-wrap { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--np-border); }
+.progress-bar { height: 5px; background: var(--np-bg-soft); border-radius: 3px; overflow: hidden; }
+.progress-bar > i { display: block; height: 100%; width: 0; background: var(--np-accent); transition: width .2s; }
+.progress-label { font-size: 10.5px; color: var(--np-text-muted); margin-top: 6px; font-family: var(--np-mono); }
+.main { padding: 36px 40px 120px; min-width: 0; }
+section { scroll-margin-top: 20px; margin-bottom: 44px; }
+h1 { font-family: var(--np-display); font-weight: 800; font-size: 29px; line-height: 1.15; letter-spacing: -.02em; margin: 6px 0 14px; }
+h2 { font-family: var(--np-display); font-weight: 700; font-size: 20px; letter-spacing: -.01em; margin: 0 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--np-border); }
+h3 { font-size: 15px; font-weight: 600; margin: 22px 0 8px; }
+p { margin: 0 0 12px; }
+.eyebrow { font-family: var(--np-mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--np-accent-hover); }
+.muted { color: var(--np-text-muted); }
+strong { font-weight: 600; }
+.prompt-box { margin: 16px 0 0; padding: 12px 14px; border-radius: var(--np-radius); background: var(--np-bg-soft); border: 1px solid var(--np-border); border-left: 4px solid var(--np-accent); font-size: 13.5px; }
+.prompt-box .q { font-family: var(--np-mono); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--np-text-muted); display: block; margin-bottom: 4px; }
+.tldr { padding: 16px 18px; border-radius: var(--np-radius); background: var(--np-bg-soft); border: 1px solid var(--np-border); border-left: 4px solid var(--np-accent); }
+.tldr p:last-child { margin-bottom: 0; }
+.strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 18px 0 0; }
+.strip .cell { padding: 12px 14px; border: 1px solid var(--np-border); border-radius: var(--np-radius); background: var(--np-bg-soft); }
+.strip .k { font-family: var(--np-mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--np-text-muted); }
+.strip .v { font-size: 17px; font-weight: 700; font-family: var(--np-display); margin-top: 3px; }
+.strip .v small { font-size: 11px; font-weight: 500; color: var(--np-text-muted); font-family: var(--np-sans); }
+.phases { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 4px 0 0; }
+.phase { border: 1px solid var(--np-border); border-radius: var(--np-radius); overflow: hidden; background: var(--np-bg-soft); }
+.phase > header { padding: 10px 14px; border-bottom: 1px solid var(--np-border); background: var(--np-bg); display: flex; align-items: center; gap: 8px; }
+.phase > header .tag { font-family: var(--np-mono); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; padding: 2px 7px; border-radius: 999px; }
+.phase.build > header .tag { background: var(--np-edit-bg); color: var(--np-edit-text); border: 1px solid var(--np-edit-border); }
+.phase.run > header .tag { background: var(--np-add-bg); color: var(--np-add-text); border: 1px solid var(--np-add-border); }
+.phase.local > header .tag { background: var(--np-accent-bg); color: var(--np-accent-hover); border: 1px solid var(--np-accent); }
+.phase > header b { font-family: var(--np-display); font-size: 14px; }
+.phase .body { padding: 12px 14px; font-size: 13px; }
+.phase .step { font-family: var(--np-mono); font-size: 11.5px; color: var(--np-text-muted); margin-bottom: 10px; }
+.phase .step b { color: var(--np-text); font-weight: 600; }
+.phase ul { margin: 0; padding-left: 16px; }
+.phase li { margin-bottom: 5px; }
+.phase .note { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--np-border); font-size: 12px; color: var(--np-text-muted); }
+.arrow-band { text-align: center; font-family: var(--np-mono); font-size: 11px; color: var(--np-text-muted); margin: 12px 0; letter-spacing: .04em; }
+.tbl-wrap { overflow-x: auto; border: 1px solid var(--np-border); border-radius: var(--np-radius); }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--np-border); vertical-align: top; }
+th { font-family: var(--np-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--np-text-muted); background: var(--np-bg-soft); }
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr:hover { background: var(--np-bg-soft); }
+tr.forbidden td { background: var(--np-del-bg); }
+td.fw { font-weight: 600; white-space: nowrap; }
+td code, th code { white-space: nowrap; }
+.yes { color: var(--np-success); font-weight: 700; }
+.no { color: var(--np-danger); font-weight: 700; }
+.compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.compare .pane { border: 1px solid var(--np-border); border-radius: var(--np-radius); padding: 16px; background: var(--np-bg-soft); }
+.compare .pane h3 { margin-top: 0; display: flex; align-items: center; gap: 8px; }
+.compare .pane.ok { border-top: 3px solid var(--np-success); }
+.compare .pane.gap { border-top: 3px solid var(--np-highlight); }
+.compare dl { margin: 0; }
+.compare dt { font-family: var(--np-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--np-text-muted); margin-top: 12px; }
+.compare dd { margin: 2px 0 0; font-size: 13.5px; }
+.tree { font-size: 13.5px; }
+.tree .q { border: 1px solid var(--np-border); border-radius: var(--np-radius); background: var(--np-bg); padding: 12px 14px; margin-bottom: 8px; box-shadow: var(--np-shadow-soft); }
+.tree .q .qlabel { font-weight: 600; }
+.tree .q .qlabel .n { font-family: var(--np-mono); color: var(--np-accent-hover); margin-right: 8px; }
+.tree .branch { display: grid; grid-template-columns: 110px 1fr; gap: 10px; margin-top: 8px; align-items: start; }
+.tree .branch .ans { font-family: var(--np-mono); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; padding: 3px 8px; border-radius: 999px; text-align: center; height: fit-content; }
+.tree .branch .ans.aY { background: var(--np-add-bg); color: var(--np-add-text); border: 1px solid var(--np-add-border); }
+.tree .branch .ans.aN { background: var(--np-bg-soft); color: var(--np-text-muted); border: 1px solid var(--np-border); }
+.tree .branch .ans.aM { background: var(--np-edit-bg); color: var(--np-edit-text); border: 1px solid var(--np-edit-border); }
+.tree .outcome .head { font-weight: 600; }
+.tree .outcome .how { color: var(--np-text-muted); font-size: 12.5px; }
+.grid3 { display: grid; grid-template-columns: 1.3fr .5fr 2fr; border: 1px solid var(--np-border); border-radius: var(--np-radius); overflow: hidden; }
+.grid3 > div { padding: 11px 14px; border-bottom: 1px solid var(--np-border); }
+.grid3 .gh { font-family: var(--np-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--np-text-muted); background: var(--np-bg-soft); }
+.grid3 > div:nth-last-child(-n+3) { border-bottom: 0; }
+.grid3 .issue { font-weight: 600; font-size: 13.5px; }
+.grid3 .rec { font-size: 13px; }
+@media (max-width: 720px) { .grid3 { grid-template-columns: 1fr; } .grid3 .gh { display: none; } }
+.pill { display: inline-block; padding: 1px 8px; font-size: 11px; font-weight: 600; line-height: 1.6; border-radius: 999px; border: 1px solid var(--np-border); background: var(--np-bg-soft); color: var(--np-text-muted); white-space: nowrap; }
+.pill.success { background: var(--np-add-bg); color: var(--np-add-text); border-color: var(--np-add-border); }
+.pill.warn { background: var(--np-edit-bg); color: var(--np-edit-text); border-color: var(--np-edit-border); }
+.pill.danger { background: var(--np-del-bg); color: var(--np-del-text); border-color: var(--np-del-border); }
+.pill.accent { background: var(--np-accent-bg); color: var(--np-accent-hover); border-color: var(--np-accent); }
+.callout { border: 1px solid var(--np-border); border-left: 4px solid var(--np-highlight); border-radius: var(--np-radius); background: var(--np-bg-soft); padding: 14px 16px; margin: 16px 0; }
+.callout.accent { border-left-color: var(--np-accent); }
+.callout.danger { border-left-color: var(--np-danger); }
+.callout .ct { font-weight: 700; font-family: var(--np-display); display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.callout p:last-child { margin-bottom: 0; }
+pre { margin: 0; padding: 14px 16px; background: var(--np-bg-soft); border: 1px solid var(--np-border); border-radius: var(--np-radius); overflow-x: auto; font-family: var(--np-mono); font-size: 12.5px; line-height: 1.65; color: var(--np-text); tab-size: 2; }
+pre code, pre code.hljs { background: transparent; padding: 0; font: inherit; color: inherit; }
+:not(pre) > code { font-family: var(--np-mono); font-size: .9em; padding: 1px 6px; background: var(--np-bg-soft); border: 1px solid var(--np-border); border-radius: 4px; color: var(--np-text); }
+.code-block { margin: 0 0 16px; border: 1px solid var(--np-border); border-radius: var(--np-radius); overflow: hidden; background: var(--np-bg-soft); }
+.code-block__head { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: var(--np-bg); border-bottom: 1px solid var(--np-border); font-family: var(--np-mono); font-size: 12px; color: var(--np-text-muted); }
+.code-block__file { flex: 1; font-weight: 600; color: var(--np-text); }
+.code-block__lang { font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--np-accent-hover); padding: 1px 6px; background: var(--np-accent-bg); border-radius: 3px; }
+.code-block__copy { font: inherit; font-size: 11px; padding: 2px 8px; background: transparent; border: 1px solid var(--np-border); border-radius: 4px; color: var(--np-text-muted); cursor: pointer; }
+.code-block__copy:hover { color: var(--np-accent-hover); border-color: var(--np-accent); }
+.code-block__copy.is-copied { color: var(--np-add-text); border-color: var(--np-add-border); }
+.code-block pre { margin: 0; border: 0; border-radius: 0; background: var(--np-bg-soft); }
+.diff { font-family: var(--np-mono); font-size: 12.5px; line-height: 1.5; background: var(--np-bg-soft); border: 1px solid var(--np-border); border-radius: var(--np-radius); overflow: hidden; margin-bottom: 16px; }
+.diff[data-file]::before { content: attr(data-file); display: block; padding: 8px 12px; background: var(--np-bg); border-bottom: 1px solid var(--np-border); font-weight: 600; }
+.diff .line { display: block; padding: 0 12px; white-space: pre; }
+.diff .line.hunk { color: var(--np-text-muted); background: var(--np-bg); }
+.diff .line.add { background: var(--np-add-bg); color: var(--np-add-text); }
+.diff .line.add::before { content: '+ '; opacity: .7; }
+.diff .line.del { background: var(--np-del-bg); color: var(--np-del-text); }
+.diff .line.del::before { content: '- '; opacity: .7; }
+.diff .line.ctx::before { content: '  '; }
+.steps { list-style: none; padding: 0; margin: 0; }
+.steps li { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--np-border); align-items: baseline; }
+.steps li:last-child { border-bottom: 0; }
+.steps .box { width: 15px; height: 15px; border: 1.5px solid var(--np-border); border-radius: 4px; flex: 0 0 auto; margin-top: 2px; }
+.steps .who { font-family: var(--np-mono); font-size: 10.5px; color: var(--np-text-muted); margin-left: auto; white-space: nowrap; }
+.copy-bk { font: inherit; font-size: 12px; font-weight: 600; padding: 7px 14px; border-radius: var(--np-radius); border: 1px solid var(--np-accent); background: var(--np-accent); color: var(--np-bg); cursor: pointer; margin-top: 14px; }
+.copy-bk.is-copied { background: var(--np-success); border-color: var(--np-success); }
+.np-theme-toggle { position: fixed; top: 14px; right: 16px; z-index: 50; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--np-border); background: var(--np-bg-soft); color: var(--np-text); cursor: pointer; font-size: 15px; box-shadow: var(--np-shadow-soft); }
+@media (max-width: 1024px) { .layout { grid-template-columns: 1fr; } .sidebar { display: none; } }
+@media (max-width: 780px) { .main { padding: 24px 18px 80px; } .strip, .phases, .compare { grid-template-columns: 1fr; } h1 { font-size: 23px; } }
+</style>
+</head>
+<body>
+<button class="np-theme-toggle" aria-label="Basculer le thème">◐</button>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">NextNode<span class="dot">.</span></div>
+    <div class="sub">Decision record · 2026-06-02 · v2</div>
+    <nav>
+      <a href="#contexte"><span class="num">01</span> Le problème</a>
+      <a href="#mecanisme"><span class="num">02</span> Le mécanisme (la clé)</a>
+      <a href="#phases"><span class="num">03</span> Les 2 phases Docker</a>
+      <a href="#voies"><span class="num">04</span> TOUTES les voies</a>
+      <a href="#frameworks"><span class="num">05</span> Par framework</a>
+      <a href="#cibles"><span class="num">06</span> Les 2 cibles deploy</a>
+      <a href="#arbre"><span class="num">07</span> Arbre de décision</a>
+      <a href="#gap"><span class="num">08</span> Le gap PR #18</a>
+      <a href="#fix"><span class="num">09</span> Le fix infra</a>
+      <a href="#fleurs"><span class="num">10</span> Reco fleursdaujourdhui</a>
+      <a href="#suite"><span class="num">11</span> Prochaines étapes</a>
+    </nav>
+    <div class="progress-wrap">
+      <div class="progress-bar"><i></i></div>
+      <div class="progress-label">Lecture <span id="pct">0</span>%</div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header>
+      <div class="eyebrow">Architecture · variables d'environnement · build vs runtime</div>
+      <h1>Comment l'env atteint (ou pas) le build :<br>le mécanisme, et toutes les voies</h1>
+      <p class="muted">Pourquoi un <code>.env</code> ne suffit pas en CI, où vit chaque valeur (jamais dans <code>nextnode.toml</code>), et comment alimenter build + runtime pour <strong>tous</strong> les frameworks (Astro, Next.js, SolidJS, Hono…).</p>
+      <div class="prompt-box">
+        <span class="q">Question</span>
+        « Si tu passes pas les env dans Dockerfile / docker-compose, ce putain d'Astro les voit pas même s'il y a un <code>.env</code> ? — et JAMAIS d'env dans le <code>nextnode.toml</code>. Check TOUTES les possibilités. »
+      </div>
+    </header>
+
+    <!-- 01 -->
+    <section id="contexte">
+      <h2>01 · Le problème, en une phrase</h2>
+      <div class="tldr">
+        <p>Une variable ne vit pas à un seul moment. Certaines sont <strong>gelées au <em>build</em></strong> (inlinées dans le bundle livré au navigateur), d'autres lues <strong>au <em>runtime</em></strong> (à chaque requête, côté serveur). En <strong>CI/Docker</strong>, le <code>.env</code> n'existe pas (il est gitignoré + exclu par <code>.dockerignore</code>) : <strong>Astro au build ne voit que ce que Docker injecte via <code>ARG</code>/<code>ENV</code></strong>. PR #18 a retiré ce pont (les <code>build.args</code> de l'ancien compose) sans le remplacer.</p>
+      </div>
+      <div class="strip">
+        <div class="cell"><div class="k">Cause racine</div><div class="v">build args <small>· retirés par PR #18</small></div></div>
+        <div class="cell"><div class="k">Valeurs dans toml</div><div class="v">JAMAIS <small>· noms seulement</small></div></div>
+        <div class="cell"><div class="k">Difficulté du fix</div><div class="v">I3 <small>· dans @nextnode/core</small></div></div>
+        <div class="cell"><div class="k">Cibles concernées</div><div class="v">1 / 2 <small>· VPS-Docker seul</small></div></div>
+      </div>
+    </section>
+
+    <!-- 02 — LE MECANISME -->
+    <section id="mecanisme">
+      <h2>02 · Le mécanisme : pourquoi Astro ne voit rien</h2>
+      <p>Le point qui coince. Il y a <strong>deux portes totalement distinctes</strong>, et le <code>.env</code> n'en franchit <strong>aucune</strong> dans Docker.</p>
+
+      <div class="phases">
+        <div class="phase local">
+          <header><span class="tag">local</span><b>Ta machine</b></header>
+          <div class="body">
+            <div class="step"><b>astro dev / astro build</b> sur ton poste</div>
+            <ul>
+              <li>Vite lit <code>.env</code> via <code>loadEnv</code></li>
+              <li><code>import.meta.env</code> + <code>process.env</code> peuplés</li>
+              <li>✅ tout marche → <strong>ça crée l'illusion</strong> que « le <code>.env</code> suffit »</li>
+            </ul>
+            <div class="note">Le <code>.env</code> n'existe QUE là. C'est une porte locale.</div>
+          </div>
+        </div>
+        <div class="phase build">
+          <header><span class="tag">CI · build</span><b>docker build</b></header>
+          <div class="body">
+            <div class="step"><b>contexte hermétique</b> — pas ta machine</div>
+            <ul>
+              <li><code>.dockerignore</code> exclut <code>**/.env</code> → <strong>jamais dans le contexte</strong></li>
+              <li><code>loadEnv</code> ne trouve rien</li>
+              <li><code>process.env</code> = uniquement ce que <code>ARG</code>/<code>ENV</code> injectent</li>
+            </ul>
+            <div class="note">❌ sans build args → <code>requireEnv("SITE_URL")</code> <strong>throw</strong>. C'est ton cas.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout accent">
+        <div class="ct">🔑 Les deux portes Docker (le <code>.env</code> n'en est pas une)</div>
+        <p><strong>Porte BUILD</strong> = <code>ARG</code> dans le Dockerfile, alimenté par <code>build.args</code> (ancien compose) ou <code>args</code> de la bake. <strong>Porte RUNTIME</strong> = <code>env_file</code> / <code>environment</code> → <code>process.env</code> à chaque requête. L'ancienne infra avait la porte build (<code>docker-compose.yml → args</code>) ; <strong>PR #18 l'a murée.</strong> La porte runtime, elle, est intacte — c'est pourquoi les secrets <code>astro:env/server</code> marchent au runtime sans rien faire.</p>
+      </div>
+
+      <p class="muted" style="font-size:13px">Confirmé dans le repo : <code>.dockerignore</code> (racine) contient <code>**/.env</code> et <code>**/.env.local</code> ; le Dockerfile <code>monitoring</code> n'a aucun <code>ARG</code> (il n'inline rien au build) ; <code>BuildServiceConfig</code> n'a pas de champ <code>args</code>.</p>
+    </section>
+
+    <!-- 03 — phases -->
+    <section id="phases">
+      <h2>03 · Les 2 phases : qui lit quoi, quand</h2>
+      <div class="phases">
+        <div class="phase build">
+          <header><span class="tag">phase 1</span><b>BUILD</b><span class="muted" style="font-size:12px;margin-left:auto">docker build</span></header>
+          <div class="body">
+            <p>Ce qui est lu ici est <strong>inliné / gelé</strong> dans <code>dist/</code> :</p>
+            <ul>
+              <li>Variables <strong>client</strong> du bundle JS (<code>NEXT_PUBLIC_*</code>, <code>VITE_*</code>, <code>PUBLIC_*</code>, <code>astro:env</code> <code>context:'client'</code>)</li>
+              <li>Valeurs lues dans la <strong>config</strong> du framework (Astro <code>site</code> → canonicals + sitemap, <code>image.domains</code>)</li>
+            </ul>
+            <div class="note">⚠️ Source : <code>ARG</code>/<code>ENV</code> uniquement. Les secrets ne doivent <strong>jamais</strong> arriver ici.</div>
+          </div>
+        </div>
+        <div class="phase run">
+          <header><span class="tag">phase 2</span><b>RUNTIME</b><span class="muted" style="font-size:12px;margin-left:auto">docker run</span></header>
+          <div class="body">
+            <p>Ce qui est lu ici reste <strong>variable par environnement</strong>, même image :</p>
+            <ul>
+              <li><strong>Secrets</strong> serveur — <code>getSecret()</code>, <code>process.env</code> serveur</li>
+              <li>Config <strong>publique serveur</strong> (SSR / loader / route)</li>
+              <li>Valeurs publiques <strong>rendues dans le HTML</strong> au runtime</li>
+            </ul>
+            <div class="note">✅ Déjà câblé : <code>.env.&lt;service&gt;</code> via <code>env_file</code> (secrets + <code>SITE_URL</code> + URLs + <code>PORT</code>).</div>
+          </div>
+        </div>
+      </div>
+      <div class="arrow-band">— même image · BUILD gèle ▸ RUNTIME injecte —</div>
+    </section>
+
+    <!-- 04 — TOUTES LES VOIES -->
+    <section id="voies">
+      <h2>04 · TOUTES les voies possibles</h2>
+      <p>Le problème complet = « amener une valeur <strong>V</strong> au consommateur <strong>C</strong> au bon moment ». Trois dimensions, exhaustives.</p>
+
+      <h3>A · Origine — où vit la valeur</h3>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Origine</th><th>Secret</th><th>Commitée</th><th>Vue au BUILD CI</th><th>Vue au RUNTIME CI</th><th>Usage</th></tr></thead>
+          <tbody>
+            <tr><td class="fw"><code>.env</code> repo</td><td>—</td><td>gitignored</td><td class="no">non</td><td class="no">non</td><td><strong>dev local seul</strong></td></tr>
+            <tr><td class="fw">GitHub <strong>Secrets</strong></td><td>oui</td><td>non</td><td class="no">non (interdit)</td><td class="yes">oui · <code>ALL_SECRETS</code>→<code>env_file</code></td><td>tokens, DB, clés</td></tr>
+            <tr><td class="fw">GitHub <strong>Variables</strong> <code>vars</code></td><td>non</td><td>non</td><td class="yes">oui (si forwardée)</td><td class="yes">oui (si forwardée)</td><td><strong>public non-secret</strong> (R2_CDN_URL)</td></tr>
+            <tr><td class="fw"><strong>Dérivée</strong> du toml</td><td>non</td><td>forme seule</td><td class="yes">oui (calcul pur)</td><td class="yes">oui</td><td><code>SITE_URL</code> ← <code>domain</code></td></tr>
+            <tr class="forbidden"><td class="fw">Valeur en dur dans toml</td><td>non</td><td class="no">OUI</td><td class="yes">oui</td><td class="yes">oui</td><td><span class="pill danger">INTERDIT</span> ta règle</td></tr>
+            <tr><td class="fw"><code>ENV</code> en dur Dockerfile</td><td>non</td><td>oui</td><td class="yes">oui</td><td class="yes">oui</td><td>vraies constantes</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>B · Transport vers le BUILD (<code>docker build</code>)</h3>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Mécanisme</th><th>Grave dans les layers ?</th><th>Pour</th></tr></thead>
+          <tbody>
+            <tr><td class="fw">compose <code>build.args</code> → <code>ARG</code>→<code>ENV</code></td><td class="no">oui (<code>docker history</code>)</td><td>ancienne infra · public build-time</td></tr>
+            <tr><td class="fw">bake <code>args</code> → <code>ARG</code>→<code>ENV</code></td><td class="no">oui</td><td><strong>la ré-introduction</strong> · public build-time</td></tr>
+            <tr><td class="fw">Dockerfile <code>ENV</code> littéral</td><td class="no">oui</td><td>constantes seulement</td></tr>
+            <tr><td class="fw"><code>RUN --mount=type=secret</code> (BuildKit)</td><td class="yes">NON</td><td><strong>seule voie sûre pour un secret au build</strong></td></tr>
+            <tr class="forbidden"><td class="fw">env_file / env runtime</td><td>—</td><td class="no">n'existe pas au build</td></tr>
+            <tr class="forbidden"><td class="fw"><code>.env</code> copié dans l'image</td><td class="no">oui + gitignoré</td><td class="no">jamais</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>C · Transport vers le RUNTIME (<code>docker run</code>)</h3>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Mécanisme</th><th>Pour</th></tr></thead>
+          <tbody>
+            <tr><td class="fw">compose <code>env_file: [.env.&lt;svc&gt;]</code></td><td><strong>actuel</strong> — secrets + public runtime</td></tr>
+            <tr><td class="fw">compose <code>environment:</code> inline</td><td>valeurs runtime ponctuelles</td></tr>
+            <tr><td class="fw"><code>docker run -e</code> / <code>--env-file</code></td><td>manuel / hors pipeline</td></tr>
+            <tr><td class="fw">compose/docker <code>secrets:</code> (fichiers montés)</td><td>secret livré en fichier au runtime</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout accent">
+        <div class="ct">La règle de matching (origine → transport)</div>
+        <p><strong>Secret au runtime</strong> → GitHub Secrets → <code>env_file</code> <span class="muted">(jamais build arg)</span>. · <strong>Secret au build</strong> <span class="muted">(rare)</span> → <code>--mount=type=secret</code>. · <strong>Public client inliné au build</strong> → GitHub Variables / dérivé → bake <code>args</code>. · <strong>Public serveur</strong> → Variables / dérivé → <code>env_file</code>. · <strong>Constante</strong> → Dockerfile <code>ENV</code>.</p>
+      </div>
+    </section>
+
+    <!-- 05 — frameworks -->
+    <section id="frameworks">
+      <h2>05 · Ce que chaque framework gèle au build</h2>
+      <p>Le besoin de build args n'est <strong>pas</strong> propre à Astro : c'est la propriété de tout framework à <strong>bundle client</strong>. Les serveurs purs (Hono, Express) n'inlinent rien.</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th style="min-width:130px">Framework</th><th>Gelé au BUILD (→ besoin d'une valeur au <code>docker build</code>)</th><th>Lu au RUNTIME (<code>env_file</code>)</th><th>Échappatoire runtime ?</th></tr></thead>
+          <tbody>
+            <tr><td class="fw">Astro <span class="muted">(SSG)</span></td><td><code>astro:env</code> client, <code>PUBLIC_*</code>, <code>site</code>, <code>image.domains</code></td><td><span class="muted">— (pas de serveur)</span></td><td><span class="pill danger">non</span></td></tr>
+            <tr><td class="fw">Astro <span class="muted">(SSR node)</span></td><td>idem client + <code>site</code> baqué</td><td><code>astro:env/server</code> <code>getSecret()</code>, <code>process.env</code></td><td><span class="pill success">oui</span> render-into-HTML</td></tr>
+            <tr><td class="fw">Next.js</td><td><code>NEXT_PUBLIC_*</code> <em>(gelé au build)</em></td><td><code>process.env</code> en RSC / route / rendu dynamique</td><td><span class="pill success">oui</span> <code>connection()</code></td></tr>
+            <tr><td class="fw">SolidStart / Vite</td><td><code>import.meta.env.VITE_*</code></td><td><code>process.env</code> entry serveur</td><td><span class="pill warn">partiel</span></td></tr>
+            <tr><td class="fw">SvelteKit</td><td><code>$env/static/public</code> + <code>/private</code></td><td><code>$env/dynamic/*</code></td><td><span class="pill success">oui</span></td></tr>
+            <tr><td class="fw">Nuxt</td><td><code>runtimeConfig.public</code> (défauts)</td><td><code>runtimeConfig</code> + <code>NUXT_*</code> runtime</td><td><span class="pill success">oui</span></td></tr>
+            <tr><td class="fw">Remix / RR</td><td><span class="muted">quasi rien</span></td><td><code>process.env</code> loader · <code>window.ENV</code></td><td><span class="pill success">oui</span></td></tr>
+            <tr><td class="fw">Hono / Express</td><td><span class="pill success" style="font-weight:700">RIEN</span></td><td>tout en <code>process.env</code> runtime</td><td><span class="muted">N/A</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="margin-top:12px"><strong>Lecture.</strong> Hono/Express : la bake sans args est <em>déjà parfaite</em>. Les autres inlinent du public au build → s'ils n'utilisent pas l'échappatoire runtime, il <strong>faut</strong> des build args.</p>
+    </section>
+
+    <!-- 06 — cibles -->
+    <section id="cibles">
+      <h2>06 · Les 2 cibles de deploy</h2>
+      <div class="compare">
+        <div class="pane ok">
+          <h3><span class="pill success">aucun gap</span> Cloudflare Pages</h3>
+          <p class="muted" style="font-size:13px"><code>type = "static"</code> → <code>cloudflare-pages</code></p>
+          <dl>
+            <dt>Build</dt><dd>S'exécute <strong>chez Cloudflare</strong>, env du projet déjà posée → le public-client reçoit sa valeur nativement.</dd>
+            <dt>Docker / bake</dt><dd><span class="muted">Aucun. Pas de build args.</span></dd>
+            <dt>Verdict</dt><dd><strong>Le sujet ne s'y pose pas.</strong></dd>
+          </dl>
+        </div>
+        <div class="pane gap">
+          <h3><span class="pill warn">le gap est ici</span> Hetzner VPS · Docker</h3>
+          <p class="muted" style="font-size:13px"><code>type = "app"</code> → <code>hetzner-vps</code></p>
+          <dl>
+            <dt>Build</dt><dd><code>docker build</code> via bake → <strong>aucune env</strong> sauf build arg. Job <code>build-image</code> sans <code>ALL_SECRETS</code> ni <code>PIPELINE_ENVIRONMENT</code>.</dd>
+            <dt>Runtime</dt><dd><code>env_file: [.env.&lt;svc&gt;]</code> → secrets + public + URLs + <code>PORT</code>. ✅</dd>
+            <dt>Verdict</dt><dd>Tout framework à bundle client casse ici. <strong>C'est ce qu'on fixe.</strong></dd>
+          </dl>
+        </div>
+      </div>
+    </section>
+
+    <!-- 07 — arbre -->
+    <section id="arbre">
+      <h2>07 · L'arbre de décision du développeur</h2>
+      <p>Une seule question à se poser en ajoutant une variable. Vaut pour <strong>tous</strong> les frameworks. <strong>Aucune valeur ne va dans le toml.</strong></p>
+      <div class="tree">
+        <div class="q">
+          <div class="qlabel"><span class="n">Q1</span>La valeur est-elle secrète ? (token, clé API, mot de passe)</div>
+          <div class="branch"><span class="ans aY">oui</span><div class="outcome"><div class="head">→ GitHub <strong>Secrets</strong>, nommée dans <code>[deploy].secrets</code> · runtime via <code>env_file</code></div><div class="how">Lue côté serveur seul (<code>getSecret()</code>, <code>process.env</code>). <strong>Jamais</strong> en build arg, jamais en <code>PUBLIC_</code>/<code>NEXT_PUBLIC_</code>/<code>VITE_</code>.</div></div></div>
+          <div class="branch"><span class="ans aN">non</span><div class="outcome how">↓ Q2</div></div>
+        </div>
+        <div class="q">
+          <div class="qlabel"><span class="n">Q2</span>Lue uniquement côté serveur ? (SSR / loader / route — jamais dans le bundle navigateur)</div>
+          <div class="branch"><span class="ans aY">oui</span><div class="outcome"><div class="head">→ GitHub <strong>Variables</strong> (ou dérivée) · runtime <code>env_file</code></div><div class="how">Publique mais serveur-only. Image portable, pas de build arg.</div></div></div>
+          <div class="branch"><span class="ans aN">non · finit dans le bundle client</span><div class="outcome how">↓ Q3</div></div>
+        </div>
+        <div class="q">
+          <div class="qlabel"><span class="n">Q3</span>Le framework offre-t-il une échappatoire runtime ? (Nuxt <code>runtimeConfig</code>, SvelteKit <code>$env/dynamic</code>, Remix <code>window.ENV</code>, Astro SSR render-into-HTML)</div>
+          <div class="branch"><span class="ans aY">oui</span><div class="outcome"><div class="head">→ utiliser l'échappatoire · <span class="pill accent">préféré</span></div><div class="how">Rendre la valeur dans le HTML au runtime. Pas de build arg, image agnostique. <strong>Chemin « zéro souci ».</strong></div></div></div>
+          <div class="branch"><span class="ans aM">non · inliné au build</span><div class="outcome"><div class="head">→ GitHub <strong>Variables</strong> (ou dérivée) · bake <strong>args</strong> + <code>ARG</code>/<code>ENV</code> Dockerfile</div><div class="how">Cas vraiment build-time : <code>NEXT_PUBLIC_*</code> en export statique, Astro <code>site</code>, <code>VITE_*</code>. L'image devient liée à l'env — coût accepté.</div></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 08 — gap -->
+    <section id="gap">
+      <h2>08 · Le gap exact de PR #18</h2>
+      <p>PR #18 a remplacé le <code>docker-compose.yml</code> par un <code>docker-bake.json</code> rendu depuis <code>nextnode.toml</code>. Le pont des build args a disparu.</p>
+      <h3>Avant — l'ancien compose portait les args (le pont)</h3>
+      <div class="diff" data-file="packages/&lt;app&gt;/docker-compose.yml (supprimé par PR #18)">
+@@ services.app.build @@
+     context: ../..
+     dockerfile: packages/app/Dockerfile
+-    args:
+-      - R2_CDN_URL=${R2_CDN_URL}
+-      - SITE_URL=${SITE_URL}
+      </div>
+      <h3>Après — le schema de build n'a plus de champ <code>args</code></h3>
+      <figure class="code-block">
+        <figcaption class="code-block__head"><span class="code-block__file">packages/infrastructure/src/config/types.ts:143</span><span class="code-block__lang">TS</span><button class="code-block__copy" type="button">Copy</button></figcaption>
+<pre><code class="language-typescript">export interface BuildServiceConfig {
+  readonly source: 'build'
+  readonly context?: string
+  readonly dockerfile?: string
+  readonly target?: string
+  // ← aucun `args`. Rien n'atteint `docker build`.
+}</code></pre>
+      </figure>
+      <div class="grid3">
+        <div class="gh">Constat</div><div class="gh">Sévérité</div><div class="gh">Recommandation</div>
+        <div class="issue">Aucun pont pour le public-client inliné au build</div><div><span class="pill warn">moyen</span></div><div class="rec">Ré-ajouter <code>args</code> à la cible bake. Bon endroit (infra), réutilisable par tout site containerisé.</div>
+        <div class="issue">Risque : args sourcés depuis des secrets</div><div><span class="pill danger">élevé</span></div><div class="rec"><strong>Invariant : un secret ne devient jamais un build arg</strong> (gravé dans les layers / <code>docker history</code> / GHCR). Si secret au build : <code>--mount=type=secret</code>.</div>
+        <div class="issue">Pas de source pour le public non-secret (R2_CDN_URL)</div><div><span class="pill warn">moyen</span></div><div class="rec">Câbler GitHub <strong>Variables</strong> (<code>ALL_VARS</code>) — <strong>pas de valeur dans le toml</strong>.</div>
+        <div class="issue">Job <code>build-image</code> sans <code>PIPELINE_ENVIRONMENT</code></div><div><span class="pill success">faible</span></div><div class="rec">L'ajouter pour résoudre <code>SITE_URL</code> (préfixe <code>dev.</code>). 1 ligne.</div>
+      </div>
+    </section>
+
+    <!-- 09 — fix -->
+    <section id="fix">
+      <h2>09 · Le fix infra <span class="pill accent" style="vertical-align:middle">corrigé · zéro valeur dans le toml</span></h2>
+      <p>Faire porter la correction par la <strong>plateforme</strong>. Les valeurs vivent dans GitHub (Secrets pour le sensible, Variables pour le public) — exactement comme <code>secrets = [...]</code> qui ne liste que des <strong>noms</strong> (valeurs ← <code>ALL_SECRETS</code> → <code>pickSecrets</code>).</p>
+
+      <h3>1 · Le toml ne liste que des NOMS (comme <code>secrets</code>)</h3>
+      <figure class="code-block">
+        <figcaption class="code-block__head"><span class="code-block__file">nextnode.toml</span><span class="code-block__lang">TOML</span><button class="code-block__copy" type="button">Copy</button></figcaption>
+<pre><code class="language-toml">[deploy]
+secrets = ["DATABASE_URL"]          # valeurs ← GitHub Secrets (runtime)
+build_vars = ["SITE_URL", "R2_CDN_URL"]  # NOMS seulement → build args
+#   SITE_URL  : dérivé de project.domain (aucune valeur stockée)
+#   R2_CDN_URL: valeur ← GitHub Variables (vars), jamais ici</code></pre>
+      </figure>
+      <div class="callout">
+        <div class="ct">Décision à valider (c'est toi qui tranches)</div>
+        <p><code>build_vars = [...]</code> est une <strong>liste de noms</strong>, zéro valeur — même forme que <code>secrets</code>. <strong>Alternative sans aucun toml :</strong> convention « tout <code>vars</code> est forwardé en build arg » → zéro champ ajouté, mais moins explicite. <strong>Troisième voie :</strong> seul <code>SITE_URL</code> (dérivé) est forwardé d'office, et tout autre besoin passe par l'échappatoire runtime du framework → aucun nouveau câblage. Je recommande la liste de noms (explicite, auditable, symétrique de <code>secrets</code>).</p>
+      </div>
+
+      <h3>2 · Le workflow forwarde les Variables (symétrique d'<code>ALL_SECRETS</code>)</h3>
+      <div class="diff" data-file=".github/workflows/deploy.yml (job build-image)">
+@@ env: @@
+   PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
++  PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
++  ALL_VARS: ${{ toJSON(vars) }}
+   GITHUB_REPOSITORY: ${{ github.repository }}
+   GITHUB_SHA: ${{ github.sha }}
+      </div>
+
+      <h3>3 · <code>renderBakeFile</code> écrit les <code>args</code> (dérivés ∪ vars nommées)</h3>
+      <div class="diff" data-file="packages/infrastructure/src/domain/deploy/bake-file.ts">
+@@ interface BakeTarget @@
+   readonly target?: string
++  readonly args?: Readonly&lt;Record&lt;string, string&gt;&gt;
+   readonly tags: ReadonlyArray&lt;string&gt;
+@@ buildBakeTarget @@
+   dockerfile: service.dockerfile ?? defaultDockerfile(input.packageDir),
++  ...(Object.keys(input.buildArgs).length ? { args: input.buildArgs } : {}),
+   tags: [formatImageRef(ref)],
+      </div>
+      <p class="muted" style="font-size:13px"><code>input.buildArgs</code> = { <code>SITE_URL</code> dérivé de <code>domain</code> } ∪ { les <code>build_vars</code> piochées dans <code>ALL_VARS</code> }. Aucun secret, jamais.</p>
+
+      <h3>4 · Le Dockerfile expose les <code>ARG</code> avant le build (contrat app)</h3>
+      <figure class="code-block">
+        <figcaption class="code-block__head"><span class="code-block__file">packages/&lt;app&gt;/Dockerfile (étape build)</span><span class="code-block__lang">Dockerfile</span><button class="code-block__copy" type="button">Copy</button></figcaption>
+<pre><code class="language-dockerfile">FROM deps AS build
+COPY --from=prepare /repo/out/full/ ./
+# Build args PUBLICS injectés par la bake (jamais de secrets ici)
+ARG SITE_URL
+ARG R2_CDN_URL
+ENV SITE_URL=$SITE_URL R2_CDN_URL=$R2_CDN_URL
+RUN pnpm exec turbo build --filter=@nextnode-solutions/app</code></pre>
+      </figure>
+
+      <div class="callout accent">
+        <div class="ct">Pourquoi c'est le bon endroit</div>
+        <p>Les valeurs restent dans GitHub (Secrets / Variables), jamais dans le repo. Le toml ne porte que des noms — même contrat que <code>secrets</code>. <strong>Difficulté : I3</strong> — champ <code>build_vars</code> + lecture <code>ALL_VARS</code> + rendu des args + 2 lignes de workflow + tests. Tout futur site containerisé en bénéficie sans rien écrire côté app.</p>
+      </div>
+    </section>
+
+    <!-- 10 — fleurs -->
+    <section id="fleurs">
+      <h2>10 · Recommandation — fleursdaujourdhui</h2>
+      <p>Déploie en <strong>conteneur</strong> (Dockerfile + bake), Astro. <code>astro.config</code> lit deux valeurs à l'évaluation = au build.</p>
+      <div class="grid3">
+        <div class="gh">Variable</div><div class="gh">Nature</div><div class="gh">Décision</div>
+        <div class="issue"><code>SITE_URL</code> → <code>site:</code></div><div><span class="pill warn">build réel</span></div><div class="rec">Sitemap + canonicals <strong>émis au build</strong> → besoin inévitable. <strong>Fix infra obligatoire.</strong> Dérivé de <code>domain</code> → forwardé d'office, gratuit, aucune valeur à stocker.</div>
+        <div class="issue"><code>R2_CDN_URL</code> → <code>image.domains</code></div><div><span class="pill success">évitable</span></div><div class="rec"><strong>Le retirer du chemin de config</strong> : avec <code>passthroughImageService</code>, pas d'optimisation distante → <code>image.domains</code> inutile, <code>remotePatterns: [{ hostname: '**.r2.dev' }]</code> suffit. Sinon : <strong>GitHub Variable</strong> + <code>build_vars</code> (jamais dans le toml).</div>
+      </div>
+      <div class="callout accent">
+        <div class="ct">✅ Plan retenu</div>
+        <p><strong>1.</strong> Fix infra pour <code>SITE_URL</code> (inévitable, réutilisable par tout site containerisé). <strong>2.</strong> Supprimer <code>R2_CDN_URL</code> du chemin de config via passthrough — sinon le sourcer en GitHub Variable. <strong>On ne met aucune valeur dans le toml, on ne pousse pas de complexité dans l'app.</strong></p>
+      </div>
+      <div class="callout">
+        <div class="ct">⚠️ À vérifier sur le repo fleursdaujourdhui</div>
+        <p>Je n'ai pas le repo (hors monorepo <code>core</code>). Confirmer : <strong>(a)</strong> <code>passthroughImageService</code> est-il configuré ? <strong>(b)</strong> <code>R2_CDN_URL</code> n'est-il consommé que pour les images ? <strong>(c)</strong> <code>constants.ts</code> peut-il tolérer son absence une fois retiré ?</p>
+      </div>
+    </section>
+
+    <!-- 11 — suite -->
+    <section id="suite">
+      <h2>11 · Prochaines étapes</h2>
+      <ul class="steps">
+        <li><span class="box"></span><div><strong>Infra · schema</strong> — ajouter <code>build_vars: string[]</code> (noms) à <code>[deploy]</code> (<code>config/types.ts</code> + <code>validation/deploy.ts</code>). <span class="pill accent">I3</span></div><span class="who">core</span></li>
+        <li><span class="box"></span><div><strong>Infra · vars</strong> — lire <code>ALL_VARS</code> (comme <code>ALL_SECRETS</code>), piocher les <code>build_vars</code> + <code>SITE_URL</code> dérivé → <code>buildArgs</code>.</div><span class="who">core</span></li>
+        <li><span class="box"></span><div><strong>Infra · bake</strong> — <code>renderBakeFile</code> écrit <code>args</code> ; tests <code>bake-file.test.ts</code>.</div><span class="who">core</span></li>
+        <li><span class="box"></span><div><strong>Infra · workflow</strong> — ajouter <code>PIPELINE_ENVIRONMENT</code> + <code>ALL_VARS</code> au job <code>build-image</code>.</div><span class="who">core</span></li>
+        <li><span class="box"></span><div><strong>App · fleursdaujourdhui</strong> — <code>ARG</code>/<code>ENV</code> dans le Dockerfile ; <code>R2_CDN_URL</code> supprimé via passthrough ou posé en GitHub Variable.</div><span class="who">fleurs</span></li>
+        <li><span class="box"></span><div><strong>Doctrine</strong> — coller l'arbre (§07) + « le <code>.env</code> ne traverse pas Docker » dans le <code>CLAUDE.md</code> infra + skill <code>nextnode-deploy</code>.</div><span class="who">docs</span></li>
+      </ul>
+      <button class="copy-bk" type="button">📋 Copier en prompt de backlog</button>
+    </section>
+  </main>
+</div>
+
+<link id="hljs-light" rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-light.min.css">
+<link id="hljs-dark" rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css" disabled>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>
+(function () {
+  var btn = document.querySelector('.np-theme-toggle');
+  btn.addEventListener('click', function () {
+    var cur = document.documentElement.getAttribute('data-theme') || 'light';
+    var next = cur === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    try { localStorage.setItem('np-theme', next); } catch (e) {}
+    document.dispatchEvent(new CustomEvent('np:theme-change', { detail: { theme: next } }));
+  });
+})();
+document.querySelectorAll('.diff').forEach(function (el) {
+  var raw = el.textContent.trimEnd();
+  el.innerHTML = raw.split('\n').map(function (l) {
+    var cls = l.startsWith('@@') ? 'hunk' : l.startsWith('+') ? 'add' : l.startsWith('-') ? 'del' : 'ctx';
+    var body = (cls === 'add' || cls === 'del') ? l.slice(1) : l;
+    return '<span class="line ' + cls + '">' + body.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</span>';
+  }).join('');
+});
+(function () {
+  if (!document.querySelector('pre > code[class*="language-"]')) return;
+  function applyTheme(t) {
+    document.getElementById('hljs-light').disabled = (t === 'dark');
+    document.getElementById('hljs-dark').disabled = (t !== 'dark');
+  }
+  hljs.highlightAll();
+  applyTheme(document.documentElement.dataset.theme || 'light');
+  document.addEventListener('np:theme-change', function (e) { applyTheme(e.detail.theme); });
+  document.querySelectorAll('.code-block__copy').forEach(function (btn) {
+    btn.addEventListener('click', async function () {
+      var fig = btn.closest('.code-block');
+      var code = fig ? fig.querySelector('pre code').innerText : '';
+      try { await navigator.clipboard.writeText(code); var p = btn.textContent; btn.textContent = 'Copied'; btn.classList.add('is-copied'); setTimeout(function () { btn.textContent = p; btn.classList.remove('is-copied'); }, 1200); } catch (e) {}
+    });
+  });
+})();
+(function () {
+  var links = Array.prototype.slice.call(document.querySelectorAll('.sidebar nav a'));
+  var map = {}; links.forEach(function (a) { map[a.getAttribute('href').slice(1)] = a; });
+  var obs = new IntersectionObserver(function (entries) {
+    entries.forEach(function (en) {
+      if (en.isIntersecting) { links.forEach(function (a) { a.classList.remove('active'); }); if (map[en.target.id]) map[en.target.id].classList.add('active'); }
+    });
+  }, { rootMargin: '-20% 0px -65% 0px' });
+  document.querySelectorAll('section[id]').forEach(function (s) { obs.observe(s); });
+  var bar = document.querySelector('.progress-bar > i'); var pct = document.getElementById('pct');
+  function onScroll() { var h = document.documentElement; var max = h.scrollHeight - h.clientHeight; var p = max > 0 ? Math.round((h.scrollTop / max) * 100) : 0; bar.style.width = p + '%'; pct.textContent = p; }
+  window.addEventListener('scroll', onScroll, { passive: true }); onScroll();
+})();
+(function () {
+  var btn = document.querySelector('.copy-bk'); if (!btn) return;
+  var md = [
+    '# Env build vs runtime — plan d\'action (corrigé)',
+    '',
+    'RÈGLE: aucune valeur d\'env dans nextnode.toml. Valeurs = GitHub Secrets (sensible) / GitHub Variables (public). Toml = noms seulement.',
+    'MÉCANISME: .env = porte locale seule (exclu par .dockerignore). En CI, build voit ARG/ENV; runtime voit env_file.',
+    '',
+    '## Fix infra (@nextnode/core) — I3',
+    '- [ ] Ajouter build_vars: string[] (NOMS) a [deploy] (config/types.ts + validation/deploy.ts)',
+    '- [ ] Lire ALL_VARS (comme ALL_SECRETS), composer buildArgs = SITE_URL derive + build_vars piochees',
+    '- [ ] renderBakeFile ecrit `args` + tests (bake-file.test.ts)',
+    '- [ ] Ajouter PIPELINE_ENVIRONMENT + ALL_VARS au job build-image (deploy.yml)',
+    '',
+    '## App — fleursdaujourdhui',
+    '- [ ] ARG/ENV dans le Dockerfile (etape build)',
+    '- [ ] R2_CDN_URL: supprimer via passthroughImageService + remotePatterns, sinon GitHub Variable + build_vars',
+    '',
+    '## Doctrine',
+    '- [ ] Arbre de decision + ".env ne traverse pas Docker" dans CLAUDE.md infra + skill nextnode-deploy',
+    '',
+    'INVARIANT: un secret ne devient JAMAIS un build arg (--mount=type=secret si besoin au build).'
+  ].join('\n');
+  btn.addEventListener('click', async function () {
+    try { await navigator.clipboard.writeText(md); var p = btn.textContent; btn.textContent = '✓ Copié'; btn.classList.add('is-copied'); setTimeout(function () { btn.textContent = p; btn.classList.remove('is-copied'); }, 1400); } catch (e) {}
+  });
+})();
+</script>
+</body>
+</html>

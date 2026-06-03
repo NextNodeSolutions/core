@@ -4,6 +4,7 @@ import { join } from 'node:path'
 
 import {
 	APP_UPSTREAM_PUBLIC,
+	APP_WITH_BUILD_ARGS,
 	APP_WITH_DOMAIN,
 	STATIC_WITH_DOMAIN,
 } from '#/cli/fixtures.ts'
@@ -42,6 +43,7 @@ describe('computeImageRefCommand', () => {
 		vi.stubEnv('GITHUB_SHA', SHA)
 		vi.stubEnv('PACKAGE_DIR', PACKAGE_DIR)
 		vi.stubEnv('GITHUB_WORKSPACE', workspace)
+		vi.stubEnv('PIPELINE_ENVIRONMENT', 'production')
 		vi.stubEnv('LOG_LEVEL', 'silent')
 	})
 
@@ -74,11 +76,55 @@ describe('computeImageRefCommand', () => {
 					context: '.',
 					dockerfile: 'packages/monitoring/Dockerfile',
 					target: 'app',
+					args: { SITE_URL: 'https://example.com' },
 					tags: ['ghcr.io/nextnodesolutions/core-app:sha-abc1234'],
 					'cache-from': ['type=gha,scope=app'],
 					'cache-to': ['type=gha,scope=app,mode=max'],
 				},
 			},
+		})
+	})
+
+	it('injects the auto SITE_URL plus declared build_args resolved from ALL_VARS', () => {
+		vi.stubEnv('ALL_VARS', JSON.stringify({ ANALYTICS_ID: 'GA-1' }))
+
+		computeImageRefCommand(APP_WITH_BUILD_ARGS)
+
+		const bake = parseJsonOrThrow(
+			readFileSync(join(workspace, 'docker-bake.json'), 'utf-8'),
+			'docker-bake.json',
+		)
+		expect(bake).toMatchObject({
+			target: {
+				app: {
+					args: {
+						SITE_URL: 'https://example.com',
+						ANALYTICS_ID: 'GA-1',
+					},
+				},
+			},
+		})
+	})
+
+	it('throws when a declared build_arg is absent from ALL_VARS', () => {
+		expect(() => {
+			computeImageRefCommand(APP_WITH_BUILD_ARGS)
+		}).toThrow(
+			'service "app" declares build_arg "ANALYTICS_ID" but it is absent from GitHub Variables',
+		)
+	})
+
+	it('derives the dev SITE_URL when the pipeline environment is development', () => {
+		vi.stubEnv('PIPELINE_ENVIRONMENT', 'development')
+
+		computeImageRefCommand(APP_WITH_DOMAIN)
+
+		const bake = parseJsonOrThrow(
+			readFileSync(join(workspace, 'docker-bake.json'), 'utf-8'),
+			'docker-bake.json',
+		)
+		expect(bake).toMatchObject({
+			target: { app: { args: { SITE_URL: 'https://dev.example.com' } } },
 		})
 	})
 

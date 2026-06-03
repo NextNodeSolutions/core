@@ -41,6 +41,7 @@ describe('renderBakeFile', () => {
 			imageRefs: { app: APP_IMAGE },
 			bakeTargets: ['app'],
 			packageDir: 'packages/monitoring',
+			buildArgs: {},
 		})
 
 		expect(parse(result)).toEqual({
@@ -75,6 +76,7 @@ describe('renderBakeFile', () => {
 			},
 			bakeTargets: ['web'],
 			packageDir: 'apps/web',
+			buildArgs: {},
 		})
 
 		expect(parse(result)).toEqual({
@@ -98,6 +100,7 @@ describe('renderBakeFile', () => {
 			imageRefs: { app: APP_IMAGE },
 			bakeTargets: ['app'],
 			packageDir: '',
+			buildArgs: {},
 		})
 
 		expect(parse(result)).toEqual({
@@ -106,6 +109,79 @@ describe('renderBakeFile', () => {
 				app: {
 					context: '.',
 					dockerfile: 'Dockerfile',
+					tags: ['ghcr.io/nextnodesolutions/core-app:sha-abc1234'],
+					'cache-from': ['type=gha,scope=app'],
+					'cache-to': ['type=gha,scope=app,mode=max'],
+				},
+			},
+		})
+	})
+
+	it('emits resolved build args on the target, leaving arg-less targets untouched', () => {
+		const result = renderBakeFile({
+			services: { front: buildService(), api: buildService() },
+			imageRefs: {
+				front: {
+					registry: 'ghcr.io',
+					repository: 'acme/app-front',
+					tag: 'sha-1111111',
+				},
+				api: {
+					registry: 'ghcr.io',
+					repository: 'acme/app-api',
+					tag: 'sha-2222222',
+				},
+			},
+			bakeTargets: ['front', 'api'],
+			packageDir: 'packages/app',
+			buildArgs: {
+				front: {
+					SITE_URL: 'https://example.com',
+					ANALYTICS_ID: 'GA-1',
+				},
+			},
+		})
+
+		expect(parse(result)).toEqual({
+			group: { default: { targets: ['front', 'api'] } },
+			target: {
+				front: {
+					context: '.',
+					dockerfile: 'packages/app/Dockerfile',
+					args: {
+						SITE_URL: 'https://example.com',
+						ANALYTICS_ID: 'GA-1',
+					},
+					tags: ['ghcr.io/acme/app-front:sha-1111111'],
+					'cache-from': ['type=gha,scope=front'],
+					'cache-to': ['type=gha,scope=front,mode=max'],
+				},
+				api: {
+					context: '.',
+					dockerfile: 'packages/app/Dockerfile',
+					tags: ['ghcr.io/acme/app-api:sha-2222222'],
+					'cache-from': ['type=gha,scope=api'],
+					'cache-to': ['type=gha,scope=api,mode=max'],
+				},
+			},
+		})
+	})
+
+	it('omits the args key when a target maps to an empty build-arg record', () => {
+		const result = renderBakeFile({
+			services: { app: buildService() },
+			imageRefs: { app: APP_IMAGE },
+			bakeTargets: ['app'],
+			packageDir: 'packages/monitoring',
+			buildArgs: { app: {} },
+		})
+
+		expect(parse(result)).toEqual({
+			group: { default: { targets: ['app'] } },
+			target: {
+				app: {
+					context: '.',
+					dockerfile: 'packages/monitoring/Dockerfile',
 					tags: ['ghcr.io/nextnodesolutions/core-app:sha-abc1234'],
 					'cache-from': ['type=gha,scope=app'],
 					'cache-to': ['type=gha,scope=app,mode=max'],
@@ -140,6 +216,7 @@ describe('renderBakeFile', () => {
 			},
 			bakeTargets: ['front', 'api'],
 			packageDir: 'packages/app',
+			buildArgs: {},
 		})
 
 		expect(parse(result)).toEqual({
@@ -170,6 +247,7 @@ describe('renderBakeFile', () => {
 				imageRefs: {},
 				bakeTargets: [],
 				packageDir: 'packages/app',
+				buildArgs: {},
 			}),
 		).toThrow('no build services to bake')
 	})
@@ -181,6 +259,7 @@ describe('renderBakeFile', () => {
 				imageRefs: {},
 				bakeTargets: ['app'],
 				packageDir: 'packages/app',
+				buildArgs: {},
 			}),
 		).toThrow('bake target "app" has no resolved image ref')
 	})
@@ -192,6 +271,7 @@ describe('renderBakeFile', () => {
 				imageRefs: { app: APP_IMAGE },
 				bakeTargets: ['app'],
 				packageDir: 'packages/app',
+				buildArgs: {},
 			}),
 		).toThrow('bake target "app" is not a declared build service')
 	})

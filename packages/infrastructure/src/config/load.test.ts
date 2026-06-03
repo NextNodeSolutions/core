@@ -1079,6 +1079,63 @@ describe('parseConfig', () => {
 			})
 		})
 
+		it('parses build_args names on a build service', () => {
+			const result = parseConfig(
+				appConfig({
+					app: {
+						source: 'build',
+						build_args: ['SITE_URL', 'ANALYTICS_ID'],
+					},
+				}),
+			)
+
+			expect(result.ok).toBe(true)
+			if (!result.ok || result.config.deploy === false) return
+			if (result.config.deploy.target !== 'hetzner-vps') return
+
+			expect(result.config.deploy.services['app']).toEqual({
+				port: 3000,
+				secrets: [],
+				needs: [],
+				dependsOn: [],
+				source: 'build',
+				buildArgs: ['SITE_URL', 'ANALYTICS_ID'],
+			})
+		})
+
+		it('omits buildArgs when build_args is empty or unset', () => {
+			const result = parseConfig(
+				appConfig({ app: { source: 'build', build_args: [] } }),
+			)
+
+			expect(result.ok).toBe(true)
+			if (!result.ok || result.config.deploy === false) return
+			if (result.config.deploy.target !== 'hetzner-vps') return
+
+			expect(result.config.deploy.services['app']).not.toHaveProperty(
+				'buildArgs',
+			)
+		})
+
+		it('rejects build_args on an upstream source', () => {
+			const result = parseConfig(
+				appConfig({
+					app: {
+						source: 'upstream',
+						ref: 'docker.io/acme/app:1.0',
+						build_args: ['SITE_URL'],
+					},
+				}),
+			)
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'deploy.services.app.build_args is only allowed when source = "build"',
+			)
+		})
+
 		it('defaults a service with no source to build', () => {
 			const result = parseConfig(
 				appConfig({ app: { url: 'example.com' } }),
@@ -1321,11 +1378,10 @@ describe('parseConfig', () => {
 			expect(result.ok).toBe(true)
 		})
 
-		it('accepts service secrets that are all declared in [deploy.secrets]', () => {
+		it('derives the deploy secret pool from the union of every service secret (no [deploy].secrets)', () => {
 			const result = parseConfig({
 				project: { name: 'my-app', type: 'app', domain: 'example.com' },
 				deploy: {
-					secrets: ['SESSION_KEY', 'JWT_SECRET'],
 					services: {
 						front: {
 							source: 'build',
@@ -1335,7 +1391,7 @@ describe('parseConfig', () => {
 						api: {
 							source: 'build',
 							url: 'api.example.com',
-							secrets: ['JWT_SECRET'],
+							secrets: ['JWT_SECRET', 'SESSION_KEY'],
 						},
 					},
 				},
@@ -1349,15 +1405,22 @@ describe('parseConfig', () => {
 				expect.unreachable('expected the hetzner-vps deploy target')
 			}
 
+			// each service keeps its own declared secrets…
 			expect(result.config.deploy.services['front']?.secrets).toEqual([
 				'SESSION_KEY',
 			])
 			expect(result.config.deploy.services['api']?.secrets).toEqual([
 				'JWT_SECRET',
+				'SESSION_KEY',
+			])
+			// …and the pool is the deduped union, in first-seen order
+			expect(result.config.deploy.secrets).toEqual([
+				'SESSION_KEY',
+				'JWT_SECRET',
 			])
 		})
 
-		it('rejects a service secret not declared in [deploy.secrets]', () => {
+		it('rejects a top-level [deploy].secrets on a hetzner-vps target (secrets are per-service)', () => {
 			const result = parseConfig({
 				project: { name: 'my-app', type: 'app', domain: 'example.com' },
 				deploy: {
@@ -1366,7 +1429,7 @@ describe('parseConfig', () => {
 						app: {
 							source: 'build',
 							url: 'example.com',
-							secrets: ['UNKNOWN'],
+							secrets: ['SESSION_KEY'],
 						},
 					},
 				},
@@ -1374,13 +1437,54 @@ describe('parseConfig', () => {
 
 			if (result.ok) {
 				expect.unreachable(
-					'expected an unknown-secret validation failure',
+					'expected [deploy].secrets to be rejected for hetzner-vps',
 				)
 			}
 
 			expect(result.errors).toContain(
-				'deploy.services.app.secrets references unknown secret "UNKNOWN" — declare it in [deploy.secrets]',
+				'deploy.secrets is not allowed for a hetzner-vps target — declare each secret on the service that needs it in [deploy.services.<name>].secrets',
 			)
+		})
+
+		it('rejects a needs referencing a backing service that is not declared', () => {
+			const result = parseConfig({
+				project: { name: 'my-app', type: 'app', domain: 'example.com' },
+				deploy: {
+					services: {
+						app: {
+							source: 'build',
+							url: 'example.com',
+							needs: ['postgres'],
+						},
+					},
+				},
+			})
+
+			if (result.ok) {
+				expect.unreachable('expected an undeclared-needs failure')
+			}
+
+			expect(result.errors).toContain(
+				'deploy.services.app.needs references "postgres" but no [services.postgres] is declared',
+			)
+		})
+
+		it('accepts a needs referencing a declared backing service', () => {
+			const result = parseConfig({
+				project: { name: 'my-app', type: 'app', domain: 'example.com' },
+				services: { postgres: { mode: 'embedded' } },
+				deploy: {
+					services: {
+						app: {
+							source: 'build',
+							url: 'example.com',
+							needs: ['postgres'],
+						},
+					},
+				},
+			})
+
+			expect(result.ok).toBe(true)
 		})
 
 		it('accepts a depends_on referencing a declared sibling service', () => {
@@ -1807,7 +1911,7 @@ describe('parseConfig', () => {
 			expect(result.errors).toContain('[deploy] must be a table')
 		})
 
-		it('includes secrets with hetzner-vps deploy', () => {
+		it('derives the hetzner-vps secret pool as the union of service secrets', () => {
 			const result = parseConfig({
 				project: {
 					name: 'my-app',
@@ -1815,9 +1919,13 @@ describe('parseConfig', () => {
 					domain: 'my-app.example.com',
 				},
 				deploy: {
-					secrets: ['DATABASE_URL', 'REDIS_URL'],
 					hetzner: { server_type: 'cpx22', location: 'nbg1' },
-					services: { app: { source: 'build' } },
+					services: {
+						app: {
+							source: 'build',
+							secrets: ['DATABASE_URL', 'REDIS_URL'],
+						},
+					},
 				},
 			})
 
@@ -1833,7 +1941,7 @@ describe('parseConfig', () => {
 				services: {
 					app: {
 						port: 3000,
-						secrets: [],
+						secrets: ['DATABASE_URL', 'REDIS_URL'],
 						needs: [],
 						dependsOn: [],
 						source: 'build',

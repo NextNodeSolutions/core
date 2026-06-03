@@ -316,6 +316,7 @@ describe('deployCommand', () => {
 				'my-app',
 				{
 					secrets: {},
+					secretOrigins: {},
 					images: {
 						app: {
 							registry: 'ghcr.io',

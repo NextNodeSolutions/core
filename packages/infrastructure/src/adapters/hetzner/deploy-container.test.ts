@@ -155,6 +155,7 @@ describe('stageRollout', () => {
 		hostPorts: { [name]: 8080 },
 		env: { SITE_URL: 'https://acme-web.example.com' },
 		secrets: {},
+		secretOrigins: {},
 		images: { [name]: IMAGE },
 		registryToken: undefined,
 		volumes: [],
@@ -229,6 +230,7 @@ describe('stageRollout', () => {
 		hostPorts: { front: 8080, api: 8081 },
 		env: { SITE_URL: 'https://example.com' },
 		secrets: {},
+		secretOrigins: {},
 		images: { front: IMAGE, api: IMAGE, worker: IMAGE },
 		registryToken: undefined,
 		volumes: [],
@@ -275,6 +277,7 @@ describe('stageRollout', () => {
 		hostPorts: { front: 8080, api: 8081 },
 		env: { SITE_URL: 'https://example.com' },
 		secrets,
+		secretOrigins: {},
 		images: { front: IMAGE, api: IMAGE },
 		registryToken: undefined,
 		volumes: [],
@@ -308,17 +311,45 @@ describe('stageRollout', () => {
 		expect(api).not.toContain('SESSION_KEY')
 	})
 
-	it('broadcasts a service-required secret no service declares (e.g. DATABASE_URL) into every .env', async () => {
+	// front declares no needs; api declares needs = ["postgres"]. DATABASE_URL is
+	// produced by the postgres backing service (secretOrigins), so it must land
+	// ONLY in api's env — never broadcast into front's.
+	const backingInput = (): DeployContainerInput => ({
+		projectName: 'acme-web',
+		environment: 'production',
+		hostPorts: { front: 8080, api: 8081 },
+		env: { SITE_URL: 'https://example.com', POSTGRES_USER: 'acme_web' },
+		secrets: {
+			SESSION_KEY: 'sess-val',
+			DATABASE_URL: 'postgres://db:5432',
+			POSTGRES_PASSWORD: 'pg-pw',
+		},
+		secretOrigins: {
+			DATABASE_URL: 'postgres',
+			POSTGRES_PASSWORD: 'postgres',
+		},
+		images: { front: IMAGE, api: IMAGE },
+		registryToken: undefined,
+		volumes: [],
+		postgres: { mode: 'embedded' },
+		services: {
+			front: secretService('example.com', ['SESSION_KEY']),
+			api: {
+				port: 4000,
+				url: 'api.example.com',
+				secrets: [],
+				needs: ['postgres'],
+				dependsOn: [],
+				source: 'build',
+				target: 'api',
+			},
+		},
+	})
+
+	it('projects a backing secret only into the .env of services that need it (no broadcast)', async () => {
 		const session = recordingSession()
 
-		await stageRollout(
-			session,
-			secretInput({
-				SESSION_KEY: 'sess-val',
-				JWT_SECRET: 'jwt-val',
-				DATABASE_URL: 'postgres://db:5432',
-			}),
-		)
+		await stageRollout(session, backingInput())
 
 		const front = writtenFile(
 			session,
@@ -329,8 +360,32 @@ describe('stageRollout', () => {
 			'/opt/apps/acme-web/production/.env.api',
 		)
 
-		expect(front).toContain('DATABASE_URL=postgres://db:5432')
+		// the leak fix: front (needs = []) never sees the postgres secrets
+		expect(front).toContain('SESSION_KEY=sess-val')
+		expect(front).not.toContain('DATABASE_URL')
+		expect(front).not.toContain('POSTGRES_PASSWORD')
+		// api (needs = ["postgres"]) gets the backing secrets, not front's
 		expect(api).toContain('DATABASE_URL=postgres://db:5432')
+		expect(api).toContain('POSTGRES_PASSWORD=pg-pw')
+		expect(api).not.toContain('SESSION_KEY')
+	})
+
+	it('writes the shared .env with the backing secrets (DB sidecar + migrate) but no user secret', async () => {
+		const session = recordingSession()
+
+		await stageRollout(session, backingInput())
+
+		const shared = writtenFile(
+			session,
+			'/opt/apps/acme-web/production/.env',
+		)
+
+		// the postgres sidecar (env_file: ['.env']) + migrate (--env-file .env)
+		// read this — it carries the backing env, never the app's user secrets
+		expect(shared).toContain('DATABASE_URL=postgres://db:5432')
+		expect(shared).toContain('POSTGRES_PASSWORD=pg-pw')
+		expect(shared).toContain('POSTGRES_USER=acme_web')
+		expect(shared).not.toContain('SESSION_KEY')
 	})
 
 	// The forwarded token authenticates only credentialed registries. An
@@ -359,6 +414,7 @@ describe('stageRollout', () => {
 			hostPorts: {},
 			env: { SITE_URL: 'https://example.com' },
 			secrets: {},
+			secretOrigins: {},
 			images: {
 				web: { registry: 'ghcr.io', repository: 'acme/web', tag: 'v1' },
 				cache: {
@@ -405,6 +461,7 @@ describe('deployContainer', () => {
 			hostPorts: { front: 8080, api: 8081 },
 			env: { SITE_URL: 'https://example.com' },
 			secrets: {},
+			secretOrigins: {},
 			images: { front: IMAGE, api: IMAGE, worker: IMAGE },
 			registryToken: undefined,
 			volumes: [],
@@ -436,6 +493,7 @@ describe('deployContainer', () => {
 			hostPorts: { front: 8080, api: 8081 },
 			env: { SITE_URL: 'https://dev.example.com' },
 			secrets: {},
+			secretOrigins: {},
 			images: { front: IMAGE, api: IMAGE },
 			registryToken: undefined,
 			volumes: [],

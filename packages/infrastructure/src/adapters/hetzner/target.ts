@@ -2,7 +2,7 @@ import { composeCaddyConfig } from '#/domain/caddy/compose.ts'
 import { extractUpstreams } from '#/domain/caddy/config.ts'
 import { CADDY_ENV_PATH, renderCaddyEnv } from '#/domain/caddy/env.ts'
 import { buildR2CaddyBinding } from '#/domain/cloudflare/r2/caddy-binding.ts'
-import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
+import { computeSiteUrl } from '#/domain/deploy/domain.ts'
 import { computeVpsDnsRecords } from '#/domain/hetzner/dns-records.ts'
 import { allocateHostPort } from '#/domain/hetzner/host-port.ts'
 import { createLogger } from '@nextnode-solutions/logger'
@@ -179,7 +179,10 @@ export class HetznerVpsTarget implements DeployTarget {
 	contributeEnv(): TargetEnv {
 		return {
 			public: {
-				SITE_URL: `https://${resolveDeployDomain(this.config.domain, this.config.environment)}`,
+				SITE_URL: computeSiteUrl(
+					this.config.domain,
+					this.config.environment,
+				),
 			},
 			secret: {},
 		}
@@ -204,6 +207,7 @@ export class HetznerVpsTarget implements DeployTarget {
 				hostPorts,
 				env,
 				secrets: input.secrets,
+				secretOrigins: input.secretOrigins,
 				images: this.requireImages(input),
 				registryToken: input.registryToken,
 				volumes: this.config.volumes,
@@ -283,6 +287,7 @@ export class HetznerVpsTarget implements DeployTarget {
 				hostPorts,
 				env,
 				secrets: input.secrets,
+				secretOrigins: input.secretOrigins,
 				images: this.requireImages(input),
 				registryToken: input.registryToken,
 				volumes: this.config.volumes,

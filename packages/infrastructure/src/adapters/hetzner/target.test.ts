@@ -195,7 +195,7 @@ const TARGET_CONFIG = {
 		app: {
 			port: 3000,
 			url: 'acme-web.example.com',
-			secrets: [],
+			secrets: ['DATABASE_URL'],
 			needs: [],
 			dependsOn: [],
 			source: 'build',
@@ -821,6 +821,7 @@ describe('HetznerVpsTarget', () => {
 
 		const DEPLOY_INPUT = {
 			secrets: { DATABASE_URL: 'postgres://db:5432' },
+			secretOrigins: {},
 			images: { app: DEPLOY_IMAGE },
 			registryToken: 'ghs_fake_token',
 		}

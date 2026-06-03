@@ -5,6 +5,7 @@ import { computeSilo } from '#/domain/hetzner/env-silo.ts'
 import {
 	buildServiceSecretEnv,
 	buildServiceUrlEnv,
+	selectBackingSecrets,
 } from '#/domain/hetzner/service-env.ts'
 import { buildServiceUpstreams } from '#/domain/hetzner/service-upstreams.ts'
 import {
@@ -49,6 +50,10 @@ export interface DeployContainerInput {
 	readonly hostPorts: Readonly<Record<string, number>>
 	readonly env: DeployEnv
 	readonly secrets: Readonly<Record<string, string>>
+	// Provenance for `secrets`: each backing-service secret key → its producer
+	// (`DATABASE_URL` → `postgres`). Drives per-service projection by `needs` and
+	// the shared `.env`. User secrets are absent; `{}` when no backing service.
+	readonly secretOrigins: Readonly<Record<string, string>>
 	// Image ref per declared service, keyed by instance name — sourced from the
 	// IMAGE_REFS env and passed straight to the compose renderer.
 	readonly images: Readonly<Record<string, ImageRef>>
@@ -182,14 +187,21 @@ export async function stageRollout(
 }
 
 /**
- * Write one `.env.<name>` per declared service — the per-service isolation
- * unit the compose `env_file` points at (D5). Every file carries the shared
- * deploy env, the symmetric cross-service URL block (so each service resolves
- * its peers by `<NAME>_URL`), its projected secret subset (only the secrets the
- * service declares, plus service-required ones like postgres `DATABASE_URL`),
- * and its OWN declared port: a hardcoded PORT here would break any service whose
- * `port` differs from a peer's (app on one port, mapping + healthcheck on
- * another).
+ * Write the env files a deploy reads. Two kinds:
+ *
+ *   - one `.env.<name>` per declared service — the per-service isolation unit
+ *     the compose `env_file` points at (D5). Each carries the shared deploy env,
+ *     the symmetric cross-service URL block (so each service resolves its peers
+ *     by `<NAME>_URL`), its OWN declared port, and its least-privilege secret
+ *     subset (its declared `secrets` plus the backing secrets it `needs` — never
+ *     a peer's). A hardcoded PORT here would break any service whose `port`
+ *     differs from a peer's;
+ *   - one shared `.env` — the file the embedded postgres sidecar
+ *     (`env_file: ['.env']`), the backup sidecar (`${VAR}` compose
+ *     interpolation), and the ephemeral migrate container (`--env-file .env`)
+ *     read. It carries the deploy env plus the BACKING secrets only
+ *     (`POSTGRES_PASSWORD`, `DATABASE_URL`, `R2_*`) — no user secrets, since the
+ *     DB/backup/migrate infra has no business holding the app's session keys.
  */
 async function writeServiceEnvFiles(
 	session: SshSession,
@@ -197,10 +209,19 @@ async function writeServiceEnvFiles(
 	input: DeployContainerInput,
 ): Promise<void> {
 	const serviceUrls = buildServiceUrlEnv(input.services, input.environment)
-	const serviceSecrets = buildServiceSecretEnv(input.services, input.secrets)
+	const serviceSecrets = buildServiceSecretEnv(
+		input.services,
+		input.secrets,
+		input.secretOrigins,
+	)
+	const sharedEnv = formatComposeEnv({
+		...input.env,
+		...selectBackingSecrets(input.secrets, input.secretOrigins),
+	})
 
-	await Promise.all(
-		Object.entries(input.services).map(([name, service]) =>
+	await Promise.all([
+		session.writeFile(`${envDir}/.env`, sharedEnv),
+		...Object.entries(input.services).map(([name, service]) =>
 			session.writeFile(
 				`${envDir}/.env.${name}`,
 				formatComposeEnv({
@@ -211,7 +232,7 @@ async function writeServiceEnvFiles(
 				}),
 			),
 		),
-	)
+	])
 }
 
 /**

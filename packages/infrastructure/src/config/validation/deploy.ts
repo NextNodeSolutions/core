@@ -147,12 +147,14 @@ type ParsedService = ServiceCommonParsed &
 				context?: string | undefined
 				dockerfile?: string | undefined
 				target?: string | undefined
+				build_args: string[]
 		  }
 		| {
 				source: 'upstream'
 				context?: undefined
 				dockerfile?: undefined
 				target?: undefined
+				build_args?: undefined
 				ref?: string | undefined
 				registry_auth_secret?: string | undefined
 		  }
@@ -226,6 +228,9 @@ function toUserService(name: string, parsed: ParsedService): UserServiceConfig {
 			? { dockerfile: parsed.dockerfile }
 			: {}),
 		...(parsed.target !== undefined ? { target: parsed.target } : {}),
+		...(parsed.build_args.length > 0
+			? { buildArgs: parsed.build_args }
+			: {}),
 	}
 }
 
@@ -257,6 +262,10 @@ const serviceSchema = (name: string): GenericSchema<unknown, ParsedService> => {
 						`deploy.services.${name}.dockerfile`,
 					),
 					target: optionalNonEmpty(`deploy.services.${name}.target`),
+					build_args: stringArray(
+						`deploy.services.${name}.build_args must be an array of strings`,
+						`deploy.services.${name}.build_args entries must be non-empty strings`,
+					),
 					...serviceCommonEntries(name),
 				}),
 				object({
@@ -269,6 +278,9 @@ const serviceSchema = (name: string): GenericSchema<unknown, ParsedService> => {
 					),
 					target: forbiddenField(
 						`deploy.services.${name}.target is only allowed when source = "build"`,
+					),
+					build_args: forbiddenField(
+						`deploy.services.${name}.build_args is only allowed when source = "build"`,
 					),
 					ref: optional(nonEmptyString(refMsg)),
 					registry_auth_secret: optionalNonEmpty(
@@ -288,25 +300,56 @@ const serviceSchema = (name: string): GenericSchema<unknown, ParsedService> => {
 	)
 }
 
-// Every secret a service references in its `secrets` list must be declared in
-// the [deploy.secrets] pool — that pool is the single source of truth for what
-// the pipeline pulls from GitHub Secrets, and stageRollout projects it per
-// service (D5). A reference to an undeclared name would silently inject nothing,
-// so it is rejected. Skipped when [deploy.secrets] itself failed to parse, to
-// avoid cascading every reference into a spurious "unknown" error.
-function validateServiceSecretRefs(
+// Resolve the secret pool — the set of GitHub Secret NAMES the pipeline pulls
+// for this deploy — per target. The two targets source it differently:
+//   - hetzner-vps DERIVES it as the union of every service's `secrets`. Each
+//     service declares only what it needs (per-service least privilege), so a
+//     top-level [deploy.secrets] is rejected — it would re-introduce a shared
+//     pool and the broadcast leak it implies.
+//   - cloudflare-pages parses [deploy].secrets directly: one deployable unit,
+//     no per-service split, so there is nothing to derive.
+// A name that is declared but absent from GitHub Secrets still fails loud at
+// deploy time in `pickSecrets`, so a typo is caught — just later than parse.
+function resolveSecretPool(
+	target: DeployTargetType,
+	deployRecord: Record<string, unknown>,
 	services: Record<string, UserServiceConfig>,
-	secretsResult: { errors: string[]; secrets: ReadonlyArray<string> },
-): string[] {
-	if (secretsResult.errors.length > 0) return []
+): { errors: string[]; secrets: ReadonlyArray<string> } {
+	if (target !== 'hetzner-vps') return validateSecrets(deployRecord)
 
-	const pool = new Set(secretsResult.secrets)
+	const errors =
+		deployRecord['secrets'] === undefined
+			? []
+			: [
+					'deploy.secrets is not allowed for a hetzner-vps target — declare each secret on the service that needs it in [deploy.services.<name>].secrets',
+				]
+	const pool = new Set<string>()
+	for (const service of Object.values(services)) {
+		for (const secret of service.secrets) pool.add(secret)
+	}
+	return { errors, secrets: [...pool] }
+}
+
+// Every backing service a workload lists in `needs` must be declared as a
+// top-level [services.<name>] — `needs = ["postgres"]` requires
+// [services.postgres], or the backing secrets it expects (e.g. `DATABASE_URL`)
+// would never be produced and the workload would start against nothing. Skipped
+// when any service failed to parse (the declared set would be incomplete).
+function validateServiceNeedsRefs(
+	servicesResult: {
+		errors: string[]
+		services: Record<string, UserServiceConfig>
+	},
+	declaredServices: ReadonlySet<string>,
+): string[] {
+	if (servicesResult.errors.length > 0) return []
+
 	const errors: string[] = []
-	for (const [name, service] of Object.entries(services)) {
-		for (const secret of service.secrets) {
-			if (pool.has(secret)) continue
+	for (const [name, service] of Object.entries(servicesResult.services)) {
+		for (const need of service.needs) {
+			if (declaredServices.has(need)) continue
 			errors.push(
-				`deploy.services.${name}.secrets references unknown secret "${secret}" — declare it in [deploy.secrets]`,
+				`deploy.services.${name}.needs references "${need}" but no [services.${need}] is declared`,
 			)
 		}
 	}
@@ -384,6 +427,7 @@ export function validateDeploySection(
 	raw: unknown,
 	projectType: DeployableProjectType,
 	domain: string | undefined,
+	declaredServices: ReadonlySet<string>,
 ): ValidationResult<DeploySection> {
 	if (raw !== undefined && !isRecord(raw)) {
 		return { ok: false, errors: ['[deploy] must be a table'] }
@@ -411,9 +455,6 @@ export function validateDeploySection(
 	const target: DeployTargetType =
 		rawTarget ?? DEFAULT_DEPLOY_TARGETS[projectType]
 
-	const secretsResult = validateSecrets(deployRecord)
-	errors.push(...secretsResult.errors)
-
 	const vpsResult = validateVps(deployRecord)
 	errors.push(...vpsResult.errors)
 
@@ -422,10 +463,17 @@ export function validateDeploySection(
 
 	const servicesResult = validateServices(deployRecord)
 	errors.push(...servicesResult.errors)
-	errors.push(
-		...validateServiceSecretRefs(servicesResult.services, secretsResult),
-	)
 	errors.push(...validateServiceDependsOnRefs(servicesResult))
+	errors.push(...validateServiceNeedsRefs(servicesResult, declaredServices))
+
+	// Pool source is per-target (derived for hetzner, parsed for pages), so it
+	// is resolved AFTER services are validated rather than up front.
+	const secretsResult = resolveSecretPool(
+		target,
+		deployRecord,
+		servicesResult.services,
+	)
+	errors.push(...secretsResult.errors)
 
 	const provider = DEPLOY_PROVIDER_VALIDATORS[target]
 	const providerResult = provider.validate(

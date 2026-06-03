@@ -88,6 +88,7 @@ export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 		raw['deploy'],
 		type,
 		projectResult.section.domain,
+		new Set(Object.keys(servicesResult.section)),
 	)
 	if (!deployResult.ok) return { ok: false, errors: deployResult.errors }
 

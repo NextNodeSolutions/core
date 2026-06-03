@@ -238,9 +238,15 @@ Follow the global CLAUDE.md rules verbatim:
   are all injected by the infra pipeline at deploy time.
 - The container binds `$PORT=3000`; the VPS-side Caddy reverse-proxies
   `monitoring.nextnode.fr` to `127.0.0.1:<computeHostPort('production')>`.
-- Secrets (`GITHUB_APP_PRIVATE_KEY`, `HETZNER_API_TOKEN`, `CLOUDFLARE_API_TOKEN`,
-  etc.) are declared in `[deploy].secrets` once wired; until then, the
-  dashboard's stubs return 501.
+- **Runtime secrets** (`HETZNER_API_TOKEN`, `CLOUDFLARE_API_TOKEN`, etc.) are
+  declared PER SERVICE in `[deploy.services.app].secrets` — names only; the
+  values live in GitHub Secrets and the infra pulls exactly those into the
+  service's `.env.app` at deploy (least privilege, no deploy-wide pool).
+- **Build-time config** is inlined into the image via build args, never the
+  runtime env (a `.env` does not traverse the Docker build). `SITE_URL` is
+  auto-injected by the infra (from `project.domain`, env-resolved) — the app
+  never declares it. Any other build-inlined value is listed by NAME in
+  `[deploy.services.app].build_args` and resolved from GitHub Variables.
 
 ## Reference
 

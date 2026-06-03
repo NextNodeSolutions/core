@@ -174,6 +174,10 @@ describe('migrateRemoteCommand', () => {
 					DATABASE_URL:
 						'postgres://my_app:pg-password@postgres:5432/my_app',
 				},
+				secretOrigins: {
+					POSTGRES_PASSWORD: 'postgres',
+					DATABASE_URL: 'postgres',
+				},
 				images: {
 					app: {
 						registry: 'ghcr.io',

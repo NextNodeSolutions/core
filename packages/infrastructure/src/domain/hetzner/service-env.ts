@@ -48,42 +48,71 @@ export function buildServiceUrlEnv(
 }
 
 /**
- * Route the deploy secrets across the per-service `.env.<name>` files (D5).
- *
- * A user secret declared in `[deploy.secrets]` is isolated to the services that
- * name it in their own `secrets` list: each service's env is the pool projected
- * through its `secrets` (set intersection), so a leaked `.env.front` exposes only
- * front's declared subset, never the whole pool.
- *
- * A secret that NO service claims is service-required — auto-injected by a
- * backing service (e.g. postgres `DATABASE_URL`) rather than user-declared — and
- * broadcasts to every service, preserving its existing injection path. The two
- * sets are disjoint (a service's declared keys are, by definition, claimed), so
- * the merge never collides.
- *
- * Returns one entry per service, keyed by instance name; a service that declares
- * no secrets and runs without any backing service maps to an empty record.
+ * Route the deploy secrets across the per-service `.env.<name>` files (D5),
+ * least-privilege by construction: each service receives only the secrets it
+ * needs (see `projectSecretsForService` for the rule). One entry per service,
+ * keyed by instance name; a service that needs and declares nothing maps to an
+ * empty record. The shared `.env` the DB sidecar + migrate read is built
+ * separately — see `selectBackingSecrets`.
  */
 export function buildServiceSecretEnv(
 	services: Readonly<Record<string, UserServiceConfig>>,
 	secrets: Readonly<Record<string, string>>,
+	origins: Readonly<Record<string, string>>,
 ): Record<string, Record<string, string>> {
-	const claimed = new Set(
-		Object.values(services).flatMap(service => service.secrets),
+	return Object.fromEntries(
+		Object.entries(services).map(
+			([name, service]): [string, Record<string, string>] => [
+				name,
+				projectSecretsForService(service, secrets, origins),
+			],
+		),
 	)
-	const broadcast = Object.fromEntries(
-		Object.entries(secrets).filter(([key]) => !claimed.has(key)),
-	)
+}
 
-	const byService: Record<string, Record<string, string>> = {}
-	for (const [name, service] of Object.entries(services)) {
-		const declared = Object.fromEntries(
-			Object.entries(secrets).filter(([key]) =>
-				service.secrets.includes(key),
-			),
-		)
-		byService[name] = { ...broadcast, ...declared }
+/**
+ * The least-privilege secret subset a single service receives. The deploy
+ * secrets arrive on two disjoint channels, each with its own rule:
+ *
+ *   - a BACKING secret — produced by another service, so `origins` names its
+ *     producer (e.g. `DATABASE_URL` → `postgres`) — is included only when the
+ *     service declares `needs = [<producer>]`;
+ *   - a USER secret — no producer in `origins` — is included only when the
+ *     service lists it in its own `secrets`.
+ *
+ * So a postgres `DATABASE_URL` reaches only services that declare
+ * `needs = ["postgres"]`, never a front service that does not (no broadcast).
+ */
+function projectSecretsForService(
+	service: UserServiceConfig,
+	secrets: Readonly<Record<string, string>>,
+	origins: Readonly<Record<string, string>>,
+): Record<string, string> {
+	const projected: Record<string, string> = {}
+	for (const [key, value] of Object.entries(secrets)) {
+		const producer = origins[key]
+		const included =
+			producer === undefined
+				? service.secrets.includes(key)
+				: service.needs.includes(producer)
+		if (included) projected[key] = value
 	}
+	return projected
+}
 
-	return byService
+/**
+ * Select the BACKING-service secrets (those a `Service` produced, identified via
+ * `origins`) for the shared `.env` the embedded-postgres sidecar
+ * (`env_file: ['.env']`), the backup sidecar (`${VAR}` compose interpolation),
+ * and the ephemeral migrate container (`--env-file .env`) read. User secrets are
+ * excluded on purpose: the DB/backup/migrate infra needs `DATABASE_URL`,
+ * `POSTGRES_PASSWORD`, `R2_*` — never the app's `SESSION_KEY`.
+ */
+export function selectBackingSecrets(
+	secrets: Readonly<Record<string, string>>,
+	origins: Readonly<Record<string, string>>,
+): Record<string, string> {
+	return Object.fromEntries(
+		Object.entries(secrets).filter(([key]) => origins[key] !== undefined),
+	)
 }
