@@ -19,6 +19,10 @@ interface BakeTarget {
 	// Docker build STAGE (`--target`). Absent → build the Dockerfile's final
 	// stage. Only emitted when the service declares an explicit stage.
 	readonly target?: string
+	// Build args (`--build-arg`) for this target: the infra's default public
+	// args plus the service's resolved `build_args`. Absent when the target has
+	// none. Values are inlined into the image — never put secrets here.
+	readonly args?: Readonly<Record<string, string>>
 	readonly tags: ReadonlyArray<string>
 	readonly 'cache-from': ReadonlyArray<string>
 	readonly 'cache-to': ReadonlyArray<string>
@@ -44,6 +48,12 @@ export interface RenderBakeFileInput {
 	// The calling project's package directory relative to the repo root
 	// (e.g. `packages/monitoring`), used to default the Dockerfile path.
 	readonly packageDir: string
+	// Resolved build args per build service (instance name → arg name → value).
+	// A service absent from the map (or mapped to an empty record) bakes with no
+	// build args. See `resolveBuildArgs`.
+	readonly buildArgs: Readonly<
+		Record<string, Readonly<Record<string, string>>>
+	>
 }
 
 /**
@@ -86,10 +96,12 @@ function buildBakeTarget(name: string, input: RenderBakeFileInput): BakeTarget {
 	}
 
 	const ghaCacheScope = `type=gha,scope=${name}`
+	const args = input.buildArgs[name]
 	return {
 		context: service.context ?? DEFAULT_BUILD_CONTEXT,
 		dockerfile: service.dockerfile ?? defaultDockerfile(input.packageDir),
 		...(service.target !== undefined ? { target: service.target } : {}),
+		...(args && Object.keys(args).length > 0 ? { args } : {}),
 		tags: [formatImageRef(ref)],
 		'cache-from': [ghaCacheScope],
 		'cache-to': [`${ghaCacheScope},mode=max`],

@@ -147,6 +147,13 @@ export interface BuildServiceConfig {
 	// Docker build STAGE to target (`--target`). Omitted builds the
 	// Dockerfile's final stage — the default for a single-app image.
 	readonly target?: string
+	// NAMES of GitHub Variables to inject as build args (`--build-arg`) for this
+	// service. Values never live in nextnode.toml — they are resolved against
+	// the `ALL_VARS` payload at build time. Build-time-inlined config only
+	// (e.g. `SITE_URL`, `R2_CDN_URL`); secrets NEVER flow through here (they
+	// would bake into image layers) — they go through the runtime env_file.
+	// Omitted when the service declares no build args.
+	readonly buildArgs?: ReadonlyArray<string>
 }
 
 export interface UpstreamServiceConfig {

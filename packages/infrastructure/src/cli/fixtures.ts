@@ -32,6 +32,39 @@ export const APP_WITH_DOMAIN: DeployableConfig = {
 	},
 }
 
+export const APP_WITH_BUILD_ARGS: DeployableConfig = {
+	project: {
+		type: 'app',
+		name: 'my-app',
+		domain: 'example.com',
+		redirectDomains: [],
+		filter: false,
+		internal: false,
+	},
+	scripts: { lint: 'lint', test: 'test', build: 'build' },
+	package: false,
+	environment: { development: true },
+	services: {},
+	deploy: {
+		target: 'hetzner-vps',
+		hetzner: { serverType: 'cx23', location: 'nbg1' },
+		secrets: [],
+		vps: null,
+		volumes: [],
+		services: {
+			app: {
+				port: 3000,
+				secrets: [],
+				needs: [],
+				dependsOn: [],
+				source: 'build',
+				target: 'app',
+				buildArgs: ['ANALYTICS_ID'],
+			},
+		},
+	},
+}
+
 export const APP_UPSTREAM_PUBLIC: DeployableConfig = {
 	project: {
 		type: 'app',

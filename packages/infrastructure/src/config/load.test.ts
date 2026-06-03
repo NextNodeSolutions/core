@@ -1079,6 +1079,63 @@ describe('parseConfig', () => {
 			})
 		})
 
+		it('parses build_args names on a build service', () => {
+			const result = parseConfig(
+				appConfig({
+					app: {
+						source: 'build',
+						build_args: ['SITE_URL', 'ANALYTICS_ID'],
+					},
+				}),
+			)
+
+			expect(result.ok).toBe(true)
+			if (!result.ok || result.config.deploy === false) return
+			if (result.config.deploy.target !== 'hetzner-vps') return
+
+			expect(result.config.deploy.services['app']).toEqual({
+				port: 3000,
+				secrets: [],
+				needs: [],
+				dependsOn: [],
+				source: 'build',
+				buildArgs: ['SITE_URL', 'ANALYTICS_ID'],
+			})
+		})
+
+		it('omits buildArgs when build_args is empty or unset', () => {
+			const result = parseConfig(
+				appConfig({ app: { source: 'build', build_args: [] } }),
+			)
+
+			expect(result.ok).toBe(true)
+			if (!result.ok || result.config.deploy === false) return
+			if (result.config.deploy.target !== 'hetzner-vps') return
+
+			expect(result.config.deploy.services['app']).not.toHaveProperty(
+				'buildArgs',
+			)
+		})
+
+		it('rejects build_args on an upstream source', () => {
+			const result = parseConfig(
+				appConfig({
+					app: {
+						source: 'upstream',
+						ref: 'docker.io/acme/app:1.0',
+						build_args: ['SITE_URL'],
+					},
+				}),
+			)
+
+			expect(result.ok).toBe(false)
+			if (result.ok) return
+
+			expect(result.errors).toContain(
+				'deploy.services.app.build_args is only allowed when source = "build"',
+			)
+		})
+
 		it('defaults a service with no source to build', () => {
 			const result = parseConfig(
 				appConfig({ app: { url: 'example.com' } }),

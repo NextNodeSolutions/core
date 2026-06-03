@@ -1,12 +1,4 @@
-import { getEnv } from '#/cli/env.ts'
-import { parseJsonOrThrow } from '#/kernel/json.ts'
-
-function isStringRecord(value: unknown): value is Record<string, string> {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-		return false
-	}
-	return Object.values(value).every(v => typeof v === 'string')
-}
+import { readJsonRecordEnv } from '#/cli/env.ts'
 
 /**
  * Parse the `ALL_SECRETS` GitHub Secrets payload, or return `{}` if the
@@ -15,13 +7,7 @@ function isStringRecord(value: unknown): value is Record<string, string> {
  * threads them into service factories that may need them later.
  */
 export function readRepoSecrets(): Record<string, string> {
-	const raw = getEnv('ALL_SECRETS')
-	if (raw === undefined || raw === '') return {}
-	const parsed: unknown = parseJsonOrThrow(raw, 'ALL_SECRETS')
-	if (!isStringRecord(parsed)) {
-		throw new Error('ALL_SECRETS must be a JSON object with string values')
-	}
-	return parsed
+	return readJsonRecordEnv('ALL_SECRETS')
 }
 
 export function pickSecrets(

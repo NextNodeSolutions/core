@@ -147,12 +147,14 @@ type ParsedService = ServiceCommonParsed &
 				context?: string | undefined
 				dockerfile?: string | undefined
 				target?: string | undefined
+				build_args: string[]
 		  }
 		| {
 				source: 'upstream'
 				context?: undefined
 				dockerfile?: undefined
 				target?: undefined
+				build_args?: undefined
 				ref?: string | undefined
 				registry_auth_secret?: string | undefined
 		  }
@@ -226,6 +228,9 @@ function toUserService(name: string, parsed: ParsedService): UserServiceConfig {
 			? { dockerfile: parsed.dockerfile }
 			: {}),
 		...(parsed.target !== undefined ? { target: parsed.target } : {}),
+		...(parsed.build_args.length > 0
+			? { buildArgs: parsed.build_args }
+			: {}),
 	}
 }
 
@@ -257,6 +262,10 @@ const serviceSchema = (name: string): GenericSchema<unknown, ParsedService> => {
 						`deploy.services.${name}.dockerfile`,
 					),
 					target: optionalNonEmpty(`deploy.services.${name}.target`),
+					build_args: stringArray(
+						`deploy.services.${name}.build_args must be an array of strings`,
+						`deploy.services.${name}.build_args entries must be non-empty strings`,
+					),
 					...serviceCommonEntries(name),
 				}),
 				object({
@@ -269,6 +278,9 @@ const serviceSchema = (name: string): GenericSchema<unknown, ParsedService> => {
 					),
 					target: forbiddenField(
 						`deploy.services.${name}.target is only allowed when source = "build"`,
+					),
+					build_args: forbiddenField(
+						`deploy.services.${name}.build_args is only allowed when source = "build"`,
 					),
 					ref: optional(nonEmptyString(refMsg)),
 					registry_auth_secret: optionalNonEmpty(

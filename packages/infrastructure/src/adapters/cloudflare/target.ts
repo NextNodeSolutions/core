@@ -5,7 +5,7 @@ const logger = createLogger()
 import { computeDnsRecords } from '#/domain/cloudflare/dns-records.ts'
 import { PAGES_MANAGED_RESOURCES } from '#/domain/cloudflare/managed-resources.ts'
 import { computePagesProjectName } from '#/domain/cloudflare/pages-project-name.ts'
-import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
+import { computeSiteUrl } from '#/domain/deploy/domain.ts'
 import { executeHandlers } from '#/domain/deploy/execute-handlers.ts'
 
 import { reconcileDnsRecords } from './dns/reconcile.ts'
@@ -225,7 +225,7 @@ export class CloudflarePagesTarget implements DeployTarget {
 
 	private async resolveSiteUrl(pagesProjectName: string): Promise<string> {
 		if (this.domain) {
-			return `https://${resolveDeployDomain(this.domain, this.environment)}`
+			return computeSiteUrl(this.domain, this.environment)
 		}
 		const subdomain = await this.fetchSubdomain(pagesProjectName)
 		return `https://${subdomain}`
