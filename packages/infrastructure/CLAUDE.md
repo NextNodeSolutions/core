@@ -155,12 +155,16 @@ The dev declares only NAMES — values always live in GitHub (Secrets / Variable
       `docker history` / GHCR. Build-time secrets use `RUN --mount=type=secret`.
 
 - **RUNTIME door** — values injected via compose `env_file` at run time.
-    - `secrets = ["STRIPE_SECRET_KEY", …]` lists runtime secret NAMES, resolved
-      from `ALL_SECRETS` and projected into THIS service's `.env.<name>` only.
-    - The hetzner-vps secret pool is **DERIVED** = union of every service's
-      `secrets` (a top-level `[deploy].secrets` is rejected — it would re-introduce
-      a shared pool). cloudflare-pages has no services, so it keeps
-      `[deploy].secrets` directly.
+    - `secrets = ["STRIPE_SECRET_KEY", …]` lists per-service (least-privilege)
+      secret NAMES, resolved from `ALL_SECRETS` and projected into THIS service's
+      `.env.<name>` only.
+    - **`[deploy].secrets` is the GLOBAL pool** (both targets): every name there is
+      injected into EVERY service. `resolveSecrets` folds the global names into each
+      service's own `secrets` (global ∪ own, deduped), so the per-service routing in
+      `service-env.ts` needs no extra wiring. The hetzner-vps pull pool = that union;
+      cloudflare-pages has no services, so the pool IS `[deploy].secrets`.
+    - **Auto-generated secrets** (see next section) are declared inline in
+      `[deploy].secrets`; the name still routes like any global secret.
     - `needs = ["postgres"]` opts a service into a backing service's secrets. A
       backing secret (e.g. postgres `DATABASE_URL`) is projected ONLY into the
       `.env.<name>` of services that declare `needs` on its producer — **no
@@ -171,6 +175,68 @@ The dev declares only NAMES — values always live in GitHub (Secrets / Variable
       (`${VAR}` compose interpolation) and the ephemeral migrate container
       (`--env-file .env`) read a SHARED `.env` carrying the BACKING env only
       (`POSTGRES_*`, `R2_*`, `DATABASE_URL`) — never the app's user secrets.
+
+## R2 buckets & public CDN URLs
+
+`[services.r2]` declares buckets as a table-array; each bucket opts into a
+public CDN domain with `cdn = true` (default `false` → private):
+
+```toml
+[[services.r2.buckets]]
+name = "assets"
+cdn  = true          # -> assets.cdn.<domain>, served publicly
+
+[[services.r2.buckets]]
+name = "private-cache" # no cdn -> private, no public URL
+```
+
+The dev declares only the alias + flag — never a domain. At provision time
+the infra attaches a Cloudflare **custom domain** to each `cdn` bucket
+(`<alias>.cdn.<resolveDeployDomain(project.domain)>`), the only prod-allowed
+path (`r2.dev` is rate-limited / non-prod). Passing the zone id to the attach
+call lets Cloudflare auto-create the proxied CNAME — no separate DNS write —
+and provision polls until the SSL cert is `active` before persisting state.
+
+Env projection (`buildR2ServiceEnv`): every bucket gets `R2_BUCKET_<ALIAS>`
+(bucket name) + the shared `R2_ENDPOINT` in the public channel and
+`R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` in the secret channel; a `cdn`
+bucket additionally gets `R2_BUCKET_<ALIAS>_URL` (its `https://` CDN URL).
+Custom domains are detached on `project`-scope teardown. Requires the
+project's zone to live in the same Cloudflare account (already true for any
+project with `project.domain`).
+
+## Secrets: global pool + auto-generation
+
+A `[deploy].secrets` entry is either a **must-exist** name (a string — the
+operator set it in GitHub) or an **auto-generated** table the infra creates and
+pushes itself:
+
+```toml
+[deploy]
+secrets = [
+  "PREVIEW_SECRET",                                    # must-exist, global
+  { name = "JWT_SECRET",  generate = "token",    length = 43 },  # generated
+  { name = "DB_PASSWORD", generate = "password", length = 24 },  # generated
+]
+```
+
+- **Generators** (`domain/deploy/secret-generation.ts`, pure): `token` →
+  base64url `[A-Za-z0-9_-]` (JWT/HS256 keys); `password` → alphanumeric
+  `[A-Za-z0-9]` (service/DB passwords). `length` = produced CHARACTER count
+  (8–256). Crypto bytes are rejection-sampled for `password` (62 ≠ power of two)
+  to avoid modulo bias; `token` (64) maps 1:1.
+- **Parsing** (`config/validation/deploy.ts`): each entry's name joins the pull
+  pool; table entries also become `deploy.generatedSecrets`. Duplicate names,
+  unknown generators, and out-of-range lengths fail loud at parse.
+- **Provision** (`cli/deploy/ensure-generated-secrets.ts`): for each generated
+  secret ABSENT from `ALL_SECRETS`, generate the value and `gh secret set
+  <name> --env <env>` (reuses the supabase `EnvSecretsAdapter`). **Idempotent +
+  non-rotating** — a secret already in `ALL_SECRETS` is left untouched
+  (regenerating would invalidate every live token / break the DB connection).
+  Fails loud if gh is unavailable but a push is needed.
+- **Contract**: a secret pushed during provision lands in a LATER run's
+  `ALL_SECRETS` snapshot (GitHub freezes secrets at job start), so the flow is
+  *provision → re-trigger deploy* — the same contract the supabase service uses.
 
 ## How It Runs
 

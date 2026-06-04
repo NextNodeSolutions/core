@@ -37,6 +37,7 @@ const APP_MULTI_SERVICE_POSTGRES: DeployableConfig = {
 		target: 'hetzner-vps',
 		hetzner: { serverType: 'cx23', location: 'nbg1' },
 		secrets: [],
+		generatedSecrets: [],
 		vps: null,
 		volumes: [],
 		services: {

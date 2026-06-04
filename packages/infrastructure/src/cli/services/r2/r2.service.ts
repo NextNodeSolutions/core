@@ -1,6 +1,6 @@
 import {
 	buildR2ServiceEnv,
-	computeR2ServiceAliases,
+	computeR2ServiceBuckets,
 } from '#/domain/services/r2.ts'
 
 import { ensureR2Service } from './ensure.ts'
@@ -32,7 +32,8 @@ export function createR2Service(
 				infraStorage,
 				projectName: ctx.projectName,
 				environment: ctx.environment,
-				bucketAliases: config.buckets,
+				deployDomain: ctx.deployDomain,
+				buckets: config.buckets,
 			})
 		},
 		async loadEnv(): Promise<ServiceEnv> {
@@ -57,8 +58,8 @@ export function createR2Service(
 export const r2ServiceDefinition: ServiceDefinition<'r2'> = {
 	name: 'r2',
 	build(services, ctx) {
-		const aliases = computeR2ServiceAliases(services)
-		if (aliases.length === 0) return null
-		return createR2Service(ctx, { buckets: aliases })
+		const buckets = computeR2ServiceBuckets(services)
+		if (buckets.length === 0) return null
+		return createR2Service(ctx, { buckets })
 	},
 }

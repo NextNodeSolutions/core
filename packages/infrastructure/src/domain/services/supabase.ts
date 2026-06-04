@@ -164,7 +164,7 @@ const SUPABASE_BACKUP_SCRIPT = [
 /**
  * Project the R2 service state down to the four `BACKUP_R2_*` env vars the
  * supabase backup sidecar consumes. Looks up the `backups` alias against
- * `state.buckets` — `computeR2ServiceAliases` guarantees the alias is
+ * `state.buckets` — `computeR2ServiceBuckets` guarantees the alias is
  * present whenever supabase is declared, so a missing entry means the R2
  * service state is corrupt and the sidecar would silently no-op against
  * the wrong bucket; fail loud instead.

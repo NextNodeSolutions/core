@@ -24,6 +24,7 @@ const APP_CONFIG: NextNodeConfig = {
 	deploy: {
 		target: 'hetzner-vps',
 		secrets: [],
+		generatedSecrets: [],
 		vps: null,
 		volumes: [],
 		hetzner: { serverType: 'cpx22', location: 'nbg1' },
@@ -123,6 +124,7 @@ describe('writePlanOutputs', () => {
 			deploy: {
 				target: 'hetzner-vps',
 				secrets: [],
+				generatedSecrets: [],
 				vps: null,
 				volumes: [],
 				hetzner: { serverType: 'cpx22', location: 'nbg1' },
@@ -160,6 +162,7 @@ describe('writePlanOutputs', () => {
 			deploy: {
 				target: 'hetzner-vps',
 				secrets: [],
+				generatedSecrets: [],
 				vps: null,
 				volumes: [],
 				hetzner: { serverType: 'cpx22', location: 'nbg1' },
@@ -220,6 +223,7 @@ describe('writePlanOutputs', () => {
 			deploy: {
 				target: 'hetzner-vps',
 				secrets: [],
+				generatedSecrets: [],
 				vps: null,
 				volumes: [],
 				hetzner: { serverType: 'cpx22', location: 'nbg1' },
@@ -302,6 +306,7 @@ describe('writePlanOutputs', () => {
 			deploy: {
 				target: 'cloudflare-pages',
 				secrets: [],
+				generatedSecrets: [],
 				vps: null,
 				volumes: [],
 			},

@@ -4,44 +4,67 @@ import {
 	buildR2ServiceEnv,
 	computeR2BucketBindings,
 	computeR2BucketName,
-	computeR2ServiceAliases,
+	computeR2ServiceBuckets,
 	r2ServiceStateKey,
 	r2ServiceTokenName,
 } from './r2.ts'
 
 import type { R2ServiceState } from './r2.ts'
 
-describe('computeR2ServiceAliases', () => {
+describe('computeR2ServiceBuckets', () => {
 	it('returns an empty list when neither [services.r2] nor [services.supabase] is declared', () => {
-		expect(computeR2ServiceAliases({})).toEqual([])
+		expect(computeR2ServiceBuckets({})).toEqual([])
 	})
 
 	it('returns the explicit buckets unchanged when only [services.r2] is declared', () => {
 		expect(
-			computeR2ServiceAliases({ r2: { buckets: ['uploads', 'media'] } }),
-		).toEqual(['uploads', 'media'])
+			computeR2ServiceBuckets({
+				r2: {
+					buckets: [
+						{ name: 'uploads', cdn: true },
+						{ name: 'media', cdn: false },
+					],
+				},
+			}),
+		).toEqual([
+			{ name: 'uploads', cdn: true },
+			{ name: 'media', cdn: false },
+		])
 	})
 
-	it('returns just ["backups"] when only [services.supabase] is declared', () => {
-		expect(computeR2ServiceAliases({ supabase: {} })).toEqual(['backups'])
+	it('returns just the private backups bucket when only [services.supabase] is declared', () => {
+		expect(computeR2ServiceBuckets({ supabase: {} })).toEqual([
+			{ name: 'backups', cdn: false },
+		])
 	})
 
-	it('appends "backups" after the explicit buckets when both are declared', () => {
+	it('appends a private backups bucket after the explicit buckets when both are declared', () => {
 		expect(
-			computeR2ServiceAliases({
-				r2: { buckets: ['uploads', 'media'] },
+			computeR2ServiceBuckets({
+				r2: { buckets: [{ name: 'uploads', cdn: true }] },
 				supabase: {},
 			}),
-		).toEqual(['uploads', 'media', 'backups'])
+		).toEqual([
+			{ name: 'uploads', cdn: true },
+			{ name: 'backups', cdn: false },
+		])
 	})
 
-	it('does not duplicate "backups" if the user already declared it in [services.r2]', () => {
+	it('does not duplicate backups if the user already declared it in [services.r2]', () => {
 		expect(
-			computeR2ServiceAliases({
-				r2: { buckets: ['backups', 'uploads'] },
+			computeR2ServiceBuckets({
+				r2: {
+					buckets: [
+						{ name: 'backups', cdn: false },
+						{ name: 'uploads', cdn: true },
+					],
+				},
 				supabase: {},
 			}),
-		).toEqual(['backups', 'uploads'])
+		).toEqual([
+			{ name: 'backups', cdn: false },
+			{ name: 'uploads', cdn: true },
+		])
 	})
 })
 
@@ -119,6 +142,29 @@ describe('buildR2ServiceEnv', () => {
 		expect(env.public['R2_BUCKET_MEDIA_ASSETS']).toBe(
 			'myapp-production-media-assets',
 		)
+	})
+
+	it('emits R2_BUCKET_<UPPER_ALIAS>_URL only for buckets carrying a public URL', () => {
+		const env = buildR2ServiceEnv({
+			endpoint: 'https://acct.r2.cloudflarestorage.com',
+			accessKeyId: 'access-key',
+			secretAccessKey: 'secret-key',
+			buckets: [
+				{
+					alias: 'uploads',
+					name: 'myapp-production-uploads',
+					publicUrl: 'https://uploads.cdn.example.com',
+				},
+				{
+					alias: 'media-assets',
+					name: 'myapp-production-media-assets',
+				},
+			],
+		})
+		expect(env.public['R2_BUCKET_UPLOADS_URL']).toBe(
+			'https://uploads.cdn.example.com',
+		)
+		expect(env.public['R2_BUCKET_MEDIA_ASSETS_URL']).toBeUndefined()
 	})
 
 	it('routes credentials into the secret channel, not the public env', () => {

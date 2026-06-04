@@ -47,6 +47,7 @@ const HETZNER_CONFIG: HetznerDeployableConfig = {
 	deploy: {
 		target: 'hetzner-vps',
 		secrets: [],
+		generatedSecrets: [],
 		vps: null,
 		volumes: [],
 		hetzner: { serverType: 'cpx22', location: 'nbg1' },

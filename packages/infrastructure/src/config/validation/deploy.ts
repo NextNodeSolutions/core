@@ -4,11 +4,12 @@ import {
 	DEPLOY_IMAGE_SOURCES,
 	DEPLOY_TARGETS,
 	KEBAB_IDENTIFIER_PATTERN,
+	SECRET_GENERATORS,
 	isDeployTarget,
+	isSecretGenerator,
 } from '#/config/types.ts'
 import { isRecord } from '#/kernel/guards.ts'
 import {
-	array,
 	check,
 	integer,
 	literal,
@@ -36,6 +37,7 @@ import type {
 	DeployTargetType,
 	DeployVolume,
 	DeployableProjectType,
+	GeneratedSecretConfig,
 	UserServiceConfig,
 } from '#/config/types.ts'
 import type { GenericSchema } from 'valibot'
@@ -46,21 +48,97 @@ const MAX_TCP_PORT = 65_535
 
 // --- secrets -------------------------------------------------------------
 
-const SECRETS_NOT_ARRAY = 'deploy.secrets must be an array of strings'
-const SECRETS_ENTRY = 'deploy.secrets entries must be non-empty strings'
+// `[deploy].secrets` entries are either a bare NAME (a must-exist GitHub secret)
+// or a `{ name, generate, length }` table (the infra generates + pushes it at
+// provision). `length` is the produced secret's CHARACTER count.
+const MIN_SECRET_LENGTH = 8
+const MAX_SECRET_LENGTH = 256
 
-const secretsSchema = optional(
-	array(nonEmptyString(SECRETS_ENTRY), SECRETS_NOT_ARRAY),
-	[],
-)
+const SECRETS_NOT_ARRAY = 'deploy.secrets must be an array'
+const SECRET_ENTRY_INVALID =
+	'deploy.secrets entries must be a non-empty secret name or a { name, generate, length } table'
 
-function validateSecrets(deployRecord: Record<string, unknown>): {
+type ParsedSecretEntry =
+	| { readonly kind: 'error'; readonly message: string }
+	| { readonly kind: 'name'; readonly name: string }
+	| { readonly kind: 'generated'; readonly spec: GeneratedSecretConfig }
+
+function parseGeneratedSecret(
+	entry: Record<string, unknown>,
+): ParsedSecretEntry {
+	const name = entry['name']
+	if (typeof name !== 'string' || name === '') {
+		return {
+			kind: 'error',
+			message:
+				'deploy.secrets generated entry must declare a non-empty string `name`',
+		}
+	}
+	const generate = entry['generate']
+	if (!isSecretGenerator(generate)) {
+		return {
+			kind: 'error',
+			message: `deploy.secrets entry "${name}" \`generate\` must be one of: ${SECRET_GENERATORS.join(', ')}`,
+		}
+	}
+	const length = entry['length']
+	if (
+		typeof length !== 'number' ||
+		!Number.isInteger(length) ||
+		length < MIN_SECRET_LENGTH ||
+		length > MAX_SECRET_LENGTH
+	) {
+		return {
+			kind: 'error',
+			message: `deploy.secrets entry "${name}" \`length\` must be an integer between ${MIN_SECRET_LENGTH} and ${MAX_SECRET_LENGTH}`,
+		}
+	}
+	return { kind: 'generated', spec: { name, generate, length } }
+}
+
+function parseSecretEntry(entry: unknown): ParsedSecretEntry {
+	if (typeof entry === 'string') {
+		if (entry === '')
+			return { kind: 'error', message: SECRET_ENTRY_INVALID }
+		return { kind: 'name', name: entry }
+	}
+	if (isRecord(entry)) return parseGeneratedSecret(entry)
+	return { kind: 'error', message: SECRET_ENTRY_INVALID }
+}
+
+// Parse `[deploy].secrets` into the flat NAME pool (every entry's name, for
+// pickSecrets) and the generation specs (the table entries, for provisioning).
+// Duplicate names are rejected — a name declared twice is an ambiguous source.
+function parseSecretEntries(raw: unknown): {
 	errors: string[]
-	secrets: ReadonlyArray<string>
+	names: string[]
+	generated: GeneratedSecretConfig[]
 } {
-	const result = runSchema(secretsSchema, deployRecord['secrets'])
-	if (!result.ok) return { errors: result.errors, secrets: [] }
-	return { errors: [], secrets: result.section }
+	if (raw === undefined) return { errors: [], names: [], generated: [] }
+	if (!Array.isArray(raw)) {
+		return { errors: [SECRETS_NOT_ARRAY], names: [], generated: [] }
+	}
+
+	const errors: string[] = []
+	const names: string[] = []
+	const generated: GeneratedSecretConfig[] = []
+	const seen = new Set<string>()
+	for (const entry of raw) {
+		const parsed = parseSecretEntry(entry)
+		if (parsed.kind === 'error') {
+			errors.push(parsed.message)
+			continue
+		}
+		const name = parsed.kind === 'name' ? parsed.name : parsed.spec.name
+		if (seen.has(name)) {
+			errors.push(`deploy.secrets declares "${name}" more than once`)
+			continue
+		}
+		seen.add(name)
+		names.push(name)
+		if (parsed.kind === 'generated') generated.push(parsed.spec)
+	}
+	return { errors, names, generated }
 }
 
 // --- vps -----------------------------------------------------------------
@@ -300,34 +378,70 @@ const serviceSchema = (name: string): GenericSchema<unknown, ParsedService> => {
 	)
 }
 
+// Fold the GLOBAL `[deploy].secrets` names into every service's own `secrets`
+// (global ∪ own, deduped, global-first) so the per-service routing in
+// `service-env.ts` — which keys off `service.secrets` — injects a global secret
+// into every `.env.<service>` without any further wiring. No-op when there are
+// no globals.
+function expandServiceSecrets(
+	services: Record<string, UserServiceConfig>,
+	globalNames: ReadonlyArray<string>,
+): Record<string, UserServiceConfig> {
+	if (globalNames.length === 0) return services
+	return Object.fromEntries(
+		Object.entries(services).map(
+			([name, service]): [string, UserServiceConfig] => [
+				name,
+				{
+					...service,
+					secrets: [...new Set([...globalNames, ...service.secrets])],
+				},
+			],
+		),
+	)
+}
+
 // Resolve the secret pool — the set of GitHub Secret NAMES the pipeline pulls
-// for this deploy — per target. The two targets source it differently:
-//   - hetzner-vps DERIVES it as the union of every service's `secrets`. Each
-//     service declares only what it needs (per-service least privilege), so a
-//     top-level [deploy.secrets] is rejected — it would re-introduce a shared
-//     pool and the broadcast leak it implies.
+// for this deploy — and the generation specs, per target:
 //   - cloudflare-pages parses [deploy].secrets directly: one deployable unit,
-//     no per-service split, so there is nothing to derive.
-// A name that is declared but absent from GitHub Secrets still fails loud at
-// deploy time in `pickSecrets`, so a typo is caught — just later than parse.
-function resolveSecretPool(
+//     no per-service split, so the pool IS the declared list.
+//   - hetzner-vps treats [deploy].secrets as the GLOBAL pool (injected into
+//     every service via `expandServiceSecrets`) and the pool is that union with
+//     each service's own per-service (least-privilege) secrets.
+// Either way a `{ name, generate, length }` entry contributes its name to the
+// pool and its spec to `generatedSecrets`. A name declared but absent from
+// GitHub Secrets still fails loud at deploy time in `pickSecrets`.
+function resolveSecrets(
 	target: DeployTargetType,
 	deployRecord: Record<string, unknown>,
 	services: Record<string, UserServiceConfig>,
-): { errors: string[]; secrets: ReadonlyArray<string> } {
-	if (target !== 'hetzner-vps') return validateSecrets(deployRecord)
+): {
+	errors: string[]
+	secrets: ReadonlyArray<string>
+	generatedSecrets: ReadonlyArray<GeneratedSecretConfig>
+	services: Record<string, UserServiceConfig>
+} {
+	const parsed = parseSecretEntries(deployRecord['secrets'])
+	if (target !== 'hetzner-vps') {
+		return {
+			errors: parsed.errors,
+			secrets: parsed.names,
+			generatedSecrets: parsed.generated,
+			services,
+		}
+	}
 
-	const errors =
-		deployRecord['secrets'] === undefined
-			? []
-			: [
-					'deploy.secrets is not allowed for a hetzner-vps target — declare each secret on the service that needs it in [deploy.services.<name>].secrets',
-				]
-	const pool = new Set<string>()
-	for (const service of Object.values(services)) {
+	const expanded = expandServiceSecrets(services, parsed.names)
+	const pool = new Set<string>(parsed.names)
+	for (const service of Object.values(expanded)) {
 		for (const secret of service.secrets) pool.add(secret)
 	}
-	return { errors, secrets: [...pool] }
+	return {
+		errors: parsed.errors,
+		secrets: [...pool],
+		generatedSecrets: parsed.generated,
+		services: expanded,
+	}
 }
 
 // Every backing service a workload lists in `needs` must be declared as a
@@ -466,9 +580,10 @@ export function validateDeploySection(
 	errors.push(...validateServiceDependsOnRefs(servicesResult))
 	errors.push(...validateServiceNeedsRefs(servicesResult, declaredServices))
 
-	// Pool source is per-target (derived for hetzner, parsed for pages), so it
-	// is resolved AFTER services are validated rather than up front.
-	const secretsResult = resolveSecretPool(
+	// Pool resolution folds the global [deploy].secrets into each service, so it
+	// runs AFTER services are validated and yields the EXPANDED services the
+	// provider then assembles into the section.
+	const secretsResult = resolveSecrets(
 		target,
 		deployRecord,
 		servicesResult.services,
@@ -479,9 +594,10 @@ export function validateDeploySection(
 	const providerResult = provider.validate(
 		deployRecord,
 		secretsResult.secrets,
+		secretsResult.generatedSecrets,
 		vpsResult.vps,
 		volumesResult.volumes,
-		servicesResult.services,
+		secretsResult.services,
 		domain,
 	)
 	errors.push(...providerResult.errors)

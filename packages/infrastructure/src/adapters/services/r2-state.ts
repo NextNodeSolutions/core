@@ -31,7 +31,14 @@ function parseBucketBindings(
 				`Invalid R2 service state at "${key}": buckets[${String(index)}].name missing`,
 			)
 		}
-		return { alias, name }
+		const publicUrl = entry['publicUrl']
+		if (publicUrl === undefined) return { alias, name }
+		if (typeof publicUrl !== 'string' || publicUrl === '') {
+			throw new Error(
+				`Invalid R2 service state at "${key}": buckets[${String(index)}].publicUrl must be a non-empty string when present`,
+			)
+		}
+		return { alias, name, publicUrl }
 	})
 }
 

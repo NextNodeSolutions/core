@@ -98,20 +98,43 @@ export interface DeployVolume {
 	readonly mount: string
 }
 
+// The generators a `[deploy].secrets` entry may declare. `token` draws from the
+// base64url alphabet ([A-Za-z0-9_-]) — the right shape for JWT/HS256 signing
+// keys; `password` draws from the alphanumeric alphabet ([A-Za-z0-9]) — the
+// right shape for service/DB passwords that travel through URLs and shells.
+export const SECRET_GENERATORS = ['token', 'password'] as const
+export type SecretGenerator = (typeof SECRET_GENERATORS)[number]
+
+// A secret the infra GENERATES itself (rather than requiring the operator to
+// pre-set it in GitHub). Declared inline in `[deploy].secrets` as
+// `{ name, generate, length }`. At provision the value is generated once and
+// pushed as a GitHub env-secret, idempotently — see `ensureGeneratedSecrets`.
+// `length` is the number of CHARACTERS in the produced secret.
+export interface GeneratedSecretConfig {
+	readonly name: string
+	readonly generate: SecretGenerator
+	readonly length: number
+}
+
 interface BaseDeploySection {
 	// Override the VPS hostname this project deploys onto. When `null`, the
 	// CLI resolves a shared default per environment (see resolveVpsName).
 	// Only consumed by the hetzner-vps target; cloudflare-pages ignores it.
 	readonly vps: string | null
 	readonly volumes: ReadonlyArray<DeployVolume>
+	// Secrets the infra auto-generates and pushes to GitHub at provision time —
+	// the `{ name, generate, length }` entries parsed out of `[deploy].secrets`.
+	// Empty when every declared secret is must-exist. Consumed by
+	// `ensureGeneratedSecrets`; the names also live in `secrets` (the pull pool).
+	readonly generatedSecrets: ReadonlyArray<GeneratedSecretConfig>
 }
 
 export interface HetznerVpsDeploySection extends BaseDeploySection {
 	readonly target: 'hetzner-vps'
-	// The pool of GitHub Secret NAMES the pipeline pulls. NOT declared in the
-	// toml for hetzner-vps — DERIVED at validation as the union of every
-	// service's `secrets` (each service declares only what it needs, per-service
-	// least privilege). Consumed by `pickSecrets` + the GITHUB_ENV write.
+	// The pool of GitHub Secret NAMES the pipeline pulls = the GLOBAL secrets
+	// declared in `[deploy].secrets` (injected into every service) UNIONED with
+	// every service's own `[deploy.services.<name>].secrets` (least-privilege).
+	// Consumed by `pickSecrets` + the GITHUB_ENV write.
 	readonly secrets: ReadonlyArray<string>
 	readonly hetzner: HetznerDeployConfig
 	// Per-service workloads declared under [deploy.services.<name>]. At least one
@@ -183,8 +206,18 @@ export type DeploySection =
 	| HetznerVpsDeploySection
 	| CloudflarePagesDeploySection
 
+export interface R2BucketConfig {
+	// Bucket alias declared by the dev (kebab). Materialised as the real
+	// Cloudflare bucket `<project>-<env>-<name>` via `computeR2BucketName`.
+	readonly name: string
+	// When true, the infra attaches a public custom domain
+	// (`<name>.cdn.<domain>`) to the bucket and injects its URL as
+	// `R2_BUCKET_<NAME>_URL`. Buckets default to private (cdn = false).
+	readonly cdn: boolean
+}
+
 export interface R2ServiceConfig {
-	readonly buckets: ReadonlyArray<string>
+	readonly buckets: ReadonlyArray<R2BucketConfig>
 }
 
 export const POSTGRES_MODES = ['embedded', 'external'] as const
@@ -299,6 +332,7 @@ export type ParseConfigResult =
 const PROJECT_TYPE_SET: ReadonlySet<string> = new Set(PROJECT_TYPES)
 const DEPLOY_TARGET_SET: ReadonlySet<string> = new Set(DEPLOY_TARGETS)
 const POSTGRES_MODE_SET: ReadonlySet<string> = new Set(POSTGRES_MODES)
+const SECRET_GENERATOR_SET: ReadonlySet<string> = new Set(SECRET_GENERATORS)
 
 export function isPostgresMode(value: unknown): value is PostgresMode {
 	return typeof value === 'string' && POSTGRES_MODE_SET.has(value)
@@ -318,4 +352,8 @@ export function isScriptValue(value: unknown): value is string | false {
 
 export function isDeployTarget(value: unknown): value is DeployTargetType {
 	return typeof value === 'string' && DEPLOY_TARGET_SET.has(value)
+}
+
+export function isSecretGenerator(value: unknown): value is SecretGenerator {
+	return typeof value === 'string' && SECRET_GENERATOR_SET.has(value)
 }
