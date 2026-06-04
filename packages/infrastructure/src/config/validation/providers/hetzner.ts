@@ -117,7 +117,15 @@ function validateServiceSources(
 export const hetznerVps: DeployProviderValidator = {
 	requiresDomain: true,
 	requiresServices: true,
-	validate(deployRecord, secrets, vps, volumes, services, domain) {
+	validate(
+		deployRecord,
+		secrets,
+		generatedSecrets,
+		vps,
+		volumes,
+		services,
+		domain,
+	) {
 		const { errors, hetzner } = parseHetzner(deployRecord['hetzner'])
 		const serviceErrors = [
 			...validateServiceUrls(services, domain),
@@ -131,6 +139,7 @@ export const hetznerVps: DeployProviderValidator = {
 			deploy: {
 				target: 'hetzner-vps',
 				secrets,
+				generatedSecrets,
 				vps,
 				volumes,
 				hetzner,

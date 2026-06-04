@@ -127,6 +127,7 @@ describe('parseConfig', () => {
 			expect(result.config.deploy).toEqual({
 				target: 'hetzner-vps',
 				secrets: [],
+				generatedSecrets: [],
 				vps: null,
 				volumes: [],
 				hetzner: { serverType: 'cpx22', location: 'nbg1' },
@@ -747,6 +748,7 @@ describe('parseConfig', () => {
 			expect(result.config.deploy).toEqual({
 				target: 'hetzner-vps',
 				secrets: [],
+				generatedSecrets: [],
 				vps: 'monitor-vps',
 				volumes: [],
 				hetzner: { serverType: 'cx23', location: 'nbg1' },
@@ -798,6 +800,7 @@ describe('parseConfig', () => {
 			expect(result.config.deploy).toEqual({
 				target: 'cloudflare-pages',
 				secrets: [],
+				generatedSecrets: [],
 				vps: null,
 				volumes: [],
 				hetzner: undefined,
@@ -816,6 +819,7 @@ describe('parseConfig', () => {
 			expect(result.config.deploy).toEqual({
 				target: 'cloudflare-pages',
 				secrets: ['RESEND_API_KEY', 'SUPABASE_URL'],
+				generatedSecrets: [],
 				vps: null,
 				volumes: [],
 				hetzner: undefined,
@@ -831,9 +835,7 @@ describe('parseConfig', () => {
 			expect(result.ok).toBe(false)
 			if (result.ok) return
 
-			expect(result.errors).toContain(
-				'deploy.secrets must be an array of strings',
-			)
+			expect(result.errors).toContain('deploy.secrets must be an array')
 		})
 
 		it('rejects empty-string entries', () => {
@@ -846,7 +848,119 @@ describe('parseConfig', () => {
 			if (result.ok) return
 
 			expect(result.errors).toContain(
-				'deploy.secrets entries must be non-empty strings',
+				'deploy.secrets entries must be a non-empty secret name or a { name, generate, length } table',
+			)
+		})
+
+		it('parses a generated secret table in [deploy].secrets', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-site',
+					type: 'static',
+					domain: 'example.com',
+				},
+				deploy: {
+					secrets: [
+						'RESEND_API_KEY',
+						{ name: 'JWT_SECRET', generate: 'token', length: 43 },
+					],
+				},
+			})
+
+			expect(result.ok).toBe(true)
+			if (!result.ok || result.config.deploy === false) {
+				expect.unreachable('expected a successful pages parse')
+			}
+
+			// the generated name joins the pull pool alongside the must-exist one…
+			expect(result.config.deploy.secrets).toEqual([
+				'RESEND_API_KEY',
+				'JWT_SECRET',
+			])
+			// …and its generation spec is captured for provisioning
+			expect(result.config.deploy.generatedSecrets).toEqual([
+				{ name: 'JWT_SECRET', generate: 'token', length: 43 },
+			])
+		})
+
+		it('rejects an unknown generator', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-site',
+					type: 'static',
+					domain: 'example.com',
+				},
+				deploy: {
+					secrets: [{ name: 'X', generate: 'rsa', length: 32 }],
+				},
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) expect.unreachable('expected validation to fail')
+
+			expect(result.errors).toContain(
+				'deploy.secrets entry "X" `generate` must be one of: token, password',
+			)
+		})
+
+		it('rejects a generated secret with an out-of-range length', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-site',
+					type: 'static',
+					domain: 'example.com',
+				},
+				deploy: {
+					secrets: [{ name: 'X', generate: 'token', length: 4 }],
+				},
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) expect.unreachable('expected validation to fail')
+
+			expect(result.errors).toContain(
+				'deploy.secrets entry "X" `length` must be an integer between 8 and 256',
+			)
+		})
+
+		it('rejects a generated entry missing a name', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-site',
+					type: 'static',
+					domain: 'example.com',
+				},
+				deploy: { secrets: [{ generate: 'token', length: 32 }] },
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) expect.unreachable('expected validation to fail')
+
+			expect(result.errors).toContain(
+				'deploy.secrets generated entry must declare a non-empty string `name`',
+			)
+		})
+
+		it('rejects a secret name declared more than once', () => {
+			const result = parseConfig({
+				project: {
+					name: 'my-site',
+					type: 'static',
+					domain: 'example.com',
+				},
+				deploy: {
+					secrets: [
+						'DUP',
+						{ name: 'DUP', generate: 'token', length: 32 },
+					],
+				},
+			})
+
+			expect(result.ok).toBe(false)
+			if (result.ok) expect.unreachable('expected validation to fail')
+
+			expect(result.errors).toContain(
+				'deploy.secrets declares "DUP" more than once',
 			)
 		})
 	})
@@ -1004,6 +1118,7 @@ describe('parseConfig', () => {
 			expect(result.config.deploy).toEqual({
 				target: 'hetzner-vps',
 				secrets: [],
+				generatedSecrets: [],
 				vps: null,
 				volumes: [{ name: 'data', mount: '/var/lib/app' }],
 				hetzner: { serverType: 'cpx22', location: 'nbg1' },
@@ -1420,30 +1535,43 @@ describe('parseConfig', () => {
 			])
 		})
 
-		it('rejects a top-level [deploy].secrets on a hetzner-vps target (secrets are per-service)', () => {
+		it('injects a global [deploy].secrets entry into every service on a hetzner-vps target', () => {
 			const result = parseConfig({
 				project: { name: 'my-app', type: 'app', domain: 'example.com' },
 				deploy: {
-					secrets: ['SESSION_KEY'],
+					secrets: ['PREVIEW_SECRET'],
 					services: {
 						app: {
 							source: 'build',
 							url: 'example.com',
-							secrets: ['SESSION_KEY'],
+							secrets: ['RESEND_API_KEY'],
 						},
+						worker: { source: 'build' },
 					},
 				},
 			})
 
-			if (result.ok) {
-				expect.unreachable(
-					'expected [deploy].secrets to be rejected for hetzner-vps',
-				)
+			expect(result.ok).toBe(true)
+			if (!result.ok || result.config.deploy === false) {
+				expect.unreachable('expected a successful hetzner-vps parse')
+			}
+			if (result.config.deploy.target !== 'hetzner-vps') {
+				expect.unreachable('expected the hetzner-vps deploy target')
 			}
 
-			expect(result.errors).toContain(
-				'deploy.secrets is not allowed for a hetzner-vps target — declare each secret on the service that needs it in [deploy.services.<name>].secrets',
-			)
+			// the global secret reaches every service (global ∪ own, deduped)…
+			expect(result.config.deploy.services['app']?.secrets).toEqual([
+				'PREVIEW_SECRET',
+				'RESEND_API_KEY',
+			])
+			expect(result.config.deploy.services['worker']?.secrets).toEqual([
+				'PREVIEW_SECRET',
+			])
+			// …and the pull pool is the union of global + every service's own
+			expect(result.config.deploy.secrets).toEqual([
+				'PREVIEW_SECRET',
+				'RESEND_API_KEY',
+			])
 		})
 
 		it('rejects a needs referencing a backing service that is not declared', () => {
@@ -1621,6 +1749,7 @@ describe('parseConfig', () => {
 			expect(result.config.deploy).toEqual({
 				target: 'hetzner-vps',
 				secrets: [],
+				generatedSecrets: [],
 				vps: null,
 				volumes: [],
 				hetzner: { serverType: 'cpx22', location: 'nbg1' },
@@ -1647,6 +1776,7 @@ describe('parseConfig', () => {
 			expect(result.config.deploy).toEqual({
 				target: 'cloudflare-pages',
 				secrets: [],
+				generatedSecrets: [],
 				vps: null,
 				volumes: [],
 				hetzner: undefined,
@@ -1665,6 +1795,7 @@ describe('parseConfig', () => {
 			expect(result.config.deploy).toEqual({
 				target: 'cloudflare-pages',
 				secrets: [],
+				generatedSecrets: [],
 				vps: null,
 				volumes: [],
 				hetzner: undefined,
@@ -1691,6 +1822,7 @@ describe('parseConfig', () => {
 			expect(result.config.deploy).toEqual({
 				target: 'hetzner-vps',
 				secrets: [],
+				generatedSecrets: [],
 				vps: null,
 				volumes: [],
 				hetzner: { serverType: 'cax11', location: 'fsn1' },
@@ -1722,6 +1854,7 @@ describe('parseConfig', () => {
 			expect(result.config.deploy).toEqual({
 				target: 'hetzner-vps',
 				secrets: [],
+				generatedSecrets: [],
 				vps: null,
 				volumes: [],
 				hetzner: { serverType: 'cx23', location: 'nbg1' },
@@ -1756,6 +1889,7 @@ describe('parseConfig', () => {
 			expect(result.config.deploy).toEqual({
 				target: 'hetzner-vps',
 				secrets: [],
+				generatedSecrets: [],
 				vps: null,
 				volumes: [],
 				hetzner: { serverType: 'cx23', location: 'nbg1' },
@@ -1790,6 +1924,7 @@ describe('parseConfig', () => {
 			expect(result.config.deploy).toEqual({
 				target: 'hetzner-vps',
 				secrets: [],
+				generatedSecrets: [],
 				vps: null,
 				volumes: [],
 				hetzner: { serverType: 'cpx22', location: 'nbg1' },
@@ -1935,6 +2070,7 @@ describe('parseConfig', () => {
 			expect(result.config.deploy).toEqual({
 				target: 'hetzner-vps',
 				secrets: ['DATABASE_URL', 'REDIS_URL'],
+				generatedSecrets: [],
 				vps: null,
 				volumes: [],
 				hetzner: { serverType: 'cpx22', location: 'nbg1' },
@@ -1989,21 +2125,35 @@ describe('parseConfig', () => {
 					domain: 'my-app.example.com',
 				},
 				deploy: { services: { app: { source: 'build' } } },
-				services: { r2: { buckets: ['uploads', 'media'] } },
+				services: {
+					r2: {
+						buckets: [
+							{ name: 'uploads', cdn: true },
+							{ name: 'media' },
+						],
+					},
+				},
 			})
 
 			expect(result.ok).toBe(true)
 			if (!result.ok) return
 
 			expect(result.config.services).toEqual({
-				r2: { buckets: ['uploads', 'media'] },
+				r2: {
+					buckets: [
+						{ name: 'uploads', cdn: true },
+						{ name: 'media', cdn: false },
+					],
+				},
 			})
 		})
 
 		it('rejects [services] for package projects', () => {
 			const result = parseConfig({
 				project: { name: 'my-lib', type: 'package' },
-				services: { r2: { buckets: ['uploads'] } },
+				services: {
+					r2: { buckets: [{ name: 'uploads', cdn: false }] },
+				},
 			})
 
 			expect(result.ok).toBe(false)
@@ -2021,7 +2171,9 @@ describe('parseConfig', () => {
 					type: 'static',
 					domain: 'my-site.example.com',
 				},
-				services: { r2: { buckets: ['uploads'] } },
+				services: {
+					r2: { buckets: [{ name: 'uploads', cdn: false }] },
+				},
 			})
 
 			expect(result.ok).toBe(false)
@@ -2046,7 +2198,7 @@ describe('parseConfig', () => {
 			if (result.ok) return
 
 			expect(result.errors).toContain(
-				'services.r2.buckets must declare at least one bucket alias',
+				'services.r2.buckets must declare at least one bucket',
 			)
 		})
 	})

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type { R2BucketConfig } from '#/config/types.ts'
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 
 vi.mock('node:timers/promises', () => ({
@@ -72,6 +73,10 @@ interface RouterContext {
 	readonly deletedTokenIds: string[]
 }
 
+function privateBuckets(...names: ReadonlyArray<string>): R2BucketConfig[] {
+	return names.map(name => ({ name, cdn: false }))
+}
+
 function routeBucket(ctx: RouterContext): MockResponse | undefined {
 	if (/\/r2\/buckets\/[^/]+$/.test(ctx.url) && ctx.method === 'GET') {
 		return notFound()
@@ -129,6 +134,33 @@ function routeS3Verify(ctx: RouterContext): MockResponse | undefined {
 	return unauthorized()
 }
 
+function routeZones(ctx: RouterContext): MockResponse | undefined {
+	if (!ctx.url.includes('/zones?') || ctx.method !== 'GET') return undefined
+	return okJson({
+		success: true,
+		result: [{ id: 'zone-1', name: 'example.com' }],
+		errors: [],
+	})
+}
+
+function routeCustomDomains(ctx: RouterContext): MockResponse | undefined {
+	if (!ctx.url.includes('/domains/custom')) return undefined
+	if (/\/domains\/custom\/[^/]+$/.test(ctx.url) && ctx.method === 'GET') {
+		return okJson({
+			success: true,
+			result: { status: { ownership: 'active', ssl: 'active' } },
+			errors: [],
+		})
+	}
+	if (ctx.url.endsWith('/domains/custom') && ctx.method === 'GET') {
+		return okJson({ success: true, result: { domains: [] }, errors: [] })
+	}
+	if (ctx.url.endsWith('/domains/custom') && ctx.method === 'POST') {
+		return okJson({ success: true, result: { domain: 'x' }, errors: [] })
+	}
+	return undefined
+}
+
 function stubFetch(overrides: FetchOverrides = {}): StubFetchContext {
 	const calls: FetchCall[] = []
 	const verifyQueue = [...(overrides.verifyResults ?? ['ok'])]
@@ -156,7 +188,11 @@ function stubFetch(overrides: FetchOverrides = {}): StubFetchContext {
 				deletedTokenIds,
 			}
 			const routed =
-				routeBucket(ctx) ?? routeTokens(ctx) ?? routeS3Verify(ctx)
+				routeBucket(ctx) ??
+				routeTokens(ctx) ??
+				routeS3Verify(ctx) ??
+				routeZones(ctx) ??
+				routeCustomDomains(ctx)
 			if (routed) return routed
 			throw new Error(`unexpected fetch: ${ctx.method} ${u}`)
 		},
@@ -192,7 +228,8 @@ describe('ensureR2Service', () => {
 			infraStorage: INFRA_STORAGE,
 			projectName: 'myapp',
 			environment: 'production',
-			bucketAliases: ['uploads', 'media'],
+			deployDomain: null,
+			buckets: privateBuckets('uploads', 'media'),
 		})
 
 		const bucketProbes = calls
@@ -217,7 +254,8 @@ describe('ensureR2Service', () => {
 			infraStorage: INFRA_STORAGE,
 			projectName: 'myapp',
 			environment: 'production',
-			bucketAliases: ['uploads'],
+			deployDomain: null,
+			buckets: privateBuckets('uploads'),
 		})
 
 		const createCall = calls.find(
@@ -239,7 +277,8 @@ describe('ensureR2Service', () => {
 			infraStorage: INFRA_STORAGE,
 			projectName: 'myapp',
 			environment: 'development',
-			bucketAliases: ['uploads'],
+			deployDomain: null,
+			buckets: privateBuckets('uploads'),
 		})
 
 		const createTokenCall = calls.find(
@@ -260,7 +299,8 @@ describe('ensureR2Service', () => {
 			infraStorage: INFRA_STORAGE,
 			projectName: 'myapp',
 			environment: 'production',
-			bucketAliases: ['uploads', 'media'],
+			deployDomain: null,
+			buckets: privateBuckets('uploads', 'media'),
 		})
 
 		expect(result.endpoint).toBe(
@@ -284,7 +324,8 @@ describe('ensureR2Service', () => {
 			infraStorage: INFRA_STORAGE,
 			projectName: 'myapp',
 			environment: 'production',
-			bucketAliases: ['uploads'],
+			deployDomain: null,
+			buckets: privateBuckets('uploads'),
 		})
 
 		const persisted = fakeR2State.get('services/r2/myapp/production.json')
@@ -297,6 +338,83 @@ describe('ensureR2Service', () => {
 		})
 	})
 
+	it('attaches a custom domain and records the public URL for cdn-enabled buckets', async () => {
+		const { calls } = stubFetch()
+
+		const result = await ensureR2Service({
+			cfToken: 'cf-token',
+			infraStorage: INFRA_STORAGE,
+			projectName: 'myapp',
+			environment: 'production',
+			deployDomain: 'example.com',
+			buckets: [
+				{ name: 'assets', cdn: true },
+				{ name: 'private-cache', cdn: false },
+			],
+		})
+
+		expect(result.buckets).toEqual([
+			{
+				alias: 'assets',
+				name: 'myapp-production-assets',
+				publicUrl: 'https://assets.cdn.example.com',
+			},
+			{ alias: 'private-cache', name: 'myapp-production-private-cache' },
+		])
+		const attachCalls = calls.filter(
+			c => c.method === 'POST' && c.url.endsWith('/domains/custom'),
+		)
+		expect(attachCalls).toHaveLength(1)
+		expect(attachCalls[0]?.url).toContain(
+			'/myapp-production-assets/domains/custom',
+		)
+	})
+
+	it('uses the dev subdomain in the custom domain for development deploys', async () => {
+		const { calls } = stubFetch()
+
+		const result = await ensureR2Service({
+			cfToken: 'cf-token',
+			infraStorage: INFRA_STORAGE,
+			projectName: 'myapp',
+			environment: 'development',
+			deployDomain: 'example.com',
+			buckets: [{ name: 'assets', cdn: true }],
+		})
+
+		expect(result.buckets[0]?.publicUrl).toBe(
+			'https://assets.cdn.dev.example.com',
+		)
+		const attachBody: unknown = JSON.parse(
+			calls.find(
+				c => c.method === 'POST' && c.url.endsWith('/domains/custom'),
+			)?.body ?? '{}',
+		)
+		expect(attachBody).toEqual({
+			domain: 'assets.cdn.dev.example.com',
+			zoneId: 'zone-1',
+			enabled: true,
+		})
+	})
+
+	it('skips custom-domain attach when the project has no domain', async () => {
+		const { calls } = stubFetch()
+
+		const result = await ensureR2Service({
+			cfToken: 'cf-token',
+			infraStorage: INFRA_STORAGE,
+			projectName: 'myapp',
+			environment: 'production',
+			deployDomain: null,
+			buckets: [{ name: 'assets', cdn: true }],
+		})
+
+		expect(result.buckets).toEqual([
+			{ alias: 'assets', name: 'myapp-production-assets' },
+		])
+		expect(calls.some(c => c.url.includes('/domains/custom'))).toBe(false)
+	})
+
 	it('polls verification until credentials become active', async () => {
 		stubFetch({ verifyResults: ['401', '401', 'ok'] })
 
@@ -305,7 +423,8 @@ describe('ensureR2Service', () => {
 			infraStorage: INFRA_STORAGE,
 			projectName: 'myapp',
 			environment: 'production',
-			bucketAliases: ['uploads'],
+			deployDomain: null,
+			buckets: privateBuckets('uploads'),
 		})
 
 		expect(result.accessKeyId).toBe('new-token-id')
@@ -320,7 +439,8 @@ describe('ensureR2Service', () => {
 				infraStorage: INFRA_STORAGE,
 				projectName: 'myapp',
 				environment: 'production',
-				bucketAliases: ['uploads'],
+				deployDomain: null,
+				buckets: privateBuckets('uploads'),
 			}),
 		).rejects.toThrow(/did not become active after 5 attempts/)
 	})
@@ -352,7 +472,8 @@ describe('ensureR2Service', () => {
 			infraStorage: INFRA_STORAGE,
 			projectName: 'myapp',
 			environment: 'production',
-			bucketAliases: ['uploads'],
+			deployDomain: null,
+			buckets: privateBuckets('uploads'),
 		})
 
 		expect(deletedTokenIds.toSorted()).toEqual(['old-1', 'old-2'])
@@ -367,7 +488,8 @@ describe('ensureR2Service', () => {
 				infraStorage: INFRA_STORAGE,
 				projectName: 'myapp',
 				environment: 'production',
-				bucketAliases: ['uploads'],
+				deployDomain: null,
+				buckets: privateBuckets('uploads'),
 			}),
 		).rejects.toThrow(/500/)
 	})
@@ -380,7 +502,8 @@ describe('ensureR2Service', () => {
 			infraStorage: INFRA_STORAGE,
 			projectName: 'myapp',
 			environment: 'production',
-			bucketAliases: ['first-bucket', 'second-bucket'],
+			deployDomain: null,
+			buckets: privateBuckets('first-bucket', 'second-bucket'),
 		})
 
 		const verifyCalls = calls.filter(c =>

@@ -8,9 +8,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { provisionCommand } from './provision.command.ts'
 
+import type { DeployableConfig } from '#/config/types.ts'
 import type { FetchImpl } from '#/test-fetch.ts'
 
-const { mockEnsureInfra } = vi.hoisted(() => ({
+const { mockEnsureInfra, mockEnsureGenerated } = vi.hoisted(() => ({
 	mockEnsureInfra: vi.fn(async () => ({
 		kind: 'vps' as const,
 		outcome: {},
@@ -21,6 +22,13 @@ const { mockEnsureInfra } = vi.hoisted(() => ({
 		tailnetIp: '100.64.0.1',
 		durationMs: 0,
 	})),
+	mockEnsureGenerated: vi.fn(async () => {}),
+}))
+
+// Mock the gh-backed generator: provision should DELEGATE to it; the unit under
+// test is the wiring (right args, right ordering), not the gh push itself.
+vi.mock('./ensure-generated-secrets.ts', () => ({
+	ensureGeneratedSecrets: mockEnsureGenerated,
 }))
 
 vi.mock('../../adapters/hetzner/target.ts', () => ({
@@ -100,6 +108,7 @@ describe('provisionCommand', () => {
 	let outputFile: string
 
 	beforeEach(() => {
+		mockEnsureGenerated.mockClear()
 		const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
 		summaryFile = join(tmpdir(), `gh-summary-${id}.txt`)
 		outputFile = join(tmpdir(), `gh-output-${id}.txt`)
@@ -147,6 +156,32 @@ describe('provisionCommand', () => {
 		const summary = readFileSync(summaryFile, 'utf-8')
 		expect(summary).toContain('Infrastructure ready for `my-site`')
 		expect(summary).toContain('cloudflare-pages')
+	})
+
+	it('delegates declared generated secrets to ensureGeneratedSecrets', async () => {
+		stubCloudflareApi()
+		const config: DeployableConfig = {
+			...STATIC_WITH_DOMAIN,
+			deploy: {
+				target: 'cloudflare-pages',
+				secrets: [],
+				generatedSecrets: [
+					{ name: 'JWT_SECRET', generate: 'token', length: 32 },
+				],
+				vps: null,
+				volumes: [],
+			},
+		}
+
+		await provisionCommand(config)
+
+		expect(mockEnsureGenerated).toHaveBeenCalledWith(
+			[{ name: 'JWT_SECRET', generate: 'token', length: 32 }],
+			{},
+			'NextNodeSolutions',
+			'core',
+			'production',
+		)
 	})
 
 	it('throws when CLOUDFLARE_ACCOUNT_ID is missing', async () => {

@@ -1,49 +1,65 @@
 import { KEBAB_IDENTIFIER_PATTERN } from '#/config/types.ts'
+import { isRecord } from '#/kernel/guards.ts'
 import { array, minLength, object, pipe, rawTransform, unknown } from 'valibot'
 
 import { runSchema } from '../valibot.ts'
 
-import type { R2ServiceConfig } from '#/config/types.ts'
+import type { R2BucketConfig, R2ServiceConfig } from '#/config/types.ts'
 import type { ValidationResult } from '#/config/validation/result.ts'
 
-// One error per bucket entry, first-match-wins (non-empty -> kebab -> duplicate),
-// plus dedup on the accepted aliases. A plain `array(pipe(...))` would emit
-// multiple issues per entry under abortPipeEarly:false, so the per-entry checks
-// live in a single rawTransform that mirrors the hand-rolled loop exactly. Any
-// `addIssue` marks the parse failed, so the returned aliases are discarded on
-// error — no need to guard the return value.
+// One error per bucket entry, first-match-wins (table -> name present -> kebab
+// -> duplicate -> cdn boolean), plus dedup on the accepted names. A plain
+// `array(pipe(...))` would emit multiple issues per entry under
+// abortPipeEarly:false, so the per-entry checks live in a single rawTransform.
+// Any `addIssue` marks the parse failed, so the returned buckets are discarded
+// on error — no need to guard the return value.
 const bucketsSchema = pipe(
-	array(unknown(), 'services.r2.buckets must be an array of strings'),
-	minLength(1, 'services.r2.buckets must declare at least one bucket alias'),
-	rawTransform<unknown[], string[]>(({ dataset, addIssue }) => {
+	array(unknown(), 'services.r2.buckets must be an array of bucket tables'),
+	minLength(1, 'services.r2.buckets must declare at least one bucket'),
+	rawTransform<unknown[], R2BucketConfig[]>(({ dataset, addIssue }) => {
 		const seen = new Set<string>()
-		const aliases: string[] = []
+		const buckets: R2BucketConfig[] = []
 
 		for (const entry of dataset.value) {
-			if (typeof entry !== 'string' || entry === '') {
+			if (!isRecord(entry)) {
 				addIssue({
 					message:
-						'services.r2.buckets entries must be non-empty strings',
+						'services.r2.buckets entries must be tables with a `name` field',
 				})
 				continue
 			}
-			if (!KEBAB_IDENTIFIER_PATTERN.test(entry)) {
+			const name = entry['name']
+			if (typeof name !== 'string' || name === '') {
 				addIssue({
-					message: `services.r2.buckets entry "${entry}" must be lowercase alphanumeric with dashes only (pattern: ${KEBAB_IDENTIFIER_PATTERN.source})`,
+					message:
+						'services.r2.buckets entries must declare a non-empty string `name`',
 				})
 				continue
 			}
-			if (seen.has(entry)) {
+			if (!KEBAB_IDENTIFIER_PATTERN.test(name)) {
 				addIssue({
-					message: `services.r2.buckets entry "${entry}" is duplicated`,
+					message: `services.r2.buckets entry "${name}" must be lowercase alphanumeric with dashes only (pattern: ${KEBAB_IDENTIFIER_PATTERN.source})`,
 				})
 				continue
 			}
-			seen.add(entry)
-			aliases.push(entry)
+			if (seen.has(name)) {
+				addIssue({
+					message: `services.r2.buckets entry "${name}" is duplicated`,
+				})
+				continue
+			}
+			const cdn = entry['cdn']
+			if (cdn !== undefined && typeof cdn !== 'boolean') {
+				addIssue({
+					message: `services.r2.buckets entry "${name}" \`cdn\` must be a boolean`,
+				})
+				continue
+			}
+			seen.add(name)
+			buckets.push({ name, cdn: cdn ?? false })
 		}
 
-		return aliases
+		return buckets
 	}),
 )
 

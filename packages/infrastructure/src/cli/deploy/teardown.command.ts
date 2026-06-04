@@ -1,6 +1,8 @@
+import { deleteR2CustomDomain } from '#/adapters/cloudflare/r2/domains.ts'
 import { writeSummary } from '#/adapters/github/output.ts'
 import { wipePostgresBackups } from '#/adapters/r2/backup-store.ts'
-import { getEnumEnv, getEnv, isEnvSet } from '#/cli/env.ts'
+import { getEnumEnv, getEnv, isEnvSet, requireEnv } from '#/cli/env.ts'
+import { computeR2CustomDomainHostname } from '#/domain/cloudflare/r2/custom-domain.ts'
 import { buildTeardownSummary } from '#/domain/deploy/teardown-summary.ts'
 import {
 	TEARDOWN_TARGETS,
@@ -8,6 +10,7 @@ import {
 } from '#/domain/deploy/teardown-target.ts'
 import { resolveEnvironment } from '#/domain/environment.ts'
 import { postgresBackupBucketName } from '#/domain/services/postgres.ts'
+import { computeR2BucketName } from '#/domain/services/r2.ts'
 import { S3Client } from '@aws-sdk/client-s3'
 import { createLogger } from '@nextnode-solutions/logger'
 
@@ -15,8 +18,55 @@ import { buildRuntimeTarget } from './build-runtime-target.ts'
 import { loadInfraStorageForConfig } from './load-infra-storage.ts'
 
 import type { DeployableConfig } from '#/config/types.ts'
+import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
+import type { TeardownTarget } from '#/domain/deploy/teardown-target.ts'
+import type { AppEnvironment } from '#/domain/environment.ts'
 
 const logger = createLogger()
+
+/**
+ * Detach the public custom domain from every `cdn`-enabled bucket so no
+ * orphaned Cloudflare binding (and its auto-created CNAME) survives the
+ * teardown. Only runs on `project` scope — `vps` is a server-level
+ * operation that leaves project R2 data in place. Reversible: a later
+ * provision re-attaches the domain.
+ */
+async function teardownR2CustomDomains(
+	config: DeployableConfig,
+	environment: AppEnvironment,
+	infraStorage: InfraStorageRuntimeConfig | null,
+	teardownTarget: TeardownTarget,
+): Promise<void> {
+	if (teardownTarget !== 'project') return
+	if (infraStorage === null) return
+	const domain = config.project.domain
+	if (domain === undefined) return
+	const cdnBuckets = (config.services.r2?.buckets ?? []).filter(
+		bucket => bucket.cdn,
+	)
+	if (cdnBuckets.length === 0) return
+
+	const cfToken = requireEnv('CLOUDFLARE_API_TOKEN')
+	const accountId = infraStorage.accountId
+	await Promise.all(
+		cdnBuckets.map(async bucket => {
+			const bucketName = computeR2BucketName(
+				config.project.name,
+				environment,
+				bucket.name,
+			)
+			const hostname = computeR2CustomDomainHostname(
+				bucket.name,
+				domain,
+				environment,
+			)
+			await deleteR2CustomDomain(cfToken, accountId, bucketName, hostname)
+			logger.info(
+				`Detached R2 custom domain "${hostname}" from bucket "${bucketName}"`,
+			)
+		}),
+	)
+}
 
 export async function teardownCommand(config: DeployableConfig): Promise<void> {
 	const environment = resolveEnvironment(
@@ -67,6 +117,13 @@ export async function teardownCommand(config: DeployableConfig): Promise<void> {
 			)
 		}
 	}
+
+	await teardownR2CustomDomains(
+		config,
+		environment,
+		infraStorage,
+		teardownTarget,
+	)
 
 	writeSummary(buildTeardownSummary(result, config.project.name, target.name))
 }

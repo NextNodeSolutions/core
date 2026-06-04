@@ -5,6 +5,7 @@ import type {
 	DeploySection,
 	DeployTargetType,
 	DeployVolume,
+	GeneratedSecretConfig,
 	UserServiceConfig,
 } from '#/config/types.ts'
 
@@ -20,6 +21,7 @@ export interface DeployProviderValidator {
 	validate(
 		deployRecord: Record<string, unknown>,
 		secrets: ReadonlyArray<string>,
+		generatedSecrets: ReadonlyArray<GeneratedSecretConfig>,
 		vps: string | null,
 		volumes: ReadonlyArray<DeployVolume>,
 		services: Record<string, UserServiceConfig>,

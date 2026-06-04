@@ -10,6 +10,7 @@ import { buildProvisionSummary } from '#/domain/deploy/provision-summary.ts'
 import { resolveEnvironment } from '#/domain/environment.ts'
 
 import { buildRuntimeTarget } from './build-runtime-target.ts'
+import { ensureGeneratedSecrets } from './ensure-generated-secrets.ts'
 import { ensureInfraStorageForConfig } from './load-infra-storage.ts'
 
 import type { DeployableConfig } from '#/config/types.ts'
@@ -39,6 +40,14 @@ export async function provisionCommand(
 		repoSecrets,
 	})
 	await Promise.all(services.map(service => service.provision()))
+
+	await ensureGeneratedSecrets(
+		config.deploy.generatedSecrets,
+		repoSecrets,
+		repository.owner,
+		repository.name,
+		environment,
+	)
 
 	writeSummary(
 		buildProvisionSummary(result, config.project.name, target.name),

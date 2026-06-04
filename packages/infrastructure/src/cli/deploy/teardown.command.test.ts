@@ -38,6 +38,14 @@ vi.mock(import('#/adapters/r2/backup-store.ts'), () => ({
 	wipePostgresBackups: mockWipePostgresBackups,
 }))
 
+// Mock the R2 custom-domain adapter (network boundary: Cloudflare API).
+const { mockDeleteR2CustomDomain } = vi.hoisted(() => ({
+	mockDeleteR2CustomDomain: vi.fn(),
+}))
+vi.mock('#/adapters/cloudflare/r2/domains.ts', () => ({
+	deleteR2CustomDomain: mockDeleteR2CustomDomain,
+}))
+
 // Mock createLogger so we can assert on the preserve/wipe info lines
 // emitted by the postgres teardown branch. Existing tests don't assert on
 // logs - this mock keeps them green while letting the new tests verify
@@ -325,5 +333,102 @@ describe('teardownCommand - postgres backup wipe', () => {
 		expect(mockLoggerInfo).toHaveBeenCalledWith(
 			'Wiping backup bucket "nn-backups-my-app" (irreversible)...',
 		)
+	})
+})
+
+describe('teardownCommand - R2 custom domains', () => {
+	let testPrivateKey: string
+
+	const APP_WITH_R2_CDN: DeployableConfig = {
+		...APP_WITH_DOMAIN,
+		services: {
+			r2: {
+				buckets: [
+					{ name: 'assets', cdn: true },
+					{ name: 'private-cache', cdn: false },
+				],
+			},
+		},
+	}
+
+	beforeAll(() => {
+		testPrivateKey = sshUtils.generateKeyPairSync('ed25519').private
+	})
+
+	beforeEach(() => {
+		vi.stubEnv('PIPELINE_ENVIRONMENT', 'production')
+		vi.stubEnv('CLOUDFLARE_API_TOKEN', 'cf-token')
+		vi.stubEnv('HETZNER_API_TOKEN', 'hcloud-token')
+		vi.stubEnv(
+			'DEPLOY_SSH_PRIVATE_KEY_B64',
+			Buffer.from(testPrivateKey).toString('base64'),
+		)
+		vi.stubEnv('TAILSCALE_AUTH_KEY', 'tskey-auth-test')
+		vi.stubEnv('GITHUB_STEP_SUMMARY', tmpSummaryFile())
+		mockHetznerTeardown.mockResolvedValue({
+			kind: 'vps',
+			scope: 'project',
+			outcome: {
+				container: { handled: true, detail: 'removed' },
+				caddy: { handled: true, detail: 'removed' },
+				certs: { handled: false, detail: '0 cert object(s) deleted' },
+				dns: { handled: true, detail: '1 record(s) deleted' },
+				state: { handled: true, detail: 'deleted' },
+			},
+			durationMs: 1,
+		})
+	})
+
+	afterEach(() => {
+		vi.unstubAllEnvs()
+		vi.unstubAllGlobals()
+		vi.restoreAllMocks()
+		mockHetznerTeardown.mockReset()
+		mockDeleteR2CustomDomain.mockReset()
+	})
+
+	it('detaches the custom domain for each cdn-enabled bucket on project teardown', async () => {
+		await teardownCommand(APP_WITH_R2_CDN)
+
+		expect(mockDeleteR2CustomDomain).toHaveBeenCalledTimes(1)
+		expect(mockDeleteR2CustomDomain).toHaveBeenCalledWith(
+			'cf-token',
+			'acct',
+			'my-app-production-assets',
+			'assets.cdn.example.com',
+		)
+	})
+
+	it('does not detach domains for private (non-cdn) buckets', async () => {
+		const APP_PRIVATE_ONLY: DeployableConfig = {
+			...APP_WITH_DOMAIN,
+			services: {
+				r2: { buckets: [{ name: 'private-cache', cdn: false }] },
+			},
+		}
+
+		await teardownCommand(APP_PRIVATE_ONLY)
+
+		expect(mockDeleteR2CustomDomain).not.toHaveBeenCalled()
+	})
+
+	it('does not detach domains on a vps-scope teardown', async () => {
+		vi.stubEnv('TEARDOWN_TARGET', 'vps')
+		mockHetznerTeardown.mockResolvedValue({
+			kind: 'vps',
+			scope: 'vps',
+			outcome: {
+				server: { handled: true, detail: 'deleted #1' },
+				firewall: { handled: true, detail: 'deleted' },
+				tailscale: { handled: false, detail: '0 device(s) purged' },
+				dns: { handled: true, detail: '1 record(s) deleted' },
+				state: { handled: true, detail: 'deleted' },
+			},
+			durationMs: 1,
+		})
+
+		await teardownCommand(APP_WITH_R2_CDN)
+
+		expect(mockDeleteR2CustomDomain).not.toHaveBeenCalled()
 	})
 })

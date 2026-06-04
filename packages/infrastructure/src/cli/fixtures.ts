@@ -16,6 +16,7 @@ export const APP_WITH_DOMAIN: DeployableConfig = {
 	deploy: {
 		target: 'hetzner-vps',
 		hetzner: { serverType: 'cx23', location: 'nbg1' },
+		generatedSecrets: [],
 		secrets: [],
 		vps: null,
 		volumes: [],
@@ -48,6 +49,7 @@ export const APP_WITH_BUILD_ARGS: DeployableConfig = {
 	deploy: {
 		target: 'hetzner-vps',
 		hetzner: { serverType: 'cx23', location: 'nbg1' },
+		generatedSecrets: [],
 		secrets: [],
 		vps: null,
 		volumes: [],
@@ -81,6 +83,7 @@ export const APP_UPSTREAM_PUBLIC: DeployableConfig = {
 	deploy: {
 		target: 'hetzner-vps',
 		hetzner: { serverType: 'cx23', location: 'nbg1' },
+		generatedSecrets: [],
 		secrets: [],
 		vps: null,
 		volumes: [],
@@ -113,6 +116,7 @@ export const APP_UPSTREAM_PRIVATE: DeployableConfig = {
 	deploy: {
 		target: 'hetzner-vps',
 		hetzner: { serverType: 'cx23', location: 'nbg1' },
+		generatedSecrets: [],
 		secrets: [],
 		vps: null,
 		volumes: [],
@@ -150,6 +154,7 @@ export const APP_WITH_POSTGRES: DeployableConfig = {
 	deploy: {
 		target: 'hetzner-vps',
 		hetzner: { serverType: 'cx23', location: 'nbg1' },
+		generatedSecrets: [],
 		secrets: [],
 		vps: null,
 		volumes: [],
@@ -186,6 +191,7 @@ export const APP_WITH_POSTGRES_EXTERNAL: DeployableConfig = {
 	deploy: {
 		target: 'hetzner-vps',
 		hetzner: { serverType: 'cx23', location: 'nbg1' },
+		generatedSecrets: [],
 		secrets: [],
 		vps: null,
 		volumes: [],
@@ -223,6 +229,7 @@ export const APP_WITH_POSTGRES_CUSTOM_MIGRATE: DeployableConfig = {
 	deploy: {
 		target: 'hetzner-vps',
 		hetzner: { serverType: 'cx23', location: 'nbg1' },
+		generatedSecrets: [],
 		secrets: [],
 		vps: null,
 		volumes: [],
@@ -255,9 +262,10 @@ export const APP_WITH_SECRETS: DeployableConfig = {
 	deploy: {
 		target: 'hetzner-vps',
 		hetzner: { serverType: 'cx23', location: 'nbg1' },
-		// hetzner pool is DERIVED = union of every service's secrets, so the
-		// declared secret lives on the service that needs it.
+		// hetzner pool = global [deploy].secrets ∪ every service's own secrets;
+		// here the only secret is declared on the service that needs it.
 		secrets: ['DATABASE_URL'],
+		generatedSecrets: [],
 		vps: null,
 		volumes: [],
 		services: {
@@ -286,7 +294,13 @@ export const STATIC_WITH_DOMAIN: DeployableConfig = {
 	package: false,
 	environment: { development: true },
 	services: {},
-	deploy: { target: 'cloudflare-pages', secrets: [], vps: null, volumes: [] },
+	deploy: {
+		target: 'cloudflare-pages',
+		secrets: [],
+		generatedSecrets: [],
+		vps: null,
+		volumes: [],
+	},
 }
 
 export const STATIC_NO_DOMAIN: DeployableConfig = {
@@ -301,7 +315,13 @@ export const STATIC_NO_DOMAIN: DeployableConfig = {
 	package: false,
 	environment: { development: true },
 	services: {},
-	deploy: { target: 'cloudflare-pages', secrets: [], vps: null, volumes: [] },
+	deploy: {
+		target: 'cloudflare-pages',
+		secrets: [],
+		generatedSecrets: [],
+		vps: null,
+		volumes: [],
+	},
 }
 
 export const STATIC_WITH_SECRETS: DeployableConfig = {
@@ -320,6 +340,7 @@ export const STATIC_WITH_SECRETS: DeployableConfig = {
 	deploy: {
 		target: 'cloudflare-pages',
 		secrets: ['RESEND_API_KEY'],
+		generatedSecrets: [],
 		vps: null,
 		volumes: [],
 	},
@@ -341,6 +362,7 @@ export const STATIC_WITH_MISSING_SECRET: DeployableConfig = {
 	deploy: {
 		target: 'cloudflare-pages',
 		secrets: ['MISSING_KEY'],
+		generatedSecrets: [],
 		vps: null,
 		volumes: [],
 	},

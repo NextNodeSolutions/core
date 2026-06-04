@@ -41,9 +41,45 @@ describe('writeR2ServiceState + readR2ServiceState', () => {
 		expect(loaded).toEqual(STATE)
 	})
 
+	it('roundtrips a cdn bucket binding carrying a public URL', async () => {
+		const state = new Map<string, string>()
+		const r2 = fakeR2(state)
+		const cdnState: R2ServiceState = {
+			...STATE,
+			buckets: [
+				{
+					alias: 'assets',
+					name: 'myapp-production-assets',
+					publicUrl: 'https://assets.cdn.example.com',
+				},
+			],
+		}
+
+		await writeR2ServiceState(r2, KEY, cdnState)
+
+		expect(await readR2ServiceState(r2, KEY)).toEqual(cdnState)
+	})
+
 	it('returns null when no state has been written', async () => {
 		const r2 = fakeR2(new Map())
 		expect(await readR2ServiceState(r2, KEY)).toBeNull()
+	})
+
+	it('rejects a non-string publicUrl on a bucket binding', async () => {
+		const state = new Map<string, string>([
+			[
+				KEY,
+				JSON.stringify({
+					endpoint: 'e',
+					accessKeyId: 'k',
+					secretAccessKey: 's',
+					buckets: [{ alias: 'u', name: 'b', publicUrl: 123 }],
+				}),
+			],
+		])
+		await expect(readR2ServiceState(fakeR2(state), KEY)).rejects.toThrow(
+			'publicUrl',
+		)
 	})
 
 	it('rejects state without an endpoint', async () => {

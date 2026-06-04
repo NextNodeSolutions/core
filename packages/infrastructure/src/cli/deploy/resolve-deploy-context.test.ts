@@ -40,6 +40,7 @@ const hetznerConfig = (
 		target: 'hetzner-vps',
 		hetzner: { serverType: 'cx23', location: 'nbg1' },
 		secrets: [],
+		generatedSecrets: [],
 		vps: null,
 		volumes: [],
 		services,

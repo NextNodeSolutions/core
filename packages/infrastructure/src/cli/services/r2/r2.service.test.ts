@@ -33,7 +33,10 @@ const CTX: ServiceFactoryContext = {
 }
 
 const CONFIG: R2ServiceConfig = {
-	buckets: ['uploads', 'media'],
+	buckets: [
+		{ name: 'uploads', cdn: false },
+		{ name: 'media', cdn: false },
+	],
 }
 
 const STATE: R2ServiceState = {
@@ -68,7 +71,11 @@ describe('createR2Service', () => {
 			infraStorage: INFRA_STORAGE,
 			projectName: 'myapp',
 			environment: 'production',
-			bucketAliases: ['uploads', 'media'],
+			deployDomain: 'example.com',
+			buckets: [
+				{ name: 'uploads', cdn: false },
+				{ name: 'media', cdn: false },
+			],
 		})
 	})
 
@@ -145,7 +152,9 @@ describe('r2ServiceDefinition', () => {
 		expect(service?.name).toBe('r2')
 		await service?.provision()
 		expect(ensureMock).toHaveBeenCalledWith(
-			expect.objectContaining({ bucketAliases: ['backups'] }),
+			expect.objectContaining({
+				buckets: [{ name: 'backups', cdn: false }],
+			}),
 		)
 	})
 
@@ -159,7 +168,11 @@ describe('r2ServiceDefinition', () => {
 		await service?.provision()
 		expect(ensureMock).toHaveBeenCalledWith(
 			expect.objectContaining({
-				bucketAliases: ['uploads', 'media', 'backups'],
+				buckets: [
+					{ name: 'uploads', cdn: false },
+					{ name: 'media', cdn: false },
+					{ name: 'backups', cdn: false },
+				],
 			}),
 		)
 	})

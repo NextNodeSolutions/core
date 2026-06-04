@@ -1,4 +1,4 @@
-import type { ServicesConfig } from '#/config/types.ts'
+import type { R2BucketConfig, ServicesConfig } from '#/config/types.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 import type { ServiceEnv } from './service.ts'
 
@@ -25,6 +25,10 @@ export const R2_BACKUPS_ALIAS = 'backups'
 export interface R2BucketBinding {
 	readonly alias: string
 	readonly name: string
+	// Public CDN URL when the bucket opts into `cdn = true` and the project
+	// has a domain. Absent for private buckets — `buildR2ServiceEnv` then
+	// emits no `R2_BUCKET_<ALIAS>_URL` for them.
+	readonly publicUrl?: string
 }
 
 export interface R2ServiceState {
@@ -35,23 +39,27 @@ export interface R2ServiceState {
 }
 
 /**
- * Resolve the bucket aliases the R2 service must provision for a project.
+ * Resolve the buckets the R2 service must provision for a project.
  *
- * Combines the explicit `[services.r2].buckets` list (declared order
- * preserved) with the implicit `backups` alias every project opting into
- * `[services.supabase]` needs. An empty result means the R2 service does
+ * Combines the explicit `[services.r2].buckets` list (declared order +
+ * `cdn` flags preserved) with the implicit `backups` bucket every project
+ * opting into `[services.supabase]` needs. The implicit backups bucket is
+ * always private (`cdn: false`) — it is internal and must never be served
+ * over a public custom domain. An empty result means the R2 service does
  * not need to run for this project — callers use that as the skip signal.
  *
  * Idempotent: a user who already declared `backups` in `[services.r2]`
- * gets the same single-entry alias, not a duplicate.
+ * keeps their own declaration, not a duplicate.
  */
-export function computeR2ServiceAliases(
+export function computeR2ServiceBuckets(
 	services: ServicesConfig,
-): ReadonlyArray<string> {
+): ReadonlyArray<R2BucketConfig> {
 	const explicit = services.r2?.buckets ?? []
 	if (services.supabase === undefined) return explicit
-	if (explicit.includes(R2_BACKUPS_ALIAS)) return explicit
-	return [...explicit, R2_BACKUPS_ALIAS]
+	if (explicit.some(bucket => bucket.name === R2_BACKUPS_ALIAS)) {
+		return explicit
+	}
+	return [...explicit, { name: R2_BACKUPS_ALIAS, cdn: false }]
 }
 
 export function computeR2BucketName(
@@ -102,7 +110,11 @@ export function buildR2ServiceEnv(state: R2ServiceState): ServiceEnv {
 		R2_ENDPOINT: state.endpoint,
 	}
 	for (const binding of state.buckets) {
-		publicEnv[envKeyForAlias(binding.alias)] = binding.name
+		const key = envKeyForAlias(binding.alias)
+		publicEnv[key] = binding.name
+		if (binding.publicUrl !== undefined) {
+			publicEnv[`${key}_URL`] = binding.publicUrl
+		}
 	}
 
 	return {

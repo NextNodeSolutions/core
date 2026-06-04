@@ -19,7 +19,12 @@ function withR2Service(
 	config: DeployableConfig,
 	buckets: ReadonlyArray<string>,
 ): DeployableConfig {
-	return { ...config, services: { r2: { buckets } } }
+	return {
+		...config,
+		services: {
+			r2: { buckets: buckets.map(name => ({ name, cdn: false })) },
+		},
+	}
 }
 
 describe('resolveServices', () => {
