@@ -399,6 +399,20 @@ describe('teardownCommand - R2 custom domains', () => {
 		)
 	})
 
+	it('detaches the single-dev-prefixed domain on a development teardown (matches provision)', async () => {
+		vi.stubEnv('PIPELINE_ENVIRONMENT', 'development')
+
+		await teardownCommand(APP_WITH_R2_CDN)
+
+		expect(mockDeleteR2CustomDomain).toHaveBeenCalledTimes(1)
+		expect(mockDeleteR2CustomDomain).toHaveBeenCalledWith(
+			'cf-token',
+			'acct',
+			'my-app-development-assets',
+			'assets.cdn.dev.example.com',
+		)
+	})
+
 	it('does not detach domains for private (non-cdn) buckets', async () => {
 		const APP_PRIVATE_ONLY: DeployableConfig = {
 			...APP_WITH_DOMAIN,

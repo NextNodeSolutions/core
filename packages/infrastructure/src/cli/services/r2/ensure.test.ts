@@ -370,7 +370,7 @@ describe('ensureR2Service', () => {
 		)
 	})
 
-	it('uses the dev subdomain in the custom domain for development deploys', async () => {
+	it('uses the resolved dev domain verbatim without prefixing a second dev.', async () => {
 		const { calls } = stubFetch()
 
 		const result = await ensureR2Service({
@@ -378,7 +378,10 @@ describe('ensureR2Service', () => {
 			infraStorage: INFRA_STORAGE,
 			projectName: 'myapp',
 			environment: 'development',
-			deployDomain: 'example.com',
+			// `resolveServices` already resolved `example.com` -> `dev.example.com`
+			// for a development deploy; `ensureR2Service` must NOT re-resolve it
+			// into `dev.dev.example.com`.
+			deployDomain: 'dev.example.com',
 			buckets: [{ name: 'assets', cdn: true }],
 		})
 

@@ -3,6 +3,7 @@ import { writeSummary } from '#/adapters/github/output.ts'
 import { wipePostgresBackups } from '#/adapters/r2/backup-store.ts'
 import { getEnumEnv, getEnv, isEnvSet, requireEnv } from '#/cli/env.ts'
 import { computeR2CustomDomainHostname } from '#/domain/cloudflare/r2/custom-domain.ts'
+import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
 import { buildTeardownSummary } from '#/domain/deploy/teardown-summary.ts'
 import {
 	TEARDOWN_TARGETS,
@@ -48,6 +49,10 @@ async function teardownR2CustomDomains(
 
 	const cfToken = requireEnv('CLOUDFLARE_API_TOKEN')
 	const accountId = infraStorage.accountId
+	// Resolve the deploy domain ONCE — the same single resolution the provision
+	// path applies via `resolveServices` — so the hostname detached here matches
+	// the one attached at provision (in development both gain the `dev.` prefix).
+	const resolvedDomain = resolveDeployDomain(domain, environment)
 	await Promise.all(
 		cdnBuckets.map(async bucket => {
 			const bucketName = computeR2BucketName(
@@ -57,8 +62,7 @@ async function teardownR2CustomDomains(
 			)
 			const hostname = computeR2CustomDomainHostname(
 				bucket.name,
-				domain,
-				environment,
+				resolvedDomain,
 			)
 			await deleteR2CustomDomain(cfToken, accountId, bucketName, hostname)
 			logger.info(

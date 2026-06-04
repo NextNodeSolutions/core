@@ -6,23 +6,18 @@ import {
 } from './custom-domain.ts'
 
 describe('computeR2CustomDomainHostname', () => {
-	it('groups the bucket under a cdn subdomain of the apex in production', () => {
-		expect(
-			computeR2CustomDomainHostname(
-				'uploads',
-				'example.com',
-				'production',
-			),
-		).toBe('uploads.cdn.example.com')
+	it('groups the bucket under a cdn subdomain of the resolved apex', () => {
+		expect(computeR2CustomDomainHostname('uploads', 'example.com')).toBe(
+			'uploads.cdn.example.com',
+		)
 	})
 
-	it('prefixes the dev subdomain for the development environment', () => {
+	it('does NOT re-resolve an already dev-resolved domain (no double dev. prefix)', () => {
+		// `dev.example.com` is what `resolveDeployDomain` already produced for a
+		// development deploy; this helper must take it verbatim, not prepend a
+		// second `dev.`.
 		expect(
-			computeR2CustomDomainHostname(
-				'uploads',
-				'example.com',
-				'development',
-			),
+			computeR2CustomDomainHostname('uploads', 'dev.example.com'),
 		).toBe('uploads.cdn.dev.example.com')
 	})
 })

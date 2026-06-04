@@ -1,7 +1,3 @@
-import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
-
-import type { AppEnvironment } from '#/domain/environment.ts'
-
 /**
  * Subdomain under which every public R2 bucket is served, e.g.
  * `assets.cdn.example.com`. Grouping buckets under a dedicated `cdn.`
@@ -11,15 +7,17 @@ const R2_CDN_SUBDOMAIN = 'cdn'
 
 /**
  * Public hostname for a CDN-enabled bucket: `<alias>.cdn.<resolved-domain>`.
- * Reuses `resolveDeployDomain` so the dev subdomain convention (and thus
- * the dev/prod split) is shared with SITE_URL and the Pages custom domains.
+ * `resolvedDomain` is the ALREADY env-resolved deploy domain (the output of
+ * `resolveDeployDomain`, e.g. `dev.example.com` in development) — the caller
+ * resolves it ONCE so the dev/prod split stays a single source of truth shared
+ * with SITE_URL and the Pages custom domains. Re-resolving here would double the
+ * `dev.` prefix.
  */
 export function computeR2CustomDomainHostname(
 	alias: string,
-	domain: string,
-	environment: AppEnvironment,
+	resolvedDomain: string,
 ): string {
-	return `${alias}.${R2_CDN_SUBDOMAIN}.${resolveDeployDomain(domain, environment)}`
+	return `${alias}.${R2_CDN_SUBDOMAIN}.${resolvedDomain}`
 }
 
 export function computeR2PublicUrl(hostname: string): string {

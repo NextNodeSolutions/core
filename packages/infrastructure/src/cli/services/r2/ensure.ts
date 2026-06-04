@@ -38,8 +38,10 @@ export interface EnsureR2ServiceInput {
 	readonly infraStorage: InfraStorageRuntimeConfig
 	readonly projectName: string
 	readonly environment: AppEnvironment
-	// Project domain (`project.domain`) or null when the project declares
-	// none. When null, no bucket gets a public custom domain.
+	// The env-RESOLVED deploy domain (`resolveDeployDomain(project.domain)`,
+	// e.g. `dev.example.com` in development), or null when the project declares
+	// no domain. When null, no bucket gets a public custom domain. Already
+	// resolved upstream in `resolveServices` — never re-resolve it here.
 	readonly deployDomain: string | null
 	readonly buckets: ReadonlyArray<R2BucketConfig>
 }
@@ -78,7 +80,6 @@ async function attachCustomDomains(
 			const hostname = computeR2CustomDomainHostname(
 				binding.alias,
 				deployDomain,
-				input.environment,
 			)
 			await ensureR2CustomDomain({
 				token: input.cfToken,
