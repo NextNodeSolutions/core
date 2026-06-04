@@ -43,17 +43,21 @@ export async function ensureGeneratedSecrets(
 		)
 	}
 
-	for (const spec of pending) {
-		const value = generateSecretValue(spec)
-		await adapter.setRepoEnvSecret(
-			spec.name,
-			value,
-			owner,
-			repo,
-			environment,
-		)
-		logger.info(
-			`generated secret "${spec.name}" (${spec.generate}, length ${String(spec.length)}) pushed to ${owner}/${repo} (${environment})`,
-		)
-	}
+	// Each push is an independent `gh secret set` on a distinct name — no
+	// ordering constraint — so run them concurrently.
+	await Promise.all(
+		pending.map(async spec => {
+			const value = generateSecretValue(spec)
+			await adapter.setRepoEnvSecret(
+				spec.name,
+				value,
+				owner,
+				repo,
+				environment,
+			)
+			logger.info(
+				`generated secret "${spec.name}" (${spec.generate}, length ${String(spec.length)}) pushed to ${owner}/${repo} (${environment})`,
+			)
+		}),
+	)
 }

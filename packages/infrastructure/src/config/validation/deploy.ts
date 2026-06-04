@@ -6,6 +6,7 @@ import {
 	KEBAB_IDENTIFIER_PATTERN,
 	SECRET_GENERATORS,
 	isDeployTarget,
+	isSecretGenerator,
 } from '#/config/types.ts'
 import { isRecord } from '#/kernel/guards.ts'
 import {
@@ -37,7 +38,6 @@ import type {
 	DeployVolume,
 	DeployableProjectType,
 	GeneratedSecretConfig,
-	SecretGenerator,
 	UserServiceConfig,
 } from '#/config/types.ts'
 import type { GenericSchema } from 'valibot'
@@ -63,10 +63,6 @@ type ParsedSecretEntry =
 	| { readonly kind: 'name'; readonly name: string }
 	| { readonly kind: 'generated'; readonly spec: GeneratedSecretConfig }
 
-function isSecretGenerator(value: string): value is SecretGenerator {
-	return SECRET_GENERATORS.some(generator => generator === value)
-}
-
 function parseGeneratedSecret(
 	entry: Record<string, unknown>,
 ): ParsedSecretEntry {
@@ -79,7 +75,7 @@ function parseGeneratedSecret(
 		}
 	}
 	const generate = entry['generate']
-	if (typeof generate !== 'string' || !isSecretGenerator(generate)) {
+	if (!isSecretGenerator(generate)) {
 		return {
 			kind: 'error',
 			message: `deploy.secrets entry "${name}" \`generate\` must be one of: ${SECRET_GENERATORS.join(', ')}`,

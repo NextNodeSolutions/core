@@ -332,6 +332,7 @@ export type ParseConfigResult =
 const PROJECT_TYPE_SET: ReadonlySet<string> = new Set(PROJECT_TYPES)
 const DEPLOY_TARGET_SET: ReadonlySet<string> = new Set(DEPLOY_TARGETS)
 const POSTGRES_MODE_SET: ReadonlySet<string> = new Set(POSTGRES_MODES)
+const SECRET_GENERATOR_SET: ReadonlySet<string> = new Set(SECRET_GENERATORS)
 
 export function isPostgresMode(value: unknown): value is PostgresMode {
 	return typeof value === 'string' && POSTGRES_MODE_SET.has(value)
@@ -351,4 +352,8 @@ export function isScriptValue(value: unknown): value is string | false {
 
 export function isDeployTarget(value: unknown): value is DeployTargetType {
 	return typeof value === 'string' && DEPLOY_TARGET_SET.has(value)
+}
+
+export function isSecretGenerator(value: unknown): value is SecretGenerator {
+	return typeof value === 'string' && SECRET_GENERATOR_SET.has(value)
 }

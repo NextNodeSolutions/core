@@ -7,7 +7,7 @@ import type { GeneratedSecretConfig, SecretGenerator } from '#/config/types.ts'
 const TOKEN_ALPHABET =
 	'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
 // alphanumeric alphabet (62 chars): not a power of two, so bytes are
-// rejection-sampled (see GENERATOR_BYTE_CEILING) to keep the draw uniform.
+// rejection-sampled (see generatorByteCeiling) to keep the draw uniform.
 const PASSWORD_ALPHABET =
 	'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
 
