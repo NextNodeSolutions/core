@@ -69,7 +69,7 @@ export class NextNodeLogger implements Logger {
 
 		for (const transport of this.transports) {
 			try {
-				transport.log(entry)
+				void transport.log(entry)
 			} catch (error) {
 				console.error(
 					`[NextNodeLogger] Transport failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -115,9 +115,9 @@ export class NextNodeLogger implements Logger {
 	 * Call this when shutting down to flush any buffered logs.
 	 */
 	async dispose(): Promise<void> {
-		const disposals = this.transports
-			.filter(t => t.dispose !== undefined)
-			.map(t => t.dispose!())
+		const disposals = this.transports.map(transport =>
+			Promise.resolve(transport.dispose?.()),
+		)
 
 		await Promise.all(disposals)
 	}

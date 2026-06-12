@@ -42,45 +42,45 @@ describe('formatForNode', () => {
 	})
 
 	it('should format basic info log entry', () => {
-		const result = formatForNode(baseEntry)
+		const formatted = formatForNode(baseEntry)
 
-		expect(result).toContain('🔵')
-		expect(result).toContain('INFO')
-		expect(result).toContain('Test message')
-		expect(result).toContain('test.ts:42:testFunction')
-		expect(result).toContain('req_abc12345')
-		expect(result).toContain('10:30:15')
+		expect(formatted).toContain('🔵')
+		expect(formatted).toContain('INFO')
+		expect(formatted).toContain('Test message')
+		expect(formatted).toContain('test.ts:42:testFunction')
+		expect(formatted).toContain('req_abc12345')
+		expect(formatted).toContain('10:30:15')
 	})
 
 	it('should format debug log entry', () => {
 		const entry: LogEntry = { ...baseEntry, level: 'debug' }
-		const result = formatForNode(entry)
+		const formatted = formatForNode(entry)
 
-		expect(result).toContain('🔍')
-		expect(result).toContain('DEBUG')
+		expect(formatted).toContain('🔍')
+		expect(formatted).toContain('DEBUG')
 	})
 
 	it('should format warn log entry', () => {
 		const entry: LogEntry = { ...baseEntry, level: 'warn' }
-		const result = formatForNode(entry)
+		const formatted = formatForNode(entry)
 
-		expect(result).toContain('⚠️')
-		expect(result).toContain('WARN')
+		expect(formatted).toContain('⚠️')
+		expect(formatted).toContain('WARN')
 	})
 
 	it('should format error log entry', () => {
 		const entry: LogEntry = { ...baseEntry, level: 'error' }
-		const result = formatForNode(entry)
+		const formatted = formatForNode(entry)
 
-		expect(result).toContain('🔴')
-		expect(result).toContain('ERROR')
+		expect(formatted).toContain('🔴')
+		expect(formatted).toContain('ERROR')
 	})
 
 	it('should include scope when present', () => {
 		const entry: LogEntry = { ...baseEntry, scope: 'Auth' }
-		const result = formatForNode(entry)
+		const formatted = formatForNode(entry)
 
-		expect(result).toContain('[Auth]')
+		expect(formatted).toContain('[Auth]')
 	})
 
 	it('should include object properties', () => {
@@ -88,10 +88,10 @@ describe('formatForNode', () => {
 			...baseEntry,
 			object: { status: 200, details: 'Simple detail' },
 		}
-		const result = formatForNode(entry)
+		const formatted = formatForNode(entry)
 
-		expect(result).toContain('status: 200')
-		expect(result).toContain('details: Simple detail')
+		expect(formatted).toContain('status: 200')
+		expect(formatted).toContain('details: Simple detail')
 	})
 
 	it('should handle production location format', () => {
@@ -99,10 +99,10 @@ describe('formatForNode', () => {
 			...baseEntry,
 			location: { function: 'testFunction' },
 		}
-		const result = formatForNode(entry)
+		const formatted = formatForNode(entry)
 
-		expect(result).toContain('(testFunction)')
-		expect(result).not.toContain(':42:')
+		expect(formatted).toContain('(testFunction)')
+		expect(formatted).not.toContain(':42:')
 	})
 
 	it('should handle invalid timestamp gracefully', () => {
@@ -110,9 +110,9 @@ describe('formatForNode', () => {
 			...baseEntry,
 			timestamp: 'invalid-timestamp',
 		}
-		const result = formatForNode(entry)
+		const formatted = formatForNode(entry)
 
-		expect(result).toContain('invalid-timestamp')
+		expect(formatted).toContain('invalid-timestamp')
 	})
 })
 
@@ -140,32 +140,32 @@ describe('formatForBrowser', () => {
 	})
 
 	it('should return format string and styles', () => {
-		const result = formatForBrowser(baseEntry)
+		const formatted = formatForBrowser(baseEntry)
 
-		expect(result).toHaveProperty('format')
-		expect(result).toHaveProperty('styles')
-		expect(result).toHaveProperty('objects')
-		expect(Array.isArray(result.styles)).toBe(true)
-		expect(Array.isArray(result.objects)).toBe(true)
+		expect(formatted).toHaveProperty('format')
+		expect(formatted).toHaveProperty('styles')
+		expect(formatted).toHaveProperty('objects')
+		expect(Array.isArray(formatted.styles)).toBe(true)
+		expect(Array.isArray(formatted.objects)).toBe(true)
 	})
 
 	it('should include emoji in format', () => {
-		const result = formatForBrowser(baseEntry)
+		const formatted = formatForBrowser(baseEntry)
 
-		expect(result.format).toContain('🔵')
+		expect(formatted.format).toContain('🔵')
 	})
 
 	it('should include message in format', () => {
-		const result = formatForBrowser(baseEntry)
+		const formatted = formatForBrowser(baseEntry)
 
-		expect(result.format).toContain('Test message')
+		expect(formatted.format).toContain('Test message')
 	})
 
 	it('should include scope in format when present', () => {
 		const entry: LogEntry = { ...baseEntry, scope: 'Auth' }
-		const result = formatForBrowser(entry)
+		const formatted = formatForBrowser(entry)
 
-		expect(result.format).toContain('[Auth]')
+		expect(formatted.format).toContain('[Auth]')
 	})
 
 	it('should pass objects directly for DevTools inspection', () => {
@@ -173,19 +173,19 @@ describe('formatForBrowser', () => {
 			...baseEntry,
 			object: { status: 200, details: { userId: 123 } },
 		}
-		const result = formatForBrowser(entry)
+		const formatted = formatForBrowser(entry)
 
-		expect(result.objects).toHaveLength(1)
-		expect(result.objects[0]).toEqual({
+		expect(formatted.objects).toHaveLength(1)
+		expect(formatted.objects[0]).toEqual({
 			status: 200,
 			details: { userId: 123 },
 		})
 	})
 
 	it('should have empty objects array when no object present', () => {
-		const result = formatForBrowser(baseEntry)
+		const formatted = formatForBrowser(baseEntry)
 
-		expect(result.objects).toHaveLength(0)
+		expect(formatted.objects).toHaveLength(0)
 	})
 })
 
@@ -211,8 +211,8 @@ describe('formatAsJson', () => {
 	})
 
 	it('should format basic log entry as JSON', () => {
-		const result = formatAsJson(baseEntry)
-		const parsed = JSON.parse(result)
+		const formatted = formatAsJson(baseEntry)
+		const parsed = JSON.parse(formatted)
 
 		expect(parsed.level).toBe('info')
 		expect(parsed.message).toBe('Test message')
@@ -223,8 +223,8 @@ describe('formatAsJson', () => {
 
 	it('should include scope when present', () => {
 		const entry: LogEntry = { ...baseEntry, scope: 'Auth' }
-		const result = formatAsJson(entry)
-		const parsed = JSON.parse(result)
+		const formatted = formatAsJson(entry)
+		const parsed = JSON.parse(formatted)
 
 		expect(parsed.scope).toBe('Auth')
 	})
@@ -237,8 +237,8 @@ describe('formatAsJson', () => {
 				details: { userId: 123 },
 			},
 		}
-		const result = formatAsJson(entry)
-		const parsed = JSON.parse(result)
+		const formatted = formatAsJson(entry)
+		const parsed = JSON.parse(formatted)
 
 		expect(parsed.status).toBe(200)
 		expect(parsed.details).toEqual({ userId: 123 })
@@ -252,8 +252,8 @@ describe('formatAsJson', () => {
 				details: undefined,
 			},
 		}
-		const result = formatAsJson(entry)
-		const parsed = JSON.parse(result)
+		const formatted = formatAsJson(entry)
+		const parsed = JSON.parse(formatted)
 
 		expect(parsed.status).toBe(200)
 		expect(parsed).not.toHaveProperty('details')
@@ -266,10 +266,10 @@ describe('formatAsJson', () => {
 		['error' as const],
 	])('should produce valid JSON for %s level', level => {
 		const entry: LogEntry = { ...baseEntry, level }
-		const result = formatAsJson(entry)
+		const formatted = formatAsJson(entry)
 
-		expect(() => JSON.parse(result)).not.toThrow()
-		const parsed = JSON.parse(result)
+		expect(() => JSON.parse(formatted)).not.toThrow()
+		const parsed = JSON.parse(formatted)
 		expect(parsed.level).toBe(level)
 	})
 })
@@ -296,16 +296,16 @@ describe('formatAsJsonPretty', () => {
 	})
 
 	it('should produce multi-line JSON', () => {
-		const result = formatAsJsonPretty(baseEntry)
+		const formatted = formatAsJsonPretty(baseEntry)
 
-		expect(result).toContain('\n')
-		expect(result).toContain('  ') // Indentation
+		expect(formatted).toContain('\n')
+		expect(formatted).toContain('  ') // Indentation
 	})
 
 	it('should be parseable as JSON', () => {
-		const result = formatAsJsonPretty(baseEntry)
+		const formatted = formatAsJsonPretty(baseEntry)
 
-		expect(() => JSON.parse(result)).not.toThrow()
+		expect(() => JSON.parse(formatted)).not.toThrow()
 	})
 })
 
@@ -339,8 +339,8 @@ describe('JSON Formatter Security', () => {
 					__proto__: { polluted: true },
 				},
 			}
-			const result = formatAsJson(entry)
-			const parsed = JSON.parse(result)
+			const formatted = formatAsJson(entry)
+			const parsed = JSON.parse(formatted)
 
 			expect(parsed.normalKey).toBe('value')
 			// Check that __proto__ is not an own property of the parsed object
@@ -355,8 +355,8 @@ describe('JSON Formatter Security', () => {
 					constructor: { polluted: true },
 				},
 			}
-			const result = formatAsJson(entry)
-			const parsed = JSON.parse(result)
+			const formatted = formatAsJson(entry)
+			const parsed = JSON.parse(formatted)
 
 			expect(parsed.normalKey).toBe('value')
 			expect(parsed).not.toHaveProperty('constructor')
@@ -370,8 +370,8 @@ describe('JSON Formatter Security', () => {
 					prototype: { polluted: true },
 				},
 			}
-			const result = formatAsJson(entry)
-			const parsed = JSON.parse(result)
+			const formatted = formatAsJson(entry)
+			const parsed = JSON.parse(formatted)
 
 			expect(parsed.normalKey).toBe('value')
 			expect(parsed).not.toHaveProperty('prototype')
@@ -389,8 +389,8 @@ describe('JSON Formatter Security', () => {
 					data: { nested: 'value' },
 				},
 			}
-			const result = formatAsJson(entry)
-			const parsed = JSON.parse(result)
+			const formatted = formatAsJson(entry)
+			const parsed = JSON.parse(formatted)
 
 			// Normal keys should be present
 			expect(parsed.status).toBe(200)
@@ -412,8 +412,8 @@ describe('JSON Formatter Security', () => {
 					constructor: { polluted: true },
 				},
 			}
-			const result = formatAsJsonPretty(entry)
-			const parsed = JSON.parse(result)
+			const formatted = formatAsJsonPretty(entry)
+			const parsed = JSON.parse(formatted)
 
 			expect(parsed.normalKey).toBe('value')
 			expect(Object.keys(parsed)).not.toContain('__proto__')

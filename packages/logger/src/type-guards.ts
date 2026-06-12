@@ -10,12 +10,13 @@ import type {
 	RuntimeEnvironment,
 } from './types.js'
 
-export const isLogLevel = (value: unknown): value is LogLevel =>
-	typeof value === 'string' &&
-	['debug', 'info', 'warn', 'error'].includes(value)
+export const isLogLevel = (candidate: unknown): candidate is LogLevel =>
+	typeof candidate === 'string' &&
+	['debug', 'info', 'warn', 'error'].includes(candidate)
 
-export const isEnvironment = (value: unknown): value is Environment =>
-	typeof value === 'string' && ['development', 'production'].includes(value)
+export const isEnvironment = (candidate: unknown): candidate is Environment =>
+	typeof candidate === 'string' &&
+	['development', 'production'].includes(candidate)
 
 export const isDevelopmentLocation = (
 	location: DevelopmentLocationInfo | ProductionLocationInfo,
@@ -23,7 +24,7 @@ export const isDevelopmentLocation = (
 	'file' in location && 'line' in location
 
 export const isRuntimeEnvironment = (
-	value: unknown,
-): value is RuntimeEnvironment =>
-	typeof value === 'string' &&
-	['node', 'browser', 'webworker', 'unknown'].includes(value)
+	candidate: unknown,
+): candidate is RuntimeEnvironment =>
+	typeof candidate === 'string' &&
+	['node', 'browser', 'webworker', 'unknown'].includes(candidate)

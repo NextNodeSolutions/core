@@ -202,6 +202,14 @@ export class HttpTransport implements Transport {
 		}
 	}
 
+	private async backoffBeforeRetry(attempt: number): Promise<void> {
+		const isLastAttempt = attempt >= this.config.maxRetries - 1
+		if (isLastAttempt) return
+
+		// Exponential backoff: 100ms, 200ms, 400ms, etc.
+		await this.sleep(100 * 2 ** attempt)
+	}
+
 	private async sendWithRetry(entries: LogEntry[]): Promise<void> {
 		let lastError: Error | null = null
 
@@ -213,10 +221,7 @@ export class HttpTransport implements Transport {
 				lastError =
 					error instanceof Error ? error : new Error(String(error))
 
-				// Exponential backoff: 100ms, 200ms, 400ms, etc.
-				if (attempt < this.config.maxRetries - 1) {
-					await this.sleep(100 * 2 ** attempt)
-				}
+				await this.backoffBeforeRetry(attempt)
 			}
 		}
 

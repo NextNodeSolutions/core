@@ -41,6 +41,35 @@ import type {
  * })
  * ```
  */
+/**
+ * Pure inspection helpers over a recorded call list. Hoisted so the spy
+ * factory stays small and the query logic is reusable/testable on its own.
+ */
+const createSpyQueries = (
+	calls: LogEntry[],
+): Pick<
+	SpyLogger,
+	'getCallsByLevel' | 'getLastCall' | 'wasCalledWith' | 'wasCalledWithLevel'
+> => ({
+	getCallsByLevel(level: LogLevel): LogEntry[] {
+		return calls.filter(call => call.level === level)
+	},
+
+	getLastCall(): LogEntry | undefined {
+		return calls[calls.length - 1]
+	},
+
+	wasCalledWith(message: string): boolean {
+		return calls.some(call => call.message.includes(message))
+	},
+
+	wasCalledWithLevel(level: LogLevel, message: string): boolean {
+		return calls.some(
+			call => call.level === level && call.message.includes(message),
+		)
+	},
+})
+
 export const createSpyLogger = (
 	sharedCalls?: LogEntry[],
 	parentScope?: string,
@@ -85,23 +114,7 @@ export const createSpyLogger = (
 			log('error', message, object)
 		},
 
-		getCallsByLevel(level: LogLevel): LogEntry[] {
-			return calls.filter(call => call.level === level)
-		},
-
-		getLastCall(): LogEntry | undefined {
-			return calls[calls.length - 1]
-		},
-
-		wasCalledWith(message: string): boolean {
-			return calls.some(call => call.message.includes(message))
-		},
-
-		wasCalledWithLevel(level: LogLevel, message: string): boolean {
-			return calls.some(
-				call => call.level === level && call.message.includes(message),
-			)
-		},
+		...createSpyQueries(calls),
 
 		clear(): void {
 			calls.length = 0

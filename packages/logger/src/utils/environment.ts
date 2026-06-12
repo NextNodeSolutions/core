@@ -38,9 +38,12 @@ export const detectRuntime = (): RuntimeEnvironment => {
  */
 export const hasCryptoSupport = (): boolean => {
 	try {
-		return !!(crypto && typeof crypto.randomUUID === 'function')
+		return (
+			typeof crypto !== 'undefined' &&
+			typeof crypto.randomUUID === 'function'
+		)
 	} catch (error) {
-		// Business rule: feature detection — access to `crypto` can throw in
+		// Business rule: feature detection - access to `crypto` can throw in
 		// locked-down envs (SES, some workers). Report unavailability, but
 		// surface the reason so misconfig stays debuggable. `console.warn`
 		// is used because the logger itself depends on this probe.
@@ -57,7 +60,7 @@ export const hasCryptoSupport = (): boolean => {
  */
 export const detectEnvironment = (): Environment => {
 	const nodeEnv =
-		typeof process !== 'undefined' ? process.env.NODE_ENV : undefined
+		typeof process === 'undefined' ? undefined : process.env.NODE_ENV
 
 	if (nodeEnv === 'production' || nodeEnv === 'prod') {
 		return 'production'

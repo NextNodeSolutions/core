@@ -30,6 +30,21 @@ export interface JsonLogOutput {
  * - Flattens object properties into root level for easier querying
  * - Filters out dangerous keys to prevent prototype pollution
  */
+/**
+ * Returns a log object's safe properties, skipping undefined values and
+ * prototype-pollution-prone keys, ready to be flattened onto the output.
+ */
+const safeObjectEntries = (
+	object: NonNullable<LogEntry['object']>,
+): Record<string, unknown> => {
+	const safe: Record<string, unknown> = {}
+	for (const [key, fieldValue] of Object.entries(object)) {
+		if (fieldValue === undefined || DANGEROUS_KEYS.has(key)) continue
+		safe[key] = fieldValue
+	}
+	return safe
+}
+
 const buildJsonOutput = (entry: LogEntry): JsonLogOutput => {
 	const { level, message, timestamp, location, requestId, scope, object } =
 		entry
@@ -47,11 +62,7 @@ const buildJsonOutput = (entry: LogEntry): JsonLogOutput => {
 	}
 
 	if (object) {
-		for (const [key, value] of Object.entries(object)) {
-			if (value !== undefined && !DANGEROUS_KEYS.has(key)) {
-				output[key] = value
-			}
-		}
+		Object.assign(output, safeObjectEntries(object))
 	}
 
 	return output

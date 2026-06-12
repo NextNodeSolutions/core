@@ -38,15 +38,14 @@ describe('generateRequestId', () => {
 	it('should work in browser environment with Web Crypto API', () => {
 		// Mock browser environment with crypto support
 		vi.stubGlobal('process', undefined)
-		vi.stubGlobal('crypto', {
-			randomUUID: vi
-				.fn()
-				.mockReturnValue('12345678-abcd-efgh-ijkl-mnopqrstuvwx'),
-		})
+		const randomUUID = vi
+			.fn()
+			.mockReturnValue('12345678-abcd-efgh-ijkl-mnopqrstuvwx')
+		vi.stubGlobal('crypto', { randomUUID })
 
 		const requestId = generateRequestId()
 		expect(requestId).toBe('req_12345678')
-		expect(vi.mocked(crypto.randomUUID)).toHaveBeenCalledOnce()
+		expect(randomUUID).toHaveBeenCalledOnce()
 	})
 
 	it('should work in Node.js environment with crypto global', () => {
@@ -119,8 +118,8 @@ describe('safeStringify', () => {
 
 	it('should handle symbols', () => {
 		const sym = Symbol('test')
-		const result = safeStringify(sym)
-		expect(result).toContain('Symbol(test)')
+		const serialized = safeStringify(sym)
+		expect(serialized).toContain('Symbol(test)')
 	})
 
 	it('should handle functions', () => {
@@ -135,15 +134,15 @@ describe('safeStringify', () => {
 
 	it('should handle simple objects', () => {
 		const obj = { name: 'test', value: 42 }
-		const result = safeStringify(obj)
-		const parsed = JSON.parse(result)
+		const serialized = safeStringify(obj)
+		const parsed = JSON.parse(serialized)
 		expect(parsed).toEqual(obj)
 	})
 
 	it('should handle arrays', () => {
 		const arr = [1, 'test', true]
-		const result = safeStringify(arr)
-		const parsed = JSON.parse(result)
+		const serialized = safeStringify(arr)
+		const parsed = JSON.parse(serialized)
 		expect(parsed).toEqual(arr)
 	})
 
@@ -151,10 +150,10 @@ describe('safeStringify', () => {
 		const obj: Record<string, unknown> = { name: 'test' }
 		obj.self = obj
 
-		const result = safeStringify(obj)
-		expect(result).toContain('[Circular Reference]')
-		expect(result).toContain('name')
-		expect(result).toContain('test')
+		const serialized = safeStringify(obj)
+		expect(serialized).toContain('[Circular Reference]')
+		expect(serialized).toContain('name')
+		expect(serialized).toContain('test')
 	})
 
 	it('should handle nested objects with functions', () => {
@@ -167,12 +166,12 @@ describe('safeStringify', () => {
 			},
 		}
 
-		const result = safeStringify(obj)
-		expect(result).toContain('data')
-		expect(result).toContain('test')
-		expect(result).toContain('[Function: method]')
-		expect(result).toContain('[Function: namedFunc]')
-		expect(result).toContain('42')
+		const serialized = safeStringify(obj)
+		expect(serialized).toContain('data')
+		expect(serialized).toContain('test')
+		expect(serialized).toContain('[Function: method]')
+		expect(serialized).toContain('[Function: namedFunc]')
+		expect(serialized).toContain('42')
 	})
 
 	it('should handle complex types', () => {
@@ -182,9 +181,9 @@ describe('safeStringify', () => {
 		const set = new Set([1, 2, 3])
 
 		const obj = { date, regex, map, set }
-		const result = safeStringify(obj)
+		const serialized = safeStringify(obj)
 
-		expect(result).toContain('2024-01-01')
+		expect(serialized).toContain('2024-01-01')
 		expect(() => safeStringify(obj)).not.toThrow()
 	})
 
@@ -197,9 +196,9 @@ describe('safeStringify', () => {
 			},
 		})
 
-		const result = safeStringify(problematicObj)
+		const serialized = safeStringify(problematicObj)
 		// Note: Modern JSON.stringify might handle this gracefully, so we just check it doesn't throw
-		expect(typeof result).toBe('string')
+		expect(typeof serialized).toBe('string')
 	})
 
 	it('should handle JSON.stringify throwing error and provide fallback message', () => {
@@ -212,10 +211,10 @@ describe('safeStringify', () => {
 			}),
 		})
 
-		const result = safeStringify({ test: 'data' })
+		const serialized = safeStringify({ test: 'data' })
 
 		// Should return error message format
-		expect(result).toMatch(/\[Serialization Error: Stringify failed\]/)
+		expect(serialized).toMatch(/\[Serialization Error: Stringify failed\]/)
 
 		// Restore original
 		vi.stubGlobal('JSON', { ...JSON, stringify: originalStringify })

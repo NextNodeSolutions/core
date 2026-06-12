@@ -4,26 +4,26 @@
  */
 
 // Centralized string conversion for special types
-const typeToString = (value: unknown): string | undefined => {
-	if (value === null) return 'null'
-	if (value === undefined) return 'undefined'
-	if (typeof value === 'function')
-		return `[Function: ${value.name || 'anonymous'}]`
-	if (typeof value === 'symbol') return value.toString()
-	if (typeof value === 'bigint') return value.toString()
+const typeToString = (subject: unknown): string | undefined => {
+	if (subject === null) return 'null'
+	if (subject === undefined) return 'undefined'
+	if (typeof subject === 'function')
+		return `[Function: ${subject.name || 'anonymous'}]`
+	if (typeof subject === 'symbol') return subject.toString()
+	if (typeof subject === 'bigint') return subject.toString()
 	return undefined
 }
 
-export const safeStringify = (value: unknown): string => {
+export const safeStringify = (subject: unknown): string => {
 	try {
 		// Fast path for primitives
-		const primitiveString = typeToString(value)
+		const primitiveString = typeToString(subject)
 		if (primitiveString !== undefined) return primitiveString
 
 		// Direct string conversion for simple types
-		if (typeof value === 'string') return value
-		if (typeof value === 'number' || typeof value === 'boolean') {
-			return String(value)
+		if (typeof subject === 'string') return subject
+		if (typeof subject === 'number' || typeof subject === 'boolean') {
+			return String(subject)
 		}
 
 		// Complex object serialization with circular reference protection
@@ -33,7 +33,7 @@ export const safeStringify = (value: unknown): string => {
 			// Early return for non-objects
 			if (typeof val !== 'object' || val === null) {
 				const specialString = typeToString(val)
-				return specialString !== undefined ? specialString : val
+				return specialString ?? val
 			}
 
 			// Circular reference check
@@ -43,7 +43,7 @@ export const safeStringify = (value: unknown): string => {
 			return val
 		}
 
-		return JSON.stringify(value, replacer, 2)
+		return JSON.stringify(subject, replacer, 2)
 	} catch (error) {
 		// Business rule: logger internals MUST NOT log through the logger
 		// (would recurse through the same serialization path). Embedding

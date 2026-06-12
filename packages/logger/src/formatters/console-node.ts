@@ -81,7 +81,7 @@ const formatObjectDetails = (object: LogEntry['object']): string[] => {
 		const isLast = i === entries.length - 1
 		const prefix = isLast ? '└─' : '├─'
 		const valueStr =
-			typeof value === 'object' ? safeStringify(value) : String(value)
+			typeof value === 'string' ? value : safeStringify(value)
 
 		lines.push(...formatPropertyLines(key, valueStr, prefix))
 	}

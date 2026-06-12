@@ -59,25 +59,25 @@ const truncateStackLine = (line: string): string =>
 		? line.slice(0, MAX_STACK_LINE_LENGTH)
 		: line
 
+const cleanFunctionName = (rawName: string): string => {
+	const functionName = rawName.trim()
+
+	// Clean up common patterns
+	if (functionName.includes('<anonymous>')) return 'anonymous'
+
+	// Extract last part if it's a method call
+	const lastDotIndex = functionName.lastIndexOf('.')
+	if (lastDotIndex === -1) return functionName
+
+	return functionName.slice(lastDotIndex + 1) || functionName
+}
+
 const extractFunctionName = (stackLine: string): string => {
 	const safeLine = truncateStackLine(stackLine)
 
 	for (const pattern of STACK_TRACE_PATTERNS.function) {
 		const match = pattern.exec(safeLine)
-		if (match?.[1]) {
-			const functionName = match[1].trim()
-
-			// Clean up common patterns
-			if (functionName.includes('<anonymous>')) return 'anonymous'
-
-			// Extract last part if it's a method call
-			const lastDotIndex = functionName.lastIndexOf('.')
-			if (lastDotIndex !== -1) {
-				return functionName.slice(lastDotIndex + 1) || functionName
-			}
-
-			return functionName
-		}
+		if (match?.[1]) return cleanFunctionName(match[1])
 	}
 
 	return 'unknown'
@@ -89,7 +89,7 @@ const extractFileInfo = (stackLine: string): { file: string; line: number } => {
 	for (const pattern of STACK_TRACE_PATTERNS.file) {
 		const match = pattern.exec(safeLine)
 		if (match?.[1] && match[2]) {
-			const fullPath = match[1]
+			const [, fullPath] = match
 			const line = Number(match[2])
 
 			// Extract filename from path efficiently
@@ -98,9 +98,9 @@ const extractFileInfo = (stackLine: string): { file: string; line: number } => {
 				fullPath.lastIndexOf('\\'),
 			)
 			const file =
-				lastSeparatorIndex !== -1
-					? fullPath.slice(lastSeparatorIndex + 1)
-					: fullPath
+				lastSeparatorIndex === -1
+					? fullPath
+					: fullPath.slice(lastSeparatorIndex + 1)
 
 			return { file, line }
 		}

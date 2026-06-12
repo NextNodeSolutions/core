@@ -316,7 +316,7 @@ describe('NextNodeLogger', () => {
 
 				if (expectations.hasEmojis) {
 					expect(consoleMocks.log).toHaveBeenCalledWith(
-						expect.stringContaining(expectations.emoji!),
+						expect.stringContaining(expectations.emoji),
 					)
 					expect(consoleMocks.log).toHaveBeenCalledWith(
 						expect.stringContaining(expectations.level),
@@ -673,18 +673,18 @@ describe('NextNodeLogger', () => {
 
 	describe('dispose', () => {
 		it('should call dispose on transports that implement it', async () => {
-			let disposed = false
+			let wasDisposed = false
 			const transport: Transport = {
 				log: () => {},
 				dispose: () => {
-					disposed = true
+					wasDisposed = true
 				},
 			}
 			const testLogger = new NextNodeLogger({ transports: [transport] })
 
 			await testLogger.dispose()
 
-			expect(disposed).toBe(true)
+			expect(wasDisposed).toBe(true)
 		})
 
 		it('should not fail when transports lack dispose', async () => {

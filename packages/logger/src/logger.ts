@@ -1,5 +1,5 @@
 /**
- * NextNode Logger — public entry point.
+ * NextNode Logger - public entry point.
  * Thin barrel that re-exports the full public API.
  */
 
