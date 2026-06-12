@@ -70,11 +70,22 @@ export async function findFirewallsByName(
 	})
 }
 
-export async function createFirewall(
+/**
+ * Find a firewall by name, creating it only if absent. Reusing the existing
+ * firewall makes provisioning idempotent: a re-run (attach / resume) no longer
+ * hits Hetzner's `uniqueness_error` 409 on a name that already exists. Mirrors
+ * the idempotent contract of {@link deleteFirewall} (silent 404).
+ *
+ * Note: an existing firewall is reused as-is; its rules are NOT reconciled.
+ */
+export async function ensureFirewall(
 	token: string,
 	name: string,
 	rules: ReadonlyArray<FirewallRule>,
 ): Promise<HcloudFirewallResponse> {
+	const [existing] = await findFirewallsByName(token, name)
+	if (existing) return existing
+
 	const response = await fetch(`${HCLOUD_API_BASE}/firewalls`, {
 		method: 'POST',
 		headers: authHeaders(token),

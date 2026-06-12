@@ -75,7 +75,7 @@ vi.mock(import('./api/firewall.ts'), async importOriginal => {
 	const actual = await importOriginal()
 	return {
 		...actual,
-		createFirewall: vi.fn(async () => ({
+		ensureFirewall: vi.fn(async () => ({
 			id: 99,
 			name: 'acme-web-fw',
 			appliedToCount: 0,
@@ -526,7 +526,7 @@ describe('HetznerVpsTarget', () => {
 			})
 
 			it('propagates errors from firewall creation', async () => {
-				const { createFirewall: mockedFw } =
+				const { ensureFirewall: mockedFw } =
 					await import('./api/firewall.ts')
 				vi.mocked(mockedFw).mockRejectedValueOnce(
 					new Error('Hetzner API create firewall: 422'),
@@ -557,7 +557,7 @@ describe('HetznerVpsTarget', () => {
 				const { createServer: mockedCreate } =
 					await import('./api/server.ts')
 				// Make completeProvisioning fail to observe intermediate state
-				const { createFirewall: mockedFw } =
+				const { ensureFirewall: mockedFw } =
 					await import('./api/firewall.ts')
 				vi.mocked(mockedFw).mockRejectedValueOnce(
 					new Error('firewall fail'),

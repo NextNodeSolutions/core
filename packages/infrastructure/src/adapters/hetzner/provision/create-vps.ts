@@ -1,6 +1,6 @@
 import {
 	applyFirewall,
-	createFirewall,
+	ensureFirewall,
 } from '#/adapters/hetzner/api/firewall.ts'
 import {
 	assertServerTypeAvailable,
@@ -150,7 +150,7 @@ export async function completeProvisioning(
 
 	const firewallName = `${input.vpsName}-fw`
 	logger.info(`Ensuring firewall "${firewallName}"`)
-	const firewall = await createFirewall(
+	const firewall = await ensureFirewall(
 		credentials.hcloudToken,
 		firewallName,
 		computeFirewallRules(input.internal),

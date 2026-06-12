@@ -9,8 +9,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
 	applyFirewall,
-	createFirewall,
 	deleteFirewall,
+	ensureFirewall,
 	findFirewallById,
 	findFirewallsByName,
 } from './firewall.ts'
@@ -149,26 +149,28 @@ describe('deleteFirewall', () => {
 	})
 })
 
-describe('createFirewall', () => {
+describe('ensureFirewall', () => {
 	const firewallPayload = {
 		firewall: { id: 42, name: 'acme-web-fw' },
 	}
+	const rules = [
+		{
+			description: 'Allow SSH',
+			direction: 'in' as const,
+			protocol: 'tcp' as const,
+			port: '22',
+			source_ips: ['0.0.0.0/0', '::/0'],
+		},
+	]
 
-	it('sends rules and returns parsed firewall', async () => {
-		const mock = vi.fn().mockResolvedValue(okJson(firewallPayload))
+	it('creates the firewall when none exists, sending rules', async () => {
+		const mock = vi
+			.fn()
+			.mockResolvedValueOnce(okJson({ firewalls: [] }))
+			.mockResolvedValueOnce(okJson(firewallPayload))
 		vi.stubGlobal('fetch', mock)
 
-		const rules = [
-			{
-				description: 'Allow SSH',
-				direction: 'in' as const,
-				protocol: 'tcp' as const,
-				port: '22',
-				source_ips: ['0.0.0.0/0', '::/0'],
-			},
-		]
-
-		const firewallValue = await createFirewall(
+		const firewallValue = await ensureFirewall(
 			TEST_TOKEN,
 			'acme-web-fw',
 			rules,
@@ -177,9 +179,32 @@ describe('createFirewall', () => {
 		expect(firewallValue.id).toBe(42)
 		expect(firewallValue.name).toBe('acme-web-fw')
 
+		const [createUrl, createInit] = lastCall(mock)
+		expect(createUrl).toBe('https://api.hetzner.cloud/v1/firewalls')
+		expect(createInit.method).toBe('POST')
 		const body = lastBody(mock)
 		expect(body.name).toBe('acme-web-fw')
 		expect(body.rules).toStrictEqual(rules)
+	})
+
+	it('reuses an existing firewall without creating one', async () => {
+		const mock = vi
+			.fn()
+			.mockResolvedValue(
+				okJson({ firewalls: [{ id: 42, name: 'acme-web-fw' }] }),
+			)
+		vi.stubGlobal('fetch', mock)
+
+		const firewallValue = await ensureFirewall(
+			TEST_TOKEN,
+			'acme-web-fw',
+			rules,
+		)
+
+		expect(firewallValue.id).toBe(42)
+		expect(mock).toHaveBeenCalledTimes(1)
+		const [url] = lastCall(mock)
+		expect(url).toContain('/firewalls?name=acme-web-fw')
 	})
 })
 
