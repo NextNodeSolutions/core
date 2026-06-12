@@ -14,7 +14,7 @@ export interface ImageRef {
 }
 
 /**
- * Public env surface handed to `target.deploy(env)` — already merged from
+ * Public env surface handed to `target.deploy(env)` - already merged from
  * the target, every declared service, and the user-declared secrets'
  * public counterpart. SITE_URL is guaranteed by the orchestrator because
  * every target's `contributeEnv` puts it in `public`.
@@ -27,7 +27,7 @@ export interface DeployEnv {
 /**
  * Env contribution from a deploy target. Same `{public, secret}` shape
  * as a `Service`, so targets and services merge through the same
- * `mergeServiceEnvs` primitive — one source of truth, one collision
+ * `mergeServiceEnvs` primitive - one source of truth, one collision
  * detector. SITE_URL is required in `public` because every app needs it
  * at build + runtime and only the target knows the resolved hostname.
  */
@@ -39,7 +39,7 @@ export interface TargetEnv extends ServiceEnv {
 
 /**
  * Narrow a merged public-env Record to a DeployEnv. Throws when SITE_URL
- * is missing — that means a DeployTarget skipped its `contributeEnv`
+ * is missing - that means a DeployTarget skipped its `contributeEnv`
  * obligation, which is a wiring bug, not a runtime condition.
  */
 export function buildDeployEnv(
@@ -48,7 +48,7 @@ export function buildDeployEnv(
 	const siteUrl = values['SITE_URL']
 	if (!siteUrl) {
 		throw new Error(
-			'SITE_URL missing from merged env — every DeployTarget must put it in contributeEnv().public',
+			'SITE_URL missing from merged env - every DeployTarget must put it in contributeEnv().public',
 		)
 	}
 	return { ...values, SITE_URL: siteUrl }
@@ -61,9 +61,9 @@ export interface DeployInput {
 	// secrets are absent. Lets the container target project backing secrets by
 	// `needs` (least privilege) and build the shared `.env` the DB sidecar +
 	// migrate read. An EMPTY map for targets with no backing services (Cloudflare
-	// Pages ignores it) — provenance is always a map, never absent.
+	// Pages ignores it) - provenance is always a map, never absent.
 	readonly secretOrigins: Readonly<Record<string, string>>
-	// Image ref per declared service, keyed by instance name — parsed from the
+	// Image ref per declared service, keyed by instance name - parsed from the
 	// IMAGE_REFS env. Absent for static (Cloudflare Pages) targets, which build
 	// no images.
 	readonly images?: Readonly<Record<string, ImageRef>>
@@ -78,7 +78,7 @@ interface BaseDeployedEnvironment {
 
 export interface ContainerDeployedEnvironment extends BaseDeployedEnvironment {
 	readonly kind: 'container'
-	// Image deployed per declared service, keyed by instance name — one entry
+	// Image deployed per declared service, keyed by instance name - one entry
 	// per [deploy.services.<name>]. The deploy summary renders one row each.
 	readonly imageRefs: Readonly<Record<string, ImageRef>>
 }
@@ -144,7 +144,7 @@ export interface MigrateResult {
 /**
  * Inputs for the on-demand pre-migrate snapshot. The orchestration knows
  * project + environment; the silo and compose-file path are derived inside
- * the adapter — the domain stays free of infra strings.
+ * the adapter - the domain stays free of infra strings.
  */
 export interface SnapshotInput {
 	readonly projectName: string
@@ -153,7 +153,7 @@ export interface SnapshotInput {
 
 /**
  * Outcome of a pre-migrate snapshot triggered via the backup sidecar.
- * Just a wall-clock duration — the dump itself is identified by its
+ * Just a wall-clock duration - the dump itself is identified by its
  * timestamp in R2, and `infrastructure restore --at <deploy-time>` picks
  * it via `selectPostgresBackupForRestore`. No need to track the key here.
  */
@@ -163,7 +163,7 @@ export interface SnapshotResult {
 
 /**
  * Default migrate command used when the project does not override
- * `[services.postgres].migrate_command`. Uses `drizzle-kit migrate` —
+ * `[services.postgres].migrate_command`. Uses `drizzle-kit migrate` -
  * the platform-native runner that reads `drizzle.config.ts` (dialect +
  * `dbCredentials.url`, which the app's config reads from the injected
  * `DATABASE_URL` env). Zero app-side boilerplate for the dominant case;
@@ -197,7 +197,7 @@ export interface DeployTarget {
 	 * healthy. Called by `migrate-remote` BEFORE `runMigrate` so the
 	 * migrate container has both a reachable postgres (via the project's
 	 * docker network) and an env file on disk (for `--env-file`). For
-	 * static targets, throw "not applicable" — no DB to bring up.
+	 * static targets, throw "not applicable" - no DB to bring up.
 	 */
 	prepareRollout(
 		projectName: string,
@@ -209,7 +209,7 @@ export interface DeployTarget {
 	 * spawns an ephemeral migrate container inside the project's docker
 	 * network (postgres reachable at its compose service name, never
 	 * exposed on the host). For static targets (Cloudflare Pages), this
-	 * is a wiring bug — throw "not applicable" so the caller routes
+	 * is a wiring bug - throw "not applicable" so the caller routes
 	 * accordingly.
 	 */
 	runMigrate(input: MigrateInput): Promise<MigrateResult>
@@ -219,14 +219,14 @@ export interface DeployTarget {
 	 * is healthy and BEFORE `runMigrate` runs, so a failed migration has
 	 * a fresh dump to restore from. The sidecar uploads to R2 directly;
 	 * we return the object key so deploy summaries surface it. For static
-	 * targets, throw "not applicable" — no DB to snapshot.
+	 * targets, throw "not applicable" - no DB to snapshot.
 	 */
 	runPreMigrateSnapshot(input: SnapshotInput): Promise<SnapshotResult>
 	teardown(
 		projectName: string,
 		domain: string | undefined,
 		target: TeardownTarget,
-		withVolumes: boolean,
+		shouldWipeVolumes: boolean,
 	): Promise<TeardownResult>
 	describe?(projectName: string): Promise<TargetState | null>
 }

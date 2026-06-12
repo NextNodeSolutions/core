@@ -29,7 +29,7 @@ export async function provisionCommand(
 	const infraStorage = await ensureInfraStorageForConfig(config, cfToken)
 
 	const target = buildRuntimeTarget(config, environment, infraStorage)
-	const result = await target.ensureInfra(config.project.name)
+	const provisionResult = await target.ensureInfra(config.project.name)
 
 	const services = resolveServices({
 		config,
@@ -41,15 +41,17 @@ export async function provisionCommand(
 	})
 	await Promise.all(services.map(service => service.provision()))
 
-	await ensureGeneratedSecrets(
-		config.deploy.generatedSecrets,
-		repoSecrets,
-		repository.owner,
-		repository.name,
+	await ensureGeneratedSecrets(config.deploy.generatedSecrets, repoSecrets, {
+		owner: repository.owner,
+		repo: repository.name,
 		environment,
-	)
+	})
 
 	writeSummary(
-		buildProvisionSummary(result, config.project.name, target.name),
+		buildProvisionSummary(
+			provisionResult,
+			config.project.name,
+			target.name,
+		),
 	)
 }

@@ -126,11 +126,11 @@ describe('createR2Service', () => {
 		await expect(service.loadEnv()).rejects.toThrow('state missing')
 	})
 
-	it('throws when infra storage is missing — every R2 op needs the state bucket', () => {
+	it('throws when infra storage is missing - every R2 op needs the state bucket', () => {
 		expect(() =>
 			createR2Service({ ...CTX, infraStorage: null }, CONFIG),
 		).toThrow(
-			'r2 service: infra storage (state bucket) must be loaded by the caller — caller invariant broken',
+			'r2 service: infra storage (state bucket) must be loaded by the caller - caller invariant broken',
 		)
 	})
 })
@@ -184,7 +184,7 @@ describe('r2ServiceDefinition', () => {
 				{ ...CTX, infraStorage: null },
 			),
 		).toThrow(
-			'r2 service: infra storage (state bucket) must be loaded by the caller — caller invariant broken',
+			'r2 service: infra storage (state bucket) must be loaded by the caller - caller invariant broken',
 		)
 	})
 })

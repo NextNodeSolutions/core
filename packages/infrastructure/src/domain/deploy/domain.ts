@@ -21,7 +21,7 @@ export function resolveDeployDomain(
  * The canonical public site URL for an environment: `https://<resolved-domain>`.
  * Single source of truth shared by the runtime env (every target's
  * `contributeEnv().public.SITE_URL`) and the build args (Astro `site:` and
- * friends read it at build time) — so the value baked into the image and the
+ * friends read it at build time) - so the value baked into the image and the
  * value injected at runtime can never drift.
  */
 export function computeSiteUrl(

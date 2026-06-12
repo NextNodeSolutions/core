@@ -35,17 +35,22 @@ function buildPayload(
  * Computed values (SITE_URL) are set as plain_text (visible in dashboard).
  * Secrets (RESEND_API_KEY) are set as secret_text (write-only, encrypted).
  *
- * This PATCH merges with existing env vars — keys not included in the
+ * This PATCH merges with existing env vars - keys not included in the
  * payload are left untouched.
  */
+export interface PagesEnvTarget {
+	readonly accountId: string
+	readonly projectName: string
+	readonly token: string
+}
+
 export async function updatePagesEnvVars(
-	accountId: string,
-	projectName: string,
-	token: string,
+	target: PagesEnvTarget,
 	computed: Readonly<Record<string, string>>,
 	secrets: Readonly<Record<string, string>>,
 ): Promise<void> {
 	const envVars = buildPayload(computed, secrets)
+	const { accountId, projectName, token } = target
 
 	await cfFetchJson(
 		`${CLOUDFLARE_API_BASE}/accounts/${accountId}/pages/projects/${encodeURIComponent(projectName)}`,

@@ -23,7 +23,7 @@ const BYTE_BATCH = 64
  * The exclusive upper bound on a usable byte for a given alphabet: the largest
  * multiple of `size` that fits in a byte. Bytes at or above it would skew the
  * distribution toward the low indices (modulo bias), so they are discarded. For
- * a power-of-two alphabet (token = 64) this equals 256 — nothing is discarded.
+ * a power-of-two alphabet (token = 64) this equals 256 - nothing is discarded.
  */
 function generatorByteCeiling(size: number): number {
 	return BYTE_RANGE - (BYTE_RANGE % size)
@@ -42,7 +42,7 @@ function defaultByteSource(): () => number {
 			buffer = randomBytes(BYTE_BATCH)
 			offset = 0
 		}
-		const byte = buffer[offset]!
+		const byte = buffer.readUInt8(offset)
 		offset += 1
 		return byte
 	}
@@ -51,7 +51,7 @@ function defaultByteSource(): () => number {
 /**
  * Generate a random secret value of exactly `spec.length` characters drawn
  * uniformly from the generator's alphabet. Pure given `nextByte` (defaulting to
- * crypto) — the imperative shell (`ensureGeneratedSecrets`) decides whether to
+ * crypto) - the imperative shell (`ensureGeneratedSecrets`) decides whether to
  * call it; this only computes.
  */
 export function generateSecretValue(
@@ -64,7 +64,7 @@ export function generateSecretValue(
 	while (chars.length < spec.length) {
 		const byte = nextByte()
 		if (byte >= ceiling) continue
-		chars.push(alphabet[byte % alphabet.length]!)
+		chars.push(alphabet.charAt(byte % alphabet.length))
 	}
 	return chars.join('')
 }

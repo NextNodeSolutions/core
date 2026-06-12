@@ -52,9 +52,9 @@ export function selectGoldenImage(
 		}
 	}
 
-	const newest = matching.toSorted(
+	const [newest] = matching.toSorted(
 		(a, b) => new Date(b.created).getTime() - new Date(a.created).getTime(),
-	)[0]
+	)
 	if (!newest) {
 		return {
 			action: 'rebuild',

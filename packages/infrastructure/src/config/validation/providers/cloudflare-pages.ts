@@ -3,7 +3,7 @@ import type { DeployProviderValidator } from './registry.ts'
 export const cloudflarePages: DeployProviderValidator = {
 	requiresDomain: false,
 	requiresServices: false,
-	validate(deployRecord, secrets, generatedSecrets, vps, volumes) {
+	validate(deployRecord, inputs) {
 		if (deployRecord['services'] !== undefined) {
 			return {
 				errors: [
@@ -16,10 +16,10 @@ export const cloudflarePages: DeployProviderValidator = {
 			errors: [],
 			deploy: {
 				target: 'cloudflare-pages',
-				secrets,
-				generatedSecrets,
-				vps,
-				volumes,
+				secrets: inputs.secrets,
+				generatedSecrets: inputs.generatedSecrets,
+				vps: inputs.vps,
+				volumes: inputs.volumes,
 			},
 		}
 	},

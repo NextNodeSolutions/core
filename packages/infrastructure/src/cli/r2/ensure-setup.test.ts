@@ -194,10 +194,10 @@ describe('ensureR2Setup', () => {
 		const { urls } = stubFetch()
 		stubGh()
 
-		const result = await ensureR2Setup('cf-token')
+		const ensured = await ensureR2Setup('cf-token')
 
-		expect(result.accountId).toBe('acct-from-api')
-		expect(result.endpoint).toBe(
+		expect(ensured.accountId).toBe('acct-from-api')
+		expect(ensured.endpoint).toBe(
 			'https://acct-from-api.r2.cloudflarestorage.com',
 		)
 		expect(urls.some(u => u.endsWith('/v4/accounts'))).toBe(true)
@@ -221,10 +221,10 @@ describe('ensureR2Setup', () => {
 		const { urls } = stubFetch({ verifyResults: ['ok'] })
 		stubGh()
 
-		const result = await ensureR2Setup('cf-token')
+		const ensured = await ensureR2Setup('cf-token')
 
-		expect(result.accessKeyId).toBe('existing-id')
-		expect(result.secretAccessKey).toBe('existing-secret')
+		expect(ensured.accessKeyId).toBe('existing-id')
+		expect(ensured.secretAccessKey).toBe('existing-secret')
 		expect(urls.some(u => u.endsWith('/user/tokens'))).toBe(false)
 	})
 
@@ -234,12 +234,12 @@ describe('ensureR2Setup', () => {
 		const { urls } = stubFetch({ verifyResults: ['401', 'ok'] })
 		stubGh()
 
-		const result = await ensureR2Setup('cf-token')
+		const ensured = await ensureR2Setup('cf-token')
 
 		const tokenCreates = urls.filter(u => u.endsWith('/user/tokens'))
 		expect(tokenCreates).toHaveLength(2) // POST (create) + GET (list for cleanup)
-		expect(result.accessKeyId).toBe('new-key-id')
-		expect(result.secretAccessKey).toHaveLength(64)
+		expect(ensured.accessKeyId).toBe('new-key-id')
+		expect(ensured.secretAccessKey).toHaveLength(64)
 	})
 
 	it('continues revoking remaining tokens when one delete fails (best-effort)', async () => {
@@ -299,10 +299,10 @@ describe('ensureR2Setup', () => {
 		const { urls } = stubFetch()
 		stubGh()
 
-		const result = await ensureR2Setup('cf-token')
+		const ensured = await ensureR2Setup('cf-token')
 
 		expect(urls.filter(u => u.endsWith('/user/tokens'))).toHaveLength(2) // POST (create) + GET (list for cleanup)
-		expect(result.accessKeyId).toBe('new-key-id')
+		expect(ensured.accessKeyId).toBe('new-key-id')
 		const setCalls = spawnSyncMock.mock.calls.filter(
 			c => c[1]?.[0] === 'secret' && c[1]?.[1] === 'set',
 		)
@@ -324,9 +324,9 @@ describe('ensureR2Setup', () => {
 		stubFetch()
 		stubGh()
 
-		const result = await ensureR2Setup('cf-token')
+		const ensured = await ensureR2Setup('cf-token')
 
-		expect(result).toEqual({
+		expect(ensured).toEqual({
 			accountId: 'acct-from-api',
 			endpoint: 'https://acct-from-api.r2.cloudflarestorage.com',
 			accessKeyId: 'new-key-id',

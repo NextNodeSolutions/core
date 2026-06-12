@@ -27,7 +27,7 @@ async function resolveCredsOrRotate(ctx: R2Context): Promise<R2Credentials> {
 	const accessKeyId = process.env[ENV_R2_ACCESS_KEY]
 	const secretAccessKey = process.env[ENV_R2_SECRET_KEY]
 	if (!accessKeyId || !secretAccessKey) {
-		logger.info('No R2 credentials injected — provisioning new ones')
+		logger.info('No R2 credentials injected - provisioning new ones')
 		return rotateR2Credentials(ctx)
 	}
 
@@ -42,7 +42,7 @@ async function resolveCredsOrRotate(ctx: R2Context): Promise<R2Credentials> {
 		return { accessKeyId, secretAccessKey }
 	}
 	logger.warn(
-		`Existing R2 credentials are stale (${String(verify.status)}: ${verify.body}) — rotating via Cloudflare API`,
+		`Existing R2 credentials are stale (${String(verify.status)}: ${verify.body}) - rotating via Cloudflare API`,
 	)
 	return rotateR2Credentials(ctx)
 }
@@ -54,7 +54,7 @@ async function persistOrgSecrets(
 	const org = process.env[ENV_GITHUB_OWNER]
 	if (!org) {
 		logger.warn(
-			`${ENV_GITHUB_OWNER} not set — skipping GitHub org secret persistence`,
+			`${ENV_GITHUB_OWNER} not set - skipping GitHub org secret persistence`,
 		)
 		return
 	}
@@ -63,7 +63,7 @@ async function persistOrgSecrets(
 	const available = await orgSecrets.ghAvailable()
 	if (!available) {
 		logger.warn(
-			'gh CLI unavailable — cannot persist R2 secrets to GitHub org. They will need to be recreated on the next run.',
+			'gh CLI unavailable - cannot persist R2 secrets to GitHub org. They will need to be recreated on the next run.',
 		)
 		return
 	}
@@ -84,7 +84,7 @@ async function persistOrgSecrets(
  *      until it propagates, revoke stale tokens, persist as GitHub org
  *      secrets.
  *
- * Returns the resolved `InfraStorageRuntimeConfig` — callers thread it
+ * Returns the resolved `InfraStorageRuntimeConfig` - callers thread it
  * explicitly into adapters that need it (no hidden coupling via `process.env`).
  */
 export async function ensureR2Setup(

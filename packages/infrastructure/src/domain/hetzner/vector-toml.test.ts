@@ -27,7 +27,7 @@ describe('renderVectorToml', () => {
 	})
 
 	it('enriches logs with NN_CLIENT_ID and NN_PROJECT env vars', () => {
-		const enrich = parseVectorConfig().transforms.enrich
+		const { enrich } = parseVectorConfig().transforms
 		expect(enrich.type).toBe('remap')
 		expect(enrich.source).toContain('${NN_CLIENT_ID}')
 		expect(enrich.source).toContain('${NN_PROJECT}')

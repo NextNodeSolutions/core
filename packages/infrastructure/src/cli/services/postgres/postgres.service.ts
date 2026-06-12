@@ -35,10 +35,10 @@ export function createPostgresService(
 
 	if (ctx.infraStorage === null) {
 		throw new Error(
-			'postgres service (embedded mode): infra storage (state bucket) must be loaded by the caller — caller invariant broken',
+			'postgres service (embedded mode): infra storage (state bucket) must be loaded by the caller - caller invariant broken',
 		)
 	}
-	const accountId = ctx.infraStorage.accountId
+	const { accountId } = ctx.infraStorage
 	return {
 		name: 'postgres',
 		async provision(): Promise<void> {

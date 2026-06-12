@@ -23,7 +23,7 @@ import type { ValidationResult } from './result.ts'
 // contract, plus the shared field vocabulary every config schema reuses.
 // Individual validators still import Valibot's schema builders directly (that
 // is where schemas are declared); this module owns the two things worth
-// centralizing — the `safeParse → ValidationResult` seam and the reusable field
+// centralizing - the `safeParse → ValidationResult` seam and the reusable field
 // shapes below.
 //
 // Every validation action in a config schema MUST carry an explicit message:
@@ -35,12 +35,12 @@ export function runSchema<TSchema extends GenericSchema>(
 	schema: TSchema,
 	raw: unknown,
 ): ValidationResult<InferOutput<TSchema>> {
-	const result = safeParse(schema, raw, {
+	const validation = safeParse(schema, raw, {
 		abortEarly: false,
 		abortPipeEarly: false,
 	})
-	if (result.success) return { ok: true, section: result.output }
-	return { ok: false, errors: result.issues.map(issue => issue.message) }
+	if (validation.success) return { ok: true, section: validation.output }
+	return { ok: false, errors: validation.issues.map(issue => issue.message) }
 }
 
 // Flatten a set of per-field results into their combined error messages (empty
@@ -49,7 +49,8 @@ export function runSchema<TSchema extends GenericSchema>(
 // then gather. See validateProjectSection / validatePostgresService.
 export const collectFieldErrors = (
 	...results: ReadonlyArray<ValidationResult<unknown>>
-): string[] => results.flatMap(result => (result.ok ? [] : result.errors))
+): string[] =>
+	results.flatMap(validation => (validation.ok ? [] : validation.errors))
 
 // --- shared field builders ----------------------------------------------
 //
@@ -67,8 +68,8 @@ export const optionalNonEmpty = (
 ): GenericSchema<unknown, string | undefined> => optional(nonEmptyString(msg))
 
 // An optional array-of-non-empty-strings field, defaulting to []. Takes a
-// distinct message per failure level — `notArrayMsg` when the value is not an
-// array, `entryMsg` when an entry is empty or non-string — so the two cases
+// distinct message per failure level - `notArrayMsg` when the value is not an
+// array, `entryMsg` when an entry is empty or non-string - so the two cases
 // surface separately instead of collapsing into one ambiguous string.
 export const stringArray = (
 	notArrayMsg: string,
@@ -87,7 +88,7 @@ export const optionalStringOrFalse = (
 
 // A field only valid when absent: a present value surfaces `msg`. (Presence is
 // enforced at the OBJECT level with a `check`, since an `optional` entry skips
-// its own schema when the key is missing — see the per-section validators.)
+// its own schema when the key is missing - see the per-section validators.)
 export const forbiddenField = (
 	msg: string,
 ): GenericSchema<unknown, undefined> => optional(never(msg))

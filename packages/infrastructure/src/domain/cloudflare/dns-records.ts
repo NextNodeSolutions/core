@@ -30,7 +30,7 @@ export interface DnsRecordsInput {
 	 * The actual `*.pages.dev` hostname assigned by Cloudflare to the
 	 * project (e.g. `my-site.pages.dev` or, when the desired name is
 	 * already taken globally, `my-site-6zu.pages.dev`). MUST be read
-	 * from the Pages API (`result.subdomain`) — never derived from the
+	 * from the Pages API (`result.subdomain`) - never derived from the
 	 * project name, since CF auto-suffixes on cross-account collisions
 	 * and a CNAME pointing at the bare project name yields a
 	 * "CNAME Cross-User Banned" (1014) error.
@@ -102,15 +102,15 @@ function buildLookup(hostname: string): DnsRecordLookup {
 function buildCname(
 	name: string,
 	target: string,
-	proxied: boolean,
+	isProxied: boolean,
 ): DesiredDnsRecord {
 	return {
 		zoneName: extractRootDomain(name),
 		name,
 		type: 'CNAME',
 		content: target,
-		proxied,
-		ttl: proxied ? 1 : DNS_TTL_UNPROXIED,
+		proxied: isProxied,
+		ttl: isProxied ? 1 : DNS_TTL_UNPROXIED,
 	}
 }
 
@@ -153,7 +153,7 @@ export function reconcileDnsRecord(
 		}
 	}
 
-	const current = existing[0]
+	const [current] = existing
 	if (!current) return { kind: 'create' }
 	if (
 		current.content === desired.content &&

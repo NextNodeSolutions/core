@@ -12,7 +12,25 @@ import { DEFAULT_MIGRATE_COMMAND } from '#/domain/deploy/target.ts'
 import { resolveDeployContext } from './resolve-deploy-context.ts'
 
 import type { DeployableConfig } from '#/config/types.ts'
-import type { MigrateInput } from '#/domain/deploy/target.ts'
+import type { DeployTarget, MigrateInput } from '#/domain/deploy/target.ts'
+import type { AppEnvironment } from '#/domain/environment.ts'
+
+// Take an embedded-postgres pre-migrate snapshot so a failed migration can be
+// rolled back. Returns the snapshot duration for the summary.
+async function runPreMigrateSnapshot(
+	target: DeployTarget,
+	projectName: string,
+	environment: AppEnvironment,
+): Promise<number> {
+	const snapshot = await target.runPreMigrateSnapshot({
+		projectName,
+		environment,
+	})
+	logger.info(
+		`Pre-migrate snapshot for "${projectName}" completed in ${String(snapshot.durationMs)}ms`,
+	)
+	return snapshot.durationMs
+}
 
 /**
  * `migrate-remote` orchestrates Path A's migrate phase. It runs in its
@@ -21,7 +39,7 @@ import type { MigrateInput } from '#/domain/deploy/target.ts'
  * unmigrated schema.
  *
  * Steps:
- *   1. Stage the rollout on the target — env file, compose file,
+ *   1. Stage the rollout on the target - env file, compose file,
  *      registry login, image pull, postgres up + healthy.
  *   2. Trigger an on-demand snapshot via the backup sidecar so the
  *      forward-only migration has a known-good restore point. Skipped
@@ -32,14 +50,14 @@ import type { MigrateInput } from '#/domain/deploy/target.ts'
  *
  * The snapshot is the rollback safety net: a failure there halts the
  * workflow before migrate runs. A migration failure does NOT delete the
- * snapshot — it stays in R2 for `infrastructure restore`, which picks
+ * snapshot - it stays in R2 for `infrastructure restore`, which picks
  * the right dump by timestamp (most-recent ≤ deploy time). Skipped
  * (early-exit) when the project does not declare `[services.postgres]`.
  */
 export async function migrateRemoteCommand(
 	config: DeployableConfig,
 ): Promise<void> {
-	const postgres = config.services.postgres
+	const { postgres } = config.services
 	if (!postgres) {
 		logger.info(
 			`Skipping migrate-remote: no [services.postgres] for "${config.project.name}"`,
@@ -62,17 +80,14 @@ export async function migrateRemoteCommand(
 
 	await target.prepareRollout(config.project.name, input, env)
 
-	let snapshotDurationMs: number | null = null
-	if (postgres.mode === 'embedded') {
-		const snapshot = await target.runPreMigrateSnapshot({
-			projectName: config.project.name,
-			environment,
-		})
-		snapshotDurationMs = snapshot.durationMs
-		logger.info(
-			`Pre-migrate snapshot for "${config.project.name}" completed in ${String(snapshot.durationMs)}ms`,
-		)
-	}
+	const snapshotDurationMs =
+		postgres.mode === 'embedded'
+			? await runPreMigrateSnapshot(
+					target,
+					config.project.name,
+					environment,
+				)
+			: null
 
 	const migrateInput: MigrateInput = {
 		projectName: config.project.name,
@@ -81,16 +96,16 @@ export async function migrateRemoteCommand(
 		migrateCommand: postgres.migrateCommand ?? DEFAULT_MIGRATE_COMMAND,
 	}
 
-	const result = await target.runMigrate(migrateInput)
+	const migrateResult = await target.runMigrate(migrateInput)
 	logger.info(
-		`Migration applied for "${config.project.name}" in ${result.durationMs}ms`,
+		`Migration applied for "${config.project.name}" in ${migrateResult.durationMs}ms`,
 	)
 
 	writeSummary(
 		buildMigrateSummary({
 			projectName: config.project.name,
 			environment,
-			migrateDurationMs: result.durationMs,
+			migrateDurationMs: migrateResult.durationMs,
 			snapshotDurationMs,
 		}),
 	)

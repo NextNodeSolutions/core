@@ -26,8 +26,8 @@ describe('createR2Token', () => {
 		)
 		vi.stubGlobal('fetch', fetchMock)
 
-		const result = await createR2Token({ ...INPUT })
-		expect(result).toEqual({ id: 'new-id', value: 'raw-secret' })
+		const createdToken = await createR2Token({ ...INPUT })
+		expect(createdToken).toEqual({ id: 'new-id', value: 'raw-secret' })
 		expect(fetchMock).toHaveBeenCalledWith(
 			'https://api.cloudflare.com/client/v4/user/tokens',
 			expect.objectContaining({
@@ -37,7 +37,7 @@ describe('createR2Token', () => {
 				}),
 			}),
 		)
-		const call = fetchMock.mock.calls[0]
+		const [call] = fetchMock.mock.calls
 		if (!call) throw new Error('expected fetch call')
 		const body: unknown = JSON.parse(call[1].body)
 		expect(body).toEqual({
@@ -90,9 +90,9 @@ describe('listUserTokens', () => {
 			),
 		)
 
-		const result = await listUserTokens('parent-tok')
+		const tokensValue = await listUserTokens('parent-tok')
 
-		expect(result).toEqual([
+		expect(tokensValue).toEqual([
 			{ id: 'a', name: 'nextnode-r2', status: 'active' },
 			{ id: 'b', name: 'other', status: 'disabled' },
 		])

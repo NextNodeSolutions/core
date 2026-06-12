@@ -25,10 +25,36 @@ import type { AppEnvironment } from '#/domain/environment.ts'
 
 const logger = createLogger()
 
+// Either wipe the project's postgres backup bucket (irreversible) or log that
+// it was preserved. Driven by the TEARDOWN_WIPE_BACKUPS opt-in.
+async function reconcilePostgresBackups(
+	projectName: string,
+	infraStorage: InfraStorageRuntimeConfig,
+	shouldWipeBackups: boolean,
+): Promise<void> {
+	const bucket = postgresBackupBucketName(projectName)
+	if (!shouldWipeBackups) {
+		logger.info(
+			`Preserving backup bucket "${bucket}" (use --wipe-backups to remove).`,
+		)
+		return
+	}
+	logger.info(`Wiping backup bucket "${bucket}" (irreversible)...`)
+	const s3 = new S3Client({
+		region: 'auto',
+		endpoint: infraStorage.endpoint,
+		credentials: {
+			accessKeyId: infraStorage.accessKeyId,
+			secretAccessKey: infraStorage.secretAccessKey,
+		},
+	})
+	await wipePostgresBackups(s3, bucket)
+}
+
 /**
  * Detach the public custom domain from every `cdn`-enabled bucket so no
  * orphaned Cloudflare binding (and its auto-created CNAME) survives the
- * teardown. Only runs on `project` scope — `vps` is a server-level
+ * teardown. Only runs on `project` scope - `vps` is a server-level
  * operation that leaves project R2 data in place. Reversible: a later
  * provision re-attaches the domain.
  */
@@ -40,7 +66,7 @@ async function teardownR2CustomDomains(
 ): Promise<void> {
 	if (teardownTarget !== 'project') return
 	if (infraStorage === null) return
-	const domain = config.project.domain
+	const { domain } = config.project
 	if (domain === undefined) return
 	const cdnBuckets = (config.services.r2?.buckets ?? []).filter(
 		bucket => bucket.cdn,
@@ -48,9 +74,9 @@ async function teardownR2CustomDomains(
 	if (cdnBuckets.length === 0) return
 
 	const cfToken = requireEnv('CLOUDFLARE_API_TOKEN')
-	const accountId = infraStorage.accountId
-	// Resolve the deploy domain ONCE — the same single resolution the provision
-	// path applies via `resolveServices` — so the hostname detached here matches
+	const { accountId } = infraStorage
+	// Resolve the deploy domain ONCE - the same single resolution the provision
+	// path applies via `resolveServices` - so the hostname detached here matches
 	// the one attached at provision (in development both gain the `dev.` prefix).
 	const resolvedDomain = resolveDeployDomain(domain, environment)
 	await Promise.all(
@@ -82,44 +108,36 @@ export async function teardownCommand(config: DeployableConfig): Promise<void> {
 		TEARDOWN_TARGETS,
 		'project',
 	)
-	const withVolumes = isEnvSet('TEARDOWN_WITH_VOLUMES')
+	const shouldWipeVolumes = isEnvSet('TEARDOWN_WITH_VOLUMES')
 	const wipeBackups = isEnvSet('TEARDOWN_WIPE_BACKUPS')
-	validateTeardownOptions(config.project.type, teardownTarget, withVolumes)
+	validateTeardownOptions(
+		config.project.type,
+		teardownTarget,
+		shouldWipeVolumes,
+	)
 	const infraStorage = await loadInfraStorageForConfig(config)
 	const target = buildRuntimeTarget(config, environment, infraStorage)
 
-	// Audit line — emitted BEFORE any destructive call so CI log readers can
+	// Audit line - emitted BEFORE any destructive call so CI log readers can
 	// reconstruct the exact scope of the teardown (project, env, target type,
 	// domain) even if a later step fails mid-flight.
 	logger.info(
-		`Teardown starting: project="${config.project.name}" env="${environment}" target="${target.name}" scope="${teardownTarget}" withVolumes=${String(withVolumes)} wipeBackups=${String(wipeBackups)} domain="${config.project.domain ?? '(none)'}"`,
+		`Teardown starting: project="${config.project.name}" env="${environment}" target="${target.name}" scope="${teardownTarget}" shouldWipeVolumes=${String(shouldWipeVolumes)} wipeBackups=${String(wipeBackups)} domain="${config.project.domain ?? '(none)'}"`,
 	)
 
-	const result = await target.teardown(
+	const teardownResult = await target.teardown(
 		config.project.name,
 		config.project.domain,
 		teardownTarget,
-		withVolumes,
+		shouldWipeVolumes,
 	)
 
 	if (config.services.postgres !== undefined && infraStorage !== null) {
-		const bucket = postgresBackupBucketName(config.project.name)
-		if (wipeBackups) {
-			logger.info(`Wiping backup bucket "${bucket}" (irreversible)...`)
-			const s3 = new S3Client({
-				region: 'auto',
-				endpoint: infraStorage.endpoint,
-				credentials: {
-					accessKeyId: infraStorage.accessKeyId,
-					secretAccessKey: infraStorage.secretAccessKey,
-				},
-			})
-			await wipePostgresBackups(s3, bucket)
-		} else {
-			logger.info(
-				`Preserving backup bucket "${bucket}" (use --wipe-backups to remove).`,
-			)
-		}
+		await reconcilePostgresBackups(
+			config.project.name,
+			infraStorage,
+			wipeBackups,
+		)
 	}
 
 	await teardownR2CustomDomains(
@@ -129,5 +147,7 @@ export async function teardownCommand(config: DeployableConfig): Promise<void> {
 		teardownTarget,
 	)
 
-	writeSummary(buildTeardownSummary(result, config.project.name, target.name))
+	writeSummary(
+		buildTeardownSummary(teardownResult, config.project.name, target.name),
+	)
 }

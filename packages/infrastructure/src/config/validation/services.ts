@@ -21,7 +21,7 @@ interface MutableServicesConfig {
 
 /**
  * Validate the [services] table. Returns an empty `ServicesConfig` when no
- * services are declared — every backing service (R2, future Supabase, Redis)
+ * services are declared - every backing service (R2, future Supabase, Redis)
  * lives as an optional sub-table under `[services.<name>]`.
  */
 export function validateServicesSection(
@@ -37,28 +37,28 @@ export function validateServicesSection(
 
 	if (raw['r2'] !== undefined) {
 		const r2Result = validateR2Service(raw['r2'])
-		if (!r2Result.ok) {
-			errors.push(...r2Result.errors)
-		} else {
+		if (r2Result.ok) {
 			services.r2 = r2Result.section
+		} else {
+			errors.push(...r2Result.errors)
 		}
 	}
 
 	if (raw['postgres'] !== undefined) {
 		const postgresResult = validatePostgresService(raw['postgres'])
-		if (!postgresResult.ok) {
-			errors.push(...postgresResult.errors)
-		} else {
+		if (postgresResult.ok) {
 			services.postgres = postgresResult.section
+		} else {
+			errors.push(...postgresResult.errors)
 		}
 	}
 
 	if (raw['supabase'] !== undefined) {
 		const supabaseResult = validateSupabaseService(raw['supabase'])
-		if (!supabaseResult.ok) {
-			errors.push(...supabaseResult.errors)
-		} else {
+		if (supabaseResult.ok) {
 			services.supabase = supabaseResult.section
+		} else {
+			errors.push(...supabaseResult.errors)
 		}
 	}
 

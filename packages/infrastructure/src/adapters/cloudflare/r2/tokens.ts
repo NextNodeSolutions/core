@@ -17,17 +17,17 @@ export interface CreateR2TokenInput {
 	readonly permissions: R2PermissionGroupIds
 }
 
-function parseTokenResult(item: unknown): CloudflareTokenResult {
-	if (typeof item !== 'object' || item === null) {
+function parseTokenResult(rawToken: unknown): CloudflareTokenResult {
+	if (typeof rawToken !== 'object' || rawToken === null) {
 		throw new Error('Cloudflare R2 token response: result is not an object')
 	}
-	if (!('id' in item) || typeof item.id !== 'string') {
+	if (!('id' in rawToken) || typeof rawToken.id !== 'string') {
 		throw new Error('Cloudflare R2 token response: id missing')
 	}
-	if (!('value' in item) || typeof item.value !== 'string') {
+	if (!('value' in rawToken) || typeof rawToken.value !== 'string') {
 		throw new Error('Cloudflare R2 token response: value missing')
 	}
-	return { id: item.id, value: item.value }
+	return { id: rawToken.id, value: rawToken.value }
 }
 
 /**
@@ -48,14 +48,14 @@ export async function createR2Token(
 	})
 
 	const context = `Cloudflare R2 token create "${input.tokenName}"`
-	const data = await cfFetchJson(
+	const responseBody = await cfFetchJson(
 		`${CLOUDFLARE_API_BASE}/user/tokens`,
 		input.token,
 		context,
 		{ method: 'POST', body: JSON.stringify(body) },
 	)
 
-	return parseTokenResult(requireObjectResult(data, context))
+	return parseTokenResult(requireObjectResult(responseBody, context))
 }
 
 export interface ListedToken {
@@ -64,20 +64,20 @@ export interface ListedToken {
 	readonly status: string
 }
 
-function parseListedToken(item: unknown): ListedToken {
-	if (typeof item !== 'object' || item === null) {
+function parseListedToken(rawToken: unknown): ListedToken {
+	if (typeof rawToken !== 'object' || rawToken === null) {
 		throw new Error('Cloudflare list tokens: item is not an object')
 	}
-	if (!('id' in item) || typeof item.id !== 'string') {
+	if (!('id' in rawToken) || typeof rawToken.id !== 'string') {
 		throw new Error('Cloudflare list tokens: id missing')
 	}
-	if (!('name' in item) || typeof item.name !== 'string') {
+	if (!('name' in rawToken) || typeof rawToken.name !== 'string') {
 		throw new Error('Cloudflare list tokens: name missing')
 	}
-	if (!('status' in item) || typeof item.status !== 'string') {
+	if (!('status' in rawToken) || typeof rawToken.status !== 'string') {
 		throw new Error('Cloudflare list tokens: status missing')
 	}
-	return { id: item.id, name: item.name, status: item.status }
+	return { id: rawToken.id, name: rawToken.name, status: rawToken.status }
 }
 
 /**
@@ -88,12 +88,12 @@ export async function listUserTokens(
 	cfToken: string,
 ): Promise<ReadonlyArray<ListedToken>> {
 	const context = 'Cloudflare list user tokens'
-	const data = await cfFetchJson(
+	const responseBody = await cfFetchJson(
 		`${CLOUDFLARE_API_BASE}/user/tokens`,
 		cfToken,
 		context,
 	)
-	return requireArrayResult(data, context).map(parseListedToken)
+	return requireArrayResult(responseBody, context).map(parseListedToken)
 }
 
 /**

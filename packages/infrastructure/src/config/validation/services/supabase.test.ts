@@ -4,18 +4,20 @@ import { validateSupabaseService } from './supabase.ts'
 
 describe('validateSupabaseService', () => {
 	it('accepts an empty table (gate only)', () => {
-		const result = validateSupabaseService({})
+		const validation = validateSupabaseService({})
 
-		expect(result.ok).toBe(true)
-		if (!result.ok) return
-		expect(result.section).toEqual({})
+		expect(validation.ok).toBe(true)
+		if (!validation.ok) return
+		expect(validation.section).toEqual({})
 	})
 
 	it('rejects a non-table [services.supabase] section', () => {
-		const result = validateSupabaseService('enabled')
+		const validation = validateSupabaseService('enabled')
 
-		expect(result.ok).toBe(false)
-		if (result.ok) return
-		expect(result.errors).toEqual(['[services.supabase] must be a table'])
+		expect(validation.ok).toBe(false)
+		if (validation.ok) return
+		expect(validation.errors).toEqual([
+			'[services.supabase] must be a table',
+		])
 	})
 })

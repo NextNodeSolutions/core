@@ -2,13 +2,18 @@ import { defaultGhRunner, probeGh } from './gh-runner.ts'
 
 import type { GhRunner } from './gh-runner.ts'
 
+// GitHub repo + pipeline environment a secret is scoped to.
+export interface RepoEnvScope {
+	readonly owner: string
+	readonly repo: string
+	readonly environment: string
+}
+
 export interface EnvSecretsAdapter {
 	setRepoEnvSecret: (
 		name: string,
-		value: string,
-		owner: string,
-		repo: string,
-		environment: string,
+		secretValue: string,
+		scope: RepoEnvScope,
 	) => Promise<void>
 	ghAvailable: () => Promise<boolean>
 }
@@ -17,22 +22,22 @@ export function createEnvSecretsAdapter(
 	runner: GhRunner = defaultGhRunner,
 ): EnvSecretsAdapter {
 	return {
-		async setRepoEnvSecret(name, value, owner, repo, environment) {
-			const result = await runner(
+		async setRepoEnvSecret(name, secretValue, scope) {
+			const ghResult = await runner(
 				[
 					'secret',
 					'set',
 					name,
 					'--repo',
-					`${owner}/${repo}`,
+					`${scope.owner}/${scope.repo}`,
 					'--env',
-					environment,
+					scope.environment,
 				],
-				value,
+				secretValue,
 			)
-			if (result.exitCode !== 0) {
+			if (ghResult.exitCode !== 0) {
 				throw new Error(
-					`gh secret set "${name}" --env "${environment}" failed (exit ${String(result.exitCode)}): ${result.stderr.trim()}`,
+					`gh secret set "${name}" --env "${scope.environment}" failed (exit ${String(ghResult.exitCode)}): ${ghResult.stderr.trim()}`,
 				)
 			}
 		},

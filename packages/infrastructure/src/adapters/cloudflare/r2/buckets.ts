@@ -19,7 +19,7 @@ export interface EnsureR2BucketInput {
  * the bucket is present (HTTP 200), creates it via POST otherwise.
  *
  * Returns `true` if the bucket was newly created, `false` if it already
- * existed — callers use this for logging + metrics.
+ * existed - callers use this for logging + metrics.
  */
 export async function ensureR2Bucket(
 	input: EnsureR2BucketInput,
@@ -51,9 +51,9 @@ export async function ensureR2Bucket(
 	)
 	await requireOk(createResponse)
 
-	const data: unknown = await createResponse.json()
+	const responseBody: unknown = await createResponse.json()
 	const context = `Cloudflare R2 bucket create "${input.bucketName}"`
-	const envelope = parseEnvelope(data, context)
+	const envelope = parseEnvelope(responseBody, context)
 	if (!envelope.success) {
 		throw new Error(`${context} failed: ${formatErrors(envelope.errors)}`)
 	}

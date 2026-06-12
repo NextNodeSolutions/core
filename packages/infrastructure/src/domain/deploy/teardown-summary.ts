@@ -6,13 +6,13 @@ import {
 import type { TeardownResult } from './teardown-result.ts'
 
 export function buildTeardownSummary(
-	result: TeardownResult,
+	teardownResult: TeardownResult,
 	projectName: string,
 	targetName: string,
 ): string {
 	const heading = `### :wastebasket: Infrastructure torn down for \`${projectName}\``
 	const table = renderKeyValueTable(
-		buildResourceOutcomeRows(result, targetName),
+		buildResourceOutcomeRows(teardownResult, targetName),
 	)
 
 	return `${heading}\n\n${table}`

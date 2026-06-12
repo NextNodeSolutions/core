@@ -7,8 +7,8 @@ const logger = createLogger()
 export interface WaitOptions<T> {
 	readonly subject: string
 	readonly poll: () => Promise<T>
-	readonly isDone: (value: T) => boolean
-	readonly detail?: (value: T) => string
+	readonly isDone: (polled: T) => boolean
+	readonly detail?: (polled: T) => string
 	readonly maxAttempts: number
 	readonly intervalMs: number
 }
@@ -30,12 +30,12 @@ export interface WaitOptions<T> {
 export async function waitUntil<T>(options: WaitOptions<T>): Promise<T> {
 	for (let attempt = 1; attempt <= options.maxAttempts; attempt++) {
 		// oxlint-disable-next-line no-await-in-loop -- sequential polling by design
-		const value = await options.poll()
-		if (options.isDone(value)) {
+		const polled = await options.poll()
+		if (options.isDone(polled)) {
 			logger.info(`${options.subject}: done`)
-			return value
+			return polled
 		}
-		const detail = options.detail ? `${options.detail(value)} ` : ''
+		const detail = options.detail ? `${options.detail(polled)} ` : ''
 		logger.info(
 			`${options.subject}: ${detail}(attempt ${String(attempt)}/${String(options.maxAttempts)})`,
 		)

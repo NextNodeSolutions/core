@@ -18,12 +18,12 @@ export interface SigV4SignedRequest {
 	readonly headers: Record<string, string>
 }
 
-function hmacSha256(key: Buffer | string, data: string): Buffer {
-	return createHmac('sha256', key).update(data).digest()
+function hmacSha256(key: Buffer | string, message: string): Buffer {
+	return createHmac('sha256', key).update(message).digest()
 }
 
-function sha256Hex(data: string): string {
-	return createHash('sha256').update(data).digest('hex')
+function sha256Hex(message: string): string {
+	return createHash('sha256').update(message).digest('hex')
 }
 
 const DATE_STAMP_LENGTH = 8

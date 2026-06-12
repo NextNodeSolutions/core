@@ -5,22 +5,22 @@ import type { R2BucketBinding, R2ServiceState } from '#/domain/services/r2.ts'
 import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
 
 function parseBucketBindings(
-	value: unknown,
+	rawList: unknown,
 	key: string,
 ): ReadonlyArray<R2BucketBinding> {
-	if (!Array.isArray(value)) {
+	if (!Array.isArray(rawList)) {
 		throw new Error(
 			`Invalid R2 service state at "${key}": buckets is not an array`,
 		)
 	}
-	return value.map((entry, index) => {
+	return rawList.map((entry, index) => {
 		if (!isRecord(entry)) {
 			throw new Error(
 				`Invalid R2 service state at "${key}": buckets[${String(index)}] is not an object`,
 			)
 		}
-		const alias = entry['alias']
-		const name = entry['name']
+		const { alias } = entry
+		const { name } = entry
 		if (typeof alias !== 'string' || alias === '') {
 			throw new Error(
 				`Invalid R2 service state at "${key}": buckets[${String(index)}].alias missing`,
@@ -31,7 +31,7 @@ function parseBucketBindings(
 				`Invalid R2 service state at "${key}": buckets[${String(index)}].name missing`,
 			)
 		}
-		const publicUrl = entry['publicUrl']
+		const { publicUrl } = entry
 		if (publicUrl === undefined) return { alias, name }
 		if (typeof publicUrl !== 'string' || publicUrl === '') {
 			throw new Error(
@@ -43,16 +43,16 @@ function parseBucketBindings(
 }
 
 function parseState(raw: string, key: string): R2ServiceState {
-	const data: unknown = parseJsonOrThrow(
+	const parsedState: unknown = parseJsonOrThrow(
 		raw,
 		`Invalid R2 service state at "${key}"`,
 	)
-	if (!isRecord(data)) {
+	if (!isRecord(parsedState)) {
 		throw new Error(`Invalid R2 service state at "${key}": not an object`)
 	}
-	const endpoint = data['endpoint']
-	const accessKeyId = data['accessKeyId']
-	const secretAccessKey = data['secretAccessKey']
+	const { endpoint } = parsedState
+	const { accessKeyId } = parsedState
+	const { secretAccessKey } = parsedState
 	if (typeof endpoint !== 'string' || endpoint === '') {
 		throw new Error(
 			`Invalid R2 service state at "${key}": missing endpoint`,
@@ -72,7 +72,7 @@ function parseState(raw: string, key: string): R2ServiceState {
 		endpoint,
 		accessKeyId,
 		secretAccessKey,
-		buckets: parseBucketBindings(data['buckets'], key),
+		buckets: parseBucketBindings(parsedState['buckets'], key),
 	}
 }
 
@@ -80,9 +80,9 @@ export async function readR2ServiceState(
 	r2: ObjectStoreClient,
 	key: string,
 ): Promise<R2ServiceState | null> {
-	const result = await r2.get(key)
-	if (!result) return null
-	return parseState(result.body, key)
+	const stored = await r2.get(key)
+	if (!stored) return null
+	return parseState(stored.body, key)
 }
 
 export async function writeR2ServiceState(

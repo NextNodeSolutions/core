@@ -67,7 +67,7 @@ import { migrateRemoteCommand } from './migrate-remote.command.ts'
 
 // Hoisted vi.fn()s so the HetznerVpsTarget mock can route every target
 // method through assertable spies. Hoisting is required because vi.mock
-// runs before module imports — without it, the target factory would
+// runs before module imports - without it, the target factory would
 // close over `undefined`.
 const { mockPrepareRollout, mockRunMigrate, mockRunPreMigrateSnapshot } =
 	vi.hoisted(() => ({
@@ -77,7 +77,7 @@ const { mockPrepareRollout, mockRunMigrate, mockRunPreMigrateSnapshot } =
 	}))
 
 // Mock loadR2Runtime (network boundary: Cloudflare accounts API + SigV4
-// verify). migrate-remote must NOT depend on R2 bootstrap — that lives
+// verify). migrate-remote must NOT depend on R2 bootstrap - that lives
 // in provision.
 vi.mock(import('#/cli/r2/load-runtime.ts'), async () => ({
 	loadR2Runtime: vi.fn(async () => ({

@@ -3,13 +3,13 @@ export const HOST_PORT_MAX = 8200
 
 export interface HostPortAllocation {
 	// Host port for every url service of THIS project: reused where the project
-	// already had one, freshly allocated otherwise. Services without a url never
-	// appear here — they face no reverse proxy and expose no host port.
+	// already had one, freshly hasAllocated otherwise. Services without a url never
+	// appear here - they face no reverse proxy and expose no host port.
 	readonly ports: Readonly<Record<string, number>>
 	// true when at least one fresh port was assigned and the caller must persist
 	// the updated nested map; false when every url service already had a port and
 	// the caller can skip the write.
-	readonly allocated: boolean
+	readonly hasAllocated: boolean
 }
 
 /**
@@ -20,7 +20,7 @@ export interface HostPortAllocation {
  * nested map, not just this project's slice.
  *
  * Idempotent for an already-mapped service: a re-deploy with the same url
- * services returns the same ports and `allocated: false`, so the caller skips
+ * services returns the same ports and `hasAllocated: false`, so the caller skips
  * the state write.
  */
 export function allocateHostPort(
@@ -32,7 +32,7 @@ export function allocateHostPort(
 	const taken = collectTakenPorts(hostPorts)
 
 	const ports: Record<string, number> = {}
-	let allocated = false
+	let hasAllocated = false
 	for (const service of urlServices) {
 		const current = existing[service]
 		if (current !== undefined) {
@@ -42,10 +42,10 @@ export function allocateHostPort(
 		const port = allocateFreePort(taken, projectName, service)
 		ports[service] = port
 		taken.add(port)
-		allocated = true
+		hasAllocated = true
 	}
 
-	return { ports, allocated }
+	return { ports, hasAllocated }
 }
 
 function collectTakenPorts(

@@ -30,11 +30,14 @@ describe('findFirewallsByName', () => {
 		const mock = vi.fn().mockResolvedValue(okJson(firewallListPayload))
 		vi.stubGlobal('fetch', mock)
 
-		const result = await findFirewallsByName(TEST_TOKEN, 'acme-web-fw')
+		const firewallsValue = await findFirewallsByName(
+			TEST_TOKEN,
+			'acme-web-fw',
+		)
 
-		expect(result).toHaveLength(1)
-		expect(result[0]!.id).toBe(42)
-		expect(result[0]!.name).toBe('acme-web-fw')
+		expect(firewallsValue).toHaveLength(1)
+		expect(firewallsValue[0]!.id).toBe(42)
+		expect(firewallsValue[0]!.name).toBe('acme-web-fw')
 
 		const [url] = lastCall(mock)
 		expect(url).toContain('/firewalls?name=acme-web-fw')
@@ -46,9 +49,12 @@ describe('findFirewallsByName', () => {
 			vi.fn().mockResolvedValue(okJson({ firewalls: [] })),
 		)
 
-		const result = await findFirewallsByName(TEST_TOKEN, 'nonexistent')
+		const firewallsValue = await findFirewallsByName(
+			TEST_TOKEN,
+			'nonexistent',
+		)
 
-		expect(result).toHaveLength(0)
+		expect(firewallsValue).toHaveLength(0)
 	})
 
 	it('throws on HTTP error', async () => {
@@ -162,10 +168,14 @@ describe('createFirewall', () => {
 			},
 		]
 
-		const result = await createFirewall(TEST_TOKEN, 'acme-web-fw', rules)
+		const firewallValue = await createFirewall(
+			TEST_TOKEN,
+			'acme-web-fw',
+			rules,
+		)
 
-		expect(result.id).toBe(42)
-		expect(result.name).toBe('acme-web-fw')
+		expect(firewallValue.id).toBe(42)
+		expect(firewallValue.name).toBe('acme-web-fw')
 
 		const body = lastBody(mock)
 		expect(body.name).toBe('acme-web-fw')

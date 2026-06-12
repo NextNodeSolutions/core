@@ -20,10 +20,10 @@ export function createR2Service(
 ): Service {
 	if (!ctx.infraStorage) {
 		throw new Error(
-			'r2 service: infra storage (state bucket) must be loaded by the caller — caller invariant broken',
+			'r2 service: infra storage (state bucket) must be loaded by the caller - caller invariant broken',
 		)
 	}
-	const infraStorage = ctx.infraStorage
+	const { infraStorage } = ctx
 	return {
 		name: 'r2',
 		async provision(): Promise<void> {
@@ -48,7 +48,7 @@ export function createR2Service(
 }
 
 /**
- * The R2 service runs whenever any alias is required — either declared
+ * The R2 service runs whenever any alias is required - either declared
  * explicitly via `[services.r2]` or pulled in implicitly by another
  * service (currently `[services.supabase]`, which adds the `backups`
  * alias). The single token created in `ensureR2Service` covers every

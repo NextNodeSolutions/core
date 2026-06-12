@@ -14,7 +14,7 @@ export function buildRuntimeTarget(
 	const target = definition.build(config, { environment, infraStorage })
 	if (!target) {
 		throw new Error(
-			`buildRuntimeTarget: definition "${definition.name}" returned null for matching config — definition bug`,
+			`buildRuntimeTarget: definition "${definition.name}" returned null for matching config - definition bug`,
 		)
 	}
 	return target

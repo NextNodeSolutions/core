@@ -23,10 +23,10 @@ export async function deployCommand(config: DeployableConfig): Promise<void> {
 		`Wrote ${Object.keys(merged.public).length} public envs (${Object.keys(merged.public).join(', ')}) and ${Object.keys(merged.secret).length} masked secrets to GITHUB_ENV`,
 	)
 
-	const result = await target.deploy(config.project.name, input, env)
+	const deployResult = await target.deploy(config.project.name, input, env)
 
-	writeSummary(buildDeploySummary(result, target.name))
+	writeSummary(buildDeploySummary(deployResult, target.name))
 	logger.info(
-		`Deploy complete for "${result.projectName}" in ${result.durationMs}ms`,
+		`Deploy complete for "${deployResult.projectName}" in ${deployResult.durationMs}ms`,
 	)
 }

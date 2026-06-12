@@ -41,7 +41,7 @@ export interface BuildMigrateCommandResult {
  * interpolated field is single-quote-escaped to neutralise shell
  * metacharacters in user-supplied values.
  *
- * Not a compose sidecar — Path A explicitly avoids adding a `migrate`
+ * Not a compose sidecar - Path A explicitly avoids adding a `migrate`
  * service to `compose.yaml`. This is an SSH-orchestrated one-shot.
  */
 export function buildMigrateCommand(
@@ -118,7 +118,7 @@ export interface BuildSnapshotCommandResult {
  *   docker compose -p <silo> -f <composeFile> exec -T postgres-backup sh backup.sh
  *
  * `exec -T` runs in the existing `postgres-backup` container (already up
- * via `bringUpDb`), reusing its env (R2 creds, S3_BUCKET, etc.) — no new
+ * via `bringUpDb`), reusing its env (R2 creds, S3_BUCKET, etc.) - no new
  * container, no fresh credentials. `-T` disables pseudo-TTY allocation
  * because we are invoked over SSH from a non-interactive runner.
  */
@@ -155,7 +155,7 @@ export function buildSnapshotCommand(
 
 /**
  * Trigger the backup sidecar via SSH. Failure modes (non-zero exit,
- * transport error) propagate as thrown errors — the snapshot is the
+ * transport error) propagate as thrown errors - the snapshot is the
  * rollback safety net for `runMigrate`, so the orchestrator MUST halt
  * the deploy before migrate runs when this fails. The dump itself is
  * identified by its timestamped R2 key (written by the sidecar);

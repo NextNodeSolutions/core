@@ -23,6 +23,20 @@ function rebaseInProgress(repoRoot: string): boolean {
 	)
 }
 
+// Abort a half-applied rebase left by a failed recovery attempt so the next
+// attempt starts clean. A failing abort is logged, not thrown - the outer loop
+// already owns the retry decision.
+function abortRebaseIfInProgress(repoRoot: string, attempt: number): void {
+	if (!rebaseInProgress(repoRoot)) return
+	try {
+		git(['rebase', '--abort'], repoRoot)
+	} catch (abortError) {
+		logger.warn(
+			`rebase --abort failed on attempt ${attempt}: ${abortError instanceof Error ? abortError.message : String(abortError)}`,
+		)
+	}
+}
+
 export interface RecoverPushInput {
 	readonly repoRoot: string
 	readonly branch: string
@@ -33,13 +47,14 @@ export function recoverReleasePush({
 	branch,
 }: RecoverPushInput): void {
 	const tagOutput = git(['tag', '--points-at', 'HEAD'], repoRoot)
-	const [tagName, ...extraTags] = tagOutput.split('\n').filter(Boolean)
+	const tags = tagOutput.split('\n').filter(Boolean)
+	const [tagName, ...extraTags] = tags
 	if (!tagName) {
-		throw new Error('No tag points at HEAD — nothing to recover')
+		throw new Error('No tag points at HEAD - nothing to recover')
 	}
 	if (extraTags.length > 0) {
 		throw new Error(
-			`Multiple tags point at HEAD (${[tagName, ...extraTags].join(', ')}) — ambiguous recovery`,
+			`Multiple tags point at HEAD (${tags.join(', ')}) - ambiguous recovery`,
 		)
 	}
 
@@ -54,15 +69,7 @@ export function recoverReleasePush({
 			return
 		} catch (error) {
 			lastError = error
-			if (rebaseInProgress(repoRoot)) {
-				try {
-					git(['rebase', '--abort'], repoRoot)
-				} catch (abortError) {
-					logger.warn(
-						`rebase --abort failed on attempt ${attempt}: ${abortError instanceof Error ? abortError.message : String(abortError)}`,
-					)
-				}
-			}
+			abortRebaseIfInProgress(repoRoot, attempt)
 		}
 	}
 	throw new Error(

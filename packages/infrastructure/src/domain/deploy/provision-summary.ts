@@ -6,13 +6,13 @@ import {
 import type { ProvisionResult } from './target.ts'
 
 export function buildProvisionSummary(
-	result: ProvisionResult,
+	provisionResult: ProvisionResult,
 	projectName: string,
 	targetName: string,
 ): string {
 	const heading = `### :white_check_mark: Infrastructure ready for \`${projectName}\``
 	const table = renderKeyValueTable(
-		buildResourceOutcomeRows(result, targetName),
+		buildResourceOutcomeRows(provisionResult, targetName),
 	)
 
 	return `${heading}\n\n${table}`

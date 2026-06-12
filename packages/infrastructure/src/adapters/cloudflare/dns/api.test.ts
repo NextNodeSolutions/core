@@ -102,9 +102,13 @@ describe('listDnsRecords', () => {
 			)
 		vi.stubGlobal('fetch', fetchMock)
 
-		const result = await listDnsRecords('zone-1', 'example.com', TOKEN)
+		const recordsValue = await listDnsRecords(
+			'zone-1',
+			'example.com',
+			TOKEN,
+		)
 
-		expect(result).toEqual(records)
+		expect(recordsValue).toEqual(records)
 		expect(fetchMock).toHaveBeenCalledWith(
 			'https://api.cloudflare.com/client/v4/zones/zone-1/dns_records?name=example.com',
 			expect.any(Object),
@@ -140,7 +144,7 @@ describe('createDnsRecord', () => {
 			)
 		vi.stubGlobal('fetch', fetchMock)
 
-		const result = await createDnsRecord(
+		const createdRecord = await createDnsRecord(
 			'zone-1',
 			{
 				type: 'CNAME',
@@ -152,7 +156,7 @@ describe('createDnsRecord', () => {
 			TOKEN,
 		)
 
-		expect(result).toEqual(created)
+		expect(createdRecord).toEqual(created)
 		expect(fetchMock).toHaveBeenCalledWith(
 			'https://api.cloudflare.com/client/v4/zones/zone-1/dns_records',
 			expect.objectContaining({
@@ -213,7 +217,7 @@ describe('updateDnsRecord', () => {
 			)
 		vi.stubGlobal('fetch', fetchMock)
 
-		const result = await updateDnsRecord(
+		const updatedRecord = await updateDnsRecord(
 			'zone-1',
 			'rec-1',
 			{
@@ -226,7 +230,7 @@ describe('updateDnsRecord', () => {
 			TOKEN,
 		)
 
-		expect(result).toEqual(updated)
+		expect(updatedRecord).toEqual(updated)
 		expect(fetchMock).toHaveBeenCalledWith(
 			'https://api.cloudflare.com/client/v4/zones/zone-1/dns_records/rec-1',
 			expect.objectContaining({ method: 'PUT' }),

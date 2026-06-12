@@ -24,45 +24,45 @@ export interface DnsRecordPayload {
 	readonly ttl: number
 }
 
-function parseZoneId(item: unknown): string {
-	if (typeof item !== 'object' || item === null) {
+function parseZoneId(rawEntry: unknown): string {
+	if (typeof rawEntry !== 'object' || rawEntry === null) {
 		throw new Error('Cloudflare zone lookup: zone is not an object')
 	}
-	if (!('id' in item) || typeof item.id !== 'string') {
+	if (!('id' in rawEntry) || typeof rawEntry.id !== 'string') {
 		throw new Error('Cloudflare zone lookup: zone.id missing')
 	}
-	return item.id
+	return rawEntry.id
 }
 
-function parseDnsRecord(item: unknown): CloudflareDnsRecord {
-	if (typeof item !== 'object' || item === null) {
+function parseDnsRecord(rawEntry: unknown): CloudflareDnsRecord {
+	if (typeof rawEntry !== 'object' || rawEntry === null) {
 		throw new Error('Cloudflare DNS record: item is not an object')
 	}
-	if (!('id' in item) || typeof item.id !== 'string') {
+	if (!('id' in rawEntry) || typeof rawEntry.id !== 'string') {
 		throw new Error('Cloudflare DNS record: id missing')
 	}
-	if (!('type' in item) || typeof item.type !== 'string') {
+	if (!('type' in rawEntry) || typeof rawEntry.type !== 'string') {
 		throw new Error('Cloudflare DNS record: type missing')
 	}
-	if (!('name' in item) || typeof item.name !== 'string') {
+	if (!('name' in rawEntry) || typeof rawEntry.name !== 'string') {
 		throw new Error('Cloudflare DNS record: name missing')
 	}
-	if (!('content' in item) || typeof item.content !== 'string') {
+	if (!('content' in rawEntry) || typeof rawEntry.content !== 'string') {
 		throw new Error('Cloudflare DNS record: content missing')
 	}
-	if (!('proxied' in item) || typeof item.proxied !== 'boolean') {
+	if (!('proxied' in rawEntry) || typeof rawEntry.proxied !== 'boolean') {
 		throw new Error('Cloudflare DNS record: proxied missing')
 	}
-	if (!('ttl' in item) || typeof item.ttl !== 'number') {
+	if (!('ttl' in rawEntry) || typeof rawEntry.ttl !== 'number') {
 		throw new Error('Cloudflare DNS record: ttl missing')
 	}
 	return {
-		id: item.id,
-		type: item.type,
-		name: item.name,
-		content: item.content,
-		proxied: item.proxied,
-		ttl: item.ttl,
+		id: rawEntry.id,
+		type: rawEntry.type,
+		name: rawEntry.name,
+		content: rawEntry.content,
+		proxied: rawEntry.proxied,
+		ttl: rawEntry.ttl,
 	}
 }
 
@@ -71,19 +71,19 @@ export async function lookupZoneId(
 	token: string,
 ): Promise<string> {
 	const context = `Cloudflare zone lookup for "${zoneName}"`
-	const data = await cfFetchJson(
+	const responseBody = await cfFetchJson(
 		`${CLOUDFLARE_API_BASE}/zones?name=${encodeURIComponent(zoneName)}`,
 		token,
 		context,
 	)
 
-	const result = requireArrayResult(data, context)
-	if (result.length === 0) {
+	const zones = requireArrayResult(responseBody, context)
+	if (zones.length === 0) {
 		throw new Error(
-			`Cloudflare zone not found for "${zoneName}" — ensure the zone exists in this account and the API token has Zone:Read access`,
+			`Cloudflare zone not found for "${zoneName}" - ensure the zone exists in this account and the API token has Zone:Read access`,
 		)
 	}
-	return parseZoneId(result[0])
+	return parseZoneId(zones[0])
 }
 
 export async function listDnsRecords(
@@ -93,12 +93,12 @@ export async function listDnsRecords(
 ): Promise<ReadonlyArray<CloudflareDnsRecord>> {
 	const params = new URLSearchParams({ name })
 	const context = `Cloudflare DNS list for ${name}`
-	const data = await cfFetchJson(
+	const responseBody = await cfFetchJson(
 		`${CLOUDFLARE_API_BASE}/zones/${zoneId}/dns_records?${params.toString()}`,
 		token,
 		context,
 	)
-	return requireArrayResult(data, context).map(parseDnsRecord)
+	return requireArrayResult(responseBody, context).map(parseDnsRecord)
 }
 
 export async function createDnsRecord(
@@ -107,13 +107,13 @@ export async function createDnsRecord(
 	token: string,
 ): Promise<CloudflareDnsRecord> {
 	const context = `Cloudflare DNS create for ${payload.name}`
-	const data = await cfFetchJson(
+	const responseBody = await cfFetchJson(
 		`${CLOUDFLARE_API_BASE}/zones/${zoneId}/dns_records`,
 		token,
 		context,
 		{ method: 'POST', body: JSON.stringify(payload) },
 	)
-	return parseDnsRecord(requireObjectResult(data, context))
+	return parseDnsRecord(requireObjectResult(responseBody, context))
 }
 
 export async function updateDnsRecord(
@@ -123,13 +123,13 @@ export async function updateDnsRecord(
 	token: string,
 ): Promise<CloudflareDnsRecord> {
 	const context = `Cloudflare DNS update for ${payload.name}`
-	const data = await cfFetchJson(
+	const responseBody = await cfFetchJson(
 		`${CLOUDFLARE_API_BASE}/zones/${zoneId}/dns_records/${recordId}`,
 		token,
 		context,
 		{ method: 'PUT', body: JSON.stringify(payload) },
 	)
-	return parseDnsRecord(requireObjectResult(data, context))
+	return parseDnsRecord(requireObjectResult(responseBody, context))
 }
 
 export async function getZoneSslMode(
@@ -137,17 +137,17 @@ export async function getZoneSslMode(
 	token: string,
 ): Promise<string> {
 	const context = `Cloudflare SSL mode for zone ${zoneId}`
-	const data = await cfFetchJson(
+	const responseBody = await cfFetchJson(
 		`${CLOUDFLARE_API_BASE}/zones/${zoneId}/settings/ssl`,
 		token,
 		context,
 	)
 
-	const result = requireObjectResult(data, context)
-	if (!('value' in result) || typeof result.value !== 'string') {
+	const sslSetting = requireObjectResult(responseBody, context)
+	if (!('value' in sslSetting) || typeof sslSetting.value !== 'string') {
 		throw new Error(`${context}: missing or invalid "value" field`)
 	}
-	return result.value
+	return sslSetting.value
 }
 
 export async function setZoneSslMode(

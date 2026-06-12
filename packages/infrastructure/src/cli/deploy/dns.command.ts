@@ -13,7 +13,7 @@ import type { DeployableConfig } from '#/config/types.ts'
 export async function dnsCommand(config: DeployableConfig): Promise<void> {
 	if (!config.project.domain) {
 		logger.info(
-			'No project.domain configured — skipping DNS reconciliation',
+			'No project.domain configured - skipping DNS reconciliation',
 		)
 		return
 	}

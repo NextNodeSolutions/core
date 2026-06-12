@@ -10,10 +10,10 @@ const fields = {
 
 describe('renderVectorEnv', () => {
 	it('renders all three fields', () => {
-		const result = renderVectorEnv(fields)
-		expect(result).toContain('NN_CLIENT_ID=nextnode')
-		expect(result).toContain('NN_PROJECT=acme-web')
-		expect(result).toContain(
+		const vectorEnv = renderVectorEnv(fields)
+		expect(vectorEnv).toContain('NN_CLIENT_ID=nextnode')
+		expect(vectorEnv).toContain('NN_PROJECT=acme-web')
+		expect(vectorEnv).toContain(
 			'NN_VL_URL=http://monitoring.tail1234.ts.net:9428',
 		)
 	})

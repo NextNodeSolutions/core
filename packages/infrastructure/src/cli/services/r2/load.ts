@@ -14,7 +14,7 @@ export interface LoadR2ServiceInput {
 }
 
 /**
- * Deploy-time R2 service load. Throws on missing state or stale creds —
+ * Deploy-time R2 service load. Throws on missing state or stale creds -
  * the operator re-runs provision rather than having deploy self-heal.
  */
 export async function loadR2Service(
@@ -32,12 +32,13 @@ export async function loadR2Service(
 	)
 	if (!state) {
 		throw new Error(
-			`R2 service state not found at "${stateKey}" — run provision before deploy`,
+			`R2 service state not found at "${stateKey}" - run provision before deploy`,
 		)
 	}
-	if (state.buckets.length === 0) {
+	const [firstBucket] = state.buckets
+	if (!firstBucket) {
 		throw new Error(
-			`R2 service state at "${stateKey}" has no buckets — corrupt state, re-run provision`,
+			`R2 service state at "${stateKey}" has no buckets - corrupt state, re-run provision`,
 		)
 	}
 
@@ -45,7 +46,7 @@ export async function loadR2Service(
 		accountId: input.infraStorage.accountId,
 		accessKeyId: state.accessKeyId,
 		secretAccessKey: state.secretAccessKey,
-		bucketName: state.buckets[0]!.name,
+		bucketName: firstBucket.name,
 	})
 	if (!verify.valid) {
 		throw new Error(

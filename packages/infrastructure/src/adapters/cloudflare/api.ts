@@ -23,14 +23,17 @@ export async function requireOk(response: Response): Promise<void> {
 	throw new Error(`Cloudflare API returned ${response.status}: ${body}`)
 }
 
-function parseApiError(item: unknown): CloudflareApiError {
-	if (typeof item !== 'object' || item === null) {
+function parseApiError(rawError: unknown): CloudflareApiError {
+	if (typeof rawError !== 'object' || rawError === null) {
 		return { code: 0, message: 'unknown error' }
 	}
-	const code = 'code' in item && typeof item.code === 'number' ? item.code : 0
+	const code =
+		'code' in rawError && typeof rawError.code === 'number'
+			? rawError.code
+			: 0
 	const message =
-		'message' in item && typeof item.message === 'string'
-			? item.message
+		'message' in rawError && typeof rawError.message === 'string'
+			? rawError.message
 			: 'unknown error'
 	return { code, message }
 }
@@ -41,45 +44,54 @@ export function formatErrors(
 	return errors.map(err => `[${err.code}] ${err.message}`).join('; ')
 }
 
-export function parseEnvelope(data: unknown, context: string): EnvelopeFields {
-	if (typeof data !== 'object' || data === null) {
-		throw new Error(`${context}: response body is not an object`)
-	}
-	if (!('success' in data) || typeof data.success !== 'boolean') {
-		throw new Error(`${context}: missing or invalid \`success\` field`)
-	}
-	const errors: ReadonlyArray<CloudflareApiError> =
-		'errors' in data && Array.isArray(data.errors)
-			? data.errors.map(parseApiError)
-			: []
-	return { success: data.success, errors }
-}
-
-export function requireArrayResult(
-	data: unknown,
+export function parseEnvelope(
+	responseBody: unknown,
 	context: string,
-): ReadonlyArray<unknown> {
-	if (typeof data !== 'object' || data === null) {
-		throw new Error(`${context}: response body is not an object`)
-	}
-	if (!('result' in data) || !Array.isArray(data.result)) {
-		throw new Error(`${context}: \`result\` must be an array`)
-	}
-	return data.result
-}
-
-export function requireObjectResult(data: unknown, context: string): object {
-	if (typeof data !== 'object' || data === null) {
+): EnvelopeFields {
+	if (typeof responseBody !== 'object' || responseBody === null) {
 		throw new Error(`${context}: response body is not an object`)
 	}
 	if (
-		!('result' in data) ||
-		typeof data.result !== 'object' ||
-		data.result === null
+		!('success' in responseBody) ||
+		typeof responseBody.success !== 'boolean'
+	) {
+		throw new Error(`${context}: missing or invalid \`success\` field`)
+	}
+	const errors: ReadonlyArray<CloudflareApiError> =
+		'errors' in responseBody && Array.isArray(responseBody.errors)
+			? responseBody.errors.map(parseApiError)
+			: []
+	return { success: responseBody.success, errors }
+}
+
+export function requireArrayResult(
+	responseBody: unknown,
+	context: string,
+): ReadonlyArray<unknown> {
+	if (typeof responseBody !== 'object' || responseBody === null) {
+		throw new Error(`${context}: response body is not an object`)
+	}
+	if (!('result' in responseBody) || !Array.isArray(responseBody.result)) {
+		throw new Error(`${context}: \`result\` must be an array`)
+	}
+	return responseBody.result
+}
+
+export function requireObjectResult(
+	responseBody: unknown,
+	context: string,
+): object {
+	if (typeof responseBody !== 'object' || responseBody === null) {
+		throw new Error(`${context}: response body is not an object`)
+	}
+	if (
+		!('result' in responseBody) ||
+		typeof responseBody.result !== 'object' ||
+		responseBody.result === null
 	) {
 		throw new Error(`${context}: \`result\` must be an object`)
 	}
-	return data.result
+	return responseBody.result
 }
 
 /**
@@ -90,7 +102,7 @@ export function requireObjectResult(data: unknown, context: string): object {
  * fetch → requireOk → json() → parseEnvelope → throw on failure.
  *
  * The caller still picks the result shape via `requireArrayResult` /
- * `requireObjectResult` — those extractions stay explicit at the call site
+ * `requireObjectResult` - those extractions stay explicit at the call site
  * because they document what shape the endpoint returns.
  */
 export async function cfFetchJson(
@@ -102,10 +114,10 @@ export async function cfFetchJson(
 	const response = await fetch(url, { ...init, headers: authHeaders(token) })
 	await requireOk(response)
 
-	const data: unknown = await response.json()
-	const envelope = parseEnvelope(data, context)
+	const responseBody: unknown = await response.json()
+	const envelope = parseEnvelope(responseBody, context)
 	if (!envelope.success) {
 		throw new Error(`${context} failed: ${formatErrors(envelope.errors)}`)
 	}
-	return data
+	return responseBody
 }

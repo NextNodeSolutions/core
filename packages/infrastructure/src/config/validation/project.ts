@@ -26,7 +26,7 @@ const INTERNAL_MSG = 'project.internal must be a boolean'
 
 // Required: validating each value directly (not as an optional object entry)
 // means a missing key arrives as `undefined` and fails with the real message,
-// while the success branch yields a narrowed type — no placeholder fallback.
+// while the success branch yields a narrowed type - no placeholder fallback.
 const nameSchema = pipe(
 	nonEmptyString(NAME_MSG),
 	regex(KEBAB_IDENTIFIER_PATTERN, NAME_PATTERN_MSG),
@@ -96,7 +96,7 @@ export function validatePackageSection(
 ): ValidationResult<PackageSection | false> {
 	if (!isRecord(raw)) return { ok: true, section: false }
 
-	const access = raw['access']
+	const { access } = raw
 	if (typeof access !== 'string' || access === '') {
 		return {
 			ok: false,

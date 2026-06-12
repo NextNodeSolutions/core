@@ -8,9 +8,9 @@ export const APP_ENVIRONMENTS = ['development', 'production'] as const
 export type AppEnvironment = (typeof APP_ENVIRONMENTS)[number]
 export type PipelineEnvironment = AppEnvironment | 'none'
 
-function isAppEnvironment(value: string): value is AppEnvironment {
+function isAppEnvironment(candidate: string): candidate is AppEnvironment {
 	const envs: readonly string[] = APP_ENVIRONMENTS
-	return envs.includes(value)
+	return envs.includes(candidate)
 }
 
 export function resolveEnvironment(

@@ -42,26 +42,26 @@ describe('resolveBuildArgs', () => {
 	const autoArgs = { SITE_URL: 'https://example.com' }
 
 	it('injects the infra auto args into every build service by default', () => {
-		const result = resolveBuildArgs(
+		const buildArgs = resolveBuildArgs(
 			{ front: buildService(), api: buildService() },
 			{},
 			autoArgs,
 		)
 
-		expect(result).toEqual({
+		expect(buildArgs).toEqual({
 			front: { SITE_URL: 'https://example.com' },
 			api: { SITE_URL: 'https://example.com' },
 		})
 	})
 
 	it('resolves each declared build_arg name against the GitHub Variables map', () => {
-		const result = resolveBuildArgs(
+		const buildArgs = resolveBuildArgs(
 			{ front: buildService(['ANALYTICS_ID', 'FEATURE_X']) },
 			{ ANALYTICS_ID: 'GA-1', FEATURE_X: 'on', UNUSED: 'noise' },
 			autoArgs,
 		)
 
-		expect(result).toEqual({
+		expect(buildArgs).toEqual({
 			front: {
 				SITE_URL: 'https://example.com',
 				ANALYTICS_ID: 'GA-1',
@@ -83,18 +83,18 @@ describe('resolveBuildArgs', () => {
 	})
 
 	it('ignores upstream services entirely', () => {
-		const result = resolveBuildArgs(
+		const buildArgs = resolveBuildArgs(
 			{ app: upstreamService() },
 			{},
 			autoArgs,
 		)
 
-		expect(result).toEqual({})
+		expect(buildArgs).toEqual({})
 	})
 
 	it('maps a build service with no args to an empty record (the bake renderer omits the args key)', () => {
-		const result = resolveBuildArgs({ app: buildService() }, {}, {})
+		const buildArgs = resolveBuildArgs({ app: buildService() }, {}, {})
 
-		expect(result).toEqual({ app: {} })
+		expect(buildArgs).toEqual({ app: {} })
 	})
 })

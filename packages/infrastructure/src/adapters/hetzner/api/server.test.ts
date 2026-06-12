@@ -38,11 +38,11 @@ describe('createServer', () => {
 		const mock = vi.fn().mockResolvedValue(okJson(serverPayload))
 		vi.stubGlobal('fetch', mock)
 
-		const result = await createServer(TEST_TOKEN, createServerInput)
+		const serverValue = await createServer(TEST_TOKEN, createServerInput)
 
-		expect(result.id).toBe(123)
-		expect(result.name).toBe('acme-web')
-		expect(result.public_net.ipv4.ip).toBe('1.2.3.4')
+		expect(serverValue.id).toBe(123)
+		expect(serverValue.name).toBe('acme-web')
+		expect(serverValue.public_net.ipv4.ip).toBe('1.2.3.4')
 
 		const [url] = lastCall(mock)
 		expect(url).toBe('https://api.hetzner.cloud/v1/servers')
@@ -86,9 +86,9 @@ describe('describeServer', () => {
 		const mock = vi.fn().mockResolvedValue(okJson(serverPayload))
 		vi.stubGlobal('fetch', mock)
 
-		const result = await describeServer(TEST_TOKEN, 123)
+		const serverValue = await describeServer(TEST_TOKEN, 123)
 
-		expect(result.id).toBe(123)
+		expect(serverValue.id).toBe(123)
 		const [url] = lastCall(mock)
 		expect(url).toBe('https://api.hetzner.cloud/v1/servers/123')
 	})

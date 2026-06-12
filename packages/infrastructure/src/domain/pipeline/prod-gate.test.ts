@@ -53,8 +53,8 @@ describe('evaluateDevRun', () => {
 	})
 
 	it('returns failure reason when dev run is missing', () => {
-		const result = evaluateDevRun(undefined, 'abc123')
-		expect(result).toEqual({
+		const evaluation = evaluateDevRun(undefined, 'abc123')
+		expect(evaluation).toEqual({
 			ok: false,
 			reason: 'No dev pipeline run found for abc123. Deploy to development first.',
 		})
@@ -65,8 +65,8 @@ describe('evaluateDevRun', () => {
 			...DEV_RUN,
 			conclusion: 'failure',
 		}
-		const result = evaluateDevRun(failedRun, 'abc123')
-		expect(result).toEqual({
+		const evaluation = evaluateDevRun(failedRun, 'abc123')
+		expect(evaluation).toEqual({
 			ok: false,
 			reason: `Dev pipeline has not passed: completed/failure (${DEV_RUN.html_url})`,
 		})
@@ -78,8 +78,8 @@ describe('evaluateDevRun', () => {
 			status: 'in_progress',
 			conclusion: null,
 		}
-		const result = evaluateDevRun(inProgressRun, 'abc123')
-		expect(result).toEqual({
+		const evaluation = evaluateDevRun(inProgressRun, 'abc123')
+		expect(evaluation).toEqual({
 			ok: false,
 			reason: `Dev pipeline has not passed: in_progress/null (${DEV_RUN.html_url})`,
 		})

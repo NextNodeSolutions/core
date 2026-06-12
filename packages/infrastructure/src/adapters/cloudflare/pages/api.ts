@@ -20,32 +20,32 @@ export interface CloudflarePagesDomain {
 	readonly name: string
 }
 
-function parsePagesProject(item: unknown): CloudflarePagesProject {
-	if (typeof item !== 'object' || item === null) {
+function parsePagesProject(rawEntry: unknown): CloudflarePagesProject {
+	if (typeof rawEntry !== 'object' || rawEntry === null) {
 		throw new Error('Cloudflare Pages project: item is not an object')
 	}
-	if (!('name' in item) || typeof item.name !== 'string') {
+	if (!('name' in rawEntry) || typeof rawEntry.name !== 'string') {
 		throw new Error('Cloudflare Pages project: name missing')
 	}
 	if (
-		!('production_branch' in item) ||
-		typeof item.production_branch !== 'string'
+		!('production_branch' in rawEntry) ||
+		typeof rawEntry.production_branch !== 'string'
 	) {
 		throw new Error('Cloudflare Pages project: production_branch missing')
 	}
-	if (!('subdomain' in item) || typeof item.subdomain !== 'string') {
+	if (!('subdomain' in rawEntry) || typeof rawEntry.subdomain !== 'string') {
 		throw new Error('Cloudflare Pages project: subdomain missing')
 	}
 	return {
-		name: item.name,
-		productionBranch: item.production_branch,
-		subdomain: item.subdomain,
+		name: rawEntry.name,
+		productionBranch: rawEntry.production_branch,
+		subdomain: rawEntry.subdomain,
 	}
 }
 
 /**
  * Fetch a Cloudflare Pages project by name.
- * Returns `null` if the project does not exist (HTTP 404) — the API treats
+ * Returns `null` if the project does not exist (HTTP 404) - the API treats
  * a missing resource as a valid, expected state here. All other HTTP failures
  * propagate.
  */
@@ -64,31 +64,31 @@ export async function getPagesProject(
 	if (response.status === HTTP_NOT_FOUND) return null
 	await requireOk(response)
 
-	const data: unknown = await response.json()
+	const responseBody: unknown = await response.json()
 	const context = `Cloudflare Pages project lookup for "${projectName}"`
-	const envelope = parseEnvelope(data, context)
+	const envelope = parseEnvelope(responseBody, context)
 	if (!envelope.success) {
 		throw new Error(`${context} failed: ${formatErrors(envelope.errors)}`)
 	}
 
-	return parsePagesProject(requireObjectResult(data, context))
+	return parsePagesProject(requireObjectResult(responseBody, context))
 }
 
-function parsePagesDomain(item: unknown): CloudflarePagesDomain {
-	if (typeof item !== 'object' || item === null) {
+function parsePagesDomain(rawEntry: unknown): CloudflarePagesDomain {
+	if (typeof rawEntry !== 'object' || rawEntry === null) {
 		throw new Error('Cloudflare Pages domain: item is not an object')
 	}
-	if (!('name' in item) || typeof item.name !== 'string') {
+	if (!('name' in rawEntry) || typeof rawEntry.name !== 'string') {
 		throw new Error('Cloudflare Pages domain: name missing')
 	}
-	return { name: item.name }
+	return { name: rawEntry.name }
 }
 
 /**
  * List the custom domains attached to a Cloudflare Pages project.
  *
  * The returned list reflects the domains tied to the project in the
- * "Custom domains" tab — NOT the DNS records in the zone. These are
+ * "Custom domains" tab - NOT the DNS records in the zone. These are
  * separate concerns: attaching a domain here teaches Pages which
  * `Host` header maps to this project and provisions the SSL certificate.
  */
@@ -98,18 +98,18 @@ export async function listPagesDomains(
 	token: string,
 ): Promise<ReadonlyArray<CloudflarePagesDomain>> {
 	const context = `Cloudflare Pages domains list for "${projectName}"`
-	const data = await cfFetchJson(
+	const responseBody = await cfFetchJson(
 		`${CLOUDFLARE_API_BASE}/accounts/${accountId}/pages/projects/${encodeURIComponent(projectName)}/domains`,
 		token,
 		context,
 	)
-	return requireArrayResult(data, context).map(parsePagesDomain)
+	return requireArrayResult(responseBody, context).map(parsePagesDomain)
 }
 
 /**
  * Attach a custom domain to a Cloudflare Pages project.
  *
- * Must be called BEFORE serving traffic from the domain — skipping this
+ * Must be called BEFORE serving traffic from the domain - skipping this
  * step while only creating the CNAME record yields a 522 error because
  * the Pages edge has no routing entry for the incoming `Host` header.
  */
@@ -120,13 +120,13 @@ export async function attachPagesDomain(
 	token: string,
 ): Promise<CloudflarePagesDomain> {
 	const context = `Cloudflare Pages domain attach "${domainName}" to "${projectName}"`
-	const data = await cfFetchJson(
+	const responseBody = await cfFetchJson(
 		`${CLOUDFLARE_API_BASE}/accounts/${accountId}/pages/projects/${encodeURIComponent(projectName)}/domains`,
 		token,
 		context,
 		{ method: 'POST', body: JSON.stringify({ name: domainName }) },
 	)
-	return parsePagesDomain(requireObjectResult(data, context))
+	return parsePagesDomain(requireObjectResult(responseBody, context))
 }
 
 /**
@@ -140,7 +140,7 @@ export async function createPagesProject(
 	token: string,
 ): Promise<CloudflarePagesProject> {
 	const context = `Cloudflare Pages project create for "${projectName}"`
-	const data = await cfFetchJson(
+	const responseBody = await cfFetchJson(
 		`${CLOUDFLARE_API_BASE}/accounts/${accountId}/pages/projects`,
 		token,
 		context,
@@ -152,7 +152,7 @@ export async function createPagesProject(
 			}),
 		},
 	)
-	return parsePagesProject(requireObjectResult(data, context))
+	return parsePagesProject(requireObjectResult(responseBody, context))
 }
 
 /**

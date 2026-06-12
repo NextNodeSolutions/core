@@ -12,7 +12,7 @@ import type { ValidationResult } from '#/config/validation/result.ts'
 // `array(pipe(...))` would emit multiple issues per entry under
 // abortPipeEarly:false, so the per-entry checks live in a single rawTransform.
 // Any `addIssue` marks the parse failed, so the returned buckets are discarded
-// on error — no need to guard the return value.
+// on error - no need to guard the return value.
 const bucketsSchema = pipe(
 	array(unknown(), 'services.r2.buckets must be an array of bucket tables'),
 	minLength(1, 'services.r2.buckets must declare at least one bucket'),
@@ -28,7 +28,7 @@ const bucketsSchema = pipe(
 				})
 				continue
 			}
-			const name = entry['name']
+			const { name } = entry
 			if (typeof name !== 'string' || name === '') {
 				addIssue({
 					message:
@@ -48,7 +48,7 @@ const bucketsSchema = pipe(
 				})
 				continue
 			}
-			const cdn = entry['cdn']
+			const { cdn } = entry
 			if (cdn !== undefined && typeof cdn !== 'boolean') {
 				addIssue({
 					message: `services.r2.buckets entry "${name}" \`cdn\` must be a boolean`,

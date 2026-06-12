@@ -17,7 +17,7 @@ import type { AppEnvironment } from '#/domain/environment.ts'
  * subject derived from it, and the DNS record in lockstep.
  *
  * A service that declares a `url` but has no entry in `hostPorts` is an
- * unroutable state (Caddy would have a subject with nothing to dial) — fail
+ * unroutable state (Caddy would have a subject with nothing to dial) - fail
  * loud rather than emit a dangling route.
  */
 export function buildServiceUpstreams(

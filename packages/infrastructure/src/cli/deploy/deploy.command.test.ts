@@ -85,7 +85,7 @@ const { mockHetznerDeploy } = vi.hoisted(() => ({
 }))
 
 // Mock loadR2Runtime (network boundary: Cloudflare accounts API + SigV4 verify).
-// Deploy must NOT call ensureR2Setup — R2 bootstrap is provision's responsibility.
+// Deploy must NOT call ensureR2Setup - R2 bootstrap is provision's responsibility.
 vi.mock(import('#/cli/r2/load-runtime.ts'), async () => ({
 	loadR2Runtime: vi.fn(async () => ({
 		accountId: 'acct',

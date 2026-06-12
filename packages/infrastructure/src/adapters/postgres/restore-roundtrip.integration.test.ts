@@ -111,17 +111,17 @@ describe.skipIf(!RUN)('postgres dump -> R2 -> restore round-trip', () => {
 	})
 
 	it('selects that snapshot as the latest <= now+1min', () => {
-		const result = selectPostgresBackupForRestore(
+		const backup = selectPostgresBackupForRestore(
 			snapshots,
 			new Date(Date.now() + 60_000),
 		)
-		if (result === null) {
+		if (backup === null) {
 			throw new Error(
 				'expected selectPostgresBackupForRestore to return a snapshot',
 			)
 		}
-		expect(result.key).toBe(snapshots[0]?.key)
-		chosen = result
+		expect(backup.key).toBe(snapshots[0]?.key)
+		chosen = backup
 	})
 
 	it('downloads the dump to disk', async () => {

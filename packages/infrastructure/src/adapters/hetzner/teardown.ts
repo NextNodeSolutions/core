@@ -43,12 +43,12 @@ export interface HetznerTeardownContext {
 	readonly projectName: string
 	readonly vpsName: string
 	readonly domain: string | undefined
-	// Declared deploy services — project teardown derives the routed hostnames
+	// Declared deploy services - project teardown derives the routed hostnames
 	// to delete (DNS, certs, Caddy route) from each service's `url`, the same set
 	// deploy created, rather than the bare project domain.
 	readonly services: Readonly<Record<string, UserServiceConfig>>
 	readonly target: TeardownTarget
-	readonly withVolumes: boolean
+	readonly shouldWipeVolumes: boolean
 	readonly environment: AppEnvironment
 	readonly internal: boolean
 	readonly hcloudToken: string
@@ -93,7 +93,7 @@ async function teardownVps(
 
 	if (existing.state.phase !== 'converged') {
 		logger.warn(
-			`VPS "${ctx.vpsName}" state phase is "${existing.state.phase}" — skipping Caddy upstream enumeration; only the project's own DNS (${ctx.domain ?? 'none'}) will be cleaned`,
+			`VPS "${ctx.vpsName}" state phase is "${existing.state.phase}" - skipping Caddy upstream enumeration; only the project's own DNS (${ctx.domain ?? 'none'}) will be cleaned`,
 		)
 	}
 
@@ -138,7 +138,7 @@ async function readCaddyHostnames(
 		const config = await session.readFile(CADDY_CONFIG_PATH)
 		if (config === null) {
 			logger.info(
-				`No Caddy config on VPS "${ctx.vpsName}" — no project hostnames to enumerate`,
+				`No Caddy config on VPS "${ctx.vpsName}" - no project hostnames to enumerate`,
 			)
 			return []
 		}
@@ -205,7 +205,7 @@ async function teardownProjectWithSession(
 	existing: { state: HcloudConvergedState; etag: string },
 	startMs: number,
 ): Promise<TeardownResult> {
-	// The hostnames this project routes — one per service that declares a `url`,
+	// The hostnames this project routes - one per service that declares a `url`,
 	// resolved per environment, exactly the set deploy created (Caddy upstreams,
 	// cert subjects, DNS records). Deleting from this set keeps teardown
 	// symmetric with deploy; a url-less project routes nothing and gets none.
@@ -221,7 +221,7 @@ async function teardownProjectWithSession(
 				session,
 				ctx.projectName,
 				ctx.environment,
-				ctx.withVolumes,
+				ctx.shouldWipeVolumes,
 			),
 		caddy: () =>
 			teardownProjectCaddyRoute(session, projectHostnames, {
@@ -234,13 +234,12 @@ async function teardownProjectWithSession(
 			teardownProjectCerts(ctx.certsR2, ctx.vpsName, projectHostnames),
 		dns: () => teardownProjectDns(projectHostnames, ctx.dns),
 		state: () =>
-			releaseProjectHostPort(
-				ctx.r2,
-				ctx.vpsName,
-				ctx.projectName,
-				existing.state,
-				existing.etag,
-			),
+			releaseProjectHostPort(ctx.projectName, {
+				r2: ctx.r2,
+				vpsName: ctx.vpsName,
+				state: existing.state,
+				etag: existing.etag,
+			}),
 	})
 
 	logger.info(

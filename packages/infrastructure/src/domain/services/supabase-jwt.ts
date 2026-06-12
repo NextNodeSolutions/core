@@ -3,7 +3,7 @@ import { createHmac } from 'node:crypto'
 /**
  * Supabase API key roles. `anon` is the public client key (RLS enforces
  * permissions); `service_role` is the server-side admin key (bypasses RLS).
- * Both are deterministic HS256 JWTs signed with `JWT_SECRET` — the keys
+ * Both are deterministic HS256 JWTs signed with `JWT_SECRET` - the keys
  * are derived at deploy time from the secret rather than stored alongside
  * it, so `JWT_SECRET` stays the single secret of record.
  */
@@ -19,7 +19,7 @@ export interface SupabaseJwtPayload {
 /**
  * JWS header for the Supabase API keys. HMAC-SHA256 is the algorithm the
  * supabase auth/kong/postgrest containers verify against when they decode
- * incoming ANON_KEY / SERVICE_ROLE_KEY bearer tokens — staying on the
+ * incoming ANON_KEY / SERVICE_ROLE_KEY bearer tokens - staying on the
  * upstream default keeps the stack drop-in compatible with the
  * supabase/supabase docker-compose template.
  */
@@ -35,7 +35,7 @@ const SUPABASE_JWT_HEADER = { alg: 'HS256', typ: 'JWT' } as const
  * `SERVICE_ROLE_KEY` env vars at deploy time.
  *
  * Uses `node:crypto.createHmac` + the platform-native `'base64url'`
- * encoding (Node ≥ 15.7) — no third-party JWT lib, no manual URL-safe
+ * encoding (Node ≥ 15.7) - no third-party JWT lib, no manual URL-safe
  * replacement. The header is a module constant so its serialized form is
  * byte-identical across calls.
  */

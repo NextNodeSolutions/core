@@ -22,14 +22,14 @@ export async function fetchWorkflowRuns(
 		)
 	}
 
-	const data: unknown = await response.json()
+	const responseBody: unknown = await response.json()
 	if (
-		typeof data !== 'object' ||
-		data === null ||
-		!('workflow_runs' in data) ||
-		!Array.isArray(data.workflow_runs)
+		typeof responseBody !== 'object' ||
+		responseBody === null ||
+		!('workflow_runs' in responseBody) ||
+		!Array.isArray(responseBody.workflow_runs)
 	) {
 		throw new Error('GitHub API response missing workflow_runs array')
 	}
-	return data.workflow_runs
+	return responseBody.workflow_runs
 }

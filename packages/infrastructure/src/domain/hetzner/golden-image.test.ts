@@ -30,19 +30,19 @@ interface ParsedGoldenCloudInit {
 }
 
 function isParsedGoldenCloudInit(
-	value: unknown,
-): value is ParsedGoldenCloudInit {
-	if (typeof value !== 'object' || value === null) return false
+	candidate: unknown,
+): candidate is ParsedGoldenCloudInit {
+	if (typeof candidate !== 'object' || candidate === null) return false
 	return (
-		'packages' in value &&
-		Array.isArray(value.packages) &&
-		'write_files' in value &&
-		Array.isArray(value.write_files) &&
-		'runcmd' in value &&
-		Array.isArray(value.runcmd) &&
-		'power_state' in value &&
-		typeof value.power_state === 'object' &&
-		value.power_state !== null
+		'packages' in candidate &&
+		Array.isArray(candidate.packages) &&
+		'write_files' in candidate &&
+		Array.isArray(candidate.write_files) &&
+		'runcmd' in candidate &&
+		Array.isArray(candidate.runcmd) &&
+		'power_state' in candidate &&
+		typeof candidate.power_state === 'object' &&
+		candidate.power_state !== null
 	)
 }
 

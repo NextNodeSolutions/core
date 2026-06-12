@@ -294,7 +294,7 @@ describe('ensureR2Service', () => {
 			tokenResult: { id: 'token-key-id', value: 'token-secret' },
 		})
 
-		const result = await ensureR2Service({
+		const ensured = await ensureR2Service({
 			cfToken: 'cf-token',
 			infraStorage: INFRA_STORAGE,
 			projectName: 'myapp',
@@ -303,12 +303,12 @@ describe('ensureR2Service', () => {
 			buckets: privateBuckets('uploads', 'media'),
 		})
 
-		expect(result.endpoint).toBe(
+		expect(ensured.endpoint).toBe(
 			'https://acct-123.r2.cloudflarestorage.com',
 		)
-		expect(result.accessKeyId).toBe('token-key-id')
-		expect(result.secretAccessKey).toHaveLength(64)
-		expect(result.buckets).toEqual([
+		expect(ensured.accessKeyId).toBe('token-key-id')
+		expect(ensured.secretAccessKey).toHaveLength(64)
+		expect(ensured.buckets).toEqual([
 			{ alias: 'uploads', name: 'myapp-production-uploads' },
 			{ alias: 'media', name: 'myapp-production-media' },
 		])
@@ -319,7 +319,7 @@ describe('ensureR2Service', () => {
 			tokenResult: { id: 'token-key-id', value: 'token-secret' },
 		})
 
-		const result = await ensureR2Service({
+		const ensured = await ensureR2Service({
 			cfToken: 'cf-token',
 			infraStorage: INFRA_STORAGE,
 			projectName: 'myapp',
@@ -331,9 +331,9 @@ describe('ensureR2Service', () => {
 		const persisted = fakeR2State.get('services/r2/myapp/production.json')
 		expect(persisted).toBeDefined()
 		expect(JSON.parse(persisted ?? '{}')).toEqual({
-			endpoint: result.endpoint,
-			accessKeyId: result.accessKeyId,
-			secretAccessKey: result.secretAccessKey,
+			endpoint: ensured.endpoint,
+			accessKeyId: ensured.accessKeyId,
+			secretAccessKey: ensured.secretAccessKey,
 			buckets: [{ alias: 'uploads', name: 'myapp-production-uploads' }],
 		})
 	})
@@ -341,7 +341,7 @@ describe('ensureR2Service', () => {
 	it('attaches a custom domain and records the public URL for cdn-enabled buckets', async () => {
 		const { calls } = stubFetch()
 
-		const result = await ensureR2Service({
+		const ensured = await ensureR2Service({
 			cfToken: 'cf-token',
 			infraStorage: INFRA_STORAGE,
 			projectName: 'myapp',
@@ -353,7 +353,7 @@ describe('ensureR2Service', () => {
 			],
 		})
 
-		expect(result.buckets).toEqual([
+		expect(ensured.buckets).toEqual([
 			{
 				alias: 'assets',
 				name: 'myapp-production-assets',
@@ -373,7 +373,7 @@ describe('ensureR2Service', () => {
 	it('uses the resolved dev domain verbatim without prefixing a second dev.', async () => {
 		const { calls } = stubFetch()
 
-		const result = await ensureR2Service({
+		const ensured = await ensureR2Service({
 			cfToken: 'cf-token',
 			infraStorage: INFRA_STORAGE,
 			projectName: 'myapp',
@@ -385,7 +385,7 @@ describe('ensureR2Service', () => {
 			buckets: [{ name: 'assets', cdn: true }],
 		})
 
-		expect(result.buckets[0]?.publicUrl).toBe(
+		expect(ensured.buckets[0]?.publicUrl).toBe(
 			'https://assets.cdn.dev.example.com',
 		)
 		const attachBody: unknown = JSON.parse(
@@ -403,7 +403,7 @@ describe('ensureR2Service', () => {
 	it('skips custom-domain attach when the project has no domain', async () => {
 		const { calls } = stubFetch()
 
-		const result = await ensureR2Service({
+		const ensured = await ensureR2Service({
 			cfToken: 'cf-token',
 			infraStorage: INFRA_STORAGE,
 			projectName: 'myapp',
@@ -412,7 +412,7 @@ describe('ensureR2Service', () => {
 			buckets: [{ name: 'assets', cdn: true }],
 		})
 
-		expect(result.buckets).toEqual([
+		expect(ensured.buckets).toEqual([
 			{ alias: 'assets', name: 'myapp-production-assets' },
 		])
 		expect(calls.some(c => c.url.includes('/domains/custom'))).toBe(false)
@@ -421,7 +421,7 @@ describe('ensureR2Service', () => {
 	it('polls verification until credentials become active', async () => {
 		stubFetch({ verifyResults: ['401', '401', 'ok'] })
 
-		const result = await ensureR2Service({
+		const ensured = await ensureR2Service({
 			cfToken: 'cf-token',
 			infraStorage: INFRA_STORAGE,
 			projectName: 'myapp',
@@ -430,7 +430,7 @@ describe('ensureR2Service', () => {
 			buckets: privateBuckets('uploads'),
 		})
 
-		expect(result.accessKeyId).toBe('new-token-id')
+		expect(ensured.accessKeyId).toBe('new-token-id')
 	})
 
 	it('throws when token never propagates within the verification budget', async () => {

@@ -62,6 +62,17 @@ function buildConvergedState(
 	}
 }
 
+const route = (host: string, port: number): unknown => ({
+	match: [{ host: [host] }],
+	handle: [
+		{
+			handler: 'reverse_proxy',
+			upstreams: [{ dial: `localhost:${String(port)}` }],
+		},
+	],
+	terminal: true,
+})
+
 beforeEach(() => {
 	vi.stubEnv('LOG_LEVEL', 'silent')
 })
@@ -102,7 +113,7 @@ describe('teardownProjectContainer', () => {
 		)
 	})
 
-	it('wipes volumes (-v flag) only when withVolumes=true', async () => {
+	it('wipes volumes (-v flag) only when shouldWipeVolumes=true', async () => {
 		const session = createMockSession()
 		vi.mocked(session.readFile).mockResolvedValueOnce('services: {}')
 
@@ -308,16 +319,6 @@ describe('teardownProjectCaddyRoute', () => {
 
 	it('removes every routed hostname of a multi-service project, preserving siblings', async () => {
 		const session = createMockSession()
-		const route = (host: string, port: number): unknown => ({
-			match: [{ host: [host] }],
-			handle: [
-				{
-					handler: 'reverse_proxy',
-					upstreams: [{ dial: `localhost:${String(port)}` }],
-				},
-			],
-			terminal: true,
-		})
 		vi.mocked(session.readFile).mockResolvedValueOnce(
 			JSON.stringify({
 				apps: {
@@ -438,13 +439,12 @@ describe('releaseProjectHostPort', () => {
 		const r2 = createMockR2()
 		const state = buildConvergedState({ 'other-project': { web: 8080 } })
 
-		const outcome = await releaseProjectHostPort(
+		const outcome = await releaseProjectHostPort('acme-web', {
 			r2,
-			'nn-prod',
-			'acme-web',
+			vpsName: 'nn-prod',
 			state,
-			'etag-1',
-		)
+			etag: 'etag-1',
+		})
 
 		expect(outcome).toEqual({ handled: false, detail: 'no port allocated' })
 		expect(r2.put).not.toHaveBeenCalled()
@@ -454,13 +454,12 @@ describe('releaseProjectHostPort', () => {
 		const r2 = createMockR2()
 		const state = buildConvergedState({ 'acme-web': { app: 8080 } })
 
-		const outcome = await releaseProjectHostPort(
+		const outcome = await releaseProjectHostPort('acme-web', {
 			r2,
-			'nn-prod',
-			'acme-web',
+			vpsName: 'nn-prod',
 			state,
-			'etag-1',
-		)
+			etag: 'etag-1',
+		})
 
 		expect(outcome).toEqual({
 			handled: true,
@@ -483,13 +482,12 @@ describe('releaseProjectHostPort', () => {
 			'acme-web': { front: 8080, api: 8081 },
 		})
 
-		const outcome = await releaseProjectHostPort(
+		const outcome = await releaseProjectHostPort('acme-web', {
 			r2,
-			'nn-prod',
-			'acme-web',
+			vpsName: 'nn-prod',
 			state,
-			'etag-1',
-		)
+			etag: 'etag-1',
+		})
 
 		expect(outcome).toEqual({
 			handled: true,
@@ -506,13 +504,12 @@ describe('releaseProjectHostPort', () => {
 			'other-project': { web: 8081 },
 		})
 
-		const outcome = await releaseProjectHostPort(
+		const outcome = await releaseProjectHostPort('acme-web', {
 			r2,
-			'nn-prod',
-			'acme-web',
+			vpsName: 'nn-prod',
 			state,
-			'etag-1',
-		)
+			etag: 'etag-1',
+		})
 
 		expect(outcome.handled).toBe(true)
 		const [, body] = vi.mocked(r2.put).mock.calls[0]!

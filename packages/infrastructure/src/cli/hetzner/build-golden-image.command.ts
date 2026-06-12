@@ -25,7 +25,7 @@ export async function buildGoldenImageCommand(): Promise<void> {
 		infra_fingerprint: fingerprint,
 	})
 
-	const cached = existing[0]
+	const [cached] = existing
 	if (cached) {
 		logger.info(
 			`Golden image already up to date (snapshot ${cached.id}, fingerprint ${fingerprint})`,

@@ -79,7 +79,7 @@ const USERS = [
 ]
 
 const RUNCMD: ReadonlyArray<string> = [
-	// Tailscale (install only — `tailscale up` runs per-project from renderProjectCloudInit)
+	// Tailscale (install only - `tailscale up` runs per-project from renderProjectCloudInit)
 	'curl -fsSL https://tailscale.com/install.sh | sh',
 
 	// Docker CE (daemon.json was written BEFORE this so the first start picks it up)

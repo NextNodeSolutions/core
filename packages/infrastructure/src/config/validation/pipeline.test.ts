@@ -7,11 +7,11 @@ import {
 
 describe('validateScriptsSection', () => {
 	it('returns defaults when the section is undefined', () => {
-		const result = validateScriptsSection(undefined)
+		const validation = validateScriptsSection(undefined)
 
-		expect(result.ok).toBe(true)
-		if (!result.ok) return
-		expect(result.section).toEqual({
+		expect(validation.ok).toBe(true)
+		if (!validation.ok) return
+		expect(validation.section).toEqual({
 			lint: 'lint',
 			test: 'test',
 			build: 'build',
@@ -19,15 +19,15 @@ describe('validateScriptsSection', () => {
 	})
 
 	it('accepts custom script names', () => {
-		const result = validateScriptsSection({
+		const validation = validateScriptsSection({
 			lint: 'check:lint',
 			test: 'check:test',
 			build: 'compile',
 		})
 
-		expect(result.ok).toBe(true)
-		if (!result.ok) return
-		expect(result.section).toEqual({
+		expect(validation.ok).toBe(true)
+		if (!validation.ok) return
+		expect(validation.section).toEqual({
 			lint: 'check:lint',
 			test: 'check:test',
 			build: 'compile',
@@ -35,19 +35,19 @@ describe('validateScriptsSection', () => {
 	})
 
 	it('accepts false to disable a script', () => {
-		const result = validateScriptsSection({ test: false })
+		const validation = validateScriptsSection({ test: false })
 
-		expect(result.ok).toBe(true)
-		if (!result.ok) return
-		expect(result.section.test).toBe(false)
+		expect(validation.ok).toBe(true)
+		if (!validation.ok) return
+		expect(validation.section.test).toBe(false)
 	})
 
 	it('rejects non-table section', () => {
-		const result = validateScriptsSection('not a table')
+		const validation = validateScriptsSection('not a table')
 
-		expect(result.ok).toBe(false)
-		if (result.ok) return
-		expect(result.errors).toContain('[scripts] must be a table')
+		expect(validation.ok).toBe(false)
+		if (validation.ok) return
+		expect(validation.errors).toContain('[scripts] must be a table')
 	})
 
 	it.each([
@@ -56,12 +56,12 @@ describe('validateScriptsSection', () => {
 		['build', [], 'object'],
 	] as const)(
 		'rejects %s when value is %j (type %s)',
-		(key, value, typeName) => {
-			const result = validateScriptsSection({ [key]: value })
+		(key, scriptValue, typeName) => {
+			const validation = validateScriptsSection({ [key]: scriptValue })
 
-			expect(result.ok).toBe(false)
-			if (result.ok) return
-			expect(result.errors).toContain(
+			expect(validation.ok).toBe(false)
+			if (validation.ok) return
+			expect(validation.errors).toContain(
 				`scripts.${key} must be a string or false, got ${typeName}`,
 			)
 		},
@@ -70,11 +70,11 @@ describe('validateScriptsSection', () => {
 
 describe('validateEnvironmentSection', () => {
 	it('defaults development to true when the section is undefined', () => {
-		const result = validateEnvironmentSection(undefined)
+		const validation = validateEnvironmentSection(undefined)
 
-		expect(result.ok).toBe(true)
-		if (!result.ok) return
-		expect(result.section.development).toBe(true)
+		expect(validation.ok).toBe(true)
+		if (!validation.ok) return
+		expect(validation.section.development).toBe(true)
 	})
 
 	it('accepts development explicitly set', () => {
@@ -89,19 +89,19 @@ describe('validateEnvironmentSection', () => {
 	})
 
 	it('rejects non-table section', () => {
-		const result = validateEnvironmentSection('not a table')
+		const validation = validateEnvironmentSection('not a table')
 
-		expect(result.ok).toBe(false)
-		if (result.ok) return
-		expect(result.errors).toContain('[environment] must be a table')
+		expect(validation.ok).toBe(false)
+		if (validation.ok) return
+		expect(validation.errors).toContain('[environment] must be a table')
 	})
 
 	it('rejects non-boolean development value', () => {
-		const result = validateEnvironmentSection({ development: 'yes' })
+		const validation = validateEnvironmentSection({ development: 'yes' })
 
-		expect(result.ok).toBe(false)
-		if (result.ok) return
-		expect(result.errors).toContain(
+		expect(validation.ok).toBe(false)
+		if (validation.ok) return
+		expect(validation.errors).toContain(
 			'environment.development must be a boolean',
 		)
 	})

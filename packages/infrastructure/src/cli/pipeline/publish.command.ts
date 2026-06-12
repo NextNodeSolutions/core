@@ -14,10 +14,10 @@ const DEFAULT_BRANCH = 'main'
 export function publishCommand(): void {
 	const packageDir = requireEnv('PACKAGE_DIR')
 	const repoRoot = requireEnv('GITHUB_WORKSPACE')
-	const srOutputFile = getEnv('SR_OUTPUT_FILE') || DEFAULT_SR_OUTPUT
-	const branch = getEnv('PUBLISH_BRANCH') || DEFAULT_BRANCH
+	const srOutputFile = getEnv('SR_OUTPUT_FILE') ?? DEFAULT_SR_OUTPUT
+	const branch = getEnv('PUBLISH_BRANCH') ?? DEFAULT_BRANCH
 
-	const result = spawnSync(
+	const spawnResult = spawnSync(
 		'bash',
 		[
 			'-c',
@@ -30,7 +30,7 @@ export function publishCommand(): void {
 		},
 	)
 
-	if (result.status === 0) {
+	if (spawnResult.status === 0) {
 		return
 	}
 
@@ -39,12 +39,12 @@ export function publishCommand(): void {
 
 	if (!analysis.canRecover) {
 		logger.error('semantic-release failed without a recoverable cause')
-		process.exitCode = result.status ?? 1
+		process.exitCode = spawnResult.status ?? 1
 		return
 	}
 
 	logger.warn(
-		`npm published ${analysis.publishedVersion} but git push was rejected — rebasing and re-pushing`,
+		`npm published ${analysis.publishedVersion} but git push was rejected - rebasing and re-pushing`,
 	)
 	recoverReleasePush({ repoRoot, branch })
 	appendFileSync(

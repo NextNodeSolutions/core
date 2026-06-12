@@ -18,14 +18,14 @@ afterEach(() => {
 describe('waitUntil', () => {
 	it('resolves on the first attempt when the predicate holds', async () => {
 		const poll = vi.fn(async () => 'ready')
-		const result = await waitUntil({
+		const waited = await waitUntil({
 			subject: 'task',
 			poll,
-			isDone: value => value === 'ready',
+			isDone: polled => polled === 'ready',
 			maxAttempts: 5,
 			intervalMs: 10,
 		})
-		expect(result).toBe('ready')
+		expect(waited).toBe('ready')
 		expect(poll).toHaveBeenCalledTimes(1)
 	})
 
@@ -35,14 +35,14 @@ describe('waitUntil', () => {
 			tick += 1
 			return tick === 3 ? 'ready' : 'starting'
 		})
-		const result = await waitUntil({
+		const waited = await waitUntil({
 			subject: 'task',
 			poll,
-			isDone: value => value === 'ready',
+			isDone: polled => polled === 'ready',
 			maxAttempts: 5,
 			intervalMs: 10,
 		})
-		expect(result).toBe('ready')
+		expect(waited).toBe('ready')
 		expect(poll).toHaveBeenCalledTimes(3)
 	})
 
@@ -52,7 +52,7 @@ describe('waitUntil', () => {
 			waitUntil({
 				subject: 'task',
 				poll,
-				isDone: value => value === 'ready',
+				isDone: polled => polled === 'ready',
 				maxAttempts: 3,
 				intervalMs: 10,
 			}),

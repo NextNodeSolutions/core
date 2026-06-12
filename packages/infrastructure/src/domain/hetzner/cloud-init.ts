@@ -4,7 +4,7 @@ export interface ProjectCloudInitInput {
 	readonly tailscaleAuthKey: string
 	readonly tailscaleHostname: string
 	readonly deployPublicKey: string
-	readonly internal: boolean
+	readonly isInternal: boolean
 }
 
 export interface CloudInitUser {
@@ -53,8 +53,8 @@ function buildTailscaleAuthKeyFile(authKey: string): CloudInitWriteFile {
 	}
 }
 
-function buildUfwRules(internal: boolean): ReadonlyArray<string> {
-	if (internal) {
+function buildUfwRules(isInternal: boolean): ReadonlyArray<string> {
+	if (isInternal) {
 		// Internal mode: all traffic restricted to tailscale0 interface
 		return [
 			'ufw default deny incoming',
@@ -103,7 +103,7 @@ export function renderProjectCloudInit(input: ProjectCloudInitInput): string {
 			// Tailscale is pre-installed in the golden image; just authenticate.
 			...buildTailscaleUpCmds(input.tailscaleHostname),
 			// UFW rules are per-project (internal vs public).
-			...buildUfwRules(input.internal),
+			...buildUfwRules(input.isInternal),
 		],
 	}
 

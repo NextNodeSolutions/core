@@ -6,7 +6,7 @@ import type { ImageRef } from './target.ts'
 // docker buildx bake resolves a target's `dockerfile` relative to its
 // `context`. We write the bake file at the repo root (the bake-action working
 // directory), so the default context is the repo root and the default
-// Dockerfile sits at `<packageDir>/Dockerfile` — the NextNode monorepo
+// Dockerfile sits at `<packageDir>/Dockerfile` - the NextNode monorepo
 // convention (turbo prune needs the whole workspace as context).
 const DEFAULT_BUILD_CONTEXT = '.'
 const DOCKERFILE_BASENAME = 'Dockerfile'
@@ -21,7 +21,7 @@ interface BakeTarget {
 	readonly target?: string
 	// Build args (`--build-arg`) for this target: the infra's default public
 	// args plus the service's resolved `build_args`. Absent when the target has
-	// none. Values are inlined into the image — never put secrets here.
+	// none. Values are inlined into the image - never put secrets here.
 	readonly args?: Readonly<Record<string, string>>
 	readonly tags: ReadonlyArray<string>
 	readonly 'cache-from': ReadonlyArray<string>
@@ -38,12 +38,12 @@ interface BakeDefinition {
 }
 
 export interface RenderBakeFileInput {
-	// Every declared service, by instance name — used to read each build
+	// Every declared service, by instance name - used to read each build
 	// target's context/dockerfile/stage overrides.
 	readonly services: Readonly<Record<string, UserServiceConfig>>
 	// Resolved image ref per service (the build refs become the bake tags).
 	readonly imageRefs: Readonly<Record<string, ImageRef>>
-	// Instance names of the `build` services — the exact set of bake targets.
+	// Instance names of the `build` services - the exact set of bake targets.
 	readonly bakeTargets: ReadonlyArray<string>
 	// The calling project's package directory relative to the repo root
 	// (e.g. `packages/monitoring`), used to default the Dockerfile path.
@@ -57,7 +57,7 @@ export interface RenderBakeFileInput {
 }
 
 /**
- * Render the docker-bake definition (JSON) that drives the build job —
+ * Render the docker-bake definition (JSON) that drives the build job -
  * `nextnode.toml` is the single source of truth for build shape, so the
  * caller needs no docker-compose.yml. Each `build` service becomes a bake
  * target carrying its build inputs (context/dockerfile/stage from the toml,
@@ -67,7 +67,7 @@ export interface RenderBakeFileInput {
 export function renderBakeFile(input: RenderBakeFileInput): string {
 	if (input.bakeTargets.length === 0) {
 		throw new Error(
-			'renderBakeFile: no build services to bake — compute-image-ref runs only when at least one service has source = "build"',
+			'renderBakeFile: no build services to bake - compute-image-ref runs only when at least one service has source = "build"',
 		)
 	}
 
@@ -83,7 +83,7 @@ export function renderBakeFile(input: RenderBakeFileInput): string {
 
 function buildBakeTarget(name: string, input: RenderBakeFileInput): BakeTarget {
 	const service = input.services[name]
-	if (!service || service.source !== 'build') {
+	if (service?.source !== 'build') {
 		throw new Error(
 			`renderBakeFile: bake target "${name}" is not a declared build service`,
 		)
@@ -100,7 +100,7 @@ function buildBakeTarget(name: string, input: RenderBakeFileInput): BakeTarget {
 	return {
 		context: service.context ?? DEFAULT_BUILD_CONTEXT,
 		dockerfile: service.dockerfile ?? defaultDockerfile(input.packageDir),
-		...(service.target !== undefined ? { target: service.target } : {}),
+		...(service.target === undefined ? {} : { target: service.target }),
 		...(args && Object.keys(args).length > 0 ? { args } : {}),
 		tags: [formatImageRef(ref)],
 		'cache-from': [ghaCacheScope],
@@ -109,7 +109,7 @@ function buildBakeTarget(name: string, input: RenderBakeFileInput): BakeTarget {
 }
 
 // `<packageDir>/Dockerfile`, or just `Dockerfile` when the project lives at the
-// repo root (empty package dir) — never a leading-slash absolute path.
+// repo root (empty package dir) - never a leading-slash absolute path.
 function defaultDockerfile(packageDir: string): string {
 	if (packageDir === '') return DOCKERFILE_BASENAME
 	return `${packageDir}/${DOCKERFILE_BASENAME}`

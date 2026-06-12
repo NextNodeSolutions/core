@@ -14,7 +14,7 @@ describe('validateTeardownOptions', () => {
 		expect(() => validateTeardownOptions('app', 'vps', true)).not.toThrow()
 	})
 
-	it('accepts project + withVolumes=false for static projects', () => {
+	it('accepts project + shouldWipeVolumes=false for static projects', () => {
 		expect(() =>
 			validateTeardownOptions('static', 'project', false),
 		).not.toThrow()
@@ -26,7 +26,7 @@ describe('validateTeardownOptions', () => {
 		)
 	})
 
-	it('rejects withVolumes=true for static projects', () => {
+	it('rejects shouldWipeVolumes=true for static projects', () => {
 		expect(() =>
 			validateTeardownOptions('static', 'project', true),
 		).toThrow(

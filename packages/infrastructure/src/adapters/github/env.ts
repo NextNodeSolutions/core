@@ -1,13 +1,13 @@
 import { appendFileSync } from 'node:fs'
 
-export function writeEnvVar(key: string, value: string): void {
+export function writeEnvVar(key: string, envValue: string): void {
 	const envFile = process.env['GITHUB_ENV']
 	if (!envFile) {
 		throw new Error(
-			'GITHUB_ENV env var is not set — are you running in GitHub Actions?',
+			'GITHUB_ENV env var is not set - are you running in GitHub Actions?',
 		)
 	}
-	appendFileSync(envFile, `${key}=${value}\n`)
+	appendFileSync(envFile, `${key}=${envValue}\n`)
 }
 
 /**
@@ -18,7 +18,7 @@ export function writeEnvVar(key: string, value: string): void {
  * Mask MUST be emitted before the value can leak; calling writeEnvVar for
  * a secret skips the mask and is a leak.
  */
-export function writeSecret(key: string, value: string): void {
-	process.stdout.write(`::add-mask::${value}\n`)
-	writeEnvVar(key, value)
+export function writeSecret(key: string, envValue: string): void {
+	process.stdout.write(`::add-mask::${envValue}\n`)
+	writeEnvVar(key, envValue)
 }

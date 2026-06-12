@@ -39,7 +39,7 @@ describe('resolveMigrationServiceName', () => {
 				api: service(['postgres']),
 			}),
 		).toThrow(
-			'Multiple deploy services declare needs = ["postgres"] (front, api) — only one can own the migration of the single project database; declare needs = ["postgres"] on the schema owner alone',
+			'Multiple deploy services declare needs = ["postgres"] (front, api) - only one can own the migration of the single project database; declare needs = ["postgres"] on the schema owner alone',
 		)
 	})
 })

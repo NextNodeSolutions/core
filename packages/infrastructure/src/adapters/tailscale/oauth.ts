@@ -21,14 +21,17 @@ async function exchangeClientSecret(clientSecret: string): Promise<string> {
 	if (!response.ok) {
 		const body = await response.text()
 		throw new Error(
-			`Tailscale OAuth token exchange: ${response.status} — ${body}`,
+			`Tailscale OAuth token exchange: ${response.status} - ${body}`,
 		)
 	}
-	const data: unknown = await response.json()
-	if (!isRecord(data) || typeof data.access_token !== 'string') {
+	const responseBody: unknown = await response.json()
+	if (
+		!isRecord(responseBody) ||
+		typeof responseBody.access_token !== 'string'
+	) {
 		throw new Error('Tailscale OAuth token exchange: missing access_token')
 	}
-	return data.access_token
+	return responseBody.access_token
 }
 
 export async function mintAuthkey(
@@ -68,19 +71,19 @@ export async function mintAuthkey(
 	if (!response.ok) {
 		const body = await response.text()
 		throw new Error(
-			`Tailscale create authkey: ${response.status} — ${body}`,
+			`Tailscale create authkey: ${response.status} - ${body}`,
 		)
 	}
 
-	const data: unknown = await response.json()
+	const responseBody: unknown = await response.json()
 	if (
-		!isRecord(data) ||
-		typeof data.key !== 'string' ||
-		typeof data.expires !== 'string'
+		!isRecord(responseBody) ||
+		typeof responseBody.key !== 'string' ||
+		typeof responseBody.expires !== 'string'
 	) {
 		throw new Error('Tailscale create authkey: invalid response shape')
 	}
-	return { key: data.key, expires: data.expires }
+	return { key: responseBody.key, expires: responseBody.expires }
 }
 
 function extractIpv4FromAddresses(
@@ -121,10 +124,9 @@ function findDeviceIpv4(devices: unknown, hostname: string): string | null {
 		}))
 		.filter((d): d is { ipv4: string; created: string } => d.ipv4 !== null)
 
-	if (candidates.length === 0) return null
-
 	candidates.sort((a, b) => b.created.localeCompare(a.created))
-	return candidates[0]!.ipv4
+	const [newest] = candidates
+	return newest?.ipv4 ?? null
 }
 
 function collectDeviceIdsByHostname(
@@ -176,8 +178,8 @@ export async function deleteTailnetDevicesByHostname(
 ): Promise<number> {
 	const accessToken = await exchangeClientSecret(clientSecret)
 
-	const data = await listDevices(accessToken)
-	const ids = collectDeviceIdsByHostname(data, hostname)
+	const devices = await listDevices(accessToken)
+	const ids = collectDeviceIdsByHostname(devices, hostname)
 
 	await Promise.all(ids.map(id => deleteDevice(accessToken, id)))
 	return ids.length
@@ -191,8 +193,8 @@ export async function getTailnetIpByHostname(
 
 	for (let attempt = 1; attempt <= DEVICE_POLL_MAX_ATTEMPTS; attempt++) {
 		// oxlint-disable-next-line no-await-in-loop -- polling until device joins tailnet
-		const data = await listDevices(accessToken)
-		const ip = findDeviceIpv4(data, hostname)
+		const devices = await listDevices(accessToken)
+		const ip = findDeviceIpv4(devices, hostname)
 		if (ip) return ip
 
 		// oxlint-disable-next-line no-await-in-loop -- polling until device joins tailnet

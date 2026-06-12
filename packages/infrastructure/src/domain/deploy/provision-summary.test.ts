@@ -6,7 +6,7 @@ import type { ProvisionResult } from './target.ts'
 
 describe('buildProvisionSummary', () => {
 	it('renders a VPS provision summary with resource outcomes', () => {
-		const result: ProvisionResult = {
+		const provisionResult: ProvisionResult = {
 			kind: 'vps',
 			outcome: {
 				server: { handled: true, detail: 'created #42' },
@@ -27,7 +27,11 @@ describe('buildProvisionSummary', () => {
 			durationMs: 135_000,
 		}
 
-		const summary = buildProvisionSummary(result, 'acme-web', 'hetzner-vps')
+		const summary = buildProvisionSummary(
+			provisionResult,
+			'acme-web',
+			'hetzner-vps',
+		)
 
 		expect(summary).toContain(
 			'### :white_check_mark: Infrastructure ready for `acme-web`',
@@ -40,7 +44,7 @@ describe('buildProvisionSummary', () => {
 	})
 
 	it('renders a static provision summary with resource outcomes', () => {
-		const result: ProvisionResult = {
+		const provisionResult: ProvisionResult = {
 			kind: 'static',
 			outcome: {
 				'pages-project': {
@@ -57,7 +61,7 @@ describe('buildProvisionSummary', () => {
 		}
 
 		const summary = buildProvisionSummary(
-			result,
+			provisionResult,
 			'my-site',
 			'cloudflare-pages',
 		)

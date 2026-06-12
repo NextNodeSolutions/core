@@ -29,9 +29,9 @@ describe('get', () => {
 			ETag: '"abc123"',
 		})
 
-		const result = await client.get('hetzner/acme.json')
+		const stored = await client.get('hetzner/acme.json')
 
-		expect(result).toStrictEqual({ body: '{"id":1}', etag: '"abc123"' })
+		expect(stored).toStrictEqual({ body: '{"id":1}', etag: '"abc123"' })
 	})
 
 	it('returns null for missing key', async () => {
@@ -39,9 +39,9 @@ describe('get', () => {
 			new NoSuchKey({ $metadata: {}, message: 'not found' }),
 		)
 
-		const result = await client.get('missing.json')
+		const stored = await client.get('missing.json')
 
-		expect(result).toBeNull()
+		expect(stored).toBeNull()
 	})
 
 	it('throws on unexpected error', async () => {
@@ -118,7 +118,7 @@ describe('deleteByPrefix', () => {
 
 	it('lists and deletes all objects under the prefix in one page', async () => {
 		send.mockImplementation(async command => {
-			const name: unknown = command.constructor.name
+			const { name } = command.constructor
 			if (name === 'ListObjectsV2Command') {
 				return {
 					Contents: [
@@ -142,7 +142,7 @@ describe('deleteByPrefix', () => {
 	it('paginates through multiple list pages', async () => {
 		let callIndex = 0
 		send.mockImplementation(async command => {
-			const name: unknown = command.constructor.name
+			const { name } = command.constructor
 			if (name === 'ListObjectsV2Command') {
 				callIndex += 1
 				if (callIndex === 1) {
@@ -166,7 +166,7 @@ describe('deleteByPrefix', () => {
 
 	it('skips objects without a Key', async () => {
 		send.mockImplementation(async command => {
-			const name: unknown = command.constructor.name
+			const { name } = command.constructor
 			if (name === 'ListObjectsV2Command') {
 				return {
 					Contents: [{ Key: 'p/a.json' }, { Key: undefined }],
@@ -183,7 +183,7 @@ describe('deleteByPrefix', () => {
 
 	it('only deletes keys matching the predicate', async () => {
 		send.mockImplementation(async command => {
-			const name: unknown = command.constructor.name
+			const { name } = command.constructor
 			if (name === 'ListObjectsV2Command') {
 				return {
 					Contents: [
@@ -216,7 +216,7 @@ describe('deleteByPrefix', () => {
 
 	it('returns 0 when nothing matches the predicate', async () => {
 		send.mockImplementation(async command => {
-			const name: unknown = command.constructor.name
+			const { name } = command.constructor
 			if (name === 'ListObjectsV2Command') {
 				return {
 					Contents: [{ Key: 'vps/certificates/le/foo/cert' }],

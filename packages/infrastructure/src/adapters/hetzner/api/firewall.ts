@@ -24,11 +24,14 @@ function parseFirewallObject(
 	return { id: fw.id, name: fw.name, appliedToCount }
 }
 
-function parseFirewall(data: unknown, context: string): HcloudFirewallResponse {
-	if (!isRecord(data) || !isRecord(data.firewall)) {
+function parseFirewall(
+	responseBody: unknown,
+	context: string,
+): HcloudFirewallResponse {
+	if (!isRecord(responseBody) || !isRecord(responseBody.firewall)) {
 		throw new Error(`${context}: missing \`firewall\` in response`)
 	}
-	return parseFirewallObject(data.firewall, context)
+	return parseFirewallObject(responseBody.firewall, context)
 }
 
 export async function findFirewallById(
@@ -40,8 +43,8 @@ export async function findFirewallById(
 	})
 	if (response.status === HTTP_NOT_FOUND) return null
 	await requireOk(response, `find firewall ${firewallId}`)
-	const data: unknown = await response.json()
-	return parseFirewall(data, `find firewall ${firewallId}`)
+	const responseBody: unknown = await response.json()
+	return parseFirewall(responseBody, `find firewall ${firewallId}`)
 }
 
 export async function findFirewallsByName(
@@ -52,13 +55,13 @@ export async function findFirewallsByName(
 	url.searchParams.set('name', name)
 	const response = await fetch(url, { headers: authHeaders(token) })
 	await requireOk(response, `list firewalls name="${name}"`)
-	const data: unknown = await response.json()
-	if (!isRecord(data) || !Array.isArray(data.firewalls)) {
+	const responseBody: unknown = await response.json()
+	if (!isRecord(responseBody) || !Array.isArray(responseBody.firewalls)) {
 		throw new Error(
 			`list firewalls name="${name}": missing \`firewalls\` array`,
 		)
 	}
-	const firewalls: ReadonlyArray<unknown> = data.firewalls
+	const { firewalls } = responseBody
 	return firewalls.map((fw, i) => {
 		if (!isRecord(fw)) {
 			throw new Error(`firewalls[${i}]: invalid firewall shape`)
@@ -78,8 +81,8 @@ export async function createFirewall(
 		body: JSON.stringify({ name, rules }),
 	})
 	await requireOk(response, `create firewall "${name}"`)
-	const data: unknown = await response.json()
-	return parseFirewall(data, `create firewall "${name}"`)
+	const responseBody: unknown = await response.json()
+	return parseFirewall(responseBody, `create firewall "${name}"`)
 }
 
 export async function applyFirewall(

@@ -17,13 +17,11 @@ describe('createEnvSecretsAdapter', () => {
 		const runner = vi.fn<GhRunner>().mockResolvedValue(ok())
 		const adapter = createEnvSecretsAdapter(runner)
 
-		await adapter.setRepoEnvSecret(
-			'POSTGRES_PASSWORD',
-			'my-secret',
-			'NextNodeSolutions',
-			'core',
-			'production',
-		)
+		await adapter.setRepoEnvSecret('POSTGRES_PASSWORD', 'my-secret', {
+			owner: 'NextNodeSolutions',
+			repo: 'core',
+			environment: 'production',
+		})
 
 		expect(runner).toHaveBeenCalledWith(
 			[
@@ -44,13 +42,11 @@ describe('createEnvSecretsAdapter', () => {
 		const adapter = createEnvSecretsAdapter(runner)
 
 		await expect(
-			adapter.setRepoEnvSecret(
-				'NAME',
-				'val',
-				'owner',
-				'repo',
-				'production',
-			),
+			adapter.setRepoEnvSecret('NAME', 'val', {
+				owner: 'owner',
+				repo: 'repo',
+				environment: 'production',
+			}),
 		).rejects.toThrow(
 			'gh secret set "NAME" --env "production" failed (exit 1): no perms',
 		)

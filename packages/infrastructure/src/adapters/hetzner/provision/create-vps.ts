@@ -72,28 +72,7 @@ export async function createVps(
 		`Preflight OK: server_type "${input.hetzner.serverType}" is available`,
 	)
 
-	const purged = await credentials.tailnet.deleteByHostname(input.vpsName)
-	if (purged > 0) {
-		logger.info(
-			`Purged ${purged} stale tailnet device(s) with hostname "${input.vpsName}"`,
-		)
-	}
-
-	const minted = await credentials.tailnet.mintAuthkey(
-		[TAILSCALE_TAG],
-		TAILSCALE_AUTHKEY_TTL_SECONDS,
-		`nextnode-infra provisioning ${input.vpsName}`,
-	)
-	logger.info(
-		`Minted ephemeral Tailscale authkey for "${input.vpsName}" (expires ${minted.expires})`,
-	)
-
-	const cloudInit = renderProjectCloudInit({
-		tailscaleAuthKey: minted.key,
-		tailscaleHostname: input.vpsName,
-		deployPublicKey: credentials.deployPublicKey,
-		internal: input.internal,
-	})
+	const cloudInit = await renderCloudInitWithFreshAuthkey(credentials, input)
 
 	logger.info(
 		`Using golden image ${input.goldenImageId} for "${input.vpsName}"`,
@@ -122,6 +101,38 @@ export async function createVps(
 		publicIp: server.public_net.ipv4.ip,
 		outcome: { handled: true, detail: `created #${String(server.id)}` },
 	}
+}
+
+/**
+ * Purge stale tailnet devices for the hostname, mint a fresh ephemeral
+ * authkey, and render the project cloud-init embedding it.
+ */
+async function renderCloudInitWithFreshAuthkey(
+	credentials: ProvisionVpsCredentials,
+	input: CreateVpsInput,
+): Promise<string> {
+	const purged = await credentials.tailnet.deleteByHostname(input.vpsName)
+	if (purged > 0) {
+		logger.info(
+			`Purged ${purged} stale tailnet device(s) with hostname "${input.vpsName}"`,
+		)
+	}
+
+	const minted = await credentials.tailnet.mintAuthkey(
+		[TAILSCALE_TAG],
+		TAILSCALE_AUTHKEY_TTL_SECONDS,
+		`nextnode-infra provisioning ${input.vpsName}`,
+	)
+	logger.info(
+		`Minted ephemeral Tailscale authkey for "${input.vpsName}" (expires ${minted.expires})`,
+	)
+
+	return renderProjectCloudInit({
+		tailscaleAuthKey: minted.key,
+		tailscaleHostname: input.vpsName,
+		deployPublicKey: credentials.deployPublicKey,
+		isInternal: input.internal,
+	})
 }
 
 export async function completeProvisioning(

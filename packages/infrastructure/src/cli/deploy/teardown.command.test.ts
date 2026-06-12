@@ -185,7 +185,7 @@ describe('teardownCommand - hetzner dispatch', () => {
 		)
 	})
 
-	it('passes withVolumes=true to the Hetzner target when TEARDOWN_WITH_VOLUMES is set', async () => {
+	it('passes shouldWipeVolumes=true to the Hetzner target when TEARDOWN_WITH_VOLUMES is set', async () => {
 		vi.stubEnv('TEARDOWN_WITH_VOLUMES', '1')
 		mockHetznerTeardown.mockResolvedValue({
 			kind: 'vps',

@@ -34,7 +34,7 @@ export interface InternalIssuer {
 export type CaddyIssuer = AcmeIssuer | InternalIssuer
 
 /**
- * ACME issuer with HTTP-01 challenge — Let's Encrypt over the public
+ * ACME issuer with HTTP-01 challenge - Let's Encrypt over the public
  * internet. Caddy serves the challenge on :80 of the public IP.
  */
 export function buildPublicAcmeIssuer(email: string): AcmeIssuer {
@@ -42,7 +42,7 @@ export function buildPublicAcmeIssuer(email: string): AcmeIssuer {
 }
 
 /**
- * ACME issuer with DNS-01 challenge via Cloudflare — for projects whose
+ * ACME issuer with DNS-01 challenge via Cloudflare - for projects whose
  * server is not publicly reachable (e.g. Tailscale-only). Let's Encrypt
  * issues real certs by validating DNS records the operator owns through
  * Cloudflare. HTTP-01 and TLS-ALPN are explicitly disabled so Caddy never
@@ -162,12 +162,12 @@ function extractRoutes(configJson: string): ReadonlyArray<unknown> {
 function parseRouteUpstream(route: unknown): CaddyUpstream | null {
 	if (!isRecord(route)) return null
 
-	const match = route.match
-	const handle = route.handle
+	const { match } = route
+	const { handle } = route
 	if (!Array.isArray(match) || !Array.isArray(handle)) return null
 
-	const firstMatch: unknown = match[0]
-	const firstHandle: unknown = handle[0]
+	const [firstMatch]: ReadonlyArray<unknown> = match
+	const [firstHandle]: ReadonlyArray<unknown> = handle
 	if (!isRecord(firstMatch) || !isRecord(firstHandle)) return null
 
 	if (
@@ -177,7 +177,7 @@ function parseRouteUpstream(route: unknown): CaddyUpstream | null {
 		return null
 
 	if (!Array.isArray(firstHandle.upstreams)) return null
-	const firstUpstream: unknown = firstHandle.upstreams[0]
+	const [firstUpstream]: ReadonlyArray<unknown> = firstHandle.upstreams
 	if (!isRecord(firstUpstream) || typeof firstUpstream.dial !== 'string')
 		return null
 

@@ -41,7 +41,7 @@ export function planCommand(config: NextNodeConfig): void {
 	logger.info(`Package dir: ${packageDir}`)
 	logger.info(`Build directory: ${buildDirectory}`)
 
-	const postgres = config.services.postgres
+	const { postgres } = config.services
 	const tasks = buildQualityMatrix(config.scripts, config.project, {
 		environment,
 		developmentEnabled: config.environment.development,

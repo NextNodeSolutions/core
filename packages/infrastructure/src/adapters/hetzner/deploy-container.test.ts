@@ -51,6 +51,20 @@ const secretService = (url: string, secrets: string[]): UserServiceConfig => ({
 	target: 'app',
 })
 
+const upstreamService = (
+	port: number,
+	ref: string,
+	registryAuthSecret?: string,
+): UserServiceConfig => ({
+	port,
+	secrets: [],
+	needs: [],
+	dependsOn: [],
+	source: 'upstream',
+	ref,
+	...(registryAuthSecret !== undefined && { registryAuthSecret }),
+})
+
 const BASE_INPUT: BringUpInput = {
 	projectName: 'acme-web',
 	environment: 'production',
@@ -313,7 +327,7 @@ describe('stageRollout', () => {
 
 	// front declares no needs; api declares needs = ["postgres"]. DATABASE_URL is
 	// produced by the postgres backing service (secretOrigins), so it must land
-	// ONLY in api's env — never broadcast into front's.
+	// ONLY in api's env - never broadcast into front's.
 	const backingInput = (): DeployContainerInput => ({
 		projectName: 'acme-web',
 		environment: 'production',
@@ -381,7 +395,7 @@ describe('stageRollout', () => {
 		)
 
 		// the postgres sidecar (env_file: ['.env']) + migrate (--env-file .env)
-		// read this — it carries the backing env, never the app's user secrets
+		// read this - it carries the backing env, never the app's user secrets
 		expect(shared).toContain('DATABASE_URL=postgres://db:5432')
 		expect(shared).toContain('POSTGRES_PASSWORD=pg-pw')
 		expect(shared).toContain('POSTGRES_USER=acme_web')
@@ -390,23 +404,10 @@ describe('stageRollout', () => {
 
 	// The forwarded token authenticates only credentialed registries. An
 	// all-upstream deploy that mixes a private registry (registry_auth_secret)
-	// with a public one must log into the private registry alone — logging into
+	// with a public one must log into the private registry alone - logging into
 	// the public registry with the private token would fail or pollute config.
 	it('logs into the credentialed registry only, never a public upstream registry', async () => {
 		const session = recordingSession()
-		const upstreamService = (
-			port: number,
-			ref: string,
-			registryAuthSecret?: string,
-		): UserServiceConfig => ({
-			port,
-			secrets: [],
-			needs: [],
-			dependsOn: [],
-			source: 'upstream',
-			ref,
-			...(registryAuthSecret !== undefined && { registryAuthSecret }),
-		})
 
 		await stageRollout(session, {
 			projectName: 'acme-web',
@@ -455,7 +456,7 @@ describe('deployContainer', () => {
 	it('returns an image ref per declared service and an upstream per routed service', async () => {
 		const session = recordingSession()
 
-		const result = await deployContainer(session, {
+		const deployment = await deployContainer(session, {
 			projectName: 'acme-web',
 			environment: 'production',
 			hostPorts: { front: 8080, api: 8081 },
@@ -473,12 +474,12 @@ describe('deployContainer', () => {
 			},
 		})
 
-		expect(result.deployed.imageRefs).toEqual({
+		expect(deployment.deployed.imageRefs).toEqual({
 			front: IMAGE,
 			api: IMAGE,
 			worker: IMAGE,
 		})
-		expect(result.upstreams).toEqual([
+		expect(deployment.upstreams).toEqual([
 			{ hostname: 'example.com', dial: 'localhost:8080' },
 			{ hostname: 'api.example.com', dial: 'localhost:8081' },
 		])
@@ -487,7 +488,7 @@ describe('deployContainer', () => {
 	it('routes each service at its dev hostname in a development deploy', async () => {
 		const session = recordingSession()
 
-		const result = await deployContainer(session, {
+		const deployment = await deployContainer(session, {
 			projectName: 'acme-web',
 			environment: 'development',
 			hostPorts: { front: 8080, api: 8081 },
@@ -504,7 +505,7 @@ describe('deployContainer', () => {
 			},
 		})
 
-		expect(result.upstreams).toEqual([
+		expect(deployment.upstreams).toEqual([
 			{ hostname: 'dev.example.com', dial: 'localhost:8080' },
 			{ hostname: 'dev.api.example.com', dial: 'localhost:8081' },
 		])

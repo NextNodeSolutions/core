@@ -8,7 +8,7 @@ import type { SshSession, SshSessionConfig } from './session.types.ts'
 
 const DEFAULT_PORT = 22
 
-// RFC 4251 §9.1 — SFTP SSH_FX_NO_SUCH_FILE status code.
+// RFC 4251 §9.1 - SFTP SSH_FX_NO_SUCH_FILE status code.
 const SFTP_STATUS_NO_SUCH_FILE = 2
 
 interface SftpError extends Error {
@@ -46,15 +46,26 @@ function openSftp(conn: Client): Promise<SFTPWrapper> {
 	})
 }
 
-export async function createSshSession(
+// Open the connection and run the host-key verification (TOFU on first
+// connect, compare-and-fail thereafter). Resolves with the observed
+// fingerprint once the handshake reaches `ready`.
+function establishConnection(
+	conn: Client,
 	config: SshSessionConfig,
-	injectedClient?: Client,
-): Promise<SshSession> {
-	const conn = injectedClient ?? new Ssh2Client()
-	let observedFingerprint: string | undefined
-
-	await new Promise<void>((resolve, reject) => {
-		conn.on('ready', () => resolve())
+): Promise<string> {
+	return new Promise<string>((resolve, reject) => {
+		let observedFingerprint: string | undefined
+		conn.on('ready', () => {
+			if (observedFingerprint === undefined) {
+				reject(
+					new Error(
+						`SSH connection to ${config.host} completed without observing a host key`,
+					),
+				)
+				return
+			}
+			resolve(observedFingerprint)
+		})
 		conn.on('error', (err: Error) =>
 			reject(
 				new Error(
@@ -71,11 +82,7 @@ export async function createSshSession(
 			hostVerifier: (key: Buffer): boolean => {
 				const fingerprint = computeHostKeyFingerprint(key)
 				observedFingerprint = fingerprint
-				if (config.expectedHostKeyFingerprint === undefined) {
-					// TOFU: first-time connect. Caller will persist the
-					// fingerprint after this session is returned.
-					return true
-				}
+				if (config.expectedHostKeyFingerprint === undefined) return true
 				return fingerprintsMatch(
 					fingerprint,
 					config.expectedHostKeyFingerprint,
@@ -83,112 +90,112 @@ export async function createSshSession(
 			},
 		})
 	})
+}
 
-	if (observedFingerprint === undefined) {
-		// hostVerifier is always invoked during a real handshake; missing
-		// means the injected client skipped verification (test-only path).
-		throw new Error(
-			`SSH connection to ${config.host} completed without observing a host key`,
-		)
-	}
-	const hostKeyFingerprint = observedFingerprint
-
-	function runCommand(
-		command: string,
-		stdin: string | null,
-	): Promise<string> {
-		return new Promise((resolve, reject) => {
-			conn.exec(command, (err, stream) => {
-				if (err) {
+function execOverSsh(
+	conn: Client,
+	command: string,
+	stdin: string | null,
+): Promise<string> {
+	return new Promise((resolve, reject) => {
+		conn.exec(command, (err, stream) => {
+			if (err) {
+				reject(
+					new Error(`SSH exec failed: ${err.message}`, {
+						cause: err,
+					}),
+				)
+				return
+			}
+			let stdout = ''
+			let stderr = ''
+			stream.on('data', (chunk: Buffer) => {
+				stdout += String(chunk)
+			})
+			stream.stderr.on('data', (chunk: Buffer) => {
+				stderr += String(chunk)
+			})
+			stream.on('close', (code: number | null) => {
+				if (code === 0) {
+					resolve(stdout)
+				} else {
 					reject(
-						new Error(`SSH exec failed: ${err.message}`, {
-							cause: err,
-						}),
+						new Error(
+							`SSH command exited with code ${String(code)}: ${command}\n${stderr}`,
+						),
 					)
-					return
-				}
-				let stdout = ''
-				let stderr = ''
-				stream.on('data', (data: Buffer) => {
-					stdout += String(data)
-				})
-				stream.stderr.on('data', (data: Buffer) => {
-					stderr += String(data)
-				})
-				stream.on('close', (code: number | null) => {
-					if (code !== 0) {
-						reject(
-							new Error(
-								`SSH command exited with code ${String(code)}: ${command}\n${stderr}`,
-							),
-						)
-					} else {
-						resolve(stdout)
-					}
-				})
-				if (stdin !== null) {
-					stream.end(stdin)
 				}
 			})
+			if (stdin !== null) stream.end(stdin)
 		})
-	}
+	})
+}
+
+async function writeFileOverSsh(
+	conn: Client,
+	remotePath: string,
+	content: string,
+): Promise<void> {
+	const sftp = await openSftp(conn)
+	return new Promise((resolve, reject) => {
+		const ws = sftp.createWriteStream(remotePath)
+		ws.on('close', () => resolve())
+		ws.on('error', (writeErr: Error) =>
+			reject(
+				new Error(
+					`SSH writeFile "${remotePath}" failed: ${writeErr.message}`,
+					{ cause: writeErr },
+				),
+			),
+		)
+		ws.end(content)
+	})
+}
+
+async function readFileOverSsh(
+	conn: Client,
+	remotePath: string,
+): Promise<string | null> {
+	const sftp = await openSftp(conn)
+	return new Promise((resolve, reject) => {
+		let content = ''
+		const rs = sftp.createReadStream(remotePath, { encoding: 'utf8' })
+		rs.on('data', (chunk: Buffer | string) => {
+			content += String(chunk)
+		})
+		rs.on('end', () => resolve(content))
+		rs.on('error', (readErr: SftpError) => {
+			if (isNotFoundError(readErr)) {
+				resolve(null)
+				return
+			}
+			reject(
+				new Error(
+					`SSH readFile "${remotePath}" failed: ${readErr.message}`,
+					{ cause: readErr },
+				),
+			)
+		})
+	})
+}
+
+export async function createSshSession(
+	config: SshSessionConfig,
+	injectedClient?: Client,
+): Promise<SshSession> {
+	const conn = injectedClient ?? new Ssh2Client()
+	const hostKeyFingerprint = await establishConnection(conn, config)
 
 	return {
-		exec(command: string): Promise<string> {
-			return runCommand(command, null)
-		},
-
-		execWithStdin(command: string, stdin: string): Promise<string> {
-			return runCommand(command, stdin)
-		},
-
-		async writeFile(remotePath: string, content: string): Promise<void> {
-			const sftp = await openSftp(conn)
-			return new Promise((resolve, reject) => {
-				const ws = sftp.createWriteStream(remotePath)
-				ws.on('close', () => resolve())
-				ws.on('error', (writeErr: Error) =>
-					reject(
-						new Error(
-							`SSH writeFile "${remotePath}" failed: ${writeErr.message}`,
-							{ cause: writeErr },
-						),
-					),
-				)
-				ws.end(content)
-			})
-		},
-
-		async readFile(remotePath: string): Promise<string | null> {
-			const sftp = await openSftp(conn)
-			return new Promise((resolve, reject) => {
-				let content = ''
-				const rs = sftp.createReadStream(remotePath, {
-					encoding: 'utf8',
-				})
-				rs.on('data', (chunk: Buffer | string) => {
-					content += String(chunk)
-				})
-				rs.on('end', () => resolve(content))
-				rs.on('error', (readErr: SftpError) => {
-					if (isNotFoundError(readErr)) {
-						resolve(null)
-						return
-					}
-					reject(
-						new Error(
-							`SSH readFile "${remotePath}" failed: ${readErr.message}`,
-							{ cause: readErr },
-						),
-					)
-				})
-			})
-		},
-
-		close(): void {
+		exec: (command: string) => execOverSsh(conn, command, null),
+		execWithStdin: (command: string, stdin: string) =>
+			execOverSsh(conn, command, stdin),
+		writeFile: (remotePath: string, content: string) =>
+			writeFileOverSsh(conn, remotePath, content),
+		readFile: (remotePath: string) => readFileOverSsh(conn, remotePath),
+		close: (): void => {
 			conn.end()
 		},
-
 		hostKeyFingerprint,
 	}
 }

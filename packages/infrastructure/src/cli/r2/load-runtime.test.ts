@@ -63,9 +63,9 @@ describe('loadR2Runtime', () => {
 		vi.stubEnv('R2_SECRET_ACCESS_KEY', 'sk')
 		const { urls } = stubFetch({ verifyStatus: 'ok' })
 
-		const result = await loadR2Runtime('cf-token')
+		const runtime = await loadR2Runtime('cf-token')
 
-		expect(result).toEqual({
+		expect(runtime).toEqual({
 			accountId: 'acct-from-api',
 			endpoint: 'https://acct-from-api.r2.cloudflarestorage.com',
 			accessKeyId: 'ak',

@@ -68,7 +68,7 @@ describe('resolveServices', () => {
 		expect(services[0]?.name).toBe('r2')
 	})
 
-	it('throws when [services.r2] is declared but infra storage is missing — invariant broken upstream', () => {
+	it('throws when [services.r2] is declared but infra storage is missing - invariant broken upstream', () => {
 		expect(() =>
 			resolveServices({
 				config: withR2Service(STATIC_WITH_DOMAIN, ['uploads']),
@@ -79,7 +79,7 @@ describe('resolveServices', () => {
 				repoSecrets: {},
 			}),
 		).toThrow(
-			'r2 service: infra storage (state bucket) must be loaded by the caller — caller invariant broken',
+			'r2 service: infra storage (state bucket) must be loaded by the caller - caller invariant broken',
 		)
 	})
 

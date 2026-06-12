@@ -37,17 +37,17 @@ export interface TeardownCaddyContext {
 /**
  * Stop and remove the project's docker-compose stack and the bind mount
  * holding its compose.yaml + .env. Docker named volumes (the local-SSD hot
- * cache for stateful apps — PGDATA, app working state) are PRESERVED by
- * default; pass `withVolumes: true` to wipe them too.
+ * cache for stateful apps - PGDATA, app working state) are PRESERVED by
+ * default; pass `shouldWipeVolumes: true` to wipe them too.
  *
- * Safe to run when the stack was never deployed — missing compose file is
+ * Safe to run when the stack was never deployed - missing compose file is
  * reported as `not deployed` rather than an error.
  */
 export async function teardownProjectContainer(
 	session: SshSession,
 	projectName: string,
 	environment: AppEnvironment,
-	withVolumes: boolean,
+	shouldWipeVolumes: boolean,
 ): Promise<ResourceOutcome> {
 	const silo = computeSilo(projectName, environment)
 	const envDir = `/opt/apps/${projectName}/${environment}`
@@ -58,17 +58,19 @@ export async function teardownProjectContainer(
 		return { handled: false, detail: 'not deployed' }
 	}
 
-	const downFlags = withVolumes ? '-v --remove-orphans' : '--remove-orphans'
+	const downFlags = shouldWipeVolumes
+		? '-v --remove-orphans'
+		: '--remove-orphans'
 	await session.exec(
 		`docker compose -p ${shellEscape(silo.id)} -f ${shellEscape(composeFile)} down ${downFlags}`,
 	)
 	await session.exec(`rm -rf ${shellEscape(envDir)}`)
 	logger.info(
-		`Container stack ${silo.id} removed (volumes ${withVolumes ? 'wiped' : 'preserved'})`,
+		`Container stack ${silo.id} removed (volumes ${shouldWipeVolumes ? 'wiped' : 'preserved'})`,
 	)
 	return {
 		handled: true,
-		detail: withVolumes
+		detail: shouldWipeVolumes
 			? 'stack, bind mount, and volumes removed'
 			: 'stack and bind mount removed (volumes preserved)',
 	}
@@ -167,12 +169,16 @@ export async function teardownProjectCerts(
 // Re-uses the R2 ETag from the caller's read so a concurrent deploy that
 // allocated a port on this VPS will lose the write race instead of silently
 // overwriting our release.
+export interface HostPortRelease {
+	readonly r2: ObjectStoreClient
+	readonly vpsName: string
+	readonly state: HcloudProvisionedState | HcloudConvergedState
+	readonly etag: string
+}
+
 export async function releaseProjectHostPort(
-	r2: ObjectStoreClient,
-	vpsName: string,
 	projectName: string,
-	state: HcloudProvisionedState | HcloudConvergedState,
-	etag: string,
+	{ r2, vpsName, state, etag }: HostPortRelease,
 ): Promise<ResourceOutcome> {
 	const servicePorts = state.hostPorts[projectName]
 	if (servicePorts === undefined) {
@@ -196,7 +202,7 @@ export async function releaseProjectHostPort(
 
 /**
  * Delete the DNS record(s) for a single project hostname. Used by project
- * teardown — does NOT touch sibling projects on the same VPS.
+ * teardown - does NOT touch sibling projects on the same VPS.
  */
 export async function teardownProjectDns(
 	projectHostnames: ReadonlyArray<string>,

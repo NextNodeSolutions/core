@@ -5,13 +5,13 @@ import type { AppEnvironment } from '#/domain/environment.ts'
 
 /**
  * The build args the infra owns and injects into every build target by
- * default — the dev never declares these. Each value is inlined at BUILD time
+ * default - the dev never declares these. Each value is inlined at BUILD time
  * (frameworks like Astro read `site` during `build`, so it cannot wait for the
  * runtime env_file). Computed purely from config + environment, so the build
  * job needs no provisioning state.
  *
  * Today this is `SITE_URL` (environment-aware: `dev.<domain>` vs `<domain>`).
- * Values sourced from deploy-time state (e.g. the R2 endpoint) are NOT here —
+ * Values sourced from deploy-time state (e.g. the R2 endpoint) are NOT here -
  * the build job runs in parallel with provisioning, so that state may not
  * exist yet. Such values stay runtime-only or move to dev-declared `build_args`.
  */
@@ -46,7 +46,7 @@ export function resolveBuildArgs(
 }
 
 // Resolve a build service's declared `build_args` NAMES against the GitHub
-// Variables map, failing loud when one is absent — a declared Variable that was
+// Variables map, failing loud when one is absent - a declared Variable that was
 // never set is a CI config bug, not a value to default away.
 function resolveDeclaredBuildArgs(
 	serviceName: string,
@@ -55,13 +55,13 @@ function resolveDeclaredBuildArgs(
 ): Record<string, string> {
 	const args: Record<string, string> = {}
 	for (const key of names) {
-		const value = vars[key]
-		if (value === undefined) {
+		const argValue = vars[key]
+		if (argValue === undefined) {
 			throw new Error(
 				`service "${serviceName}" declares build_arg "${key}" but it is absent from GitHub Variables`,
 			)
 		}
-		args[key] = value
+		args[key] = argValue
 	}
 	return args
 }

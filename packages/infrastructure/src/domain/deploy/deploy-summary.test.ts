@@ -6,7 +6,7 @@ import type { DeployResult } from './target.ts'
 
 describe('buildDeploySummary', () => {
 	it('renders a container deploy with image ref', () => {
-		const result: DeployResult = {
+		const deployResult: DeployResult = {
 			projectName: 'test-e2e',
 			durationMs: 12_300,
 			deployedEnvironments: [
@@ -26,7 +26,7 @@ describe('buildDeploySummary', () => {
 			],
 		}
 
-		const summary = buildDeploySummary(result, 'hetzner-vps')
+		const summary = buildDeploySummary(deployResult, 'hetzner-vps')
 
 		expect(summary).toContain(
 			'### :rocket: Deployed `test-e2e` to development',
@@ -41,7 +41,7 @@ describe('buildDeploySummary', () => {
 	})
 
 	it('renders one image row per service for a multi-service deploy', () => {
-		const result: DeployResult = {
+		const deployResult: DeployResult = {
 			projectName: 'acme-web',
 			durationMs: 8_000,
 			deployedEnvironments: [
@@ -66,7 +66,7 @@ describe('buildDeploySummary', () => {
 			],
 		}
 
-		const summary = buildDeploySummary(result, 'hetzner-vps')
+		const summary = buildDeploySummary(deployResult, 'hetzner-vps')
 
 		expect(summary).toContain('**Image (front)**')
 		expect(summary).toContain('`ghcr.io/acme/web-front:sha-abc1234`')
@@ -75,7 +75,7 @@ describe('buildDeploySummary', () => {
 	})
 
 	it('renders a static deploy without image ref', () => {
-		const result: DeployResult = {
+		const deployResult: DeployResult = {
 			projectName: 'my-site',
 			durationMs: 3_500,
 			deployedEnvironments: [
@@ -88,7 +88,7 @@ describe('buildDeploySummary', () => {
 			],
 		}
 
-		const summary = buildDeploySummary(result, 'cloudflare-pages')
+		const summary = buildDeploySummary(deployResult, 'cloudflare-pages')
 
 		expect(summary).toContain(
 			'### :rocket: Deployed `my-site` to production',
@@ -99,13 +99,13 @@ describe('buildDeploySummary', () => {
 	})
 
 	it('handles empty deployed environments', () => {
-		const result: DeployResult = {
+		const deployResult: DeployResult = {
 			projectName: 'empty',
 			durationMs: 100,
 			deployedEnvironments: [],
 		}
 
-		const summary = buildDeploySummary(result, 'hetzner-vps')
+		const summary = buildDeploySummary(deployResult, 'hetzner-vps')
 
 		expect(summary).toBe('### :rocket: Deploy complete for `empty`')
 	})

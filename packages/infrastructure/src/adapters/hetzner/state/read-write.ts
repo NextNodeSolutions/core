@@ -23,12 +23,12 @@ const MAX_TRANSIENT_RETRIES = 3
  * state concurrently, so whatever the caller computed from the stale read
  * is already invalid. The correct recovery is to let the caller (or the
  * user re-running the pipeline) observe the fresh state and re-plan from
- * there — not to retry with the same outdated precondition.
+ * there - not to retry with the same outdated precondition.
  */
 export class EtagMismatchError extends Error {
 	constructor(vpsName: string, cause: unknown) {
 		super(
-			`State ETag mismatch for VPS "${vpsName}" — another process advanced state concurrently; re-run the pipeline to observe the latest state`,
+			`State ETag mismatch for VPS "${vpsName}" - another process advanced state concurrently; re-run the pipeline to observe the latest state`,
 			{ cause },
 		)
 		this.name = 'EtagMismatchError'
@@ -50,39 +50,47 @@ function isEtagMismatch(error: unknown): boolean {
 	return false
 }
 
+// An ETag mismatch is a lost compare-and-swap (concurrent writer), not a
+// transient fault - surface it as EtagMismatchError so the retry loop stops.
+function rethrowIfEtagMismatch(error: unknown, vpsName: string): void {
+	if (isEtagMismatch(error)) {
+		throw new EtagMismatchError(vpsName, error)
+	}
+}
+
 export function stateKey(vpsName: string): string {
 	return `hetzner/${vpsName}.json`
 }
 
 function requireBase(
-	data: Record<string, unknown>,
+	stateRecord: Record<string, unknown>,
 	key: string,
 ): { serverId: number; publicIp: string } {
-	if (typeof data.serverId !== 'number') {
+	if (typeof stateRecord.serverId !== 'number') {
 		throw new Error(`Invalid state at "${key}": missing serverId`)
 	}
-	if (typeof data.publicIp !== 'string') {
+	if (typeof stateRecord.publicIp !== 'string') {
 		throw new Error(`Invalid state at "${key}": missing publicIp`)
 	}
-	return { serverId: data.serverId, publicIp: data.publicIp }
+	return { serverId: stateRecord.serverId, publicIp: stateRecord.publicIp }
 }
 
 function parseHostPorts(
-	data: Record<string, unknown>,
+	stateRecord: Record<string, unknown>,
 	key: string,
 ): Readonly<Record<string, Readonly<Record<string, number>>>> {
-	const raw = data.hostPorts
+	const raw = stateRecord.hostPorts
 	if (raw === undefined) return {}
 	if (!isRecord(raw)) {
 		throw new Error(
 			`Invalid state at "${key}": hostPorts must be an object`,
 		)
 	}
-	const result: Record<string, Record<string, number>> = {}
+	const portsByProject: Record<string, Record<string, number>> = {}
 	for (const [project, servicePorts] of Object.entries(raw)) {
-		result[project] = parseServicePorts(servicePorts, project, key)
+		portsByProject[project] = parseServicePorts(servicePorts, project, key)
 	}
-	return result
+	return portsByProject
 }
 
 function parseServicePorts(
@@ -108,61 +116,64 @@ function parseServicePorts(
 }
 
 function parseCreated(
-	data: Record<string, unknown>,
+	stateRecord: Record<string, unknown>,
 	key: string,
 ): HcloudCreatedState {
 	return {
 		phase: 'created',
-		...requireBase(data, key),
-		hostPorts: parseHostPorts(data, key),
+		...requireBase(stateRecord, key),
+		hostPorts: parseHostPorts(stateRecord, key),
 	}
 }
 
 function parseProvisioned(
-	data: Record<string, unknown>,
+	stateRecord: Record<string, unknown>,
 	key: string,
 ): HcloudProvisionedState {
-	const base = requireBase(data, key)
-	if (typeof data.tailnetIp !== 'string') {
+	const base = requireBase(stateRecord, key)
+	if (typeof stateRecord.tailnetIp !== 'string') {
 		throw new Error(`Invalid state at "${key}": missing tailnetIp`)
 	}
 	return {
 		phase: 'provisioned',
 		...base,
-		tailnetIp: data.tailnetIp,
-		hostPorts: parseHostPorts(data, key),
+		tailnetIp: stateRecord.tailnetIp,
+		hostPorts: parseHostPorts(stateRecord, key),
 	}
 }
 
 function parseConverged(
-	data: Record<string, unknown>,
+	stateRecord: Record<string, unknown>,
 	key: string,
 ): HcloudConvergedState {
-	const base = requireBase(data, key)
-	if (typeof data.tailnetIp !== 'string') {
+	const base = requireBase(stateRecord, key)
+	if (typeof stateRecord.tailnetIp !== 'string') {
 		throw new Error(`Invalid state at "${key}": missing tailnetIp`)
 	}
-	if (typeof data.convergedAt !== 'string') {
+	if (typeof stateRecord.convergedAt !== 'string') {
 		throw new Error(`Invalid state at "${key}": missing convergedAt`)
 	}
 	return {
 		phase: 'converged',
 		...base,
-		tailnetIp: data.tailnetIp,
-		convergedAt: data.convergedAt,
-		hostPorts: parseHostPorts(data, key),
+		tailnetIp: stateRecord.tailnetIp,
+		convergedAt: stateRecord.convergedAt,
+		hostPorts: parseHostPorts(stateRecord, key),
 	}
 }
 
 function parseState(raw: string, key: string): HcloudVpsState {
-	const data: unknown = parseJsonOrThrow(raw, `Invalid state at "${key}"`)
-	if (!isRecord(data)) {
+	const stateRecord: unknown = parseJsonOrThrow(
+		raw,
+		`Invalid state at "${key}"`,
+	)
+	if (!isRecord(stateRecord)) {
 		throw new Error(`Invalid state at "${key}": not an object`)
 	}
-	const phase = data.phase
-	if (phase === 'created') return parseCreated(data, key)
-	if (phase === 'provisioned') return parseProvisioned(data, key)
-	if (phase === 'converged') return parseConverged(data, key)
+	const { phase } = stateRecord
+	if (phase === 'created') return parseCreated(stateRecord, key)
+	if (phase === 'provisioned') return parseProvisioned(stateRecord, key)
+	if (phase === 'converged') return parseConverged(stateRecord, key)
 	throw new Error(
 		`Invalid state at "${key}": unknown or missing phase "${String(phase)}"`,
 	)
@@ -178,9 +189,9 @@ export async function readState(
 	vpsName: string,
 ): Promise<StateWithEtag | null> {
 	const key = stateKey(vpsName)
-	const result = await r2.get(key)
-	if (!result) return null
-	return { state: parseState(result.body, key), etag: result.etag }
+	const stored = await r2.get(key)
+	if (!stored) return null
+	return { state: parseState(stored.body, key), etag: stored.etag }
 }
 
 export async function writeState(
@@ -197,9 +208,7 @@ export async function writeState(
 		try {
 			return await r2.put(key, body, ifMatch) // eslint-disable-line no-await-in-loop -- sequential retries by design
 		} catch (error) {
-			if (isEtagMismatch(error)) {
-				throw new EtagMismatchError(vpsName, error)
-			}
+			rethrowIfEtagMismatch(error, vpsName)
 			logger.warn(
 				`writeState attempt ${attempt}/${MAX_TRANSIENT_RETRIES} failed for VPS "${vpsName}" (transient): ${String(error)}`,
 			)

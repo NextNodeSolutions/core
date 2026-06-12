@@ -899,8 +899,7 @@ describe('renderComposeFile - supabase-backup sidecar wiring', () => {
 	it('drives the loop with `sh -c <script>` so a single entrypoint owns the schedule', () => {
 		const parsed = parse(renderComposeFile(baseInput({ supabase: {} })))
 
-		const entrypoint =
-			parsed.services[SUPABASE_BACKUP_SERVICE_NAME].entrypoint
+		const { entrypoint } = parsed.services[SUPABASE_BACKUP_SERVICE_NAME]
 		expect(entrypoint[0]).toBe('sh')
 		expect(entrypoint[1]).toBe('-c')
 		expect(typeof entrypoint[2]).toBe('string')
@@ -922,18 +921,18 @@ describe('renderComposeFile - supabase-backup sidecar wiring', () => {
 			}),
 		)
 
-		const scriptA =
-			parse(a).services[SUPABASE_BACKUP_SERVICE_NAME].entrypoint[2]
-		const scriptB =
-			parse(b).services[SUPABASE_BACKUP_SERVICE_NAME].entrypoint[2]
+		const [, , scriptA] =
+			parse(a).services[SUPABASE_BACKUP_SERVICE_NAME].entrypoint
+		const [, , scriptB] =
+			parse(b).services[SUPABASE_BACKUP_SERVICE_NAME].entrypoint
 		expect(scriptA).toBe(scriptB)
 	})
 
 	it('emits a key matching the spec pattern pg_dump_<project>_<env>_<ts>.sql.gz from the PROJECT/ENV shell env vars', () => {
 		const parsed = parse(renderComposeFile(baseInput({ supabase: {} })))
 
-		const script =
-			parsed.services[SUPABASE_BACKUP_SERVICE_NAME].entrypoint[2]
+		const [, , script] =
+			parsed.services[SUPABASE_BACKUP_SERVICE_NAME].entrypoint
 		expect(script).toContain('key="pg_dump_${PROJECT}_${ENV}_${ts}.sql.gz"')
 		expect(script).toContain('date -u +%Y%m%dT%H%M%SZ')
 	})
@@ -941,8 +940,8 @@ describe('renderComposeFile - supabase-backup sidecar wiring', () => {
 	it('pipes pg_dump through gzip into aws s3 cp against the BACKUP_R2 endpoint', () => {
 		const parsed = parse(renderComposeFile(baseInput({ supabase: {} })))
 
-		const script =
-			parsed.services[SUPABASE_BACKUP_SERVICE_NAME].entrypoint[2]
+		const [, , script] =
+			parsed.services[SUPABASE_BACKUP_SERVICE_NAME].entrypoint
 		expect(script).toContain('pg_dump -h db -U postgres -d postgres')
 		expect(script).toContain('| gzip |')
 		expect(script).toContain(
@@ -953,8 +952,8 @@ describe('renderComposeFile - supabase-backup sidecar wiring', () => {
 	it('sleeps SUPABASE_BACKUP_INTERVAL_SECONDS between iterations (daily cadence)', () => {
 		const parsed = parse(renderComposeFile(baseInput({ supabase: {} })))
 
-		const script =
-			parsed.services[SUPABASE_BACKUP_SERVICE_NAME].entrypoint[2]
+		const [, , script] =
+			parsed.services[SUPABASE_BACKUP_SERVICE_NAME].entrypoint
 		expect(SUPABASE_BACKUP_INTERVAL_SECONDS).toBe(86_400)
 		expect(script).toContain(
 			`sleep ${String(SUPABASE_BACKUP_INTERVAL_SECONDS)}`,

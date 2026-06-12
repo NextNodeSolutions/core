@@ -7,10 +7,10 @@ const PROJECT_INPUT = {
 	tailscaleAuthKey: 'tskey-auth-proj456',
 	tailscaleHostname: 'my-project',
 	deployPublicKey: 'ssh-ed25519 AAAAC3Nz... deploy@ci',
-	internal: false,
+	isInternal: false,
 } as const
 
-const INTERNAL_PROJECT_INPUT = { ...PROJECT_INPUT, internal: true } as const
+const INTERNAL_PROJECT_INPUT = { ...PROJECT_INPUT, isInternal: true } as const
 
 interface ProjectWriteFile {
 	readonly path: string
@@ -33,10 +33,10 @@ interface ProjectCloudInitConfig {
 }
 
 function isProjectWriteFileArray(
-	value: unknown,
-): value is ReadonlyArray<ProjectWriteFile> {
-	if (!Array.isArray(value)) return false
-	return value.every(
+	candidate: unknown,
+): candidate is ReadonlyArray<ProjectWriteFile> {
+	if (!Array.isArray(candidate)) return false
+	return candidate.every(
 		entry =>
 			typeof entry === 'object' &&
 			entry !== null &&
@@ -48,16 +48,16 @@ function isProjectWriteFileArray(
 }
 
 function isProjectCloudInitConfig(
-	value: unknown,
-): value is ProjectCloudInitConfig {
-	if (typeof value !== 'object' || value === null) return false
+	candidate: unknown,
+): candidate is ProjectCloudInitConfig {
+	if (typeof candidate !== 'object' || candidate === null) return false
 	return (
-		'ssh_pwauth' in value &&
-		'disable_root' in value &&
-		'users' in value &&
-		Array.isArray(value.users) &&
-		'runcmd' in value &&
-		Array.isArray(value.runcmd)
+		'ssh_pwauth' in candidate &&
+		'disable_root' in candidate &&
+		'users' in candidate &&
+		Array.isArray(candidate.users) &&
+		'runcmd' in candidate &&
+		Array.isArray(candidate.runcmd)
 	)
 }
 

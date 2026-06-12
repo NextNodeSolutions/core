@@ -99,9 +99,11 @@ describe('ensurePgExporterPasswordSecret', () => {
 
 		await ensurePgExporterPasswordSecret(
 			{ PG_EXPORTER_PASSWORD: 'existing' },
-			'NextNodeSolutions',
-			'core',
-			'production',
+			{
+				owner: 'NextNodeSolutions',
+				repo: 'core',
+				environment: 'production',
+			},
 			adapter,
 		)
 
@@ -114,20 +116,21 @@ describe('ensurePgExporterPasswordSecret', () => {
 
 		await ensurePgExporterPasswordSecret(
 			{},
-			'NextNodeSolutions',
-			'core',
-			'production',
+			{
+				owner: 'NextNodeSolutions',
+				repo: 'core',
+				environment: 'production',
+			},
 			adapter,
 		)
 
 		expect(adapter.setRepoEnvSecret).toHaveBeenCalledTimes(1)
-		const [name, value, owner, repo, environment] = vi.mocked(
-			adapter.setRepoEnvSecret,
-		).mock.calls[0]!
+		const [name, value, scope] = vi.mocked(adapter.setRepoEnvSecret).mock
+			.calls[0]!
 		expect(name).toBe('PG_EXPORTER_PASSWORD')
-		expect(owner).toBe('NextNodeSolutions')
-		expect(repo).toBe('core')
-		expect(environment).toBe('production')
+		expect(scope.owner).toBe('NextNodeSolutions')
+		expect(scope.repo).toBe('core')
+		expect(scope.environment).toBe('production')
 		expect(value).toHaveLength(44)
 		expect(Buffer.from(value, 'base64')).toHaveLength(32)
 	})
@@ -137,15 +140,16 @@ describe('ensurePgExporterPasswordSecret', () => {
 
 		await ensurePgExporterPasswordSecret(
 			{},
-			'NextNodeSolutions',
-			'core',
-			'development',
+			{
+				owner: 'NextNodeSolutions',
+				repo: 'core',
+				environment: 'development',
+			},
 			adapter,
 		)
 
-		const [, , , , environment] = vi.mocked(adapter.setRepoEnvSecret).mock
-			.calls[0]!
-		expect(environment).toBe('development')
+		const [, , scope] = vi.mocked(adapter.setRepoEnvSecret).mock.calls[0]!
+		expect(scope.environment).toBe('development')
 	})
 
 	it('throws when gh CLI is unavailable rather than silently dropping the password', async () => {
@@ -156,9 +160,11 @@ describe('ensurePgExporterPasswordSecret', () => {
 		await expect(
 			ensurePgExporterPasswordSecret(
 				{},
-				'NextNodeSolutions',
-				'core',
-				'production',
+				{
+					owner: 'NextNodeSolutions',
+					repo: 'core',
+					environment: 'production',
+				},
 				adapter,
 			),
 		).rejects.toThrow(/gh CLI unavailable/)
@@ -185,9 +191,11 @@ describe('ensurePostgresPasswordSecret', () => {
 
 		await ensurePostgresPasswordSecret(
 			{ POSTGRES_PASSWORD: 'existing' },
-			'NextNodeSolutions',
-			'core',
-			'production',
+			{
+				owner: 'NextNodeSolutions',
+				repo: 'core',
+				environment: 'production',
+			},
 			adapter,
 		)
 
@@ -200,20 +208,21 @@ describe('ensurePostgresPasswordSecret', () => {
 
 		await ensurePostgresPasswordSecret(
 			{},
-			'NextNodeSolutions',
-			'core',
-			'production',
+			{
+				owner: 'NextNodeSolutions',
+				repo: 'core',
+				environment: 'production',
+			},
 			adapter,
 		)
 
 		expect(adapter.setRepoEnvSecret).toHaveBeenCalledTimes(1)
-		const [name, value, owner, repo, environment] = vi.mocked(
-			adapter.setRepoEnvSecret,
-		).mock.calls[0]!
+		const [name, value, scope] = vi.mocked(adapter.setRepoEnvSecret).mock
+			.calls[0]!
 		expect(name).toBe('POSTGRES_PASSWORD')
-		expect(owner).toBe('NextNodeSolutions')
-		expect(repo).toBe('core')
-		expect(environment).toBe('production')
+		expect(scope.owner).toBe('NextNodeSolutions')
+		expect(scope.repo).toBe('core')
+		expect(scope.environment).toBe('production')
 		expect(value).toHaveLength(44)
 		expect(Buffer.from(value, 'base64')).toHaveLength(32)
 	})
@@ -223,15 +232,16 @@ describe('ensurePostgresPasswordSecret', () => {
 
 		await ensurePostgresPasswordSecret(
 			{},
-			'NextNodeSolutions',
-			'core',
-			'development',
+			{
+				owner: 'NextNodeSolutions',
+				repo: 'core',
+				environment: 'development',
+			},
 			adapter,
 		)
 
-		const [, , , , environment] = vi.mocked(adapter.setRepoEnvSecret).mock
-			.calls[0]!
-		expect(environment).toBe('development')
+		const [, , scope] = vi.mocked(adapter.setRepoEnvSecret).mock.calls[0]!
+		expect(scope.environment).toBe('development')
 	})
 
 	it('throws when gh CLI is unavailable rather than silently dropping the password', async () => {
@@ -242,9 +252,11 @@ describe('ensurePostgresPasswordSecret', () => {
 		await expect(
 			ensurePostgresPasswordSecret(
 				{},
-				'NextNodeSolutions',
-				'core',
-				'production',
+				{
+					owner: 'NextNodeSolutions',
+					repo: 'core',
+					environment: 'production',
+				},
 				adapter,
 			),
 		).rejects.toThrow(/gh CLI unavailable/)
@@ -271,9 +283,11 @@ describe('ensureJwtSecret', () => {
 
 		await ensureJwtSecret(
 			{ JWT_SECRET: 'existing' },
-			'NextNodeSolutions',
-			'core',
-			'production',
+			{
+				owner: 'NextNodeSolutions',
+				repo: 'core',
+				environment: 'production',
+			},
 			adapter,
 		)
 
@@ -286,20 +300,21 @@ describe('ensureJwtSecret', () => {
 
 		await ensureJwtSecret(
 			{},
-			'NextNodeSolutions',
-			'core',
-			'production',
+			{
+				owner: 'NextNodeSolutions',
+				repo: 'core',
+				environment: 'production',
+			},
 			adapter,
 		)
 
 		expect(adapter.setRepoEnvSecret).toHaveBeenCalledTimes(1)
-		const [name, value, owner, repo, environment] = vi.mocked(
-			adapter.setRepoEnvSecret,
-		).mock.calls[0]!
+		const [name, value, scope] = vi.mocked(adapter.setRepoEnvSecret).mock
+			.calls[0]!
 		expect(name).toBe('JWT_SECRET')
-		expect(owner).toBe('NextNodeSolutions')
-		expect(repo).toBe('core')
-		expect(environment).toBe('production')
+		expect(scope.owner).toBe('NextNodeSolutions')
+		expect(scope.repo).toBe('core')
+		expect(scope.environment).toBe('production')
 		expect(value).toHaveLength(44)
 		expect(Buffer.from(value, 'base64')).toHaveLength(32)
 	})
@@ -309,15 +324,16 @@ describe('ensureJwtSecret', () => {
 
 		await ensureJwtSecret(
 			{},
-			'NextNodeSolutions',
-			'core',
-			'development',
+			{
+				owner: 'NextNodeSolutions',
+				repo: 'core',
+				environment: 'development',
+			},
 			adapter,
 		)
 
-		const [, , , , environment] = vi.mocked(adapter.setRepoEnvSecret).mock
-			.calls[0]!
-		expect(environment).toBe('development')
+		const [, , scope] = vi.mocked(adapter.setRepoEnvSecret).mock.calls[0]!
+		expect(scope.environment).toBe('development')
 	})
 
 	it('throws when gh CLI is unavailable rather than silently dropping the secret', async () => {
@@ -328,9 +344,11 @@ describe('ensureJwtSecret', () => {
 		await expect(
 			ensureJwtSecret(
 				{},
-				'NextNodeSolutions',
-				'core',
-				'production',
+				{
+					owner: 'NextNodeSolutions',
+					repo: 'core',
+					environment: 'production',
+				},
 				adapter,
 			),
 		).rejects.toThrow(/gh CLI unavailable/)
@@ -343,9 +361,11 @@ describe('requireDashboardPasswordSecret', () => {
 		expect(() =>
 			requireDashboardPasswordSecret(
 				{ DASHBOARD_PASSWORD: 'operator-chosen' },
-				'NextNodeSolutions',
-				'core',
-				'production',
+				{
+					owner: 'NextNodeSolutions',
+					repo: 'core',
+					environment: 'production',
+				},
 			),
 		).not.toThrow()
 	})
@@ -354,9 +374,11 @@ describe('requireDashboardPasswordSecret', () => {
 		expect(() =>
 			requireDashboardPasswordSecret(
 				{},
-				'NextNodeSolutions',
-				'core',
-				'production',
+				{
+					owner: 'NextNodeSolutions',
+					repo: 'core',
+					environment: 'production',
+				},
 			),
 		).toThrow(
 			/env-secret "DASHBOARD_PASSWORD" must be set on NextNodeSolutions\/core for the "production" environment.*gh secret set DASHBOARD_PASSWORD --repo NextNodeSolutions\/core --env production/s,
@@ -367,9 +389,11 @@ describe('requireDashboardPasswordSecret', () => {
 		expect(() =>
 			requireDashboardPasswordSecret(
 				{},
-				'NextNodeSolutions',
-				'core',
-				'development',
+				{
+					owner: 'NextNodeSolutions',
+					repo: 'core',
+					environment: 'development',
+				},
 			),
 		).toThrow(/"development"/)
 	})
@@ -380,20 +404,21 @@ describe('rotatePgExporterPasswordSecret', () => {
 		const adapter = makeEnvAdapter()
 
 		await rotatePgExporterPasswordSecret(
-			'NextNodeSolutions',
-			'core',
-			'production',
+			{
+				owner: 'NextNodeSolutions',
+				repo: 'core',
+				environment: 'production',
+			},
 			adapter,
 		)
 
 		expect(adapter.setRepoEnvSecret).toHaveBeenCalledTimes(1)
-		const [name, value, owner, repo, environment] = vi.mocked(
-			adapter.setRepoEnvSecret,
-		).mock.calls[0]!
+		const [name, value, scope] = vi.mocked(adapter.setRepoEnvSecret).mock
+			.calls[0]!
 		expect(name).toBe('PG_EXPORTER_PASSWORD')
-		expect(owner).toBe('NextNodeSolutions')
-		expect(repo).toBe('core')
-		expect(environment).toBe('production')
+		expect(scope.owner).toBe('NextNodeSolutions')
+		expect(scope.repo).toBe('core')
+		expect(scope.environment).toBe('production')
 		expect(value).toHaveLength(44)
 	})
 
@@ -404,9 +429,11 @@ describe('rotatePgExporterPasswordSecret', () => {
 
 		await expect(
 			rotatePgExporterPasswordSecret(
-				'NextNodeSolutions',
-				'core',
-				'production',
+				{
+					owner: 'NextNodeSolutions',
+					repo: 'core',
+					environment: 'production',
+				},
 				adapter,
 			),
 		).rejects.toThrow(/gh CLI unavailable/)
@@ -418,7 +445,7 @@ describe('createSupabaseService', () => {
 		expect(createSupabaseService(makeCtx()).name).toBe('supabase')
 	})
 
-	it('throws at construction when infraStorage is null — the R2 state bucket is required to derive BACKUP_R2_* env vars', () => {
+	it('throws at construction when infraStorage is null - the R2 state bucket is required to derive BACKUP_R2_* env vars', () => {
 		expect(() =>
 			createSupabaseService(makeCtx({}, 'myapp', 'example.com', null)),
 		).toThrow(/infra storage \(R2 state bucket\) must be loaded/)
@@ -517,7 +544,7 @@ describe('createSupabaseService', () => {
 			)
 		})
 
-		it('throws when deployDomain is null — gotrue auth callbacks cannot be silently misconfigured', async () => {
+		it('throws when deployDomain is null - gotrue auth callbacks cannot be silently misconfigured', async () => {
 			const service = createSupabaseService(
 				makeCtx(ALL_SECRETS, 'myapp', null),
 			)
@@ -717,7 +744,7 @@ describe('createSupabaseService', () => {
 			)
 		})
 
-		it('throws when the R2 service state has no "backups" alias — the sidecar would have no bucket to write to', async () => {
+		it('throws when the R2 service state has no "backups" alias - the sidecar would have no bucket to write to', async () => {
 			loadR2ServiceMock.mockResolvedValue({
 				endpoint: 'https://acct-123.r2.cloudflarestorage.com',
 				accessKeyId: 'svc-ak',
@@ -734,7 +761,7 @@ describe('createSupabaseService', () => {
 
 		it('propagates the loadR2Service rejection when the R2 state cannot be read', async () => {
 			loadR2ServiceMock.mockRejectedValue(
-				new Error('R2 service state not found — run provision'),
+				new Error('R2 service state not found - run provision'),
 			)
 
 			await expect(

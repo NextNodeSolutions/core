@@ -1,3 +1,5 @@
+import { isRecord } from '#/kernel/guards.ts'
+
 export const HCLOUD_API_BASE = 'https://api.hetzner.cloud/v1'
 
 export function authHeaders(token: string): Record<string, string> {
@@ -13,7 +15,7 @@ export async function requireOk(
 ): Promise<void> {
 	if (response.ok) return
 	const body = await response.text()
-	throw new Error(`Hetzner API ${context}: ${response.status} — ${body}`)
+	throw new Error(`Hetzner API ${context}: ${response.status} - ${body}`)
 }
 
 export function formatLabelSelector(
@@ -22,4 +24,15 @@ export function formatLabelSelector(
 	return Object.entries(labels)
 		.map(([k, v]) => `${k}=${v}`)
 		.join(',')
+}
+
+// Narrow an untyped `labels` field to a string-only record. The Hetzner API
+// returns labels as unknown; non-string values are dropped.
+export function narrowStringLabels(raw: unknown): Record<string, string> {
+	const labels: Record<string, string> = {}
+	if (!isRecord(raw)) return labels
+	for (const [key, candidate] of Object.entries(raw)) {
+		if (typeof candidate === 'string') labels[key] = candidate
+	}
+	return labels
 }

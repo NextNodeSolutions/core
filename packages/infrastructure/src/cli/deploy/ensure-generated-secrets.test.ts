@@ -6,23 +6,29 @@ import type { EnvSecretsAdapter } from '#/adapters/github/env-secrets.ts'
 
 interface PushCall {
 	readonly name: string
-	readonly value: string
+	readonly secretValue: string
 	readonly owner: string
 	readonly repo: string
 	readonly environment: string
 }
 
 // In-memory fake of the gh env-secret boundary (preferred over a mock): records
-// every push so behavior — not call mechanics — can be asserted.
-function fakeAdapter(ghAvailable = true): {
+// every push so behavior - not call mechanics - can be asserted.
+function fakeAdapter(isGhAvailable = true): {
 	adapter: EnvSecretsAdapter
 	pushes: PushCall[]
 } {
 	const pushes: PushCall[] = []
 	const adapter: EnvSecretsAdapter = {
-		ghAvailable: () => Promise.resolve(ghAvailable),
-		setRepoEnvSecret: (name, value, owner, repo, environment) => {
-			pushes.push({ name, value, owner, repo, environment })
+		ghAvailable: () => Promise.resolve(isGhAvailable),
+		setRepoEnvSecret: (name, secretValue, scope) => {
+			pushes.push({
+				name,
+				secretValue,
+				owner: scope.owner,
+				repo: scope.repo,
+				environment: scope.environment,
+			})
 			return Promise.resolve()
 		},
 	}
@@ -36,9 +42,7 @@ describe('ensureGeneratedSecrets', () => {
 		await ensureGeneratedSecrets(
 			[{ name: 'JWT_SECRET', generate: 'token', length: 32 }],
 			{},
-			'nextnode',
-			'fleurs',
-			'production',
+			{ owner: 'nextnode', repo: 'fleurs', environment: 'production' },
 			adapter,
 		)
 
@@ -48,8 +52,8 @@ describe('ensureGeneratedSecrets', () => {
 		expect(push?.owner).toBe('nextnode')
 		expect(push?.repo).toBe('fleurs')
 		expect(push?.environment).toBe('production')
-		expect(push?.value).toHaveLength(32)
-		expect(push?.value).toMatch(/^[A-Za-z0-9_-]+$/)
+		expect(push?.secretValue).toHaveLength(32)
+		expect(push?.secretValue).toMatch(/^[A-Za-z0-9_-]+$/)
 	})
 
 	it('skips a secret already present in ALL_SECRETS (no rotation)', async () => {
@@ -58,9 +62,7 @@ describe('ensureGeneratedSecrets', () => {
 		await ensureGeneratedSecrets(
 			[{ name: 'JWT_SECRET', generate: 'token', length: 32 }],
 			{ JWT_SECRET: 'already-there' },
-			'nextnode',
-			'fleurs',
-			'production',
+			{ owner: 'nextnode', repo: 'fleurs', environment: 'production' },
 			adapter,
 		)
 
@@ -73,14 +75,12 @@ describe('ensureGeneratedSecrets', () => {
 		await ensureGeneratedSecrets(
 			[{ name: 'DB_PASSWORD', generate: 'password', length: 24 }],
 			{ DB_PASSWORD: '' },
-			'nextnode',
-			'fleurs',
-			'production',
+			{ owner: 'nextnode', repo: 'fleurs', environment: 'production' },
 			adapter,
 		)
 
 		expect(pushes).toHaveLength(1)
-		expect(pushes[0]?.value).toMatch(/^[A-Za-z0-9]{24}$/)
+		expect(pushes[0]?.secretValue).toMatch(/^[A-Za-z0-9]{24}$/)
 	})
 
 	it('fails loud when gh is unavailable and a secret must be generated', async () => {
@@ -90,9 +90,11 @@ describe('ensureGeneratedSecrets', () => {
 			ensureGeneratedSecrets(
 				[{ name: 'JWT_SECRET', generate: 'token', length: 32 }],
 				{},
-				'nextnode',
-				'fleurs',
-				'production',
+				{
+					owner: 'nextnode',
+					repo: 'fleurs',
+					environment: 'production',
+				},
 				adapter,
 			),
 		).rejects.toThrow(/gh CLI unavailable/)
@@ -100,10 +102,10 @@ describe('ensureGeneratedSecrets', () => {
 	})
 
 	it('does not probe gh when there is nothing to generate', async () => {
-		let probed = false
+		let wasProbed = false
 		const adapter: EnvSecretsAdapter = {
 			ghAvailable: () => {
-				probed = true
+				wasProbed = true
 				return Promise.resolve(true)
 			},
 			setRepoEnvSecret: () => Promise.resolve(),
@@ -112,12 +114,10 @@ describe('ensureGeneratedSecrets', () => {
 		await ensureGeneratedSecrets(
 			[],
 			{},
-			'nextnode',
-			'fleurs',
-			'production',
+			{ owner: 'nextnode', repo: 'fleurs', environment: 'production' },
 			adapter,
 		)
 
-		expect(probed).toBe(false)
+		expect(wasProbed).toBe(false)
 	})
 })

@@ -7,19 +7,19 @@ export const TEARDOWN_TARGETS: readonly TeardownTarget[] = ['project', 'vps']
 export function validateTeardownOptions(
 	projectType: 'app' | 'static',
 	target: TeardownTarget,
-	withVolumes: boolean,
+	shouldWipeVolumes: boolean,
 ): void {
 	if (projectType !== 'static') {
 		return
 	}
 	if (target !== 'project') {
 		throw new Error(
-			`TEARDOWN_TARGET="${target}" is not supported for static deploys — only "project" scope exists`,
+			`TEARDOWN_TARGET="${target}" is not supported for static deploys - only "project" scope exists`,
 		)
 	}
-	if (withVolumes) {
+	if (shouldWipeVolumes) {
 		throw new Error(
-			'TEARDOWN_WITH_VOLUMES=true is not supported for static deploys — static deploys have no volumes',
+			'TEARDOWN_WITH_VOLUMES=true is not supported for static deploys - static deploys have no volumes',
 		)
 	}
 }

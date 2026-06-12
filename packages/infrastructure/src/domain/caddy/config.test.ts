@@ -142,6 +142,7 @@ describe('buildCaddyConfig', () => {
 
 	it('produces valid JSON for the Caddy /load endpoint', () => {
 		const config = buildCaddyConfig(makeInput())
+		// oxlint-disable-next-line prefer-structured-clone -- asserts JSON-serializability (Caddy /load is JSON), not cloning
 		expect(() => JSON.parse(JSON.stringify(config))).not.toThrow()
 	})
 })

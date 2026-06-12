@@ -39,36 +39,36 @@ describe('postgresProjectIdentifier', () => {
 
 describe('buildPostgresSidecar', () => {
 	it('returns a sidecar spec pinned to NEXTNODE_POSTGRES_VERSION when mode is embedded', () => {
-		const result = buildPostgresSidecar(
+		const sidecar = buildPostgresSidecar(
 			{
 				mode: 'embedded',
 			},
 			'acme-web',
 		)
 
-		expect(result).not.toBeNull()
-		if (result === null) return
-		expect(result.image).toBe('postgres:18')
-		expect(result.restart).toBe('unless-stopped')
-		expect(result.env_file).toEqual(['.env'])
-		expect(result.volumes).toEqual([
+		expect(sidecar).not.toBeNull()
+		if (sidecar === null) return
+		expect(sidecar.image).toBe('postgres:18')
+		expect(sidecar.restart).toBe('unless-stopped')
+		expect(sidecar.env_file).toEqual(['.env'])
+		expect(sidecar.volumes).toEqual([
 			`${POSTGRES_DATA_VOLUME}:${POSTGRES_DATA_DIR}`,
 		])
-		expect(result.healthcheck.test).toEqual([
+		expect(sidecar.healthcheck.test).toEqual([
 			'CMD-SHELL',
 			'pg_isready -U acme_web -d acme_web',
 		])
 	})
 
 	it('returns null when mode is external', () => {
-		const result = buildPostgresSidecar(
+		const sidecarValue = buildPostgresSidecar(
 			{
 				mode: 'external',
 			},
 			'acme-web',
 		)
 
-		expect(result).toBeNull()
+		expect(sidecarValue).toBeNull()
 	})
 })
 
@@ -119,40 +119,40 @@ describe('postgresBackupBucketName', () => {
 
 describe('buildPostgresBackupSidecar', () => {
 	it('returns null when mode is external (user-owned DB)', () => {
-		const result = buildPostgresBackupSidecar(
+		const sidecarValue = buildPostgresBackupSidecar(
 			{
 				mode: 'external',
 			},
 			'acme-web',
 		)
 
-		expect(result).toBeNull()
+		expect(sidecarValue).toBeNull()
 	})
 
 	it('builds a solectrus/postgres-s3-backup sidecar pinned to NEXTNODE_POSTGRES_VERSION', () => {
-		const result = buildPostgresBackupSidecar(
+		const sidecar = buildPostgresBackupSidecar(
 			{
 				mode: 'embedded',
 			},
 			'acme-web',
 		)
 
-		expect(result).not.toBeNull()
-		if (result === null) return
-		expect(result.image).toBe('ghcr.io/solectrus/postgres-s3-backup:18')
-		expect(result.restart).toBe('unless-stopped')
-		expect(result.depends_on).toEqual([POSTGRES_SIDECAR_SERVICE_NAME])
+		expect(sidecar).not.toBeNull()
+		if (sidecar === null) return
+		expect(sidecar.image).toBe('ghcr.io/solectrus/postgres-s3-backup:18')
+		expect(sidecar.restart).toBe('unless-stopped')
+		expect(sidecar.depends_on).toEqual([POSTGRES_SIDECAR_SERVICE_NAME])
 	})
 
 	it('renames the project-level R2 creds to the S3_* names the image expects via compose interpolation', () => {
-		const result = buildPostgresBackupSidecar(
+		const sidecar = buildPostgresBackupSidecar(
 			{
 				mode: 'embedded',
 			},
 			'acme-web',
 		)
 
-		expect(result?.environment).toMatchObject({
+		expect(sidecar?.environment).toMatchObject({
 			S3_ACCESS_KEY_ID: '${R2_ACCESS_KEY_ID}',
 			S3_SECRET_ACCESS_KEY: '${R2_SECRET_ACCESS_KEY}',
 			S3_ENDPOINT: '${R2_ENDPOINT}',
@@ -162,38 +162,40 @@ describe('buildPostgresBackupSidecar', () => {
 	})
 
 	it('targets the project-scoped R2 bucket under the postgres prefix', () => {
-		const result = buildPostgresBackupSidecar(
+		const sidecar = buildPostgresBackupSidecar(
 			{
 				mode: 'embedded',
 			},
 			'acme-web',
 		)
 
-		expect(result?.environment['S3_BUCKET']).toBe('nn-backups-acme-web')
-		expect(result?.environment['S3_PREFIX']).toBe(POSTGRES_BACKUP_PREFIX)
+		expect(sidecar?.environment['S3_BUCKET']).toBe('nn-backups-acme-web')
+		expect(sidecar?.environment['S3_PREFIX']).toBe(POSTGRES_BACKUP_PREFIX)
 	})
 
 	it('runs the dump on the canonical daily schedule with retention disabled (handled separately)', () => {
-		const result = buildPostgresBackupSidecar(
+		const sidecarValue = buildPostgresBackupSidecar(
 			{
 				mode: 'embedded',
 			},
 			'acme-web',
 		)
 
-		expect(result?.environment['SCHEDULE']).toBe(POSTGRES_BACKUP_SCHEDULE)
-		expect(result?.environment['BACKUP_KEEP_DAYS']).toBe('0')
+		expect(sidecarValue?.environment['SCHEDULE']).toBe(
+			POSTGRES_BACKUP_SCHEDULE,
+		)
+		expect(sidecarValue?.environment['BACKUP_KEEP_DAYS']).toBe('0')
 	})
 
 	it('connects to the in-network postgres sidecar with the project-scoped role+db', () => {
-		const result = buildPostgresBackupSidecar(
+		const sidecarValue = buildPostgresBackupSidecar(
 			{
 				mode: 'embedded',
 			},
 			'acme-web',
 		)
 
-		expect(result?.environment).toMatchObject({
+		expect(sidecarValue?.environment).toMatchObject({
 			POSTGRES_HOST: POSTGRES_SIDECAR_SERVICE_NAME,
 			POSTGRES_DATABASE: 'acme_web',
 			POSTGRES_USER: 'acme_web',
@@ -246,7 +248,7 @@ describe('parsePostgresBackupKey', () => {
 	})
 
 	it('returns null for impossible-but-in-range dates that JS Date silently rolls over', () => {
-		// `new Date('2026-02-30T03:00:00Z')` returns Mar 2 instead of NaN —
+		// `new Date('2026-02-30T03:00:00Z')` returns Mar 2 instead of NaN -
 		// without the round-trip check this would land in the wrong bucket
 		// and could prune a real Mar 2 snapshot.
 		expect(
@@ -299,7 +301,7 @@ describe('selectPostgresBackupsToPrune', () => {
 		expect(selectPostgresBackupsToPrune([])).toEqual([])
 	})
 
-	it('keeps a lone snapshot — daily, weekly and monthly buckets collapse onto it', () => {
+	it('keeps a lone snapshot - daily, weekly and monthly buckets collapse onto it', () => {
 		const only = snap('2026-05-16T03:00:00Z')
 		expect(selectPostgresBackupsToPrune([only])).toEqual([])
 	})
@@ -372,13 +374,13 @@ describe('selectPostgresBackupsToPrune', () => {
 		// Daily window keeps the 7 most-recent days: 2026-05-11..2026-05-17.
 		// Beyond that, the 4 most-recent ISO weekly buckets (Mon-aligned)
 		// pick their newest in-data dump:
-		//   week of 2026-05-11 — newest: 2026-05-17 (already kept daily)
-		//   week of 2026-05-04 — newest: 2026-05-10
-		//   week of 2026-04-27 — newest: 2026-05-03
-		//   week of 2026-04-20 — newest: 2026-04-26
+		//   week of 2026-05-11 - newest: 2026-05-17 (already kept daily)
+		//   week of 2026-05-04 - newest: 2026-05-10
+		//   week of 2026-04-27 - newest: 2026-05-03
+		//   week of 2026-04-20 - newest: 2026-04-26
 		// Monthly buckets pick their newest in-data dump:
-		//   2026-05 — newest: 2026-05-17 (already kept daily)
-		//   2026-04 — newest: 2026-04-30
+		//   2026-05 - newest: 2026-05-17 (already kept daily)
+		//   2026-04 - newest: 2026-04-30
 		const dumps: PostgresBackupSnapshot[] = []
 		for (let day = 20; day <= 30; day++) {
 			dumps.push(
@@ -430,19 +432,19 @@ describe('selectPostgresBackupsToPrune', () => {
 		const jan01 = snap('2027-01-01T12:00:00Z')
 
 		// Both fall inside the 7-day window, so both are kept via the
-		// daily fill alone — the weekly bucket only matters once they age
+		// daily fill alone - the weekly bucket only matters once they age
 		// out. Mix in older dumps so weekly + monthly buckets are exercised.
 		const dec28 = snap('2026-12-28T12:00:00Z') // Mon of the same ISO week
 		const dec27 = snap('2026-12-27T12:00:00Z') // Sun, previous ISO week
 
 		const prune = selectPostgresBackupsToPrune([dec27, dec28, dec31, jan01])
 
-		// All four are within the daily window — nothing pruned.
+		// All four are within the daily window - nothing pruned.
 		expect(prune).toEqual([])
 	})
 
 	it('treats a future-dated dump as the most-recent (algorithm uses snapshot timestamps, never wall-clock time)', () => {
-		// The retention function is pure — no clock parameter. A
+		// The retention function is pure - no clock parameter. A
 		// clock-skewed dump from "the future" wins the most-recent slot
 		// and can displace a present-day dump from being a bucket
 		// representative. Pin this behavior so a future refactor doesn't
@@ -612,7 +614,7 @@ describe('ensurePostgresRestoreConfirmed', () => {
 		).not.toThrow()
 	})
 
-	it('throws when --yes is missing — the safety gate for the destructive pg_restore --clean', () => {
+	it('throws when --yes is missing - the safety gate for the destructive pg_restore --clean', () => {
 		expect(() =>
 			ensurePostgresRestoreConfirmed({
 				project: 'acme-web',
@@ -625,45 +627,45 @@ describe('ensurePostgresRestoreConfirmed', () => {
 
 describe('redactPostgresPassword', () => {
 	it('moves the password off the URL and returns it on the side', () => {
-		const result = redactPostgresPassword(
+		const redacted = redactPostgresPassword(
 			'postgres://acme:hunter2@postgres:5432/acme',
 		)
-		expect(result.urlWithoutPassword).toBe(
+		expect(redacted.urlWithoutPassword).toBe(
 			'postgres://acme@postgres:5432/acme',
 		)
-		expect(result.password).toBe('hunter2')
+		expect(redacted.password).toBe('hunter2')
 	})
 
 	it('percent-decodes the password so libpq receives the unescaped value', () => {
 		// `@` and `:` are URL-reserved, so a generator that uses them in
 		// passwords must percent-encode (`%40`, `%3A`). PGPASSWORD must
 		// hold the original byte, not the encoded form, or auth fails.
-		const result = redactPostgresPassword(
+		const redacted = redactPostgresPassword(
 			'postgres://acme:p%40ss%3Aword@postgres:5432/acme',
 		)
-		expect(result.password).toBe('p@ss:word')
+		expect(redacted.password).toBe('p@ss:word')
 	})
 
 	it('preserves query parameters (e.g. sslmode) on the returned URL', () => {
-		const result = redactPostgresPassword(
+		const redacted = redactPostgresPassword(
 			'postgres://acme:hunter2@db.example.com:5432/acme?sslmode=require',
 		)
-		expect(result.urlWithoutPassword).toBe(
+		expect(redacted.urlWithoutPassword).toBe(
 			'postgres://acme@db.example.com:5432/acme?sslmode=require',
 		)
 	})
 
 	it('returns an empty password when the URL has none', () => {
-		const result = redactPostgresPassword(
+		const redacted = redactPostgresPassword(
 			'postgres://acme@postgres:5432/acme',
 		)
-		expect(result.urlWithoutPassword).toBe(
+		expect(redacted.urlWithoutPassword).toBe(
 			'postgres://acme@postgres:5432/acme',
 		)
-		expect(result.password).toBe('')
+		expect(redacted.password).toBe('')
 	})
 
-	it('throws on a malformed URL — operator misconfig should fail loud', () => {
+	it('throws on a malformed URL - operator misconfig should fail loud', () => {
 		expect(() => redactPostgresPassword('not a url')).toThrow()
 	})
 })

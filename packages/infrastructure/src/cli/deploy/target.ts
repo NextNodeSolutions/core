@@ -5,7 +5,7 @@ import type { AppEnvironment } from '#/domain/environment.ts'
 
 /**
  * `infraStorage` is nullable because Pages targets don't need it. Each
- * definition validates the precondition it actually needs — the runtime
+ * definition validates the precondition it actually needs - the runtime
  * guard lives once on the definition, not duplicated in every caller.
  */
 export interface TargetFactoryContext {

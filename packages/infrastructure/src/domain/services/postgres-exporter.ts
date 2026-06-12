@@ -164,6 +164,11 @@ export function buildPostgresExporterQueriesMount(): string {
  * rendered file to disk on the VPS next to `compose.yaml`.
  */
 export function renderPostgresExporterQueriesYaml(): string {
+	return `${renderTopStatementsYaml()}${renderGlobalStatementsYaml()}`
+}
+
+/** Per-statement top-N metric set (`pg_stat_statements_top`). */
+function renderTopStatementsYaml(): string {
 	const topLimit = String(POSTGRES_EXPORTER_TOP_QUERIES_LIMIT)
 	return `pg_stat_statements_top:
   query: |
@@ -192,7 +197,12 @@ export function renderPostgresExporterQueriesYaml(): string {
     - rows:
         usage: "COUNTER"
         description: "Total rows retrieved or affected by the statement"
-pg_stat_statements_global:
+`
+}
+
+/** Cluster-wide aggregate metric set (`pg_stat_statements_global`). */
+function renderGlobalStatementsYaml(): string {
+	return `pg_stat_statements_global:
   query: |
     SELECT
       sum(calls) AS total_calls,

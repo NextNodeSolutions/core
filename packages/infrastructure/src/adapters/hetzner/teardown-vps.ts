@@ -95,7 +95,7 @@ export async function teardownTailscale(
 
 /**
  * Delete every DNS record for the given hostnames. Used by VPS teardown to
- * clean up DNS for ALL projects hosted on the VPS in one shot — the list
+ * clean up DNS for ALL projects hosted on the VPS in one shot - the list
  * of hostnames is read from the live Caddy config before the server is
  * destroyed.
  */
@@ -120,7 +120,7 @@ export async function teardownVpsDns(
 
 /**
  * Wipe every Caddy ACME cert object for the VPS. The whole `${vpsName}/`
- * R2 prefix is shared across all projects — at VPS teardown time every
+ * R2 prefix is shared across all projects - at VPS teardown time every
  * project is going away, so we drop the prefix wholesale.
  */
 export async function teardownVpsCerts(

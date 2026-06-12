@@ -23,7 +23,7 @@ import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-c
  *
  * Splitting bootstrap from runtime-load keeps `gh secret set --org` calls
  * out of the deploy job, so deploy does not need an org-admin GH_TOKEN.
- * Fails loud on stale creds — the operator should re-run provision to
+ * Fails loud on stale creds - the operator should re-run provision to
  * rotate rather than having deploy self-heal silently.
  */
 export async function loadR2Runtime(

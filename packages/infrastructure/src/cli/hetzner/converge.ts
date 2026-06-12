@@ -32,7 +32,7 @@ export async function converge(
 	session: SshSession,
 	input: ConvergenceInput,
 ): Promise<void> {
-	// Vector config — skipped when log sink (NN_VL_URL) is unknown at provision time.
+	// Vector config - skipped when log sink (NN_VL_URL) is unknown at provision time.
 	// Re-run convergence once VL is reachable; this is the hot-update path.
 	if (input.vectorToml !== undefined && input.vectorEnv !== undefined) {
 		const vectorTomlChanged = await pushFileIfChanged(

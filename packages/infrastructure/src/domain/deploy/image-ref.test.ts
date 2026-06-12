@@ -262,7 +262,7 @@ describe('resolveServiceImageRefs', () => {
 	})
 
 	it('bakes only build services, ordered by declaration', () => {
-		const result = resolveServiceImageRefs(
+		const imageRefsValue = resolveServiceImageRefs(
 			{
 				front: buildService('front'),
 				worker: upstreamService('docker.io/acme/worker:2.0'),
@@ -272,8 +272,8 @@ describe('resolveServiceImageRefs', () => {
 			'abc1234567890',
 		)
 
-		expect(result.bakeTargets).toEqual(['front', 'api'])
-		expect(result.imageRefs).toEqual({
+		expect(imageRefsValue.bakeTargets).toEqual(['front', 'api'])
+		expect(imageRefsValue.imageRefs).toEqual({
 			front: {
 				registry: 'ghcr.io',
 				repository: 'acme/web-front',

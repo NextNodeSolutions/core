@@ -85,5 +85,9 @@ export function lastBody(
 	mock: ReturnType<typeof vi.fn>,
 ): Record<string, unknown> {
 	const [, init] = lastCall(mock)
-	return JSON.parse(String(init.body))
+	const { body } = init
+	if (typeof body !== 'string') {
+		throw new Error('Expected a string request body')
+	}
+	return JSON.parse(body)
 }

@@ -23,13 +23,13 @@ export interface Service {
  * `infraStorage` is nullable because not every service needs it; each
  * factory validates the preconditions it actually requires. It carries
  * the R2 credentials usable by services that provision their own infra
- * — `accessKeyId` / `secretAccessKey` / `endpoint` to instantiate an
+ * - `accessKeyId` / `secretAccessKey` / `endpoint` to instantiate an
  * S3 client against R2, and `accountId` to call the Cloudflare R2 REST
  * API (e.g. `ensureR2Bucket`). The R2 service uses both shapes; the
  * upcoming postgres service uses `accountId` + `cfToken` at provision
  * time to ensure its `nn-backups-<project>` backup bucket.
  *
- * `repoSecrets` is the parsed `ALL_SECRETS` GitHub Secrets payload —
+ * `repoSecrets` is the parsed `ALL_SECRETS` GitHub Secrets payload -
  * services that need user-provided credentials (e.g. postgres
  * `DATABASE_URL` / `POSTGRES_PASSWORD`) read from here. Always defined
  * (`{}` when the env var is absent) so factories never need to
@@ -46,7 +46,7 @@ export interface ServiceFactoryContext {
 	 * Project deploy domain already resolved against the current
 	 * environment via `resolveDeployDomain` (so callers see `example.com`
 	 * in production, `dev.example.com` in development). `null` when the
-	 * project does not declare `project.domain` — services that require
+	 * project does not declare `project.domain` - services that require
 	 * a domain (e.g. supabase, which bakes it into auth callback URLs)
 	 * must fail loud rather than fall back silently.
 	 */

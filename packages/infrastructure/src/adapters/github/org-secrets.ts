@@ -3,7 +3,11 @@ import { defaultGhRunner, probeGh } from './gh-runner.ts'
 import type { GhRunner } from './gh-runner.ts'
 
 export interface OrgSecretsAdapter {
-	setOrgSecret: (name: string, value: string, org: string) => Promise<void>
+	setOrgSecret: (
+		name: string,
+		secretValue: string,
+		org: string,
+	) => Promise<void>
 	ghAvailable: () => Promise<boolean>
 }
 
@@ -11,14 +15,14 @@ export function createOrgSecretsAdapter(
 	runner: GhRunner = defaultGhRunner,
 ): OrgSecretsAdapter {
 	return {
-		async setOrgSecret(name, value, org) {
-			const result = await runner(
+		async setOrgSecret(name, secretValue, org) {
+			const ghResult = await runner(
 				['secret', 'set', name, '--org', org, '--visibility', 'all'],
-				value,
+				secretValue,
 			)
-			if (result.exitCode !== 0) {
+			if (ghResult.exitCode !== 0) {
 				throw new Error(
-					`gh secret set "${name}" failed (exit ${String(result.exitCode)}): ${result.stderr.trim()}`,
+					`gh secret set "${name}" failed (exit ${String(ghResult.exitCode)}): ${ghResult.stderr.trim()}`,
 				)
 			}
 		},

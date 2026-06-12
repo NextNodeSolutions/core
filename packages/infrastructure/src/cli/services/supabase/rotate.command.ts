@@ -22,9 +22,9 @@ export async function rotatePgExporterPasswordCommand(
 		config.project.type,
 		getEnv('PIPELINE_ENVIRONMENT'),
 	)
-	await rotatePgExporterPasswordSecret(
-		repository.owner,
-		repository.name,
+	await rotatePgExporterPasswordSecret({
+		owner: repository.owner,
+		repo: repository.name,
 		environment,
-	)
+	})
 }

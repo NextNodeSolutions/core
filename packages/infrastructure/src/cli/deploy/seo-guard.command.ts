@@ -16,7 +16,7 @@ export function seoGuardCommand(config: DeployableConfig): void {
 
 	const files = computeSeoGuardFiles(environment)
 	if (files.length === 0) {
-		logger.info('Production build — no SEO guard needed')
+		logger.info('Production build - no SEO guard needed')
 		return
 	}
 

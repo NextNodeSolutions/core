@@ -26,7 +26,7 @@ export interface R2BucketBinding {
 	readonly alias: string
 	readonly name: string
 	// Public CDN URL when the bucket opts into `cdn = true` and the project
-	// has a domain. Absent for private buckets — `buildR2ServiceEnv` then
+	// has a domain. Absent for private buckets - `buildR2ServiceEnv` then
 	// emits no `R2_BUCKET_<ALIAS>_URL` for them.
 	readonly publicUrl?: string
 }
@@ -44,9 +44,9 @@ export interface R2ServiceState {
  * Combines the explicit `[services.r2].buckets` list (declared order +
  * `cdn` flags preserved) with the implicit `backups` bucket every project
  * opting into `[services.supabase]` needs. The implicit backups bucket is
- * always private (`cdn: false`) — it is internal and must never be served
+ * always private (`cdn: false`) - it is internal and must never be served
  * over a public custom domain. An empty result means the R2 service does
- * not need to run for this project — callers use that as the skip signal.
+ * not need to run for this project - callers use that as the skip signal.
  *
  * Idempotent: a user who already declared `backups` in `[services.r2]`
  * keeps their own declaration, not a duplicate.

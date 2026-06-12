@@ -13,7 +13,22 @@ import type {
 	ObjectStoreClient,
 	ObjectStoreEntry,
 } from '#/domain/storage/object-store.ts'
+import type { _Object } from '@aws-sdk/client-s3'
 import type { R2ClientConfig } from './client.types.ts'
+
+// Select the string keys from one ListObjectsV2 page that satisfy `predicate`,
+// shaped as DeleteObjects entries.
+function selectKeysToDelete(
+	objects: ReadonlyArray<_Object>,
+	predicate: (key: string) => boolean,
+): Array<{ Key: string }> {
+	return objects
+		.map(object => object.Key)
+		.filter(
+			(key): key is string => typeof key === 'string' && predicate(key),
+		)
+		.map(key => ({ Key: key }))
+}
 
 export class R2Client implements ObjectStoreClient {
 	private readonly s3: S3Client
@@ -99,12 +114,10 @@ export class R2Client implements ObjectStoreClient {
 				}),
 			)
 
-			const keysToDelete: Array<{ Key: string }> = []
-			for (const object of listResponse.Contents ?? []) {
-				if (typeof object.Key === 'string' && predicate(object.Key)) {
-					keysToDelete.push({ Key: object.Key })
-				}
-			}
+			const keysToDelete = selectKeysToDelete(
+				listResponse.Contents ?? [],
+				predicate,
+			)
 
 			if (keysToDelete.length > 0) {
 				await this.s3.send(

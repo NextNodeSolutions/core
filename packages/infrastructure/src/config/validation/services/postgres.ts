@@ -30,7 +30,7 @@ export function validatePostgresService(
 
 	// `mode` is required: validating the value directly (rather than as an
 	// optional object entry) means a missing key reaches `picklist` as
-	// `undefined` and fails with the real message — no "Invalid key" default,
+	// `undefined` and fails with the real message - no "Invalid key" default,
 	// no placeholder needed.
 	const mode = runSchema(modeSchema, raw['mode'])
 	const migrationsFolder = runSchema(

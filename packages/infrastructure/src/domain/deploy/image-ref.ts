@@ -58,7 +58,7 @@ export function computeImageRef(input: ComputeImageRefInput): ImageRef {
 
 /**
  * Render an `ImageRef` back into its canonical `registry/repository:tag`
- * string — the inverse of `parseImageRef`. Used for compose `image:` lines
+ * string - the inverse of `parseImageRef`. Used for compose `image:` lines
  * and docker-bake `tags`.
  */
 export function formatImageRef(image: ImageRef): string {
@@ -124,7 +124,7 @@ export function parseImageRef(raw: string): ImageRef {
 /**
  * Pick one service's image out of the per-service IMAGE_REFS Record by its
  * declared name. Used by the migrate container (which runs the app image) and
- * the deploy summary. Throws when absent — a missing entry is a wiring bug in
+ * the deploy summary. Throws when absent - a missing entry is a wiring bug in
  * the IMAGE_REFS the pipeline forwarded, not a runtime condition.
  */
 export function selectServiceImage(
@@ -139,7 +139,7 @@ export function selectServiceImage(
 }
 
 /**
- * Parse the `IMAGE_REFS` env var — a JSON object mapping each declared service
+ * Parse the `IMAGE_REFS` env var - a JSON object mapping each declared service
  * to its `ImageRef` (`{registry, repository, tag}`), emitted by
  * `compute-image-ref`. Every entry is validated through the same field
  * patterns as `parseImageRef`, so a malformed ref crossing the GH Actions
@@ -160,19 +160,19 @@ export function parseImageRefsEnv(raw: string): Record<string, ImageRef> {
 	}
 
 	const imageRefs: Record<string, ImageRef> = {}
-	for (const [service, value] of entries) {
-		imageRefs[service] = parseImageRefObject(service, value)
+	for (const [service, rawRef] of entries) {
+		imageRefs[service] = parseImageRefObject(service, rawRef)
 	}
 	return imageRefs
 }
 
-function parseImageRefObject(service: string, value: unknown): ImageRef {
-	if (!isRecord(value)) {
+function parseImageRefObject(service: string, rawRef: unknown): ImageRef {
+	if (!isRecord(rawRef)) {
 		throw new Error(
 			`Invalid IMAGE_REFS entry "${service}": expected an object with registry, repository and tag`,
 		)
 	}
-	const { registry, repository, tag } = value
+	const { registry, repository, tag } = rawRef
 	if (
 		typeof registry !== 'string' ||
 		typeof repository !== 'string' ||
@@ -183,14 +183,14 @@ function parseImageRefObject(service: string, value: unknown): ImageRef {
 		)
 	}
 	// Round-trip through the canonical string parser so the same registry,
-	// repository and tag patterns gate every entry — one validation source.
+	// repository and tag patterns gate every entry - one validation source.
 	return parseImageRef(`${registry}/${repository}:${tag}`)
 }
 
 export interface ServiceImageRefs {
 	// Image ref per declared service, by instance name.
 	readonly imageRefs: Record<string, ImageRef>
-	// Instance names of the `build` services only — the explicit target list
+	// Instance names of the `build` services only - the explicit target list
 	// for a single multi-target `docker buildx bake`.
 	readonly bakeTargets: ReadonlyArray<string>
 }

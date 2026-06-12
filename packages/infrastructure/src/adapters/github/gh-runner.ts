@@ -15,22 +15,22 @@ export interface GhRunner {
 }
 
 export const defaultGhRunner: GhRunner = async (args, stdin) => {
-	const result = spawnSync('gh', [...args], {
+	const spawnResult = spawnSync('gh', [...args], {
 		input: stdin,
 		encoding: 'utf8',
 	})
-	if (result.error) throw result.error
+	if (spawnResult.error) throw spawnResult.error
 	return {
-		exitCode: result.status ?? 0,
-		stdout: result.stdout,
-		stderr: result.stderr,
+		exitCode: spawnResult.status ?? 0,
+		stdout: spawnResult.stdout,
+		stderr: spawnResult.stderr,
 	}
 }
 
 export async function probeGh(runner: GhRunner): Promise<boolean> {
 	try {
-		const result = await runner(['--version'])
-		return result.exitCode === 0
+		const spawnResult = await runner(['--version'])
+		return spawnResult.exitCode === 0
 	} catch (error) {
 		logger.warn(
 			`gh CLI availability probe failed: ${error instanceof Error ? error.message : String(error)}`,

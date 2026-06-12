@@ -29,15 +29,15 @@ export async function awaitTokenPropagation(
 ): Promise<void> {
 	for (let attempt = 1; attempt <= VERIFY_MAX_ATTEMPTS; attempt++) {
 		// eslint-disable-next-line no-await-in-loop -- sequential polling by design
-		const result = await verifyR2Credentials({
+		const verification = await verifyR2Credentials({
 			accountId: input.accountId,
 			accessKeyId: input.accessKeyId,
 			secretAccessKey: input.secretAccessKey,
 			bucketName: input.probeBucket,
 		})
-		if (result.valid) return
+		if (verification.valid) return
 		logger.info(
-			`R2 credentials not yet active (attempt ${String(attempt)}/${String(VERIFY_MAX_ATTEMPTS)}, ${String(result.status)}: ${result.body})`,
+			`R2 credentials not yet active (attempt ${String(attempt)}/${String(VERIFY_MAX_ATTEMPTS)}, ${String(verification.status)}: ${verification.body})`,
 		)
 		await sleep(VERIFY_INTERVAL_MS) // eslint-disable-line no-await-in-loop -- sequential polling by design
 	}
@@ -48,7 +48,7 @@ export async function awaitTokenPropagation(
 
 /**
  * Best-effort revoke prior tokens with `tokenName` (other than `keepTokenId`).
- * Per-token failures log and continue — partial cleanup is preferable to
+ * Per-token failures log and continue - partial cleanup is preferable to
  * leaving the freshly-minted token unactivated.
  */
 export async function revokeStaleTokens(
@@ -69,7 +69,7 @@ export async function revokeStaleTokens(
 				logger.info(`Revoked stale R2 token ${token.id}`)
 			} catch (error) {
 				logger.warn(
-					`Failed to revoke stale R2 token ${token.id}: ${String(error)} — will retry on next run`,
+					`Failed to revoke stale R2 token ${token.id}: ${String(error)} - will retry on next run`,
 				)
 			}
 		}),

@@ -23,7 +23,7 @@ export interface PgRestoreOptions {
  * `/proc/<pid>/cmdline` to any local user on the host.
  *
  * `stdio: 'inherit'` streams pg_restore's progress + errors straight to
- * the parent — restore is operator-driven and the operator wants the
+ * the parent - restore is operator-driven and the operator wants the
  * raw output. Returns on exit code 0, throws otherwise so the cli
  * command surfaces the failure with a non-zero exit. `spawnSync` over
  * `spawn` keeps the surface tiny: there is nothing to do in parallel
@@ -34,7 +34,7 @@ export function runPgRestore(options: PgRestoreOptions): void {
 	const { urlWithoutPassword, password } = redactPostgresPassword(
 		options.databaseUrl,
 	)
-	const result = spawnSync(
+	const spawnResult = spawnSync(
 		'pg_restore',
 		[
 			'--dbname',
@@ -50,10 +50,10 @@ export function runPgRestore(options: PgRestoreOptions): void {
 			env: { ...process.env, PGPASSWORD: password },
 		},
 	)
-	if (result.error) throw result.error
-	if (result.status !== 0) {
+	if (spawnResult.error) throw spawnResult.error
+	if (spawnResult.status !== 0) {
 		throw new Error(
-			`pg_restore exited with code ${String(result.status)} (target db rejected the dump)`,
+			`pg_restore exited with code ${String(spawnResult.status)} (target db rejected the dump)`,
 		)
 	}
 }

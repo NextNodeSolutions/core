@@ -14,7 +14,7 @@ export interface MigrateSummaryInput {
  * Render the GH step summary for a `migrate-remote` run. Always lists the
  * project + environment + migrate duration; adds a snapshot duration row
  * when a pre-migrate snapshot ran (embedded mode). Operators don't need
- * the dump's R2 key in the summary — `infrastructure restore --at
+ * the dump's R2 key in the summary - `infrastructure restore --at
  * <deploy-time>` picks the right snapshot by timestamp ordering.
  *
  * `snapshotDurationMs = null` covers `[services.postgres].mode = "external"`

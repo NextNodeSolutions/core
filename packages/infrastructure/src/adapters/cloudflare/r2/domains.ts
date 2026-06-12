@@ -45,16 +45,19 @@ export async function listR2CustomDomains(
 	bucketName: string,
 ): Promise<ReadonlyArray<string>> {
 	const context = `Cloudflare R2 custom domains list for "${bucketName}"`
-	const data = await cfFetchJson(
+	const responseBody = await cfFetchJson(
 		customDomainsUrl(accountId, bucketName),
 		token,
 		context,
 	)
-	const result = requireObjectResult(data, context)
-	if (!('domains' in result) || !Array.isArray(result.domains)) {
+	const domainsEnvelope = requireObjectResult(responseBody, context)
+	if (
+		!('domains' in domainsEnvelope) ||
+		!Array.isArray(domainsEnvelope.domains)
+	) {
 		throw new Error(`${context}: \`result.domains\` must be an array`)
 	}
-	return result.domains.map(entry => parseDomainName(entry, context))
+	return domainsEnvelope.domains.map(entry => parseDomainName(entry, context))
 }
 
 /**
@@ -64,7 +67,7 @@ export async function listR2CustomDomains(
  * same-account zone, so no separate DNS write is needed.
  *
  * Returns `true` if the domain was newly attached, `false` if it already
- * existed — callers use this for logging.
+ * existed - callers use this for logging.
  */
 export async function ensureR2CustomDomain(
 	input: EnsureR2CustomDomainInput,
@@ -93,15 +96,18 @@ export async function ensureR2CustomDomain(
 	return true
 }
 
-function parseStatus(result: object, context: string): R2CustomDomainStatus {
+function parseStatus(
+	statusEnvelope: object,
+	context: string,
+): R2CustomDomainStatus {
 	if (
-		!('status' in result) ||
-		typeof result.status !== 'object' ||
-		result.status === null
+		!('status' in statusEnvelope) ||
+		typeof statusEnvelope.status !== 'object' ||
+		statusEnvelope.status === null
 	) {
 		throw new Error(`${context}: missing \`status\` object`)
 	}
-	const status = result.status
+	const { status } = statusEnvelope
 	const ownership =
 		'ownership' in status && typeof status.ownership === 'string'
 			? status.ownership
@@ -117,7 +123,7 @@ function parseStatus(result: object, context: string): R2CustomDomainStatus {
 /**
  * Read the provisioning status of an attached custom domain. Ownership +
  * SSL move from `pending`/`initializing` to `active` over a few minutes
- * after attach — callers poll this until `ssl === "active"`.
+ * after attach - callers poll this until `ssl === "active"`.
  */
 export async function getR2CustomDomainStatus(
 	token: string,
@@ -126,12 +132,12 @@ export async function getR2CustomDomainStatus(
 	domain: string,
 ): Promise<R2CustomDomainStatus> {
 	const context = `Cloudflare R2 custom domain status for "${domain}"`
-	const data = await cfFetchJson(
+	const responseBody = await cfFetchJson(
 		`${customDomainsUrl(accountId, bucketName)}/${encodeURIComponent(domain)}`,
 		token,
 		context,
 	)
-	return parseStatus(requireObjectResult(data, context), context)
+	return parseStatus(requireObjectResult(responseBody, context), context)
 }
 
 /**

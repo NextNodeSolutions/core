@@ -46,7 +46,7 @@ export interface DeployContainerInput {
 	readonly projectName: string
 	readonly environment: AppEnvironment
 	// Allocated host port per url service, keyed by instance name. Internal-only
-	// services (no url) hold no entry — they publish no host port.
+	// services (no url) hold no entry - they publish no host port.
 	readonly hostPorts: Readonly<Record<string, number>>
 	readonly env: DeployEnv
 	readonly secrets: Readonly<Record<string, string>>
@@ -54,7 +54,7 @@ export interface DeployContainerInput {
 	// (`DATABASE_URL` → `postgres`). Drives per-service projection by `needs` and
 	// the shared `.env`. User secrets are absent; `{}` when no backing service.
 	readonly secretOrigins: Readonly<Record<string, string>>
-	// Image ref per declared service, keyed by instance name — sourced from the
+	// Image ref per declared service, keyed by instance name - sourced from the
 	// IMAGE_REFS env and passed straight to the compose renderer.
 	readonly images: Readonly<Record<string, ImageRef>>
 	readonly registryToken: string | undefined
@@ -87,7 +87,7 @@ export interface BringUpInput {
 /**
  * Orchestrate a full container deploy: prepare files + login + pull +
  * bringUpDb, then bringUpApp. The staging matters because Path A schema
- * migrations run between the two phases at the pipeline level — postgres
+ * migrations run between the two phases at the pipeline level - postgres
  * must be healthy before migrate starts, and the app must rotate only
  * after migrate succeeds. When postgres is absent the staging collapses
  * cleanly: phase 1's bringUpDb is a no-op and phase 2 brings up `app`.
@@ -145,7 +145,7 @@ export async function deployContainer(
  *
  * Writing the env file here (not later) matters: the migrate container
  * uses `--env-file` to pick up `DATABASE_URL` and any user secrets, so
- * the file must exist on disk BEFORE migrate runs — even if the app
+ * the file must exist on disk BEFORE migrate runs - even if the app
  * itself hasn't rotated yet.
  */
 export async function stageRollout(
@@ -189,18 +189,18 @@ export async function stageRollout(
 /**
  * Write the env files a deploy reads. Two kinds:
  *
- *   - one `.env.<name>` per declared service — the per-service isolation unit
+ *   - one `.env.<name>` per declared service - the per-service isolation unit
  *     the compose `env_file` points at (D5). Each carries the shared deploy env,
  *     the symmetric cross-service URL block (so each service resolves its peers
  *     by `<NAME>_URL`), its OWN declared port, and its least-privilege secret
- *     subset (its declared `secrets` plus the backing secrets it `needs` — never
+ *     subset (its declared `secrets` plus the backing secrets it `needs` - never
  *     a peer's). A hardcoded PORT here would break any service whose `port`
  *     differs from a peer's;
- *   - one shared `.env` — the file the embedded postgres sidecar
+ *   - one shared `.env` - the file the embedded postgres sidecar
  *     (`env_file: ['.env']`), the backup sidecar (`${VAR}` compose
  *     interpolation), and the ephemeral migrate container (`--env-file .env`)
  *     read. It carries the deploy env plus the BACKING secrets only
- *     (`POSTGRES_PASSWORD`, `DATABASE_URL`, `R2_*`) — no user secrets, since the
+ *     (`POSTGRES_PASSWORD`, `DATABASE_URL`, `R2_*`) - no user secrets, since the
  *     DB/backup/migrate infra has no business holding the app's session keys.
  */
 async function writeServiceEnvFiles(
@@ -241,7 +241,7 @@ async function writeServiceEnvFiles(
  * The token authenticates only credentialed registries, so we log into those
  * alone: `build` images live on the private GHCR the GHCR token covers, and
  * `upstream` images need a login only when they declare a `registry_auth_secret`.
- * A public upstream registry is skipped — logging into it with another service's
+ * A public upstream registry is skipped - logging into it with another service's
  * token would fail or pollute ~/.docker/config.json. Sequential by necessity:
  * concurrent `docker login` calls race on the shared ~/.docker/config.json.
  */
@@ -274,12 +274,12 @@ function requiresRegistryLogin(service: UserServiceConfig): boolean {
 /**
  * Phase 1: bring postgres + postgres-backup up and block until postgres
  * reports healthy via the compose healthcheck. We use Docker Compose's
- * native `--wait` flag — the CLI subscribes to daemon health events
+ * native `--wait` flag - the CLI subscribes to daemon health events
  * directly, so there is no polling loop in this codebase and no JSON
  * status parsing. `--wait-timeout` caps the blocking duration; the CLI
  * exits non-zero (which `session.exec` propagates as a thrown error) on
  * timeout or unhealthy state. No-op when the project does not declare a
- * postgres service — phase 2 then performs a single combined bring-up.
+ * postgres service - phase 2 then performs a single combined bring-up.
  */
 export async function bringUpDb(
 	session: SshSession,
@@ -300,7 +300,7 @@ export async function bringUpDb(
 /**
  * Phase 2: rotate the user workloads. The embedded-postgres pair is brought
  * up in phase 1 (or is absent), and its compose `--wait` already gated it
- * healthy — a re-`up` of the whole file leaves the healthy DB untouched and
+ * healthy - a re-`up` of the whole file leaves the healthy DB untouched and
  * rotates every user service to its new image. So phase 2 is unconditionally
  * `up -d --remove-orphans` with no positional service (M1 has one user
  * workload; the bare form generalises to the multi-service file in M2/M3) and
@@ -311,7 +311,7 @@ export async function bringUpDb(
  * byte-identical across phases and this bare `up` finds nothing to recreate for
  * it (it only rotates the user services whose image changed). If a future
  * change ever makes the backing-service rendering differ between phase 1 and
- * phase 2, this `up` would recreate the DB it just `--wait`-ed healthy — keep
+ * phase 2, this `up` would recreate the DB it just `--wait`-ed healthy - keep
  * the compose output for postgres/supabase deterministic across both phases.
  */
 export async function bringUpApp(

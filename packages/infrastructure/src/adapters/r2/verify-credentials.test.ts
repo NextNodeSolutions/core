@@ -32,7 +32,7 @@ describe('verifyR2Credentials', () => {
 		await expect(verifyR2Credentials(INPUT)).resolves.toEqual({
 			valid: true,
 		})
-		const call = fetchMock.mock.calls[0]
+		const [call] = fetchMock.mock.calls
 		if (!call) throw new Error('expected fetch call')
 		expect(call[0]).toBe(
 			'https://acct.r2.cloudflarestorage.com/nextnode-state?list-type=2&max-keys=0',

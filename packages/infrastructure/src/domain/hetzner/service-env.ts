@@ -24,7 +24,7 @@ function toUrlEnvKey(serviceName: string): string {
  * `.env.<name>` (D5). One `<NAME>_URL` entry per service that declares a `url`,
  * resolved per environment and scheme-prefixed to `https://<host>` (so a peer's
  * `API_URL` is `https://dev.api.example.com` in development); internal-only
- * services (no `url`) contribute none — no peer ever learns a `<NAME>_URL` for
+ * services (no `url`) contribute none - no peer ever learns a `<NAME>_URL` for
  * them.
  *
  * The SAME map is merged into every service (a service receives its own
@@ -53,7 +53,7 @@ export function buildServiceUrlEnv(
  * needs (see `projectSecretsForService` for the rule). One entry per service,
  * keyed by instance name; a service that needs and declares nothing maps to an
  * empty record. The shared `.env` the DB sidecar + migrate read is built
- * separately — see `selectBackingSecrets`.
+ * separately - see `selectBackingSecrets`.
  */
 export function buildServiceSecretEnv(
 	services: Readonly<Record<string, UserServiceConfig>>,
@@ -74,10 +74,10 @@ export function buildServiceSecretEnv(
  * The least-privilege secret subset a single service receives. The deploy
  * secrets arrive on two disjoint channels, each with its own rule:
  *
- *   - a BACKING secret — produced by another service, so `origins` names its
- *     producer (e.g. `DATABASE_URL` → `postgres`) — is included only when the
+ *   - a BACKING secret - produced by another service, so `origins` names its
+ *     producer (e.g. `DATABASE_URL` → `postgres`) - is included only when the
  *     service declares `needs = [<producer>]`;
- *   - a USER secret — no producer in `origins` — is included only when the
+ *   - a USER secret - no producer in `origins` - is included only when the
  *     service lists it in its own `secrets`.
  *
  * So a postgres `DATABASE_URL` reaches only services that declare
@@ -106,7 +106,7 @@ function projectSecretsForService(
  * (`env_file: ['.env']`), the backup sidecar (`${VAR}` compose interpolation),
  * and the ephemeral migrate container (`--env-file .env`) read. User secrets are
  * excluded on purpose: the DB/backup/migrate infra needs `DATABASE_URL`,
- * `POSTGRES_PASSWORD`, `R2_*` — never the app's `SESSION_KEY`.
+ * `POSTGRES_PASSWORD`, `R2_*` - never the app's `SESSION_KEY`.
  */
 export function selectBackingSecrets(
 	secrets: Readonly<Record<string, string>>,

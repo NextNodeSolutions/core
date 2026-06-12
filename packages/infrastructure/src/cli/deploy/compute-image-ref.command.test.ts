@@ -134,7 +134,7 @@ describe('computeImageRefCommand', () => {
 		}).toThrow('compute-image-ref requires a hetzner-vps deploy target')
 	})
 
-	it('throws for an all-upstream deployment — compute-image-ref runs only for build sources', () => {
+	it('throws for an all-upstream deployment - compute-image-ref runs only for build sources', () => {
 		expect(() => {
 			computeImageRefCommand(APP_UPSTREAM_PUBLIC)
 		}).toThrow('no build services to bake')

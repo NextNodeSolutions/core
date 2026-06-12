@@ -48,8 +48,8 @@ function parseHetzner(rawHetzner: unknown): {
 }
 
 // Cross-service routing guard for the Caddy/ACME layer: every externally routed
-// service `url` must be unique — a duplicate would shadow the earlier Caddy
-// route — and must be project.domain itself or a sub-domain of it, since ACME
+// service `url` must be unique - a duplicate would shadow the earlier Caddy
+// route - and must be project.domain itself or a sub-domain of it, since ACME
 // certs are only held for project.domain. Services without a `url` are
 // internal-only and contribute nothing here. When `domain` is undefined the
 // missing-domain error is already raised upstream, so ownership is left
@@ -70,7 +70,7 @@ function validateServiceUrls(
 			firstSeenBy.set(url, name)
 		} else {
 			errors.push(
-				`deploy.services.${name}.url "${url}" duplicates deploy.services.${owner}.url — each routed service needs a distinct url`,
+				`deploy.services.${name}.url "${url}" duplicates deploy.services.${owner}.url - each routed service needs a distinct url`,
 			)
 		}
 
@@ -92,7 +92,7 @@ function validateServiceUrls(
 // `upstream` service from its registry. The pipeline forwards exactly one
 // IMAGE_REFS set per deploy (the build job's OR the plan's upstream refs, never
 // merged), so a project mixing both sources would leave the pulled services with
-// no image ref at deploy time. Reject mixed sources here — fail loud at parse
+// no image ref at deploy time. Reject mixed sources here - fail loud at parse
 // time rather than as a missing image on the VPS. Single-source projects
 // (including single-service ones) pass trivially.
 function validateServiceSources(
@@ -110,22 +110,16 @@ function validateServiceSources(
 		.map(([source, names]) => `${source}: ${names.join(', ')}`)
 		.join('; ')
 	return [
-		`deploy.services mixes image sources (${summary}) — a Hetzner deploy builds or pulls all services together; declare a single source across services`,
+		`deploy.services mixes image sources (${summary}) - a Hetzner deploy builds or pulls all services together; declare a single source across services`,
 	]
 }
 
 export const hetznerVps: DeployProviderValidator = {
 	requiresDomain: true,
 	requiresServices: true,
-	validate(
-		deployRecord,
-		secrets,
-		generatedSecrets,
-		vps,
-		volumes,
-		services,
-		domain,
-	) {
+	validate(deployRecord, inputs) {
+		const { secrets, generatedSecrets, vps, volumes, services, domain } =
+			inputs
 		const { errors, hetzner } = parseHetzner(deployRecord['hetzner'])
 		const serviceErrors = [
 			...validateServiceUrls(services, domain),

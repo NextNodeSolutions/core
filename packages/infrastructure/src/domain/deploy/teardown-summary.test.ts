@@ -6,7 +6,7 @@ import type { TeardownResult } from './teardown-result.ts'
 
 describe('buildTeardownSummary', () => {
 	it('renders a VPS teardown summary with resource outcomes', () => {
-		const result: TeardownResult = {
+		const teardownResult: TeardownResult = {
 			kind: 'vps',
 			scope: 'vps',
 			outcome: {
@@ -20,7 +20,11 @@ describe('buildTeardownSummary', () => {
 			durationMs: 5_400,
 		}
 
-		const summary = buildTeardownSummary(result, 'acme-web', 'hetzner-vps')
+		const summary = buildTeardownSummary(
+			teardownResult,
+			'acme-web',
+			'hetzner-vps',
+		)
 
 		expect(summary).toContain(
 			'### :wastebasket: Infrastructure torn down for `acme-web`',
@@ -33,7 +37,7 @@ describe('buildTeardownSummary', () => {
 	})
 
 	it('renders a VPS teardown with server already gone', () => {
-		const result: TeardownResult = {
+		const teardownResult: TeardownResult = {
 			kind: 'vps',
 			scope: 'vps',
 			outcome: {
@@ -47,7 +51,11 @@ describe('buildTeardownSummary', () => {
 			durationMs: 800,
 		}
 
-		const summary = buildTeardownSummary(result, 'acme-web', 'hetzner-vps')
+		const summary = buildTeardownSummary(
+			teardownResult,
+			'acme-web',
+			'hetzner-vps',
+		)
 
 		expect(summary).toContain('already gone')
 		expect(summary).toContain('not found')
@@ -55,7 +63,7 @@ describe('buildTeardownSummary', () => {
 	})
 
 	it('renders a static teardown summary', () => {
-		const result: TeardownResult = {
+		const teardownResult: TeardownResult = {
 			kind: 'static',
 			scope: 'project',
 			pagesProjectName: 'my-site-dev',
@@ -67,7 +75,7 @@ describe('buildTeardownSummary', () => {
 		}
 
 		const summary = buildTeardownSummary(
-			result,
+			teardownResult,
 			'my-site',
 			'cloudflare-pages',
 		)
@@ -82,7 +90,7 @@ describe('buildTeardownSummary', () => {
 	})
 
 	it('renders a static teardown with project already gone', () => {
-		const result: TeardownResult = {
+		const teardownResult: TeardownResult = {
 			kind: 'static',
 			scope: 'project',
 			pagesProjectName: 'my-site-dev',
@@ -94,7 +102,7 @@ describe('buildTeardownSummary', () => {
 		}
 
 		const summary = buildTeardownSummary(
-			result,
+			teardownResult,
 			'my-site',
 			'cloudflare-pages',
 		)

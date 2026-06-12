@@ -166,7 +166,7 @@ describe('dnsCommand', () => {
 	})
 })
 
-describe('dnsCommand — hetzner dispatch', () => {
+describe('dnsCommand - hetzner dispatch', () => {
 	let testPrivateKey: string
 
 	beforeAll(() => {

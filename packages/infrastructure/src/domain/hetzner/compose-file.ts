@@ -39,7 +39,7 @@ import type {
 
 /**
  * A Docker named volume managed by the Docker daemon on the VPS local SSD
- * (under `/var/lib/docker/volumes/...`). NOT a Hetzner Block Volume —
+ * (under `/var/lib/docker/volumes/...`). NOT a Hetzner Block Volume -
  * Hetzner Volumes are not used by default (see `docs/infra-topology.md`).
  */
 export interface ComposeVolume {
@@ -52,7 +52,7 @@ export interface ComposeFileInput {
 	readonly services: Readonly<Record<string, UserServiceConfig>>
 	// Resolved image ref per service (build → computed, upstream → parsed).
 	readonly images: Readonly<Record<string, ImageRef>>
-	// Allocated host port per service — consulted only for `url` services.
+	// Allocated host port per service - consulted only for `url` services.
 	readonly hostPorts: Readonly<Record<string, number>>
 	readonly volumes?: ReadonlyArray<ComposeVolume>
 	readonly postgres: PostgresServiceConfig | undefined
@@ -89,7 +89,7 @@ interface ComposeService {
 // owns bring-up readiness. `wget` and the `/healthz` route are guaranteed by
 // the alpine/distroless-busybox bases NextNode builds its app images on. The
 // probe is deliberately NOT applied to `upstream` images: they are pulled
-// verbatim, so we can't assume they ship `wget` or answer `/healthz` — forcing
+// verbatim, so we can't assume they ship `wget` or answer `/healthz` - forcing
 // it would flag a healthy container `unhealthy` and, because depends_on health
 // gating now blocks dependents on `service_healthy`, stall any sibling that
 // gates on this upstream service. Upstream liveness stays the image's own
@@ -136,21 +136,25 @@ function withPostgresExporterInitMount(stack: SupabaseStack): SupabaseStack {
 	return { ...stack, [SUPABASE_DB_SERVICE_NAME]: augmented }
 }
 
+interface TopLevelVolumesOptions {
+	readonly hasPostgres: boolean
+	readonly hasSupabase: boolean
+}
+
 function buildTopLevelVolumes(
 	userVolumes: ReadonlyArray<ComposeVolume> = [],
-	includePostgres: boolean,
-	includeSupabase: boolean,
+	{ hasPostgres, hasSupabase }: TopLevelVolumesOptions,
 ): Record<string, Record<string, never>> | undefined {
-	const result: Record<string, Record<string, never>> = {}
-	for (const v of userVolumes) result[v.name] = {}
-	if (includePostgres) result[POSTGRES_DATA_VOLUME] = {}
-	if (includeSupabase) result[SUPABASE_DB_DATA_VOLUME] = {}
-	return Object.keys(result).length ? result : undefined
+	const volumes: Record<string, Record<string, never>> = {}
+	for (const v of userVolumes) volumes[v.name] = {}
+	if (hasPostgres) volumes[POSTGRES_DATA_VOLUME] = {}
+	if (hasSupabase) volumes[SUPABASE_DB_DATA_VOLUME] = {}
+	return Object.keys(volumes).length ? volumes : undefined
 }
 
 /**
  * Build the postgres group (sidecar + backup) for the compose file.
- * Returns `null` when `mode = external` — the build helpers also gate on
+ * Returns `null` when `mode = external` - the build helpers also gate on
  * mode, so this central check keeps the caller free of the per-sidecar
  * null fan-out and lets the spread into `services` stay one-liner clean.
  */
@@ -169,7 +173,7 @@ function buildPostgresServiceGroup(
 
 /**
  * Build the supabase group (six-service stack + postgres-exporter +
- * backup sidecar) for the compose file. Always non-null when called —
+ * backup sidecar) for the compose file. Always non-null when called -
  * `[services.supabase]` has no mode switch like postgres does.
  */
 function buildSupabaseServiceGroup(
@@ -209,14 +213,18 @@ function buildPortMapping(
 // and the primary additionally waits on the embedded postgres sidecar. A build
 // sibling (or postgres) exposes a healthcheck so it is gated on
 // `service_healthy`; an upstream sibling carries no forced probe, so gating it
-// on `service_healthy` would never resolve — it is gated on `service_started`.
+// on `service_healthy` would never resolve - it is gated on `service_started`.
 // Returns an empty object when the service has no dependencies, so the
 // `depends_on` key is omitted from the rendered block entirely.
+interface DependsOnOptions {
+	readonly isPrimary: boolean
+	readonly hasPostgres: boolean
+}
+
 function buildDependsOn(
 	service: UserServiceConfig,
 	services: Readonly<Record<string, UserServiceConfig>>,
-	isPrimary: boolean,
-	dependsOnPostgres: boolean,
+	{ isPrimary, hasPostgres }: DependsOnOptions,
 ): { depends_on?: Readonly<Record<string, ComposeServiceDependency>> } {
 	const dependencies: Record<string, ComposeServiceDependency> = {}
 	for (const sibling of service.dependsOn) {
@@ -224,7 +232,7 @@ function buildDependsOn(
 			condition: siblingCondition(services[sibling]),
 		}
 	}
-	if (isPrimary && dependsOnPostgres) {
+	if (isPrimary && hasPostgres) {
 		dependencies[POSTGRES_SIDECAR_SERVICE_NAME] = {
 			condition: 'service_healthy',
 		}
@@ -245,21 +253,29 @@ function siblingCondition(
 
 /**
  * Render the user workloads declared under [deploy.services.<name>]. Each
- * gets its own image, per-service env file (`.env.<name>` — the isolation
+ * gets its own image, per-service env file (`.env.<name>` - the isolation
  * unit, D5) and, for `build` services, a /healthz healthcheck (D7); `upstream`
  * images get no forced probe. Every service gates on the siblings it lists in
  * `dependsOn` (D7); the FIRST declared service is the primary app, which also
  * carries the user-declared volumes and the embedded-postgres `service_healthy`
  * dependency.
  */
-function buildUserServices(
-	services: Readonly<Record<string, UserServiceConfig>>,
-	images: Readonly<Record<string, ImageRef>>,
-	hostPorts: Readonly<Record<string, number>>,
-	userVolumes: ReadonlyArray<ComposeVolume> | undefined,
-	dependsOnPostgres: boolean,
-): Record<string, ComposeService> {
-	const result: Record<string, ComposeService> = {}
+interface UserServicesInput {
+	readonly services: Readonly<Record<string, UserServiceConfig>>
+	readonly images: Readonly<Record<string, ImageRef>>
+	readonly hostPorts: Readonly<Record<string, number>>
+	readonly userVolumes: ReadonlyArray<ComposeVolume> | undefined
+	readonly hasPostgres: boolean
+}
+
+function buildUserServices({
+	services,
+	images,
+	hostPorts,
+	userVolumes,
+	hasPostgres,
+}: UserServicesInput): Record<string, ComposeService> {
+	const composeServices: Record<string, ComposeService> = {}
 	Object.entries(services).forEach(([name, service], index) => {
 		const image = images[name]
 		if (!image) {
@@ -268,7 +284,7 @@ function buildUserServices(
 			)
 		}
 		const isPrimary = index === 0
-		result[name] = {
+		composeServices[name] = {
 			image: formatImageRef(image),
 			restart: 'unless-stopped',
 			env_file: [`.env.${name}`],
@@ -283,10 +299,10 @@ function buildUserServices(
 				userVolumes && {
 					volumes: userVolumes.map(v => `${v.name}:${v.mount}`),
 				}),
-			...buildDependsOn(service, services, isPrimary, dependsOnPostgres),
+			...buildDependsOn(service, services, { isPrimary, hasPostgres }),
 		}
 	})
-	return result
+	return composeServices
 }
 
 export function renderComposeFile(input: ComposeFileInput): string {
@@ -297,21 +313,20 @@ export function renderComposeFile(input: ComposeFileInput): string {
 	const supabase = input.supabase
 		? buildSupabaseServiceGroup(input.projectName, input.environment)
 		: null
-	const topLevelVolumes = buildTopLevelVolumes(
-		userVolumes,
-		postgres !== null,
-		supabase !== null,
-	)
+	const topLevelVolumes = buildTopLevelVolumes(userVolumes, {
+		hasPostgres: postgres !== null,
+		hasSupabase: supabase !== null,
+	})
 
 	const config: ComposeConfig = {
 		services: {
-			...buildUserServices(
-				input.services,
-				input.images,
-				input.hostPorts,
+			...buildUserServices({
+				services: input.services,
+				images: input.images,
+				hostPorts: input.hostPorts,
 				userVolumes,
-				postgres !== null,
-			),
+				hasPostgres: postgres !== null,
+			}),
 			...postgres,
 			...supabase,
 		},

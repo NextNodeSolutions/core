@@ -23,9 +23,13 @@ export interface VectorConfig {
 	}
 }
 
-export function isVectorConfig(value: unknown): value is VectorConfig {
-	if (typeof value !== 'object' || value === null) return false
-	return 'sources' in value && 'transforms' in value && 'sinks' in value
+export function isVectorConfig(candidate: unknown): candidate is VectorConfig {
+	if (typeof candidate !== 'object' || candidate === null) return false
+	return (
+		'sources' in candidate &&
+		'transforms' in candidate &&
+		'sinks' in candidate
+	)
 }
 
 const VL_STREAM_FIELDS = 'nn_project,nn_client_id'

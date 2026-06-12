@@ -11,8 +11,8 @@ export const CLIENT_VPS_TAG = 'client-vps'
 /**
  * Closed set of labels VictoriaMetrics keeps on every series scraped from
  * a NextNode client VPS. The final `labelkeep` rule drops everything else
- * — including SD-time `__meta_*` metadata and any label an exporter
- * accidentally emits — so cardinality budget lives entirely on this list.
+ * - including SD-time `__meta_*` metadata and any label an exporter
+ * accidentally emits - so cardinality budget lives entirely on this list.
  *
  * `db_role` stays reserved here even though no source rule maps to it
  * yet: the planned `services.supabase.role` propagation (P6-08) was
@@ -77,18 +77,18 @@ const SOURCE_BY_LABEL: Readonly<Record<ClientVpsLabel, string | null>> = {
  * Build the relabel pipeline applied to every Tailscale SD target before
  * VictoriaMetrics issues the scrape:
  *
- *   1. `keep` — drop every target whose Tailscale tag list does not
+ *   1. `keep` - drop every target whose Tailscale tag list does not
  *      contain `tag:client-vps`. The regex tolerates the tag appearing
  *      anywhere in the comma-joined list.
- *   2. `replace` × N — map each SD meta label to its whitelist target.
+ *   2. `replace` × N - map each SD meta label to its whitelist target.
  *      Order matches `CLIENT_VPS_LABEL_WHITELIST` for diff stability.
  *      Labels with no SD source (e.g. `db_role`) are skipped.
- *   3. `labelkeep` — enforce the closed whitelist. The regex pins the
+ *   3. `labelkeep` - enforce the closed whitelist. The regex pins the
  *      full label set so a label like `client_id_v2` cannot sneak past
  *      a prefix match.
  *
  * Every emitted regex is wrapped in `^...$` even though Prom/VM anchor
- * the `regex` field implicitly — explicit anchors keep the rendered
+ * the `regex` field implicitly - explicit anchors keep the rendered
  * YAML self-describing and shield us against any tool reading the file
  * without that contract.
  *
@@ -126,9 +126,9 @@ export function buildClientVpsRelabelRules(): ReadonlyArray<RelabelRule> {
 
 /**
  * Render the relabel pipeline as a YAML fragment under the
- * `relabel_configs` key — the shape VictoriaMetrics / Prometheus scrape
+ * `relabel_configs` key - the shape VictoriaMetrics / Prometheus scrape
  * jobs expect. Consumers splice the fragment into the monitoring scrape
- * config (job_name, http_sd_configs URL, scrape_interval — all
+ * config (job_name, http_sd_configs URL, scrape_interval - all
  * deployment-side concerns) at deploy time.
  */
 export function renderClientVpsRelabelYaml(): string {

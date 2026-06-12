@@ -136,9 +136,11 @@ export class CloudflarePagesTarget implements DeployTarget {
 
 		logger.info(`Syncing env vars to "${pagesProjectName}"`)
 		await updatePagesEnvVars(
-			this.accountId,
-			pagesProjectName,
-			this.token,
+			{
+				accountId: this.accountId,
+				projectName: pagesProjectName,
+				token: this.token,
+			},
 			env,
 			input.secrets,
 		)
@@ -190,10 +192,10 @@ export class CloudflarePagesTarget implements DeployTarget {
 		projectName: string,
 		domain: string | undefined,
 		target: TeardownTarget,
-		withVolumes: boolean,
+		shouldWipeVolumes: boolean,
 	): Promise<TeardownResult> {
 		void target
-		void withVolumes
+		void shouldWipeVolumes
 		const start = Date.now()
 		const pagesProjectName = computePagesProjectName(
 			projectName,
@@ -239,7 +241,7 @@ export class CloudflarePagesTarget implements DeployTarget {
 		)
 		if (!project) {
 			throw new Error(
-				`Pages project "${pagesProjectName}" not found — run provision first`,
+				`Pages project "${pagesProjectName}" not found - run provision first`,
 			)
 		}
 		return project.subdomain

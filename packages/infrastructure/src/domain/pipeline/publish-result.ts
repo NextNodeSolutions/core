@@ -22,15 +22,14 @@ export function parseSemanticReleaseOutput(content: string): PublishResult {
 }
 
 export function buildSummary(
-	result: PublishResult,
+	publishResult: PublishResult,
 	projectFilter: string,
 ): string {
-	switch (result.status) {
-		case 'published':
-			return `### :white_check_mark: Published ${projectFilter} v${result.version}`
-		case 'no-release':
-			return `### :fast_forward: No new release for ${projectFilter}`
-		case 'failure':
-			return `### :x: Publish failed for ${projectFilter}`
+	if (publishResult.status === 'published') {
+		return `### :white_check_mark: Published ${projectFilter} v${publishResult.version}`
 	}
+	if (publishResult.status === 'no-release') {
+		return `### :fast_forward: No new release for ${projectFilter}`
+	}
+	return `### :x: Publish failed for ${projectFilter}`
 }

@@ -205,7 +205,7 @@ describe('buildSupabaseBackupEnv', () => {
 		})
 	})
 
-	it('throws when the state has no "backups" alias — the supabase sidecar would have no bucket to upload to', () => {
+	it('throws when the state has no "backups" alias - the supabase sidecar would have no bucket to upload to', () => {
 		expect(() =>
 			buildSupabaseBackupEnv({
 				...STATE,

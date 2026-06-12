@@ -8,7 +8,7 @@ import type { R2ServiceState } from './r2.ts'
  * declares `[services.supabase]` in nextnode.toml on the next pipeline
  * run. Versions follow the upstream supabase/supabase docker-compose
  * template (github.com/supabase/supabase/tree/master/docker), with the
- * postgres image pinned to the latest stable PG 17 release line — the
+ * postgres image pinned to the latest stable PG 17 release line - the
  * upstream template still defaults to PG 15; NextNode opts into PG 17
  * across the fleet so upgrades stay coordinated and tested.
  */
@@ -21,7 +21,7 @@ export const SUPABASE_STUDIO_IMAGE = 'supabase/studio:2026.04.27-sha-5f60601'
 
 /**
  * Compose service names for the Supabase self-host stack. The `db` name
- * matches the upstream supabase/supabase compose convention — every
+ * matches the upstream supabase/supabase compose convention - every
  * downstream supabase service connects to `db:5432` on the internal
  * compose network. Keeping the canonical names preserves the runbook
  * compatibility (logs `db`, exec into `auth`, etc.) operators already know.
@@ -49,7 +49,7 @@ export const SUPABASE_DB_DATA_VOLUME = 'supabase-db-data'
 
 /**
  * Data directory inside the supabase/postgres image. Identical to the
- * upstream postgres image — supabase only layers initdb scripts on top.
+ * upstream postgres image - supabase only layers initdb scripts on top.
  */
 export const SUPABASE_DB_DATA_DIR = '/var/lib/postgresql/data'
 
@@ -71,7 +71,7 @@ export const SUPABASE_STUDIO_HTTP_PORT = 3000
 
 /**
  * Lifetime, in seconds, of the JWTs gotrue/realtime/storage sign with
- * JWT_SECRET. Mirrors the upstream supabase docker-compose default —
+ * JWT_SECRET. Mirrors the upstream supabase docker-compose default -
  * pinned here so deploys are reproducible and the value is reviewed in
  * one place rather than scattered across env files.
  */
@@ -101,7 +101,7 @@ export const SUPABASE_BACKUP_SERVICE_NAME = 'supabase-backup'
 
 /**
  * Image the backup sidecar runs. `postgres:17-alpine` ships `pg_dump`
- * from the same PG 17 family as SUPABASE_POSTGRES_IMAGE — minor mismatches
+ * from the same PG 17 family as SUPABASE_POSTGRES_IMAGE - minor mismatches
  * are tolerated by libpq; major mismatches are not. The alpine variant
  * keeps the pull small; the entrypoint installs `aws-cli` at startup
  * (one-shot per container lifetime under `restart: unless-stopped`),
@@ -111,7 +111,7 @@ export const SUPABASE_BACKUP_IMAGE = 'postgres:17-alpine'
 
 /**
  * Seconds between successive backups inside the sidecar loop. 86_400 = 24h
- * = daily. The loop is a plain `while true; … sleep 86400` — adding cron
+ * = daily. The loop is a plain `while true; … sleep 86400` - adding cron
  * would require a second process inside the container and another package
  * install, both for zero functional gain at the daily cadence.
  */
@@ -121,7 +121,7 @@ export const SUPABASE_BACKUP_INTERVAL_SECONDS = 86_400
  * Command fragments embedded in the backup script. Kept module-level so
  * every line in `SUPABASE_BACKUP_SCRIPT` is either a single-quoted string
  * (pure shell, `${var}` survives untouched) or a template literal that
- * only carries TS substitutions — no `\${...}` escape juggling anywhere.
+ * only carries TS substitutions - no `\${...}` escape juggling anywhere.
  */
 const PG_DUMP_COMMAND = `pg_dump -h ${SUPABASE_DB_SERVICE_NAME} -U postgres -d ${SUPABASE_DEFAULT_DATABASE}`
 const S3_UPLOAD_COMMAND =
@@ -133,13 +133,13 @@ const S3_UPLOAD_COMMAND =
  * bucket, endpoint, postgres password) is read from a shell env var the
  * `environment:` block populates. Module-level TS constants (db host, db
  * name, interval seconds) are interpolated once via the command fragments
- * — no per-call rendering.
+ * - no per-call rendering.
  *
  * Filename pattern: `pg_dump_<project>_<env>_<YYYYMMDDTHHMMSSZ>.sql.gz`.
  * The backup tracker (monitoring P4) parses project and env directly from
  * the key without listing-time lookups.
  *
- * Errors do not abort the loop — `pg_dump | gzip | aws s3 cp` runs inside
+ * Errors do not abort the loop - `pg_dump | gzip | aws s3 cp` runs inside
  * an `if`, so a transient R2 outage or db blip logs to stderr but the
  * sidecar tries again the next day. `set -euo pipefail` still propagates
  * inside the pipeline, so an `aws s3 cp` failure after a successful
@@ -164,7 +164,7 @@ const SUPABASE_BACKUP_SCRIPT = [
 /**
  * Project the R2 service state down to the four `BACKUP_R2_*` env vars the
  * supabase backup sidecar consumes. Looks up the `backups` alias against
- * `state.buckets` — `computeR2ServiceBuckets` guarantees the alias is
+ * `state.buckets` - `computeR2ServiceBuckets` guarantees the alias is
  * present whenever supabase is declared, so a missing entry means the R2
  * service state is corrupt and the sidecar would silently no-op against
  * the wrong bucket; fail loud instead.
@@ -180,7 +180,7 @@ export function buildSupabaseBackupEnv(
 	const binding = state.buckets.find(b => b.alias === R2_BACKUPS_ALIAS)
 	if (binding === undefined) {
 		throw new Error(
-			`supabase service: R2 service state is missing the "${R2_BACKUPS_ALIAS}" bucket alias — re-run provision so the supabase backup bucket is created`,
+			`supabase service: R2 service state is missing the "${R2_BACKUPS_ALIAS}" bucket alias - re-run provision so the supabase backup bucket is created`,
 		)
 	}
 	return {
@@ -212,7 +212,7 @@ export interface SupabaseBackupSidecarService {
  * the bundled `pg_dump` matches the running supabase/postgres major.
  * The `environment:` block bridges JS-time values (project, env) and
  * compose-interpolation values (R2 + postgres creds) into the shell
- * env vars `SUPABASE_BACKUP_SCRIPT` reads — keeping the script itself a
+ * env vars `SUPABASE_BACKUP_SCRIPT` reads - keeping the script itself a
  * module constant.
  *
  * Pure: no IO, no env reads. The caller plugs the returned shape into
@@ -246,7 +246,7 @@ export function buildSupabaseBackupSidecar(
  * docker-compose template so operator runbooks transfer untouched.
  *
  * `db` mounts SUPABASE_DB_DATA_VOLUME for persistence. The downstream
- * services depend on `db` via the array form — no healthcheck-conditioned
+ * services depend on `db` via the array form - no healthcheck-conditioned
  * waits are wired here; that's an operational tuning concern handled
  * per-service in a later task. Studio does not depend on `db` directly
  * because it reaches the cluster through kong.
@@ -255,7 +255,7 @@ export function buildSupabaseBackupSidecar(
  * external exposure fronted by the VPS reverse proxy and configured
  * separately. All services read configuration from the shared `.env`
  * file populated by the deploy pipeline (JWT secret, anon key, service
- * role key, per-project postgres password, etc. — see Phase 6 backlog).
+ * role key, per-project postgres password, etc. - see Phase 6 backlog).
  *
  * Pure: no IO, no env reads. The caller plugs the returned shape into
  * the compose-file orchestrator.

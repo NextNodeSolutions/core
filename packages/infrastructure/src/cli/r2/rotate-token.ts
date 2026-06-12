@@ -19,7 +19,7 @@ export interface R2Credentials {
 /**
  * Rotate the R2 API token: create a new one scoped to the state + certs
  * buckets, poll until it propagates, then revoke any prior tokens bearing
- * the same name (best-effort — partial failures log + retry next run).
+ * the same name (best-effort - partial failures log + retry next run).
  */
 export async function rotateR2Credentials(
 	ctx: R2Context,

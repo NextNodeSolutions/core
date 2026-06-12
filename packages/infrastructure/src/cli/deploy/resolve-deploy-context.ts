@@ -104,7 +104,7 @@ export async function resolveDeployContext(
 // them (`DATABASE_URL` → `postgres`, `R2_ACCESS_KEY_ID` → `r2`). The container
 // target uses this provenance to project each backing secret only to the
 // services that declare `needs = [<producer>]`. Public env carries no
-// provenance — only secrets are projected per service.
+// provenance - only secrets are projected per service.
 function buildSecretOrigins(
 	serviceEnvs: ReadonlyArray<{ name: string; env: ServiceEnv }>,
 ): Record<string, string> {
@@ -150,7 +150,7 @@ function resolveRegistryToken(
 
 // Resolve the single registry token shared by every upstream service. Returns
 // undefined when no service declares a registry_auth_secret (public images).
-// Throws when services declare DIFFERENT auth secrets — a deploy forwards one
+// Throws when services declare DIFFERENT auth secrets - a deploy forwards one
 // token, so two private registries cannot both be authenticated.
 function resolveUpstreamRegistryToken(
 	services: Readonly<Record<string, UserServiceConfig>>,
@@ -166,7 +166,7 @@ function resolveUpstreamRegistryToken(
 
 	if (declaringBySecret.size > 1) {
 		throw new Error(
-			`deploy.services declare multiple distinct registry_auth_secret values (${[...declaringBySecret.keys()].join(', ')}); a deploy forwards a single registry token — use one secret across services`,
+			`deploy.services declare multiple distinct registry_auth_secret values (${[...declaringBySecret.keys()].join(', ')}); a deploy forwards a single registry token - use one secret across services`,
 		)
 	}
 
@@ -174,11 +174,11 @@ function resolveUpstreamRegistryToken(
 	if (entry === undefined) return undefined
 
 	const [secret, name] = entry
-	const value = repoSecrets[secret]
-	if (value === undefined) {
+	const secretValue = repoSecrets[secret]
+	if (secretValue === undefined) {
 		throw new Error(
 			`Secret "${secret}" declared in deploy.services.${name}.registry_auth_secret but not found in GitHub Secrets`,
 		)
 	}
-	return value
+	return secretValue
 }

@@ -5,7 +5,7 @@ import type { ServiceEnv } from './service.ts'
 
 /**
  * Compose service name for the embedded postgres sidecar. Co-located in
- * the same docker network as the app, reachable as `postgres:5432` —
+ * the same docker network as the app, reachable as `postgres:5432` -
  * never bound to a host port, so the database is unreachable from outside
  * the VPS unless the app explicitly proxies it.
  */
@@ -17,7 +17,7 @@ export const POSTGRES_SIDECAR_PORT = 5432
  * NextNode-blessed postgres major version. Single source of truth for the
  * server image (`postgres:<v>`) and the backup sidecar image
  * (`ghcr.io/solectrus/postgres-s3-backup:<v>`). NextNode runs an
- * externalized-CTO model — clients don't pick their postgres version, we
+ * externalized-CTO model - clients don't pick their postgres version, we
  * pin one across the fleet so upgrades are coordinated and tested. Bump
  * this single constant to roll out a new major to every NextNode embedded
  * deploy at the next pipeline run; `mode = "external"` users own their
@@ -70,7 +70,7 @@ export interface PostgresSidecarService {
 
 /**
  * Build the compose sidecar definition for the embedded postgres service.
- * Returns `null` when `mode = external` — the app talks to a remote DB
+ * Returns `null` when `mode = external` - the app talks to a remote DB
  * and no sidecar is needed.
  */
 export function buildPostgresSidecar(
@@ -97,7 +97,7 @@ export function buildPostgresSidecar(
 /**
  * Compose the `DATABASE_URL` the app uses to reach the embedded sidecar.
  * The host is the docker compose service name (`postgres`), reachable on
- * the project's internal network only — never via a host port binding.
+ * the project's internal network only - never via a host port binding.
  */
 export function buildPostgresEmbeddedDatabaseUrl(
 	projectName: string,
@@ -112,7 +112,7 @@ export function buildPostgresEmbeddedDatabaseUrl(
  * `POSTGRES_DB`, and `POSTGRES_PASSWORD` from `.env` at first boot to run
  * `initdb`; the app reads `DATABASE_URL` to connect. User and DB names are
  * derived from the project, not secrets, so they travel on the public
- * channel — only the password and the URL (which embeds the password) are
+ * channel - only the password and the URL (which embeds the password) are
  * masked.
  */
 export function buildPostgresEmbeddedEnv(
@@ -163,7 +163,7 @@ export const POSTGRES_BACKUP_SCHEDULE = '@daily'
 /**
  * R2 bucket name for the project's postgres dumps. The bucket is project-
  * scoped (one per app) and lives outside the `[services.r2]` bucket list
- * on purpose — backups are infrastructure, not application data, and the
+ * on purpose - backups are infrastructure, not application data, and the
  * provisioning of this bucket is owned by the deploy pipeline rather than
  * declared per project.
  */
@@ -181,11 +181,11 @@ export function postgresBackupBucketName(projectName: string): string {
 export const POSTGRES_BACKUP_PREFIX = 'postgres'
 
 /**
- * Retention policy bucket sizes — keep the 7 most-recent distinct UTC days,
+ * Retention policy bucket sizes - keep the 7 most-recent distinct UTC days,
  * the 4 most-recent ISO-week buckets (Monday-aligned), and the 3 most-recent
  * UTC month buckets. Older snapshots are pruned. Buckets overlap on the
  * newest snapshot (one dump satisfies day + week + month), so the worst-case
- * upper bound is 7 + 4 + 3 = 14 — but with dense daily data the realized
+ * upper bound is 7 + 4 + 3 = 14 - but with dense daily data the realized
  * count is typically lower because the most-recent weekly and the two most-
  * recent monthly buckets overlap the 7-day window.
  */
@@ -195,13 +195,13 @@ export const POSTGRES_BACKUP_RETENTION_MONTHLY = 3
 
 /**
  * Pattern of dumps emitted by `ghcr.io/solectrus/postgres-s3-backup`
- * (and identically by its `eeshugerman/postgres-backup-s3` ancestor —
+ * (and identically by its `eeshugerman/postgres-backup-s3` ancestor -
  * solectrus is a drop-in fork). The image names each file
  * `<POSTGRES_DATABASE>_<timestamp>.dump` where timestamp comes from
- * `date +%Y-%m-%dT%H:%M:%S` (see `src/backup.sh` upstream) — so colons
+ * `date +%Y-%m-%dT%H:%M:%S` (see `src/backup.sh` upstream) - so colons
  * in the time, no trailing `Z`, no milliseconds. The database segment is
  * `postgresProjectIdentifier(projectName)` (lowercase alnum + underscores).
- * Both formats are the image's own — not under our control — so the
+ * Both formats are the image's own - not under our control - so the
  * regex must mirror them exactly.
  */
 const POSTGRES_BACKUP_KEY_PATTERN = new RegExp(
@@ -215,12 +215,12 @@ export interface PostgresBackupSnapshot {
 
 /**
  * Parse an R2 object key emitted by the backup sidecar into a snapshot.
- * Returns `null` when the key does not match the expected pattern — callers
+ * Returns `null` when the key does not match the expected pattern - callers
  * filter unknown keys out so retention only ever prunes objects we own.
  *
  * `new Date(iso)` silently rolls impossible-but-in-range dates over
  * (Feb 30 → Mar 2, Apr 31 → May 1). We round-trip the parsed Date back to
- * ISO and reject any key whose timestamp does not match the original — this
+ * ISO and reject any key whose timestamp does not match the original - this
  * is what prevents a malformed (or hand-crafted) key from being classified
  * into a bucket it does not belong to and displacing a real snapshot.
  */
@@ -230,7 +230,8 @@ export function parsePostgresBackupKey(
 	const match = POSTGRES_BACKUP_KEY_PATTERN.exec(key)
 	if (match === null) return null
 	const [, year, month, day, hour, minute, second] = match
-	const iso = `${year!}-${month!}-${day!}T${hour!}:${minute!}:${second!}Z`
+	if (!year || !month || !day || !hour || !minute || !second) return null
+	const iso = `${year}-${month}-${day}T${hour}:${minute}:${second}Z`
 	const date = new Date(iso)
 	if (Number.isNaN(date.getTime())) return null
 	if (date.toISOString() !== `${iso.slice(0, -1)}.000Z`) return null
@@ -272,7 +273,7 @@ function monthBucketKey(d: Date): string {
  * policy (7 daily / 4 weekly / 3 monthly). The newest snapshot in each of
  * the 7 most-recent UTC days is kept; same for the 4 most-recent ISO weeks
  * and the 3 most-recent UTC months. A single dump can satisfy multiple
- * buckets — the union of kept keys is preserved, and the complement is
+ * buckets - the union of kept keys is preserved, and the complement is
  * returned as the prune set in input order.
  *
  * Pure: no IO, no clock reads. The caller hands a snapshot list (already
@@ -310,7 +311,7 @@ export function selectPostgresBackupsToPrune(
  * `target`. Returns `null` when nothing qualifies (input empty, or every
  * snapshot is strictly newer than `target`). Any input order is accepted.
  *
- * The boundary is inclusive — a snapshot taken at exactly `target` is
+ * The boundary is inclusive - a snapshot taken at exactly `target` is
  * eligible. `target` is compared via `getTime()`, so a target with an
  * invalid date short-circuits to `null` rather than silently selecting
  * everything (NaN comparisons are always false).
@@ -347,11 +348,11 @@ export interface PostgresRestoreArgs {
  *                       destructive)
  *
  * Pure: argv in, args out. The destructive-confirmation policy lives
- * in `ensurePostgresRestoreConfirmed` — this function only reports
+ * in `ensurePostgresRestoreConfirmed` - this function only reports
  * `yes` truthfully.
  *
  * Unknown-flag and missing-value rejection comes for free via the
- * node:util `parseArgs` `strict` default — silently ignoring an
+ * node:util `parseArgs` `strict` default - silently ignoring an
  * unrecognised flag (e.g. a typo of `--yes`) would defeat the safety
  * gate, so we lean on the platform parser rather than rolling our own.
  */
@@ -384,7 +385,7 @@ export function parsePostgresRestoreArgs(
  * pg_restore `--clean` drops the target objects before recreating them,
  * so we refuse to proceed without an explicit `--yes`. The CLAUDE.md
  * layering rule keeps this decision in the domain (CLI = orchestration
- * only) — the cli command just calls this before any IO happens.
+ * only) - the cli command just calls this before any IO happens.
  */
 export function ensurePostgresRestoreConfirmed(
 	args: PostgresRestoreArgs,
@@ -407,7 +408,7 @@ export interface RedactedPostgresUrl {
  * so it stops appearing in `ps aux` / `/proc/<pid>/cmdline`.
  *
  * Pure: takes a string, returns two strings. The URL constructor
- * propagates a `TypeError` for malformed inputs — the adapter does not
+ * propagates a `TypeError` for malformed inputs - the adapter does not
  * try to recover, mismatched DATABASE_URL is an operator misconfig.
  *
  * `decodeURIComponent` undoes the percent-encoding `new URL()` retains
@@ -431,7 +432,7 @@ export interface PostgresBackupSidecarService {
 
 /**
  * Build the compose sidecar definition for the daily postgres backup to
- * R2. Returns `null` when `mode = external` — the user owns the database
+ * R2. Returns `null` when `mode = external` - the user owns the database
  * and is responsible for their own backups.
  *
  * Image is `ghcr.io/solectrus/postgres-s3-backup` pinned to

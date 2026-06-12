@@ -8,9 +8,9 @@ describe('parseSemanticReleaseOutput', () => {
 Analyzing commits...
 Published release 2.1.0 on default channel
 `
-		const result = parseSemanticReleaseOutput(output)
+		const releaseValue = parseSemanticReleaseOutput(output)
 
-		expect(result).toEqual({ status: 'published', version: '2.1.0' })
+		expect(releaseValue).toEqual({ status: 'published', version: '2.1.0' })
 	})
 
 	it('detects no-release when no relevant changes', () => {
@@ -18,31 +18,31 @@ Published release 2.1.0 on default channel
 Analyzing commits...
 There are no relevant changes, so no new version is released.
 `
-		const result = parseSemanticReleaseOutput(output)
+		const releaseValue = parseSemanticReleaseOutput(output)
 
-		expect(result).toEqual({ status: 'no-release' })
+		expect(releaseValue).toEqual({ status: 'no-release' })
 	})
 
 	it('detects no-release with "no new version" message', () => {
 		const output = 'no new version to publish'
 
-		const result = parseSemanticReleaseOutput(output)
+		const releaseValue = parseSemanticReleaseOutput(output)
 
-		expect(result).toEqual({ status: 'no-release' })
+		expect(releaseValue).toEqual({ status: 'no-release' })
 	})
 
 	it('returns failure for unrecognized output', () => {
 		const output = 'ENOENT: something went terribly wrong'
 
-		const result = parseSemanticReleaseOutput(output)
+		const release = parseSemanticReleaseOutput(output)
 
-		expect(result).toEqual({ status: 'failure' })
+		expect(release).toEqual({ status: 'failure' })
 	})
 
 	it('returns failure for empty output', () => {
-		const result = parseSemanticReleaseOutput('')
+		const releaseValue = parseSemanticReleaseOutput('')
 
-		expect(result).toEqual({ status: 'failure' })
+		expect(releaseValue).toEqual({ status: 'failure' })
 	})
 })
 

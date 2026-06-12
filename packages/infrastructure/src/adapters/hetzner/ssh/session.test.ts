@@ -69,6 +69,7 @@ describe('createSshSession', () => {
 	it('connects with the given config', async () => {
 		await createSshSession(SESSION_CONFIG, client)
 
+		// oxlint-disable-next-line unbound-method -- client.connect is a vi.fn() mock assigned in beforeEach, not the ssh2 prototype method
 		expect(client.connect).toHaveBeenCalledWith(
 			expect.objectContaining({
 				host: '10.0.0.1',
@@ -104,9 +105,9 @@ describe('exec', () => {
 			},
 		)
 
-		const result = await session.exec('echo hello world')
+		const execResult = await session.exec('echo hello world')
 
-		expect(result).toBe('hello world\n')
+		expect(execResult).toBe('hello world\n')
 	})
 
 	it('rejects with stderr on non-zero exit', async () => {
@@ -154,8 +155,8 @@ describe('execWithStdin', () => {
 					value: stderrEmitter,
 				})
 				Object.assign(stream, {
-					end(data: string) {
-						streamEnded = data
+					end(chunk: string) {
+						streamEnded = chunk
 						process.nextTick(() => {
 							stream.emit('data', Buffer.from('logged in\n'))
 							stream.emit('close', 0)
@@ -166,13 +167,13 @@ describe('execWithStdin', () => {
 			},
 		)
 
-		const result = await session.execWithStdin(
+		const execResult = await session.execWithStdin(
 			'docker login ghcr.io -u __token__ --password-stdin',
 			'secret-token',
 		)
 
 		expect(streamEnded).toBe('secret-token')
-		expect(result).toBe('logged in\n')
+		expect(execResult).toBe('logged in\n')
 	})
 })
 
@@ -187,8 +188,8 @@ describe('writeFile', () => {
 					createWriteStream(path: string) {
 						const ws = new EventEmitter()
 						Object.assign(ws, {
-							end(data: string) {
-								written[path] = data
+							end(chunk: string) {
+								written[path] = chunk
 								process.nextTick(() => ws.emit('close'))
 							},
 						})
@@ -234,9 +235,9 @@ describe('readFile', () => {
 			},
 		)
 
-		const result = await session.readFile('/opt/apps/state.json')
+		const fileContents = await session.readFile('/opt/apps/state.json')
 
-		expect(result).toBe('file content here')
+		expect(fileContents).toBe('file content here')
 	})
 
 	it('resolves null when the file does not exist (SFTP NO_SUCH_FILE)', async () => {

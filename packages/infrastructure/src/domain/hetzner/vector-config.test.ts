@@ -11,16 +11,16 @@ describe('selectVectorConfig', () => {
 	})
 
 	it('renders both toml and env when input is provided', () => {
-		const result = selectVectorConfig({
+		const vectorConfig = selectVectorConfig({
 			clientId: 'nextnode',
 			project: 'acme-web',
 			vlUrl: 'http://vl.tail0.ts.net:9428',
 		})
 
-		expect(result.vectorToml).toContain('docker')
-		expect(result.vectorEnv).toContain('NN_CLIENT_ID=nextnode')
-		expect(result.vectorEnv).toContain('NN_PROJECT=acme-web')
-		expect(result.vectorEnv).toContain(
+		expect(vectorConfig.vectorToml).toContain('docker')
+		expect(vectorConfig.vectorEnv).toContain('NN_CLIENT_ID=nextnode')
+		expect(vectorConfig.vectorEnv).toContain('NN_PROJECT=acme-web')
+		expect(vectorConfig.vectorEnv).toContain(
 			'NN_VL_URL=http://vl.tail0.ts.net:9428',
 		)
 	})

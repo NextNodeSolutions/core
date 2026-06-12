@@ -64,7 +64,7 @@ describe('createPostgresService', () => {
 		expect(ensureR2BucketMock).not.toHaveBeenCalled()
 	})
 
-	describe('provision() — embedded mode', () => {
+	describe('provision() - embedded mode', () => {
 		it('calls ensureR2Bucket once with the derived backup bucket name', async () => {
 			ensureR2BucketMock.mockResolvedValue(true)
 			const service = createPostgresService(makeCtx(), EMBEDDED)
@@ -80,7 +80,7 @@ describe('createPostgresService', () => {
 			})
 		})
 
-		it('is safe to call multiple times — delegates idempotency to ensureR2Bucket', async () => {
+		it('is safe to call multiple times - delegates idempotency to ensureR2Bucket', async () => {
 			ensureR2BucketMock
 				.mockResolvedValueOnce(true)
 				.mockResolvedValueOnce(false)

@@ -19,7 +19,7 @@ const logger = createLogger()
 
 // Written at the workspace root and emitted by basename as the `bake_file`
 // output the build job feeds to `docker/bake-action`'s `files:` input. The
-// build step runs Bake with `source: .` so it executes from the workspace —
+// build step runs Bake with `source: .` so it executes from the workspace -
 // making this a relative lookup and resolving each target's `context: "."`
 // against the repo root.
 const BAKE_FILE_NAME = 'docker-bake.json'
@@ -33,7 +33,7 @@ const BAKE_FILE_NAME = 'docker-bake.json'
 export function computeImageRefCommand(config: DeployableConfig): void {
 	if (!isHetznerDeployableConfig(config)) {
 		throw new Error(
-			'compute-image-ref requires a hetzner-vps deploy target — non-container targets build no images',
+			'compute-image-ref requires a hetzner-vps deploy target - non-container targets build no images',
 		)
 	}
 

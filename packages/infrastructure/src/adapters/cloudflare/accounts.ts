@@ -1,13 +1,13 @@
 import { CLOUDFLARE_API_BASE, cfFetchJson, requireArrayResult } from './api.ts'
 
-function parseAccountId(item: unknown): string {
-	if (typeof item !== 'object' || item === null) {
+function parseAccountId(rawAccount: unknown): string {
+	if (typeof rawAccount !== 'object' || rawAccount === null) {
 		throw new Error('Cloudflare account: item is not an object')
 	}
-	if (!('id' in item) || typeof item.id !== 'string') {
+	if (!('id' in rawAccount) || typeof rawAccount.id !== 'string') {
 		throw new Error('Cloudflare account: id missing or not a string')
 	}
-	return item.id
+	return rawAccount.id
 }
 
 /**
@@ -19,23 +19,23 @@ function parseAccountId(item: unknown): string {
  */
 export async function resolveAccountId(token: string): Promise<string> {
 	const context = 'Cloudflare accounts list'
-	const data = await cfFetchJson(
+	const responseBody = await cfFetchJson(
 		`${CLOUDFLARE_API_BASE}/accounts`,
 		token,
 		context,
 	)
 
-	const result = requireArrayResult(data, context)
-	if (result.length === 0) {
+	const accounts = requireArrayResult(responseBody, context)
+	if (accounts.length === 0) {
 		throw new Error(
-			`${context}: token grants access to no accounts — check token scope`,
+			`${context}: token grants access to no accounts - check token scope`,
 		)
 	}
-	if (result.length > 1) {
+	if (accounts.length > 1) {
 		throw new Error(
-			`${context}: token grants access to ${String(result.length)} accounts — set CLOUDFLARE_ACCOUNT_ID to disambiguate`,
+			`${context}: token grants access to ${String(accounts.length)} accounts - set CLOUDFLARE_ACCOUNT_ID to disambiguate`,
 		)
 	}
 
-	return parseAccountId(result[0])
+	return parseAccountId(accounts[0])
 }

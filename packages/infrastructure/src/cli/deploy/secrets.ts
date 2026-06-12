@@ -5,13 +5,13 @@ export function pickSecrets(
 	const picked: Record<string, string> = {}
 
 	for (const name of names) {
-		const value = repoSecrets[name]
-		if (value === undefined) {
+		const secretValue = repoSecrets[name]
+		if (secretValue === undefined) {
 			throw new Error(
 				`Secret "${name}" declared in deploy.secrets but not found in GitHub Secrets`,
 			)
 		}
-		picked[name] = value
+		picked[name] = secretValue
 	}
 
 	return picked

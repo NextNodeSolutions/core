@@ -57,14 +57,14 @@ export function writePlanOutputs({
 // The upstream IMAGE_REFS the deploy + migrate jobs fall back to when no image
 // is built. Emitted as the SAME JSON shape `compute-image-ref` produces for
 // built services (`{ <service>: { registry, repository, tag } }`) so
-// `parseImageRefsEnv` consumes both paths identically — the bare ref string the
+// `parseImageRefsEnv` consumes both paths identically - the bare ref string the
 // old `image_ref` carried is not valid JSON and broke the upstream deploy.
 // Parsing each declared ref here also fails a malformed upstream ref loudly at
 // plan time, not as a broken `docker pull` on the VPS.
 //
 // Mixed sources are rejected at config validation, so the declared services are
-// homogeneous: either every service is `upstream` — emit one ref per service so
-// the deploy/migrate jobs pull them all — or every service is `build`, in which
+// homogeneous: either every service is `upstream` - emit one ref per service so
+// the deploy/migrate jobs pull them all - or every service is `build`, in which
 // case the build-image job supplies `image_refs` and there is nothing to emit.
 function resolveImageOutputs(config: NextNodeConfig): {
 	readonly source: string

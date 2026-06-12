@@ -111,8 +111,7 @@ describe('composeCaddyConfig', () => {
 		})
 
 		const issuer = config.apps.tls.automation.policies[0]?.issuers[0]
-		if (!issuer || issuer.module !== 'acme')
-			throw new Error('Expected ACME issuer')
+		if (issuer?.module !== 'acme') throw new Error('Expected ACME issuer')
 		expect(issuer.challenges?.dns?.provider).toStrictEqual({
 			name: 'cloudflare',
 			api_token: '{env.CF_DNS_API_TOKEN}',
@@ -173,7 +172,7 @@ describe('composeCaddyConfig', () => {
 			supabase: { deployDomain: 'acme.example.com' },
 		})
 
-		const routes = config.apps.http.servers.https.routes
+		const { routes } = config.apps.http.servers.https
 		expect(routes).toHaveLength(3)
 		expect(routes[1]?.match[0]?.host).toStrictEqual([
 			'api.acme.example.com',
@@ -197,7 +196,7 @@ describe('composeCaddyConfig', () => {
 			supabase: { deployDomain: 'monitor.example.com' },
 		})
 
-		const routes = config.apps.http.servers.https.routes
+		const { routes } = config.apps.http.servers.https
 		expect(routes).toHaveLength(2)
 		expect(routes[0]?.match[0]?.host).toStrictEqual([
 			'api.monitor.example.com',
@@ -207,8 +206,7 @@ describe('composeCaddyConfig', () => {
 		])
 
 		const issuer = config.apps.tls.automation.policies[0]?.issuers[0]
-		if (!issuer || issuer.module !== 'acme')
-			throw new Error('Expected ACME issuer')
+		if (issuer?.module !== 'acme') throw new Error('Expected ACME issuer')
 		expect(issuer.challenges?.dns?.provider.name).toBe('cloudflare')
 	})
 })

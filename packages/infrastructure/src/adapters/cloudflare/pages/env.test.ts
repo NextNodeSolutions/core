@@ -10,7 +10,7 @@ const ACCOUNT = 'acct-abc'
 const PROJECT = 'my-site'
 
 function extractBody(fetchMock: ReturnType<typeof vi.fn<FetchImpl>>): unknown {
-	const call = fetchMock.mock.calls[0]
+	const [call] = fetchMock.mock.calls
 	if (!call) throw new Error('fetch was not called')
 	const body = call[1]?.body
 	if (typeof body !== 'string') throw new Error('body is not a string')
@@ -31,9 +31,7 @@ describe('updatePagesEnvVars', () => {
 		vi.stubGlobal('fetch', fetchMock)
 
 		await updatePagesEnvVars(
-			ACCOUNT,
-			PROJECT,
-			TOKEN,
+			{ accountId: ACCOUNT, projectName: PROJECT, token: TOKEN },
 			{ SITE_URL: 'https://example.com' },
 			{ RESEND_API_KEY: 'resend-123' },
 		)
@@ -70,9 +68,7 @@ describe('updatePagesEnvVars', () => {
 		vi.stubGlobal('fetch', fetchMock)
 
 		await updatePagesEnvVars(
-			ACCOUNT,
-			PROJECT,
-			TOKEN,
+			{ accountId: ACCOUNT, projectName: PROJECT, token: TOKEN },
 			{ SITE_URL: 'https://example.com' },
 			{},
 		)
@@ -98,7 +94,11 @@ describe('updatePagesEnvVars', () => {
 		)
 
 		await expect(
-			updatePagesEnvVars(ACCOUNT, PROJECT, TOKEN, {}, {}),
+			updatePagesEnvVars(
+				{ accountId: ACCOUNT, projectName: PROJECT, token: TOKEN },
+				{},
+				{},
+			),
 		).rejects.toThrow('Cloudflare API returned 403')
 	})
 
@@ -115,7 +115,11 @@ describe('updatePagesEnvVars', () => {
 		)
 
 		await expect(
-			updatePagesEnvVars(ACCOUNT, PROJECT, TOKEN, {}, {}),
+			updatePagesEnvVars(
+				{ accountId: ACCOUNT, projectName: PROJECT, token: TOKEN },
+				{},
+				{},
+			),
 		).rejects.toThrow('[1000] bad request')
 	})
 })

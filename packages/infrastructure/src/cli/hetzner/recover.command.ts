@@ -20,15 +20,15 @@ const MANAGED_BY_LABEL = 'nextnode'
 const VPS_LABEL_KEY = 'vps'
 
 /**
- * Identify and (optionally) recover orphan Hetzner VPS — servers that
+ * Identify and (optionally) recover orphan Hetzner VPS - servers that
  * exist on Hetzner under the `managed_by=nextnode` label but for which
  * no R2 state file exists.
  *
  * Inputs (env):
- *   HETZNER_API_TOKEN       — required
- *   CLOUDFLARE_API_TOKEN    — required (R2 + Tailscale flows need it)
- *   TAILSCALE_AUTH_KEY      — required when deleting orphans (skip-safe)
- *   RECOVER_VPS_NAMES       — optional. Unset = list-only (dry-run).
+ *   HETZNER_API_TOKEN       - required
+ *   CLOUDFLARE_API_TOKEN    - required (R2 + Tailscale flows need it)
+ *   TAILSCALE_AUTH_KEY      - required when deleting orphans (skip-safe)
+ *   RECOVER_VPS_NAMES       - optional. Unset = list-only (dry-run).
  *                             "*" = recover every detected orphan.
  *                             Otherwise comma-separated vps names.
  *
@@ -54,33 +54,7 @@ export async function recoverCommand(): Promise<void> {
 		bucket: infraStorage.certsBucket,
 	})
 
-	const servers = await findServersByLabels(hcloudToken, {
-		managed_by: MANAGED_BY_LABEL,
-	})
-	const summaries: ReadonlyArray<HetznerServerSummary> = servers.flatMap(
-		s => {
-			const vpsName = s.labels[VPS_LABEL_KEY]
-			if (!vpsName) {
-				logger.warn(
-					`Server #${String(s.id)} ("${s.name}") is managed_by=nextnode but has no \`vps\` label — skipping`,
-				)
-				return []
-			}
-			return [{ id: s.id, vpsName }]
-		},
-	)
-
-	const candidates = uniqueVpsNames(summaries)
-	const knownStateVpsNames = new Set<string>()
-	await Promise.all(
-		candidates.map(async vpsName => {
-			if (await stateR2.exists(stateKey(vpsName))) {
-				knownStateVpsNames.add(vpsName)
-			}
-		}),
-	)
-
-	const orphans = findOrphanVps(summaries, knownStateVpsNames)
+	const orphans = await detectOrphanVps(hcloudToken, stateR2)
 
 	if (orphans.length === 0) {
 		logger.info('No orphan VPS detected.')
@@ -91,7 +65,7 @@ export async function recoverCommand(): Promise<void> {
 	const targets = selectTargets(orphans, recoverList)
 	if (targets.length === 0) {
 		logger.info(
-			`Detected ${String(orphans.length)} orphan VPS — list-only (set RECOVER_VPS_NAMES to recover).`,
+			`Detected ${String(orphans.length)} orphan VPS - list-only (set RECOVER_VPS_NAMES to recover).`,
 		)
 		writeSummary(formatListOnly(orphans))
 		return
@@ -111,6 +85,43 @@ export async function recoverCommand(): Promise<void> {
 
 	logger.info(`Recovered ${String(results.length)} orphan VPS.`)
 	writeSummary(formatRecovered(orphans, results))
+}
+
+/**
+ * Detect orphan VPS: list every `managed_by=nextnode` server, derive the
+ * (id, vpsName) summaries, then keep the names that have no R2 state file.
+ */
+async function detectOrphanVps(
+	hcloudToken: string,
+	stateR2: R2Client,
+): Promise<ReadonlyArray<OrphanVps>> {
+	const servers = await findServersByLabels(hcloudToken, {
+		managed_by: MANAGED_BY_LABEL,
+	})
+	const summaries: ReadonlyArray<HetznerServerSummary> = servers.flatMap(
+		s => {
+			const vpsName = s.labels[VPS_LABEL_KEY]
+			if (!vpsName) {
+				logger.warn(
+					`Server #${String(s.id)} ("${s.name}") is managed_by=nextnode but has no \`vps\` label - skipping`,
+				)
+				return []
+			}
+			return [{ id: s.id, vpsName }]
+		},
+	)
+
+	const candidates = uniqueVpsNames(summaries)
+	const knownStateVpsNames = new Set<string>()
+	await Promise.all(
+		candidates.map(async vpsName => {
+			if (await stateR2.exists(stateKey(vpsName))) {
+				knownStateVpsNames.add(vpsName)
+			}
+		}),
+	)
+
+	return findOrphanVps(summaries, knownStateVpsNames)
 }
 
 type RecoverList =

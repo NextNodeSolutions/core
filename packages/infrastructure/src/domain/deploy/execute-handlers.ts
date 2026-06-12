@@ -18,10 +18,10 @@ export async function executeHandlers<const R extends string>(
 	resources: ReadonlyArray<R>,
 	handlers: HandlerMap<R>,
 ): Promise<Record<R, ResourceOutcome>> {
-	const result: Record<string, ResourceOutcome> = {}
+	const outcomes: Record<string, ResourceOutcome> = {}
 	for (const resource of resources) {
-		result[resource] = await handlers[resource]()
+		outcomes[resource] = await handlers[resource]()
 	}
-	return result
+	return outcomes
 }
 /* eslint-enable no-await-in-loop */

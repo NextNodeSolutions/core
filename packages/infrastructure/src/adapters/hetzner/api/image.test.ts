@@ -39,15 +39,15 @@ describe('findImagesByLabels', () => {
 		const mock = vi.fn().mockResolvedValue(okJson(imagePayload))
 		vi.stubGlobal('fetch', mock)
 
-		const result = await findImagesByLabels(TEST_TOKEN, {
+		const imagesValue = await findImagesByLabels(TEST_TOKEN, {
 			managed_by: 'nextnode-golden-image',
 		})
 
-		expect(result).toHaveLength(2)
-		expect(result[0]!.id).toBe(501)
-		expect(result[0]!.description).toBe('nextnode-golden-abc123')
-		expect(result[0]!.labels.managed_by).toBe('nextnode-golden-image')
-		expect(result[1]!.id).toBe(502)
+		expect(imagesValue).toHaveLength(2)
+		expect(imagesValue[0]!.id).toBe(501)
+		expect(imagesValue[0]!.description).toBe('nextnode-golden-abc123')
+		expect(imagesValue[0]!.labels.managed_by).toBe('nextnode-golden-image')
+		expect(imagesValue[1]!.id).toBe(502)
 
 		const [url] = lastCall(mock)
 		expect(url).toContain('/images?type=snapshot&label_selector=')
@@ -60,11 +60,11 @@ describe('findImagesByLabels', () => {
 			vi.fn().mockResolvedValue(okJson({ images: [] })),
 		)
 
-		const result = await findImagesByLabels(TEST_TOKEN, {
+		const imagesValue = await findImagesByLabels(TEST_TOKEN, {
 			managed_by: 'nonexistent',
 		})
 
-		expect(result).toHaveLength(0)
+		expect(imagesValue).toHaveLength(0)
 	})
 
 	it('throws on HTTP error', async () => {

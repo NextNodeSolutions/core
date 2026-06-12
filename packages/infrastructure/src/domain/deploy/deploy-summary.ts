@@ -6,16 +6,16 @@ import type { DeployedEnvironment, DeployResult } from './target.ts'
 export { formatDuration } from './summary-renderer.ts'
 
 export function buildDeploySummary(
-	result: DeployResult,
+	deployResult: DeployResult,
 	targetName: string,
 ): string {
-	const env = result.deployedEnvironments[0]
+	const [env] = deployResult.deployedEnvironments
 	if (!env) {
-		return `### :rocket: Deploy complete for \`${result.projectName}\``
+		return `### :rocket: Deploy complete for \`${deployResult.projectName}\``
 	}
 
-	const heading = `### :rocket: Deployed \`${result.projectName}\` to ${env.name}`
-	const rows = buildSummaryRows(env, targetName, result.durationMs)
+	const heading = `### :rocket: Deployed \`${deployResult.projectName}\` to ${env.name}`
+	const rows = buildSummaryRows(env, targetName, deployResult.durationMs)
 	const table = renderKeyValueTable(rows)
 
 	return `${heading}\n\n${table}`

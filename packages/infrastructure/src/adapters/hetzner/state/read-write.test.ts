@@ -53,9 +53,9 @@ describe('readState', () => {
 	it('returns null for missing state', async () => {
 		vi.mocked(r2.get).mockResolvedValue(null)
 
-		const result = await readState(r2, 'acme-web')
+		const state = await readState(r2, 'acme-web')
 
-		expect(result).toBeNull()
+		expect(state).toBeNull()
 		expect(r2.get).toHaveBeenCalledWith('hetzner/acme-web.json')
 	})
 
@@ -65,9 +65,12 @@ describe('readState', () => {
 			etag: '"etag-1"',
 		})
 
-		const result = await readState(r2, 'acme-web')
+		const stateValue = await readState(r2, 'acme-web')
 
-		expect(result).toStrictEqual({ state: createdState, etag: '"etag-1"' })
+		expect(stateValue).toStrictEqual({
+			state: createdState,
+			etag: '"etag-1"',
+		})
 	})
 
 	it('parses provisioned phase', async () => {
@@ -76,9 +79,9 @@ describe('readState', () => {
 			etag: '"etag-1"',
 		})
 
-		const result = await readState(r2, 'acme-web')
+		const stateValue = await readState(r2, 'acme-web')
 
-		expect(result).toStrictEqual({
+		expect(stateValue).toStrictEqual({
 			state: provisionedState,
 			etag: '"etag-1"',
 		})
@@ -90,9 +93,9 @@ describe('readState', () => {
 			etag: '"etag-1"',
 		})
 
-		const result = await readState(r2, 'acme-web')
+		const stateValue = await readState(r2, 'acme-web')
 
-		expect(result).toStrictEqual({
+		expect(stateValue).toStrictEqual({
 			state: convergedState,
 			etag: '"etag-1"',
 		})
@@ -285,9 +288,9 @@ describe('hostPorts', () => {
 			etag: '"e"',
 		})
 
-		const result = await readState(r2, 'acme-web')
+		const stateValue = await readState(r2, 'acme-web')
 
-		expect(result?.state).toStrictEqual({
+		expect(stateValue?.state).toStrictEqual({
 			phase: 'created',
 			serverId: 7,
 			publicIp: '1.2.3.4',
@@ -306,9 +309,9 @@ describe('hostPorts', () => {
 			etag: '"e"',
 		})
 
-		const result = await readState(r2, 'acme-web')
+		const stateValue = await readState(r2, 'acme-web')
 
-		expect(result?.state).toStrictEqual({
+		expect(stateValue?.state).toStrictEqual({
 			phase: 'provisioned',
 			serverId: 7,
 			publicIp: '1.2.3.4',
@@ -329,9 +332,9 @@ describe('hostPorts', () => {
 			etag: '"e"',
 		})
 
-		const result = await readState(r2, 'acme-web')
+		const stateValue = await readState(r2, 'acme-web')
 
-		expect(result?.state).toStrictEqual({
+		expect(stateValue?.state).toStrictEqual({
 			phase: 'converged',
 			serverId: 7,
 			publicIp: '1.2.3.4',
@@ -365,9 +368,9 @@ describe('hostPorts', () => {
 		})
 
 		await writeState(r2, 'acme-web', populated)
-		const result = await readState(r2, 'acme-web')
+		const stateValue = await readState(r2, 'acme-web')
 
-		expect(result?.state).toStrictEqual(populated)
+		expect(stateValue?.state).toStrictEqual(populated)
 	})
 
 	it('throws when hostPorts is not an object', async () => {

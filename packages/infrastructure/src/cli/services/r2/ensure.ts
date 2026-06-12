@@ -27,6 +27,7 @@ import { createLogger } from '@nextnode-solutions/logger'
 import { awaitR2DomainActive } from './await-domain-active.ts'
 
 import type { R2BucketConfig } from '#/config/types.ts'
+import type { R2StaticCredentials } from '#/domain/cloudflare/r2/credentials.ts'
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 import type { R2BucketBinding, R2ServiceState } from '#/domain/services/r2.ts'
@@ -41,7 +42,7 @@ export interface EnsureR2ServiceInput {
 	// The env-RESOLVED deploy domain (`resolveDeployDomain(project.domain)`,
 	// e.g. `dev.example.com` in development), or null when the project declares
 	// no domain. When null, no bucket gets a public custom domain. Already
-	// resolved upstream in `resolveServices` — never re-resolve it here.
+	// resolved upstream in `resolveServices` - never re-resolve it here.
 	readonly deployDomain: string | null
 	readonly buckets: ReadonlyArray<R2BucketConfig>
 }
@@ -53,7 +54,7 @@ export interface EnsureR2ServiceInput {
  *
  * All buckets live under the project's single Cloudflare zone, so the
  * zone id is resolved once. Passing it to the attach call lets Cloudflare
- * auto-create the proxied CNAME — no separate DNS write. Each attach is then
+ * auto-create the proxied CNAME - no separate DNS write. Each attach is then
  * polled until its SSL cert is active so the persisted URL actually serves.
  */
 async function attachCustomDomains(
@@ -61,7 +62,7 @@ async function attachCustomDomains(
 	accountId: string,
 	bindings: ReadonlyArray<R2BucketBinding>,
 ): Promise<ReadonlyArray<R2BucketBinding>> {
-	const deployDomain = input.deployDomain
+	const { deployDomain } = input
 	if (deployDomain === null) return bindings
 
 	const cdnAliases = new Set(
@@ -110,12 +111,43 @@ async function attachCustomDomains(
 export async function ensureR2Service(
 	input: EnsureR2ServiceInput,
 ): Promise<R2ServiceState> {
-	const accountId = input.infraStorage.accountId
+	const { accountId } = input.infraStorage
 	const bindings = computeR2BucketBindings(
 		input.projectName,
 		input.environment,
 		input.buckets.map(bucket => bucket.name),
 	)
+
+	const creds = await mintServiceToken(input, bindings)
+	const boundBuckets = await attachCustomDomains(input, accountId, bindings)
+
+	const state: R2ServiceState = {
+		endpoint: computeR2Endpoint(accountId),
+		accessKeyId: creds.accessKeyId,
+		secretAccessKey: creds.secretAccessKey,
+		buckets: boundBuckets,
+	}
+
+	await persistServiceState(input, state)
+	return state
+}
+
+/**
+ * Ensure every bucket exists, then mint (and verify) the per-project R2
+ * service token scoped to those buckets, revoking prior tokens by name.
+ * Returns the derived S3 credentials.
+ */
+async function mintServiceToken(
+	input: EnsureR2ServiceInput,
+	bindings: ReadonlyArray<R2BucketBinding>,
+): Promise<R2StaticCredentials> {
+	const { accountId } = input.infraStorage
+	const [probeBinding] = bindings
+	if (!probeBinding) {
+		throw new Error(
+			`R2 service for "${input.projectName}" declares no buckets - nothing to provision`,
+		)
+	}
 
 	const [, permissions] = await Promise.all([
 		Promise.all(
@@ -152,20 +184,19 @@ export async function ensureR2Service(
 		accountId,
 		accessKeyId: creds.accessKeyId,
 		secretAccessKey: creds.secretAccessKey,
-		probeBucket: bindings[0]!.name,
+		probeBucket: probeBinding.name,
 	})
 	await revokeStaleTokens(input.cfToken, tokenName, tokenResult.id)
 	logger.info(`R2 service token "${tokenName}" created and verified`)
 
-	const boundBuckets = await attachCustomDomains(input, accountId, bindings)
+	return creds
+}
 
-	const state: R2ServiceState = {
-		endpoint: computeR2Endpoint(accountId),
-		accessKeyId: creds.accessKeyId,
-		secretAccessKey: creds.secretAccessKey,
-		buckets: boundBuckets,
-	}
-
+/** Persist the service state to the infra state bucket. */
+async function persistServiceState(
+	input: EnsureR2ServiceInput,
+	state: R2ServiceState,
+): Promise<void> {
 	const stateKey = r2ServiceStateKey(input.projectName, input.environment)
 	await writeR2ServiceState(
 		new R2Client({
@@ -178,6 +209,4 @@ export async function ensureR2Service(
 		state,
 	)
 	logger.info(`R2 service state persisted to state bucket at "${stateKey}"`)
-
-	return state
 }

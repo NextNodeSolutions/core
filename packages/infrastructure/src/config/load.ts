@@ -18,6 +18,7 @@ import {
 } from './validation/services.ts'
 
 import type {
+	DeployableProjectType,
 	DeploySection,
 	NextNodeConfig,
 	ParseConfigResult,
@@ -31,6 +32,13 @@ export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 	const pkgResult = validatePackageSection(raw['package'])
 	const servicesResult = validateServicesSection(raw['services'])
 
+	const sectionErrors = [
+		projectResult,
+		scriptsResult,
+		envResult,
+		pkgResult,
+		servicesResult,
+	].flatMap(r => (r.ok ? [] : r.errors))
 	if (
 		!projectResult.ok ||
 		!scriptsResult.ok ||
@@ -38,16 +46,7 @@ export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 		!pkgResult.ok ||
 		!servicesResult.ok
 	) {
-		return {
-			ok: false,
-			errors: [
-				projectResult,
-				scriptsResult,
-				envResult,
-				pkgResult,
-				servicesResult,
-			].flatMap(r => (r.ok ? [] : r.errors)),
-		}
+		return { ok: false, errors: sectionErrors }
 	}
 
 	const { type } = projectResult.section
@@ -56,59 +55,81 @@ export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 		return {
 			ok: false,
 			errors: [
-				`[services] section is forbidden for project type "${type}" — only "app" projects have a runtime that can consume service env vars`,
+				`[services] section is forbidden for project type "${type}" - only "app" projects have a runtime that can consume service env vars`,
 			],
 		}
 	}
 
-	if (!isDeployable(type)) {
-		if (raw['deploy'] !== undefined) {
-			return {
-				ok: false,
-				errors: [
-					`[deploy] section is forbidden for project type "${type}"`,
-				],
-			}
-		}
-
-		return {
-			ok: true,
-			config: {
-				project: projectResult.section,
-				scripts: scriptsResult.section,
-				environment: envResult.section,
-				package: pkgResult.section,
-				deploy: false,
-				services: servicesResult.section,
-			},
-		}
+	const base = {
+		project: projectResult.section,
+		scripts: scriptsResult.section,
+		environment: envResult.section,
+		package: pkgResult.section,
+		services: servicesResult.section,
 	}
 
+	if (!isDeployable(type)) {
+		return parseNonDeployable(raw, type, base)
+	}
+	return assembleDeployable({
+		raw,
+		type,
+		project: projectResult.section,
+		base,
+		declaredServices: new Set(Object.keys(servicesResult.section)),
+	})
+}
+
+interface AssembleDeployableInput {
+	readonly raw: Record<string, unknown>
+	readonly type: DeployableProjectType
+	readonly project: ProjectSection
+	readonly base: Omit<NextNodeConfig, 'deploy'>
+	readonly declaredServices: ReadonlySet<string>
+}
+
+// Validate the [deploy] section for a deployable project and fold it into the
+// final config, enforcing the project.internal/target compatibility rule.
+function assembleDeployable({
+	raw,
+	type,
+	project,
+	base,
+	declaredServices,
+}: AssembleDeployableInput): ParseConfigResult {
 	const deployResult = validateDeploySection(
 		raw['deploy'],
 		type,
-		projectResult.section.domain,
-		new Set(Object.keys(servicesResult.section)),
+		project.domain,
+		declaredServices,
 	)
 	if (!deployResult.ok) return { ok: false, errors: deployResult.errors }
 
 	const internalError = checkInternalCompatibility(
-		projectResult.section,
+		project,
 		deployResult.section,
 	)
 	if (internalError) return { ok: false, errors: [internalError] }
 
-	return {
-		ok: true,
-		config: {
-			project: projectResult.section,
-			scripts: scriptsResult.section,
-			environment: envResult.section,
-			package: pkgResult.section,
-			deploy: deployResult.section,
-			services: servicesResult.section,
-		},
+	return { ok: true, config: { ...base, deploy: deployResult.section } }
+}
+
+// A non-deployable project (package/lib) must not carry a [deploy] section;
+// its config pins `deploy: false`.
+function parseNonDeployable(
+	raw: Record<string, unknown>,
+	type: string,
+	base: Omit<NextNodeConfig, 'deploy'>,
+): ParseConfigResult {
+	if (raw['deploy'] !== undefined) {
+		return {
+			ok: false,
+			errors: [
+				`[deploy] section is forbidden for project type "${type}"`,
+			],
+		}
 	}
+	return { ok: true, config: { ...base, deploy: false } }
 }
 
 function checkInternalCompatibility(
@@ -128,13 +149,13 @@ function checkInternalCompatibility(
 export function loadConfig(configPath: string): NextNodeConfig {
 	const content = readFileSync(configPath, 'utf-8')
 	const raw = parseTOML(content)
-	const result = parseConfig(raw)
+	const parsed = parseConfig(raw)
 
-	if (!result.ok) {
+	if (!parsed.ok) {
 		throw new Error(
-			`Invalid nextnode.toml:\n${result.errors.map(e => `  - ${e}`).join('\n')}`,
+			`Invalid nextnode.toml:\n${parsed.errors.map(e => `  - ${e}`).join('\n')}`,
 		)
 	}
 
-	return result.config
+	return parsed.config
 }

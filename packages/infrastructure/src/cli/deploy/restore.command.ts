@@ -26,18 +26,18 @@ const ARGV_FLAGS_START_INDEX = 3
  * Operator-invoked restore: fetch the closest dump ≤ `--at` from the
  * project's R2 backup bucket and replay it into the target database.
  *
- * Standalone command (no `PIPELINE_CONFIG_FILE`) — the operator passes
+ * Standalone command (no `PIPELINE_CONFIG_FILE`) - the operator passes
  * `--project`, `--at`, and `--yes` on argv, plus `CLOUDFLARE_API_TOKEN`,
  * `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, and `DATABASE_URL` in env.
  *
  * Safety: refuses without `--yes`. pg_restore is run with `--clean
- * --if-exists`, which drops existing objects before recreating them —
+ * --if-exists`, which drops existing objects before recreating them -
  * unrecoverable on a misfire, so the confirmation flag is mandatory.
  *
  * On success the temp dir holding the downloaded dump is removed; on
  * failure it is also removed (a half-downloaded dump on disk is not
  * useful). The Linear task description says "test covers backup
- * selection logic and the safety gate" — both live in the domain so
+ * selection logic and the safety gate" - both live in the domain so
  * the cli command stays a thin wire-up.
  */
 export async function restoreCommand(): Promise<void> {
@@ -69,7 +69,7 @@ export async function restoreCommand(): Promise<void> {
 		)
 	}
 	logger.info(
-		`Selected ${chosen.key} (${chosen.timestamp.toISOString()}) — closest dump ≤ ${args.at.toISOString()}.`,
+		`Selected ${chosen.key} (${chosen.timestamp.toISOString()}) - closest dump ≤ ${args.at.toISOString()}.`,
 	)
 
 	const workDir = await mkdtemp(join(tmpdir(), 'pg-restore-'))

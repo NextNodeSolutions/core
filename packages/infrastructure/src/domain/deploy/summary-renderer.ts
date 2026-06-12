@@ -4,7 +4,7 @@ const TENTHS_DIVISOR = 100
 
 export type SummaryRow = readonly [string, string]
 
-/** Render a two-column markdown table — used by every GITHUB_STEP_SUMMARY writer. */
+/** Render a two-column markdown table - used by every GITHUB_STEP_SUMMARY writer. */
 export function renderKeyValueTable(rows: ReadonlyArray<SummaryRow>): string {
 	const header = '| | |'
 	const separator = '|---|---|'
@@ -13,7 +13,7 @@ export function renderKeyValueTable(rows: ReadonlyArray<SummaryRow>): string {
 	return `${header}\n${separator}\n${body}`
 }
 
-/** Human-readable duration — `850ms`, `4.2s`, `3m`, `3m 5s`. */
+/** Human-readable duration - `850ms`, `4.2s`, `3m`, `3m 5s`. */
 export function formatDuration(ms: number): string {
 	if (ms < MS_PER_SECOND) return `${String(ms)}ms`
 
@@ -39,17 +39,17 @@ export interface ResourceOutcomeLike {
  * one row per managed resource, followed by `Target` and `Duration` rows.
  */
 export function buildResourceOutcomeRows(
-	result: ResourceOutcomeLike,
+	outcomeSource: ResourceOutcomeLike,
 	targetName: string,
 ): ReadonlyArray<SummaryRow> {
 	const rows: Array<SummaryRow> = []
 
-	for (const [resource, outcome] of Object.entries(result.outcome)) {
+	for (const [resource, outcome] of Object.entries(outcomeSource.outcome)) {
 		rows.push([`**${resource}**`, outcome.detail])
 	}
 
 	rows.push(['**Target**', targetName])
-	rows.push(['**Duration**', formatDuration(result.durationMs)])
+	rows.push(['**Duration**', formatDuration(outcomeSource.durationMs)])
 
 	return rows
 }

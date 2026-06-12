@@ -51,14 +51,14 @@ export type PagesDomainAction =
  *
  * Pages custom domains have no mutable configuration (just a name), so the
  * only two outcomes are "already attached" (skip) and "not attached"
- * (attach). Stale attached domains are reported separately — see
+ * (attach). Stale attached domains are reported separately - see
  * `findStalePagesDomains`.
  */
 export function reconcilePagesDomain(
 	desired: DesiredPagesDomain,
 	attached: ReadonlyArray<AttachedPagesDomain>,
 ): PagesDomainAction {
-	const match = attached.find(item => item.name === desired.name)
+	const match = attached.find(domain => domain.name === desired.name)
 	if (match) return { kind: 'skip' }
 	return { kind: 'attach' }
 }
@@ -66,7 +66,7 @@ export function reconcilePagesDomain(
 /**
  * Return the attached domains that are NOT part of the desired set.
  *
- * These are left in place — removal is outside the scope of the reconcile
+ * These are left in place - removal is outside the scope of the reconcile
  * loop and must be performed explicitly by an operator after confirming
  * they are no longer needed.
  */
@@ -74,6 +74,6 @@ export function findStalePagesDomains(
 	desired: ReadonlyArray<DesiredPagesDomain>,
 	attached: ReadonlyArray<AttachedPagesDomain>,
 ): ReadonlyArray<AttachedPagesDomain> {
-	const desiredNames = new Set(desired.map(item => item.name))
-	return attached.filter(item => !desiredNames.has(item.name))
+	const desiredNames = new Set(desired.map(domain => domain.name))
+	return attached.filter(domain => !desiredNames.has(domain.name))
 }

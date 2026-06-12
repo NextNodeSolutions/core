@@ -39,8 +39,8 @@ const HTTPS_RULE: FirewallRule = {
  * - Internal: SSH only (UFW restricts everything to tailscale0)
  */
 export function computeFirewallRules(
-	internal: boolean,
+	isInternal: boolean,
 ): ReadonlyArray<FirewallRule> {
-	if (internal) return [SSH_RULE]
+	if (isInternal) return [SSH_RULE]
 	return [HTTP_RULE, HTTPS_RULE, SSH_RULE]
 }

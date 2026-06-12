@@ -6,7 +6,7 @@ import type {
 /**
  * Provider-agnostic DNS contract. Adapters that need DNS reconciliation
  * (Hetzner, future AWS, …) consume this through the cli-layer factory
- * instead of reaching across to the Cloudflare DNS adapter directly —
+ * instead of reaching across to the Cloudflare DNS adapter directly -
  * cross-adapter calls are forbidden by the layered architecture.
  *
  * Cloudflare is the only DNS provider today; adding another provider
@@ -14,6 +14,10 @@ import type {
  * cli factory.
  */
 export interface DnsClient {
-	reconcile(records: ReadonlyArray<DesiredDnsRecord>): Promise<void>
-	deleteByName(lookups: ReadonlyArray<DnsRecordLookup>): Promise<number>
+	readonly reconcile: (
+		records: ReadonlyArray<DesiredDnsRecord>,
+	) => Promise<void>
+	readonly deleteByName: (
+		lookups: ReadonlyArray<DnsRecordLookup>,
+	) => Promise<number>
 }

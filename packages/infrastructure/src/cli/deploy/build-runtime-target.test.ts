@@ -76,7 +76,7 @@ describe('buildRuntimeTarget', () => {
 		expect(() =>
 			buildRuntimeTarget(APP_WITH_DOMAIN, 'production', null),
 		).toThrow(
-			'hetzner-vps target: infra storage (state + certs buckets) must be loaded by the caller — caller invariant broken',
+			'hetzner-vps target: infra storage (state + certs buckets) must be loaded by the caller - caller invariant broken',
 		)
 	})
 

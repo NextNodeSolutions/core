@@ -99,8 +99,8 @@ export interface DeployVolume {
 }
 
 // The generators a `[deploy].secrets` entry may declare. `token` draws from the
-// base64url alphabet ([A-Za-z0-9_-]) — the right shape for JWT/HS256 signing
-// keys; `password` draws from the alphanumeric alphabet ([A-Za-z0-9]) — the
+// base64url alphabet ([A-Za-z0-9_-]) - the right shape for JWT/HS256 signing
+// keys; `password` draws from the alphanumeric alphabet ([A-Za-z0-9]) - the
 // right shape for service/DB passwords that travel through URLs and shells.
 export const SECRET_GENERATORS = ['token', 'password'] as const
 export type SecretGenerator = (typeof SECRET_GENERATORS)[number]
@@ -108,7 +108,7 @@ export type SecretGenerator = (typeof SECRET_GENERATORS)[number]
 // A secret the infra GENERATES itself (rather than requiring the operator to
 // pre-set it in GitHub). Declared inline in `[deploy].secrets` as
 // `{ name, generate, length }`. At provision the value is generated once and
-// pushed as a GitHub env-secret, idempotently — see `ensureGeneratedSecrets`.
+// pushed as a GitHub env-secret, idempotently - see `ensureGeneratedSecrets`.
 // `length` is the number of CHARACTERS in the produced secret.
 export interface GeneratedSecretConfig {
 	readonly name: string
@@ -122,7 +122,7 @@ interface BaseDeploySection {
 	// Only consumed by the hetzner-vps target; cloudflare-pages ignores it.
 	readonly vps: string | null
 	readonly volumes: ReadonlyArray<DeployVolume>
-	// Secrets the infra auto-generates and pushes to GitHub at provision time —
+	// Secrets the infra auto-generates and pushes to GitHub at provision time -
 	// the `{ name, generate, length }` entries parsed out of `[deploy].secrets`.
 	// Empty when every declared secret is must-exist. Consumed by
 	// `ensureGeneratedSecrets`; the names also live in `secrets` (the pull pool).
@@ -151,7 +151,7 @@ export type DeployImageSource = (typeof DEPLOY_IMAGE_SOURCES)[number]
 
 // A single deployable workload declared under [deploy.services.<name>]. The
 // instance name (the table key) is a KEBAB identifier; `source` discriminates
-// how its image is obtained — `build` images are built + pushed by the pipeline
+// how its image is obtained - `build` images are built + pushed by the pipeline
 // (optional context/dockerfile/target; an omitted `target` builds the
 // Dockerfile's final stage); `upstream` images are pulled verbatim from `ref`
 // (with an optional registry-auth secret NAME).
@@ -160,7 +160,7 @@ export interface ServiceCommon {
 	readonly url?: string
 	readonly secrets: ReadonlyArray<string>
 	// Backing services the workload needs at runtime (e.g. postgres). Reserved
-	// for the multi-service wiring landing in M2 — parsed here, cross-validated
+	// for the multi-service wiring landing in M2 - parsed here, cross-validated
 	// later.
 	readonly needs: ReadonlyArray<string>
 	// Sibling services this workload starts after (compose `depends_on`).
@@ -172,13 +172,13 @@ export interface BuildServiceConfig {
 	readonly context?: string
 	readonly dockerfile?: string
 	// Docker build STAGE to target (`--target`). Omitted builds the
-	// Dockerfile's final stage — the default for a single-app image.
+	// Dockerfile's final stage - the default for a single-app image.
 	readonly target?: string
 	// NAMES of GitHub Variables to inject as build args (`--build-arg`) for this
-	// service. Values never live in nextnode.toml — they are resolved against
+	// service. Values never live in nextnode.toml - they are resolved against
 	// the `ALL_VARS` payload at build time. Build-time-inlined config only
 	// (e.g. `SITE_URL`, `R2_CDN_URL`); secrets NEVER flow through here (they
-	// would bake into image layers) — they go through the runtime env_file.
+	// would bake into image layers) - they go through the runtime env_file.
 	// Omitted when the service declares no build args.
 	readonly buildArgs?: ReadonlyArray<string>
 }
@@ -197,7 +197,7 @@ export const DEFAULT_SERVICE_PORT = 3000
 export interface CloudflarePagesDeploySection extends BaseDeploySection {
 	readonly target: 'cloudflare-pages'
 	// The pool of GitHub Secret NAMES synced to the Pages project. Declared
-	// directly in `[deploy].secrets` — a Pages deploy is a single unit with no
+	// directly in `[deploy].secrets` - a Pages deploy is a single unit with no
 	// per-service split, so there is nothing to derive and no leak to prevent.
 	readonly secrets: ReadonlyArray<string>
 }
@@ -223,7 +223,7 @@ export interface R2ServiceConfig {
 export const POSTGRES_MODES = ['embedded', 'external'] as const
 export type PostgresMode = (typeof POSTGRES_MODES)[number]
 
-// `[services.supabase]` is a declarative gate — the presence of the
+// `[services.supabase]` is a declarative gate - the presence of the
 // table opts the project into the full Supabase stack + R2 backups
 // alias. No fields needed today; future knobs land here when there is
 // an actual decision to expose.
@@ -250,7 +250,7 @@ export interface PostgresServiceConfig {
 /**
  * Single source of truth for the set of supported backing services. Adding
  * a new service means appending its name here AND adding its config type
- * to `ServiceConfigByName` — TypeScript will then force every service-aware
+ * to `ServiceConfigByName` - TypeScript will then force every service-aware
  * site (validators, `hasAnyService`, future routers) to handle it.
  */
 export const SERVICE_NAMES = ['r2', 'postgres', 'supabase'] as const
@@ -269,7 +269,7 @@ export type ServicesConfig = {
 /**
  * Per-service flag declaring whether opting into the service requires the
  * infra storage runtime (state + certs buckets) to be loaded. The mapped
- * type forces every entry in `SERVICE_NAMES` to set this flag — adding a
+ * type forces every entry in `SERVICE_NAMES` to set this flag - adding a
  * new service is a TypeScript error until it answers the question.
  */
 export const SERVICE_REQUIRES_INFRA_STORAGE: {
@@ -334,26 +334,30 @@ const DEPLOY_TARGET_SET: ReadonlySet<string> = new Set(DEPLOY_TARGETS)
 const POSTGRES_MODE_SET: ReadonlySet<string> = new Set(POSTGRES_MODES)
 const SECRET_GENERATOR_SET: ReadonlySet<string> = new Set(SECRET_GENERATORS)
 
-export function isPostgresMode(value: unknown): value is PostgresMode {
-	return typeof value === 'string' && POSTGRES_MODE_SET.has(value)
+export function isPostgresMode(candidate: unknown): candidate is PostgresMode {
+	return typeof candidate === 'string' && POSTGRES_MODE_SET.has(candidate)
 }
 
-export function isBoolean(value: unknown): value is boolean {
-	return typeof value === 'boolean'
+export function isBoolean(candidate: unknown): candidate is boolean {
+	return typeof candidate === 'boolean'
 }
 
-export function isProjectType(value: unknown): value is ProjectType {
-	return typeof value === 'string' && PROJECT_TYPE_SET.has(value)
+export function isProjectType(candidate: unknown): candidate is ProjectType {
+	return typeof candidate === 'string' && PROJECT_TYPE_SET.has(candidate)
 }
 
-export function isScriptValue(value: unknown): value is string | false {
-	return typeof value === 'string' || value === false
+export function isScriptValue(candidate: unknown): candidate is string | false {
+	return typeof candidate === 'string' || candidate === false
 }
 
-export function isDeployTarget(value: unknown): value is DeployTargetType {
-	return typeof value === 'string' && DEPLOY_TARGET_SET.has(value)
+export function isDeployTarget(
+	candidate: unknown,
+): candidate is DeployTargetType {
+	return typeof candidate === 'string' && DEPLOY_TARGET_SET.has(candidate)
 }
 
-export function isSecretGenerator(value: unknown): value is SecretGenerator {
-	return typeof value === 'string' && SECRET_GENERATOR_SET.has(value)
+export function isSecretGenerator(
+	candidate: unknown,
+): candidate is SecretGenerator {
+	return typeof candidate === 'string' && SECRET_GENERATOR_SET.has(candidate)
 }

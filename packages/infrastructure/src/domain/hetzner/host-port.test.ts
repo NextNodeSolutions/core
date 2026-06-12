@@ -6,14 +6,14 @@ describe('allocateHostPort', () => {
 	it('assigns the lowest port in range to a single fresh url service', () => {
 		expect(allocateHostPort({}, 'acme-web', ['front'])).toEqual({
 			ports: { front: HOST_PORT_MIN },
-			allocated: true,
+			hasAllocated: true,
 		})
 	})
 
 	it('assigns distinct ports to two fresh url services of the same project', () => {
 		expect(allocateHostPort({}, 'acme-web', ['front', 'api'])).toEqual({
 			ports: { front: HOST_PORT_MIN, api: HOST_PORT_MIN + 1 },
-			allocated: true,
+			hasAllocated: true,
 		})
 	})
 
@@ -23,7 +23,7 @@ describe('allocateHostPort', () => {
 			allocateHostPort(hostPorts, 'acme-web', ['front', 'api']),
 		).toEqual({
 			ports: { front: 8085, api: 8090 },
-			allocated: false,
+			hasAllocated: false,
 		})
 	})
 
@@ -31,7 +31,7 @@ describe('allocateHostPort', () => {
 		const hostPorts = { 'legacy-app': { web: 9001 } }
 		expect(allocateHostPort(hostPorts, 'legacy-app', ['web'])).toEqual({
 			ports: { web: 9001 },
-			allocated: false,
+			hasAllocated: false,
 		})
 	})
 
@@ -41,7 +41,7 @@ describe('allocateHostPort', () => {
 			allocateHostPort(hostPorts, 'acme-web', ['front', 'api']),
 		).toEqual({
 			ports: { front: 8085, api: HOST_PORT_MIN },
-			allocated: true,
+			hasAllocated: true,
 		})
 	})
 
@@ -52,7 +52,7 @@ describe('allocateHostPort', () => {
 		}
 		expect(allocateHostPort(hostPorts, 'acme-web', ['front'])).toEqual({
 			ports: { front: HOST_PORT_MIN + 2 },
-			allocated: true,
+			hasAllocated: true,
 		})
 	})
 
@@ -63,7 +63,7 @@ describe('allocateHostPort', () => {
 		}
 		expect(allocateHostPort(hostPorts, 'acme-web', ['front'])).toEqual({
 			ports: { front: HOST_PORT_MIN + 1 },
-			allocated: true,
+			hasAllocated: true,
 		})
 	})
 
@@ -71,7 +71,7 @@ describe('allocateHostPort', () => {
 		const hostPorts = { 'acme-web': { front: 8080 } }
 		expect(allocateHostPort(hostPorts, 'acme-web', [])).toEqual({
 			ports: {},
-			allocated: false,
+			hasAllocated: false,
 		})
 	})
 
@@ -102,7 +102,7 @@ describe('allocateHostPort', () => {
 			allocateHostPort(hostPorts, `p-${HOST_PORT_MIN}`, ['web']),
 		).toEqual({
 			ports: { web: HOST_PORT_MIN },
-			allocated: false,
+			hasAllocated: false,
 		})
 	})
 })

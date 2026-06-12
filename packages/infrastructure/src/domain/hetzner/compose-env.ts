@@ -12,7 +12,7 @@ export function formatComposeEnv(
 			}
 			if (value.includes('\n') || value.includes('\r')) {
 				throw new Error(
-					`compose-env: value for "${key}" contains a newline — rejected to prevent .env injection`,
+					`compose-env: value for "${key}" contains a newline - rejected to prevent .env injection`,
 				)
 			}
 			return `${key}=${value}`

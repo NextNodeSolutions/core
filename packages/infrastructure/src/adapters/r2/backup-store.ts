@@ -14,12 +14,38 @@ import {
 } from '@aws-sdk/client-s3'
 
 import type { PostgresBackupSnapshot } from '#/domain/services/postgres.ts'
-import type { S3Client } from '@aws-sdk/client-s3'
+import type { S3Client, _Object } from '@aws-sdk/client-s3'
+
+// Parse the sidecar-named backup keys out of one ListObjectsV2 page, dropping
+// objects we did not write (keys that fail the naming pattern).
+function collectBackupSnapshots(
+	objects: ReadonlyArray<_Object>,
+): ReadonlyArray<PostgresBackupSnapshot> {
+	const snapshots: PostgresBackupSnapshot[] = []
+	for (const object of objects) {
+		const parsed =
+			typeof object.Key === 'string'
+				? parsePostgresBackupKey(object.Key)
+				: null
+		if (parsed !== null) snapshots.push(parsed)
+	}
+	return snapshots
+}
+
+// Extract the string keys from one ListObjectsV2 page as DeleteObjects entries.
+function toDeleteEntries(
+	objects: ReadonlyArray<_Object>,
+): Array<{ Key: string }> {
+	return objects
+		.map(object => object.Key)
+		.filter((key): key is string => typeof key === 'string')
+		.map(key => ({ Key: key }))
+}
 
 /**
  * Enumerate the postgres backup snapshots in `bucket` via paginated
  * ListObjectsV2 under the `postgres/` prefix. Keys that don't match the
- * sidecar's naming pattern are dropped on the floor — selection only
+ * sidecar's naming pattern are dropped on the floor - selection only
  * ever considers objects we know we wrote, so a stray manual upload
  * cannot displace a real dump.
  *
@@ -42,11 +68,7 @@ export async function listPostgresBackupSnapshots(
 				ContinuationToken: continuationToken,
 			}),
 		)
-		for (const object of response.Contents ?? []) {
-			if (typeof object.Key !== 'string') continue
-			const parsed = parsePostgresBackupKey(object.Key)
-			if (parsed !== null) snapshots.push(parsed)
-		}
+		snapshots.push(...collectBackupSnapshots(response.Contents ?? []))
 		continuationToken = response.NextContinuationToken
 	} while (continuationToken !== undefined)
 	/* eslint-enable no-await-in-loop */
@@ -62,7 +84,7 @@ export async function listPostgresBackupSnapshots(
  *
  * The S3 SDK's `Body` is a union across runtimes (Readable in Node,
  * Blob / ReadableStream in browsers). We narrow with `instanceof
- * Readable` to keep the pipeline type-safe without an `as` cast — this
+ * Readable` to keep the pipeline type-safe without an `as` cast - this
  * code only ever runs in Node so the non-Readable branch is defensive.
  * Per AWS SDK guidance the body must always be consumed (or cancelled)
  * to free the underlying socket; the guard `cancel`s a ReadableStream
@@ -95,7 +117,7 @@ export async function downloadPostgresBackup(
  * itself. Used by teardown's --wipe-backups path: the per-project bucket
  * `nn-backups-<project>` is dedicated to postgres dumps, so wiping it is
  * equivalent to dropping every snapshot. R2 (like S3) refuses
- * DeleteBucket on a non-empty bucket — the empty-then-drop sequence is
+ * DeleteBucket on a non-empty bucket - the empty-then-drop sequence is
  * mandatory, not a courtesy.
  */
 export async function wipePostgresBackups(
@@ -113,12 +135,7 @@ export async function wipePostgresBackups(
 			}),
 		)
 
-		const keysToDelete: Array<{ Key: string }> = []
-		for (const object of listResponse.Contents ?? []) {
-			if (typeof object.Key === 'string') {
-				keysToDelete.push({ Key: object.Key })
-			}
-		}
+		const keysToDelete = toDeleteEntries(listResponse.Contents ?? [])
 
 		if (keysToDelete.length > 0) {
 			await s3.send(

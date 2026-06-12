@@ -9,30 +9,46 @@ export interface ServiceEnv {
 }
 
 /**
- * Fold per-service env contributions into one. Collisions throw — two
+ * Fold per-service env contributions into one. Collisions throw - two
  * services claiming the same env var name is a bug, not a merge.
  */
 export function mergeServiceEnvs(envs: ReadonlyArray<ServiceEnv>): ServiceEnv {
-	const publicEnv: Record<string, string> = {}
-	const secretEnv: Record<string, string> = {}
-	for (const env of envs) {
-		assignDisjoint(publicEnv, env.public, 'public')
-		assignDisjoint(secretEnv, env.secret, 'secret')
+	return {
+		public: foldDisjoint(
+			envs.map(env => env.public),
+			'public',
+		),
+		secret: foldDisjoint(
+			envs.map(env => env.secret),
+			'secret',
+		),
 	}
-	return { public: publicEnv, secret: secretEnv }
 }
 
-function assignDisjoint(
-	target: Record<string, string>,
-	source: Readonly<Record<string, string>>,
+// Fold per-service records on one channel into a single record, throwing on
+// any key claimed by two services (a bug, not a merge).
+function foldDisjoint(
+	records: ReadonlyArray<Readonly<Record<string, string>>>,
+	channel: 'public' | 'secret',
+): Record<string, string> {
+	const merged: Record<string, string> = {}
+	for (const record of records) {
+		assertNoCollision(merged, record, channel)
+		Object.assign(merged, record)
+	}
+	return merged
+}
+
+function assertNoCollision(
+	merged: Readonly<Record<string, string>>,
+	incoming: Readonly<Record<string, string>>,
 	channel: 'public' | 'secret',
 ): void {
-	for (const [key, value] of Object.entries(source)) {
-		if (key in target) {
+	for (const key of Object.keys(incoming)) {
+		if (key in merged) {
 			throw new Error(
 				`mergeServiceEnvs: env key "${key}" collides between two services on the ${channel} channel`,
 			)
 		}
-		target[key] = value
 	}
 }

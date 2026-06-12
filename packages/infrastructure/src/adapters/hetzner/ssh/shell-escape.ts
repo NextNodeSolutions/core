@@ -8,6 +8,6 @@
  * The result is always safe to interpolate into a shell command line
  * executed via `sh -c`, which is what ssh2 `Client.exec` uses.
  */
-export function shellEscape(value: string): string {
-	return `'${value.replaceAll("'", "'\\''")}'`
+export function shellEscape(raw: string): string {
+	return `'${raw.replaceAll("'", "'\\''")}'`
 }

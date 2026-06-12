@@ -178,9 +178,11 @@ describe('provisionCommand', () => {
 		expect(mockEnsureGenerated).toHaveBeenCalledWith(
 			[{ name: 'JWT_SECRET', generate: 'token', length: 32 }],
 			{},
-			'NextNodeSolutions',
-			'core',
-			'production',
+			{
+				owner: 'NextNodeSolutions',
+				repo: 'core',
+				environment: 'production',
+			},
 		)
 	})
 

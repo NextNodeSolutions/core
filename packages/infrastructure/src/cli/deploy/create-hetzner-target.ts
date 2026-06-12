@@ -71,7 +71,7 @@ export const hetznerTargetDefinition: TargetDefinition<'hetzner-vps'> = {
 		if (!isHetznerDeployableConfig(config)) return null
 		if (!ctx.infraStorage) {
 			throw new Error(
-				'hetzner-vps target: infra storage (state + certs buckets) must be loaded by the caller — caller invariant broken',
+				'hetzner-vps target: infra storage (state + certs buckets) must be loaded by the caller - caller invariant broken',
 			)
 		}
 		return createHetznerTarget(config, ctx.environment, ctx.infraStorage)

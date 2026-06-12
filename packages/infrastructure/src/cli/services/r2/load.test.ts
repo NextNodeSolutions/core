@@ -93,13 +93,13 @@ describe('loadR2Service', () => {
 		seedState(STATE)
 		stubFetch({ verifyStatus: 'ok' })
 
-		const result = await loadR2Service({
+		const serviceValue = await loadR2Service({
 			infraStorage: INFRA_STORAGE,
 			projectName: 'myapp',
 			environment: 'production',
 		})
 
-		expect(result).toEqual(STATE)
+		expect(serviceValue).toEqual(STATE)
 	})
 
 	it('throws when no state has been written for the project + environment', async () => {
@@ -129,7 +129,7 @@ describe('loadR2Service', () => {
 		).rejects.toThrow(/has no buckets.*re-run provision/)
 	})
 
-	it('throws — does not rotate — when persisted credentials are stale', async () => {
+	it('throws - does not rotate - when persisted credentials are stale', async () => {
 		seedState(STATE)
 		stubFetch({ verifyStatus: '401' })
 
@@ -171,13 +171,13 @@ describe('loadR2Service', () => {
 		})
 		stubFetch({ verifyStatus: 'ok' })
 
-		const result = await loadR2Service({
+		const service = await loadR2Service({
 			infraStorage: INFRA_STORAGE,
 			projectName: 'myapp',
 			environment: 'production',
 		})
 
-		expect(result.accessKeyId).toBe('correct-ak')
-		expect(result.secretAccessKey).toBe('correct-sk')
+		expect(service.accessKeyId).toBe('correct-ak')
+		expect(service.secretAccessKey).toBe('correct-sk')
 	})
 })

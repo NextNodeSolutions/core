@@ -5,6 +5,7 @@ import {
 	HCLOUD_API_BASE,
 	authHeaders,
 	formatLabelSelector,
+	narrowStringLabels,
 	requireOk,
 } from './base.ts'
 
@@ -31,20 +32,12 @@ function parseImageObject(img: unknown, context: string): HcloudImageResponse {
 	) {
 		throw new Error(`${context}: invalid image shape`)
 	}
-	// Manual runtime narrowing - img.labels is untyped (unknown).
-	// TODO: replace with schema validation (e.g. Zod) when we add one.
-	const labels: Record<string, string> = {}
-	if (isRecord(img.labels)) {
-		for (const [k, v] of Object.entries(img.labels)) {
-			if (typeof v === 'string') labels[k] = v
-		}
-	}
 	return {
 		id: img.id,
 		description: img.description,
 		created: img.created,
 		status: img.status,
-		labels,
+		labels: narrowStringLabels(img.labels),
 	}
 }
 
@@ -58,13 +51,13 @@ export async function findImagesByLabels(
 	url.searchParams.set('label_selector', selector)
 	const response = await fetch(url, { headers: authHeaders(token) })
 	await requireOk(response, `list images label_selector="${selector}"`)
-	const data: unknown = await response.json()
-	if (!isRecord(data) || !Array.isArray(data.images)) {
+	const responseBody: unknown = await response.json()
+	if (!isRecord(responseBody) || !Array.isArray(responseBody.images)) {
 		throw new Error(
 			`list images label_selector="${selector}": missing \`images\` array`,
 		)
 	}
-	const images: ReadonlyArray<unknown> = data.images
+	const { images } = responseBody
 	return images.map((img, i) => parseImageObject(img, `images[${i}]`))
 }
 
@@ -77,11 +70,11 @@ export async function findImageById(
 	})
 	if (response.status === HTTP_NOT_FOUND) return null
 	await requireOk(response, `find image ${imageId}`)
-	const data: unknown = await response.json()
-	if (!isRecord(data) || !isRecord(data.image)) {
+	const responseBody: unknown = await response.json()
+	if (!isRecord(responseBody) || !isRecord(responseBody.image)) {
 		throw new Error(`find image ${imageId}: missing \`image\` in response`)
 	}
-	return parseImageObject(data.image, `find image ${imageId}`)
+	return parseImageObject(responseBody.image, `find image ${imageId}`)
 }
 
 export async function deleteImage(
@@ -113,11 +106,14 @@ export async function createSnapshot(
 		},
 	)
 	await requireOk(response, `create snapshot of server ${serverId}`)
-	const data: unknown = await response.json()
-	if (!isRecord(data) || !isRecord(data.image)) {
+	const responseBody: unknown = await response.json()
+	if (!isRecord(responseBody) || !isRecord(responseBody.image)) {
 		throw new Error(
 			`create snapshot of server ${serverId}: missing \`image\` in response`,
 		)
 	}
-	return parseImageObject(data.image, `create snapshot of server ${serverId}`)
+	return parseImageObject(
+		responseBody.image,
+		`create snapshot of server ${serverId}`,
+	)
 }

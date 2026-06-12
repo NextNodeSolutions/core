@@ -20,8 +20,8 @@ describe('isEnvSet', () => {
 
 	it.each(['1', 'true', 'false', '0', 'yes', 'whatever'])(
 		'returns true for any non-empty value (%s)',
-		value => {
-			vi.stubEnv(VAR, value)
+		candidate => {
+			vi.stubEnv(VAR, candidate)
 			expect(isEnvSet(VAR)).toBe(true)
 		},
 	)

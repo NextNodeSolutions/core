@@ -11,7 +11,7 @@ import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-c
  * storage runtime config (state + certs buckets). Returns `null` when
  * the config doesn't need it (Cloudflare Pages with no R2 service);
  * otherwise loads it via `loadR2Runtime`. Centralized so the predicate
- * never drifts across commands — getting it wrong silently skips state
+ * never drifts across commands - getting it wrong silently skips state
  * reads at deploy/teardown.
  */
 export async function loadInfraStorageForConfig(

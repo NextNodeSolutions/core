@@ -10,24 +10,24 @@ interface NamedGroup {
 	readonly name: string
 }
 
-function parseGroup(item: unknown): NamedGroup | null {
-	if (typeof item !== 'object' || item === null) return null
-	if (!('id' in item) || typeof item.id !== 'string') return null
-	if (!('name' in item) || typeof item.name !== 'string') return null
-	return { id: item.id, name: item.name }
+function parseGroup(rawGroup: unknown): NamedGroup | null {
+	if (typeof rawGroup !== 'object' || rawGroup === null) return null
+	if (!('id' in rawGroup) || typeof rawGroup.id !== 'string') return null
+	if (!('name' in rawGroup) || typeof rawGroup.name !== 'string') return null
+	return { id: rawGroup.id, name: rawGroup.name }
 }
 
 export async function resolveR2PermissionGroupIds(
 	token: string,
 ): Promise<R2PermissionGroupIds> {
 	const context = 'Cloudflare permission groups list'
-	const data = await cfFetchJson(
+	const responseBody = await cfFetchJson(
 		`${CLOUDFLARE_API_BASE}/user/tokens/permission_groups`,
 		token,
 		context,
 	)
 
-	const groups = requireArrayResult(data, context)
+	const groups = requireArrayResult(responseBody, context)
 		.map(parseGroup)
 		.filter((g): g is NamedGroup => g !== null)
 

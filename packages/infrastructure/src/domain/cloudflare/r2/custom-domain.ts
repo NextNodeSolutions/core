@@ -8,7 +8,7 @@ const R2_CDN_SUBDOMAIN = 'cdn'
 /**
  * Public hostname for a CDN-enabled bucket: `<alias>.cdn.<resolved-domain>`.
  * `resolvedDomain` is the ALREADY env-resolved deploy domain (the output of
- * `resolveDeployDomain`, e.g. `dev.example.com` in development) — the caller
+ * `resolveDeployDomain`, e.g. `dev.example.com` in development) - the caller
  * resolves it ONCE so the dev/prod split stays a single source of truth shared
  * with SITE_URL and the Pages custom domains. Re-resolving here would double the
  * `dev.` prefix.

@@ -30,13 +30,13 @@ const goldenImageFixture = (): {
 	},
 })
 
-function requireVpsScope(result: TeardownResult): VpsFullTeardownResult {
-	if (result.kind !== 'vps' || result.scope !== 'vps') {
+function requireVpsScope(teardown: TeardownResult): VpsFullTeardownResult {
+	if (teardown.kind !== 'vps' || teardown.scope !== 'vps') {
 		throw new Error(
-			`Expected kind=vps/scope=vps, got kind=${result.kind} scope=${result.scope}`,
+			`Expected kind=vps/scope=vps, got kind=${teardown.kind} scope=${teardown.scope}`,
 		)
 	}
-	return result
+	return teardown
 }
 
 // Mock hcloud API (network boundary) - split per resource
@@ -120,7 +120,7 @@ vi.mock('../../cli/hetzner/converge.ts', () => ({
 	converge: vi.fn(async () => undefined),
 }))
 
-// Tailnet is injected as a TailnetClient — no module-level mocks needed.
+// Tailnet is injected as a TailnetClient - no module-level mocks needed.
 const mockTailnetMintAuthkey = vi.fn(async () => ({
 	key: 'tskey-auth-minted',
 	expires: '2099-01-01T00:00:00Z',
@@ -138,11 +138,11 @@ vi.mock('node:timers/promises', () => ({
 	setTimeout: vi.fn(async () => undefined),
 }))
 
-// DNS is injected as a DnsClient — no module-level mocks needed.
+// DNS is injected as a DnsClient - no module-level mocks needed.
 const mockReconcile = vi.fn(async () => undefined)
 const mockDeleteByName = vi.fn(async () => 0)
 
-// Stores are injected as ObjectStoreClient — no module-level mocks needed.
+// Stores are injected as ObjectStoreClient - no module-level mocks needed.
 const fakeR2State = new Map<string, string>()
 const fakeCerts = new Map<string, string>()
 
@@ -278,9 +278,9 @@ describe('HetznerVpsTarget', () => {
 			it('returns a VpsProvisionResult with server details', async () => {
 				const target = new HetznerVpsTarget(TARGET_CONFIG)
 
-				const result = await target.ensureInfra('acme-web')
+				const infra = await target.ensureInfra('acme-web')
 
-				expect(result).toEqual(
+				expect(infra).toEqual(
 					expect.objectContaining({
 						kind: 'vps',
 						serverId: 42,
@@ -290,7 +290,7 @@ describe('HetznerVpsTarget', () => {
 						tailnetIp: '100.74.91.126',
 					}),
 				)
-				expect(result.durationMs).toBeGreaterThanOrEqual(0)
+				expect(infra.durationMs).toBeGreaterThanOrEqual(0)
 			})
 
 			it('passes correct serverType and location to createServer', async () => {
@@ -398,11 +398,11 @@ describe('HetznerVpsTarget', () => {
 				])
 
 				const target = new HetznerVpsTarget(TARGET_CONFIG)
-				const result = await target.ensureInfra('acme-web')
+				const infra = await target.ensureInfra('acme-web')
 
 				expect(mockedCreate).not.toHaveBeenCalled()
-				expect(result.serverId).toBe(99)
-				expect(result.publicIp).toBe('9.9.9.9')
+				expect(infra.serverId).toBe(99)
+				expect(infra.publicIp).toBe('9.9.9.9')
 			})
 
 			it('refuses to attach an internal project to a public VPS', async () => {
@@ -1004,16 +1004,16 @@ describe('HetznerVpsTarget', () => {
 			seedState()
 
 			const target = new HetznerVpsTarget(TARGET_CONFIG)
-			const result = await target.deploy(
+			const deployment = await target.deploy(
 				'acme-web',
 				DEPLOY_INPUT,
 				DEPLOY_ENV,
 			)
 
-			expect(result.projectName).toBe('acme-web')
-			expect(result.durationMs).toBeGreaterThanOrEqual(0)
-			expect(result.deployedEnvironments).toHaveLength(1)
-			expect(result.deployedEnvironments[0]).toEqual(
+			expect(deployment.projectName).toBe('acme-web')
+			expect(deployment.durationMs).toBeGreaterThanOrEqual(0)
+			expect(deployment.deployedEnvironments).toHaveLength(1)
+			expect(deployment.deployedEnvironments[0]).toEqual(
 				expect.objectContaining({
 					kind: 'container',
 					name: 'production',
@@ -1420,14 +1420,14 @@ describe('HetznerVpsTarget', () => {
 				'vps',
 				false,
 			)
-			const result = requireVpsScope(raw)
+			const scope = requireVpsScope(raw)
 
-			expect(result.outcome.server.handled).toBe(true)
-			expect(result.outcome.server.detail).toContain('#42')
-			expect(result.outcome.firewall.handled).toBe(true)
-			expect(result.outcome.tailscale.handled).toBe(true)
-			expect(result.outcome.dns.handled).toBe(true)
-			expect(result.outcome.state.handled).toBe(true)
+			expect(scope.outcome.server.handled).toBe(true)
+			expect(scope.outcome.server.detail).toContain('#42')
+			expect(scope.outcome.firewall.handled).toBe(true)
+			expect(scope.outcome.tailscale.handled).toBe(true)
+			expect(scope.outcome.dns.handled).toBe(true)
+			expect(scope.outcome.state.handled).toBe(true)
 			expect(mockedDelete).toHaveBeenCalledWith('hcloud-token', 42)
 		})
 
@@ -1448,7 +1448,7 @@ describe('HetznerVpsTarget', () => {
 			seedState()
 
 			const target = new HetznerVpsTarget(TARGET_CONFIG)
-			const result = requireVpsScope(
+			const scope = requireVpsScope(
 				await target.teardown(
 					'acme-web',
 					'acme-web.example.com',
@@ -1457,8 +1457,8 @@ describe('HetznerVpsTarget', () => {
 				),
 			)
 
-			expect(result.outcome.firewall.handled).toBe(false)
-			expect(result.outcome.firewall.detail).toBe('not found')
+			expect(scope.outcome.firewall.handled).toBe(false)
+			expect(scope.outcome.firewall.detail).toBe('not found')
 		})
 
 		it('skips DNS when no domain and Caddy has no upstreams', async () => {
@@ -1468,12 +1468,12 @@ describe('HetznerVpsTarget', () => {
 				...TARGET_CONFIG,
 				domain: 'acme-web.example.com',
 			})
-			const result = requireVpsScope(
+			const scope = requireVpsScope(
 				await target.teardown('acme-web', undefined, 'vps', false),
 			)
 
-			expect(result.outcome.dns.handled).toBe(false)
-			expect(result.outcome.dns.detail).toBe('no hostnames to delete')
+			expect(scope.outcome.dns.handled).toBe(false)
+			expect(scope.outcome.dns.detail).toBe('no hostnames to delete')
 			expect(mockDeleteByName).not.toHaveBeenCalled()
 		})
 
@@ -1495,7 +1495,7 @@ describe('HetznerVpsTarget', () => {
 			seedState()
 
 			const target = new HetznerVpsTarget(TARGET_CONFIG)
-			const result = requireVpsScope(
+			const scope = requireVpsScope(
 				await target.teardown(
 					'acme-web',
 					'acme-web.example.com',
@@ -1504,7 +1504,7 @@ describe('HetznerVpsTarget', () => {
 				),
 			)
 
-			expect(result.durationMs).toBeGreaterThanOrEqual(0)
+			expect(scope.durationMs).toBeGreaterThanOrEqual(0)
 		})
 
 		it('deletes a DNS record for every routed service in a project teardown', async () => {

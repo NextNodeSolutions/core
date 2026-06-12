@@ -30,19 +30,19 @@ export function publishResultCommand(): void {
 		return
 	}
 
-	const result = parseSemanticReleaseOutput(content)
+	const release = parseSemanticReleaseOutput(content)
 
-	writeOutput('status', result.status)
-	if (result.version) {
-		writeOutput('version', result.version)
+	writeOutput('status', release.status)
+	if (release.version) {
+		writeOutput('version', release.version)
 	}
-	writeSummary(buildSummary(result, projectFilter))
+	writeSummary(buildSummary(release, projectFilter))
 
 	logger.info(
-		`Publish result: ${result.status}${result.version ? ` v${result.version}` : ''}`,
+		`Publish result: ${release.status}${release.version ? ` v${release.version}` : ''}`,
 	)
 
-	if (result.status === 'failure') {
+	if (release.status === 'failure') {
 		process.exitCode = 1
 	}
 }

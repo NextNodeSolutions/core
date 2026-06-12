@@ -5,6 +5,7 @@ import {
 	HCLOUD_API_BASE,
 	authHeaders,
 	formatLabelSelector,
+	narrowStringLabels,
 	requireOk,
 } from './base.ts'
 
@@ -46,29 +47,23 @@ export function parseServerObject(
 	) {
 		throw new Error(`${context}: missing public_net.ipv4.ip`)
 	}
-	const labels: Record<string, string> = {}
-	if (isRecord(s.labels)) {
-		for (const [key, value] of Object.entries(s.labels)) {
-			if (typeof value === 'string') labels[key] = value
-		}
-	}
 	return {
 		id: s.id,
 		name: s.name,
 		status: s.status,
-		labels,
+		labels: narrowStringLabels(s.labels),
 		public_net: { ipv4: { ip: s.public_net.ipv4.ip } },
 	}
 }
 
 function parseServerResponse(
-	data: unknown,
+	responseBody: unknown,
 	context: string,
 ): HcloudServerResponse {
-	if (!isRecord(data) || !isRecord(data.server)) {
+	if (!isRecord(responseBody) || !isRecord(responseBody.server)) {
 		throw new Error(`${context}: missing \`server\` in response`)
 	}
-	return parseServerObject(data.server, context)
+	return parseServerObject(responseBody.server, context)
 }
 
 export async function assertServerTypeAvailable(
@@ -79,13 +74,13 @@ export async function assertServerTypeAvailable(
 	url.searchParams.set('name', serverTypeName)
 	const response = await fetch(url, { headers: authHeaders(token) })
 	await requireOk(response, `list server_types name="${serverTypeName}"`)
-	const data: unknown = await response.json()
-	if (!isRecord(data) || !Array.isArray(data.server_types)) {
+	const responseBody: unknown = await response.json()
+	if (!isRecord(responseBody) || !Array.isArray(responseBody.server_types)) {
 		throw new Error(
 			`list server_types name="${serverTypeName}": missing \`server_types\` array`,
 		)
 	}
-	const [first] = data.server_types
+	const [first] = responseBody.server_types
 	if (!isRecord(first)) {
 		throw new Error(
 			`Hetzner server_type "${serverTypeName}" not found - check the SKU name`,
@@ -120,8 +115,8 @@ export async function createServer(
 		}),
 	})
 	await requireOk(response, `create server "${input.name}"`)
-	const data: unknown = await response.json()
-	return parseServerResponse(data, `create server "${input.name}"`)
+	const responseBody: unknown = await response.json()
+	return parseServerResponse(responseBody, `create server "${input.name}"`)
 }
 
 export async function describeServer(
@@ -132,8 +127,8 @@ export async function describeServer(
 		headers: authHeaders(token),
 	})
 	await requireOk(response, `describe server ${serverId}`)
-	const data: unknown = await response.json()
-	return parseServerResponse(data, `describe server ${serverId}`)
+	const responseBody: unknown = await response.json()
+	return parseServerResponse(responseBody, `describe server ${serverId}`)
 }
 
 export async function findServerById(
@@ -145,8 +140,8 @@ export async function findServerById(
 	})
 	if (response.status === HTTP_NOT_FOUND) return null
 	await requireOk(response, `find server ${serverId}`)
-	const data: unknown = await response.json()
-	return parseServerResponse(data, `find server ${serverId}`)
+	const responseBody: unknown = await response.json()
+	return parseServerResponse(responseBody, `find server ${serverId}`)
 }
 
 export async function findServersByLabels(
@@ -158,13 +153,13 @@ export async function findServersByLabels(
 	url.searchParams.set('label_selector', selector)
 	const response = await fetch(url, { headers: authHeaders(token) })
 	await requireOk(response, `list servers label_selector="${selector}"`)
-	const data: unknown = await response.json()
-	if (!isRecord(data) || !Array.isArray(data.servers)) {
+	const responseBody: unknown = await response.json()
+	if (!isRecord(responseBody) || !Array.isArray(responseBody.servers)) {
 		throw new Error(
 			`list servers label_selector="${selector}": missing \`servers\` array`,
 		)
 	}
-	const servers: ReadonlyArray<unknown> = data.servers
+	const { servers } = responseBody
 	return servers.map((s, i) => parseServerObject(s, `servers[${i}]`))
 }
 

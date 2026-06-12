@@ -38,17 +38,12 @@ export async function reconcileDomains(
 		input.token,
 	)
 
-	await Promise.all(
-		desired.map(d =>
-			applyDomain(
-				input.accountId,
-				input.pagesProjectName,
-				d,
-				attached,
-				input.token,
-			),
-		),
-	)
+	const target: PagesProjectTarget = {
+		accountId: input.accountId,
+		pagesProjectName: input.pagesProjectName,
+		token: input.token,
+	}
+	await Promise.all(desired.map(d => applyDomain(target, d, attached)))
 
 	const stale = findStalePagesDomains(desired, attached)
 	if (stale.length > 0) {
@@ -63,18 +58,27 @@ export async function reconcileDomains(
 	}
 }
 
+interface PagesProjectTarget {
+	readonly accountId: string
+	readonly pagesProjectName: string
+	readonly token: string
+}
+
 async function applyDomain(
-	accountId: string,
-	pagesProjectName: string,
+	target: PagesProjectTarget,
 	desired: DesiredPagesDomain,
 	attached: ReadonlyArray<CloudflarePagesDomain>,
-	token: string,
 ): Promise<void> {
 	const action = reconcilePagesDomain(desired, attached)
 	if (action.kind === 'skip') {
 		logger.info(`Domain "${desired.name}" already attached`)
 		return
 	}
-	await attachPagesDomain(accountId, pagesProjectName, desired.name, token)
+	await attachPagesDomain(
+		target.accountId,
+		target.pagesProjectName,
+		desired.name,
+		target.token,
+	)
 	logger.info(`Attached domain "${desired.name}"`)
 }

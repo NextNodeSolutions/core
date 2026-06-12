@@ -36,7 +36,7 @@ const parse = (raw: string): unknown => parseJsonOrThrow(raw, 'bake definition')
 
 describe('renderBakeFile', () => {
 	it('renders a build service with monorepo defaults: repo-root context, package Dockerfile, no explicit stage', () => {
-		const result = renderBakeFile({
+		const bakeFile = renderBakeFile({
 			services: { app: buildService() },
 			imageRefs: { app: APP_IMAGE },
 			bakeTargets: ['app'],
@@ -44,7 +44,7 @@ describe('renderBakeFile', () => {
 			buildArgs: {},
 		})
 
-		expect(parse(result)).toEqual({
+		expect(parse(bakeFile)).toEqual({
 			group: { default: { targets: ['app'] } },
 			target: {
 				app: {
@@ -59,7 +59,7 @@ describe('renderBakeFile', () => {
 	})
 
 	it('honors explicit context, dockerfile, and build stage from the service config', () => {
-		const result = renderBakeFile({
+		const bakeFile = renderBakeFile({
 			services: {
 				web: buildService({
 					context: 'apps/web',
@@ -79,7 +79,7 @@ describe('renderBakeFile', () => {
 			buildArgs: {},
 		})
 
-		expect(parse(result)).toEqual({
+		expect(parse(bakeFile)).toEqual({
 			group: { default: { targets: ['web'] } },
 			target: {
 				web: {
@@ -95,7 +95,7 @@ describe('renderBakeFile', () => {
 	})
 
 	it('defaults the Dockerfile to the repo root when the package dir is empty', () => {
-		const result = renderBakeFile({
+		const bakeFile = renderBakeFile({
 			services: { app: buildService() },
 			imageRefs: { app: APP_IMAGE },
 			bakeTargets: ['app'],
@@ -103,7 +103,7 @@ describe('renderBakeFile', () => {
 			buildArgs: {},
 		})
 
-		expect(parse(result)).toEqual({
+		expect(parse(bakeFile)).toEqual({
 			group: { default: { targets: ['app'] } },
 			target: {
 				app: {
@@ -118,7 +118,7 @@ describe('renderBakeFile', () => {
 	})
 
 	it('emits resolved build args on the target, leaving arg-less targets untouched', () => {
-		const result = renderBakeFile({
+		const bakeFile = renderBakeFile({
 			services: { front: buildService(), api: buildService() },
 			imageRefs: {
 				front: {
@@ -142,7 +142,7 @@ describe('renderBakeFile', () => {
 			},
 		})
 
-		expect(parse(result)).toEqual({
+		expect(parse(bakeFile)).toEqual({
 			group: { default: { targets: ['front', 'api'] } },
 			target: {
 				front: {
@@ -168,7 +168,7 @@ describe('renderBakeFile', () => {
 	})
 
 	it('omits the args key when a target maps to an empty build-arg record', () => {
-		const result = renderBakeFile({
+		const bakeFile = renderBakeFile({
 			services: { app: buildService() },
 			imageRefs: { app: APP_IMAGE },
 			bakeTargets: ['app'],
@@ -176,7 +176,7 @@ describe('renderBakeFile', () => {
 			buildArgs: { app: {} },
 		})
 
-		expect(parse(result)).toEqual({
+		expect(parse(bakeFile)).toEqual({
 			group: { default: { targets: ['app'] } },
 			target: {
 				app: {
@@ -191,7 +191,7 @@ describe('renderBakeFile', () => {
 	})
 
 	it('bakes only the build services in bakeTargets order and excludes upstream services', () => {
-		const result = renderBakeFile({
+		const bakeFile = renderBakeFile({
 			services: {
 				front: buildService(),
 				api: buildService(),
@@ -219,7 +219,7 @@ describe('renderBakeFile', () => {
 			buildArgs: {},
 		})
 
-		expect(parse(result)).toEqual({
+		expect(parse(bakeFile)).toEqual({
 			group: { default: { targets: ['front', 'api'] } },
 			target: {
 				front: {

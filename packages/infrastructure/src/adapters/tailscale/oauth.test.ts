@@ -31,14 +31,14 @@ describe('mintAuthkey', () => {
 			)
 		vi.stubGlobal('fetch', mock)
 
-		const result = await mintAuthkey(
+		const authkeyValue = await mintAuthkey(
 			CLIENT_SECRET,
 			['tag:ci'],
 			600,
 			'probe',
 		)
 
-		expect(result).toStrictEqual({
+		expect(authkeyValue).toStrictEqual({
 			key: 'tskey-auth-xyz',
 			expires: '2030-01-01T00:00:00Z',
 		})
@@ -59,7 +59,11 @@ describe('mintAuthkey', () => {
 		expect(keyInit.headers).toStrictEqual(
 			expect.objectContaining({ Authorization: 'Bearer bearer-123' }),
 		)
-		const body: unknown = JSON.parse(String(keyInit.body))
+		const { body: keyBody } = keyInit
+		if (typeof keyBody !== 'string') {
+			throw new Error('Expected a string request body')
+		}
+		const body: unknown = JSON.parse(keyBody)
 		expect(body).toStrictEqual({
 			capabilities: {
 				devices: {
