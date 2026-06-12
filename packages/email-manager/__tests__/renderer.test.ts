@@ -10,7 +10,7 @@ import { renderTemplate } from '../src/templates/renderer.js'
 
 import type { ReactElement } from 'react'
 
-// Mock @react-email/render — external rendering library, no DOM needed
+// Mock @react-email/render - external rendering library, no DOM needed
 vi.mock('@react-email/render', () => ({
 	render: vi.fn(),
 }))
@@ -28,15 +28,17 @@ function badTemplate(): ReactElement {
 	throw new Error('Component crash')
 }
 
-describe('renderTemplate() (FR-11, FR-14) — success paths', () => {
+describe('renderTemplate() (FR-11, FR-14) - success paths', () => {
 	it('returns the rendered html in a success Result', async () => {
 		vi.mocked(mockRender)
 			.mockResolvedValueOnce('<div>Hello World</div>')
 			.mockResolvedValueOnce('Hello World')
 
-		const result = await renderTemplate(testTemplate, { name: 'World' })
+		const renderResult = await renderTemplate(testTemplate, {
+			name: 'World',
+		})
 
-		expect(result).toEqual({
+		expect(renderResult).toEqual({
 			success: true,
 			data: { html: '<div>Hello World</div>', text: 'Hello World' },
 		})
@@ -58,15 +60,15 @@ describe('renderTemplate() (FR-11, FR-14) — success paths', () => {
 	it('skips plain-text generation when plainText: false', async () => {
 		vi.mocked(mockRender).mockResolvedValueOnce('<div>Hi</div>')
 
-		const result = await renderTemplate(
+		const renderResult = await renderTemplate(
 			testTemplate,
 			{ name: 'Test' },
 			{ plainText: false },
 		)
 
-		expect(result.success).toBe(true)
-		if (result.success) {
-			expect(result.data.text).toBeUndefined()
+		expect(renderResult.success).toBe(true)
+		if (renderResult.success) {
+			expect(renderResult.data.text).toBeUndefined()
 		}
 		expect(mockRender).toHaveBeenCalledTimes(1)
 	})
@@ -99,40 +101,44 @@ describe('renderTemplate() (FR-11, FR-14) — success paths', () => {
 	})
 })
 
-describe('renderTemplate() — error handling (EC-1, never throws)', () => {
+describe('renderTemplate() - error handling (EC-1, never throws)', () => {
 	it('returns TEMPLATE_ERROR with the original error when render() rejects', async () => {
 		const originalError = new Error('Invalid component')
 		vi.mocked(mockRender).mockRejectedValue(originalError)
 
-		const result = await renderTemplate(testTemplate, { name: 'Test' })
+		const renderResult = await renderTemplate(testTemplate, {
+			name: 'Test',
+		})
 
-		expect(result.success).toBe(false)
-		if (!result.success) {
-			expect(result.error.code).toBe('TEMPLATE_ERROR')
-			expect(result.error.message).toContain('Invalid component')
-			expect(result.error.originalError).toBe(originalError)
+		expect(renderResult.success).toBe(false)
+		if (!renderResult.success) {
+			expect(renderResult.error.code).toBe('TEMPLATE_ERROR')
+			expect(renderResult.error.message).toContain('Invalid component')
+			expect(renderResult.error.originalError).toBe(originalError)
 		}
 	})
 
 	it('returns TEMPLATE_ERROR with "unknown error" when a non-Error value is thrown', async () => {
 		vi.mocked(mockRender).mockRejectedValue('string error')
 
-		const result = await renderTemplate(testTemplate, { name: 'Test' })
+		const renderResult = await renderTemplate(testTemplate, {
+			name: 'Test',
+		})
 
-		expect(result.success).toBe(false)
-		if (!result.success) {
-			expect(result.error.code).toBe('TEMPLATE_ERROR')
-			expect(result.error.message).toContain('unknown error')
+		expect(renderResult.success).toBe(false)
+		if (!renderResult.success) {
+			expect(renderResult.error.code).toBe('TEMPLATE_ERROR')
+			expect(renderResult.error.message).toContain('unknown error')
 		}
 	})
 
 	it('catches synchronous throws from the template function itself', async () => {
-		const result = await renderTemplate(badTemplate, {})
+		const renderResult = await renderTemplate(badTemplate, {})
 
-		expect(result.success).toBe(false)
-		if (!result.success) {
-			expect(result.error.code).toBe('TEMPLATE_ERROR')
-			expect(result.error.message).toContain('Component crash')
+		expect(renderResult.success).toBe(false)
+		if (!renderResult.success) {
+			expect(renderResult.error.code).toBe('TEMPLATE_ERROR')
+			expect(renderResult.error.message).toContain('Component crash')
 		}
 	})
 })

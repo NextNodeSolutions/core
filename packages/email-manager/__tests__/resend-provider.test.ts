@@ -12,7 +12,7 @@ import { createResendProvider } from '../src/providers/resend.js'
 
 import type { EmailMessage } from '../src/types/email.js'
 
-// Mock the Resend SDK — external API boundary, no real HTTP
+// Mock the Resend SDK - external API boundary, no real HTTP
 vi.mock('resend', () => ({
 	Resend: vi.fn().mockImplementation((apiKey: string) => ({
 		emails: { send: vi.fn() },
@@ -44,20 +44,20 @@ describe('Resend Provider', () => {
 
 	beforeEach(() => {
 		mockClient = createMockClient()
-		// @ts-expect-error — mock client only implements the methods used by the provider
+		// @ts-expect-error - mock client only implements the methods used by the provider
 		provider = createResendProvider(mockClient, createNoopLogger())
 	})
 
-	describe('send() — happy path', () => {
+	describe('send() - happy path', () => {
 		it('returns a success result with the Resend message id', async () => {
 			mockClient.emails.send.mockResolvedValue({
 				data: { id: 'msg_123' },
 				error: null,
 			})
 
-			const result = await provider.send(baseMessage)
+			const sendResult = await provider.send(baseMessage)
 
-			expect(result).toEqual({
+			expect(sendResult).toEqual({
 				success: true,
 				data: {
 					id: 'msg_123',
@@ -72,7 +72,7 @@ describe('Resend Provider', () => {
 		})
 	})
 
-	describe('send() — EmailMessage → Resend payload mapping', () => {
+	describe('send() - EmailMessage → Resend payload mapping', () => {
 		beforeEach(() => {
 			mockClient.emails.send.mockResolvedValue({
 				data: { id: 'msg_ok' },
@@ -160,7 +160,7 @@ describe('Resend Provider', () => {
 		})
 	})
 
-	describe('send() — error mapping (FR-20)', () => {
+	describe('send() - error mapping (FR-20)', () => {
 		it.each([
 			{
 				label: 'rate limit exception → RATE_LIMIT_ERROR',
@@ -190,12 +190,12 @@ describe('Resend Provider', () => {
 		])('maps $label', async ({ rejection, expectedCode }) => {
 			mockClient.emails.send.mockRejectedValue(rejection)
 
-			const result = await provider.send(baseMessage)
+			const sendResult = await provider.send(baseMessage)
 
-			expect(result.success).toBe(false)
-			if (!result.success) {
-				expect(result.error.code).toBe(expectedCode)
-				expect(result.error.provider).toBe('resend')
+			expect(sendResult.success).toBe(false)
+			if (!sendResult.success) {
+				expect(sendResult.error.code).toBe(expectedCode)
+				expect(sendResult.error.provider).toBe('resend')
 			}
 		})
 
@@ -205,12 +205,12 @@ describe('Resend Provider', () => {
 				error: { message: 'Invalid API key' },
 			})
 
-			const result = await provider.send(baseMessage)
+			const sendResult = await provider.send(baseMessage)
 
-			expect(result.success).toBe(false)
-			if (!result.success) {
-				expect(result.error.code).toBe('AUTHENTICATION_ERROR')
-				expect(result.error.provider).toBe('resend')
+			expect(sendResult.success).toBe(false)
+			if (!sendResult.success) {
+				expect(sendResult.error.code).toBe('AUTHENTICATION_ERROR')
+				expect(sendResult.error.provider).toBe('resend')
 			}
 		})
 
@@ -220,43 +220,43 @@ describe('Resend Provider', () => {
 				error: null,
 			})
 
-			const result = await provider.send(baseMessage)
+			const sendResult = await provider.send(baseMessage)
 
-			expect(result.success).toBe(false)
-			if (!result.success) {
-				expect(result.error.code).toBe('PROVIDER_ERROR')
-				expect(result.error.message).toContain('No data')
+			expect(sendResult.success).toBe(false)
+			if (!sendResult.success) {
+				expect(sendResult.error.code).toBe('PROVIDER_ERROR')
+				expect(sendResult.error.message).toContain('No data')
 			}
 		})
 	})
 
-	describe('send() — message validation', () => {
+	describe('send() - message validation', () => {
 		it('rejects an empty recipients array with VALIDATION_ERROR (EC-3)', async () => {
-			const result = await provider.send({
+			const sendResult = await provider.send({
 				from: 'sender@example.com',
 				to: [],
 				subject: 'Test',
 				html: '<p>Hi</p>',
 			})
 
-			expect(result.success).toBe(false)
-			if (!result.success) {
-				expect(result.error.code).toBe('VALIDATION_ERROR')
+			expect(sendResult.success).toBe(false)
+			if (!sendResult.success) {
+				expect(sendResult.error.code).toBe('VALIDATION_ERROR')
 			}
 			expect(mockClient.emails.send).not.toHaveBeenCalled()
 		})
 
 		it('rejects a message with no html or text content', async () => {
-			const result = await provider.send({
+			const sendResult = await provider.send({
 				from: 'sender@example.com',
 				to: 'recipient@example.com',
 				subject: 'Test',
 				html: '',
 			})
 
-			expect(result.success).toBe(false)
-			if (!result.success) {
-				expect(result.error.code).toBe('VALIDATION_ERROR')
+			expect(sendResult.success).toBe(false)
+			if (!sendResult.success) {
+				expect(sendResult.error.code).toBe('VALIDATION_ERROR')
 			}
 			expect(mockClient.emails.send).not.toHaveBeenCalled()
 		})
@@ -277,7 +277,7 @@ describe('Resend Provider', () => {
 	})
 })
 
-describe('createProvider() — registry (FR-16)', () => {
+describe('createProvider() - registry (FR-16)', () => {
 	it('returns a functional Resend provider that forwards send() to the SDK', async () => {
 		const provider = await createProvider('resend', {
 			apiKey: 're_test_key',
@@ -337,9 +337,9 @@ describe('Provider utils (base)', () => {
 
 	describe('validateMessage()', () => {
 		it('accepts a message with all required fields', () => {
-			const result = utils.validateMessage(baseMessage)
+			const validationResult = utils.validateMessage(baseMessage)
 
-			expect(result).toEqual({ success: true, data: undefined })
+			expect(validationResult).toEqual({ success: true, data: undefined })
 		})
 
 		it('rejects more than 50 recipients with a message citing both counts (EC-6)', () => {
@@ -348,16 +348,16 @@ describe('Provider utils (base)', () => {
 				(_, i) => `user${String(i)}@test.com`,
 			)
 
-			const result = utils.validateMessage({
+			const validationResult = utils.validateMessage({
 				...baseMessage,
 				to: recipients,
 			})
 
-			expect(result.success).toBe(false)
-			if (!result.success) {
-				expect(result.error.code).toBe('VALIDATION_ERROR')
-				expect(result.error.message).toContain('51')
-				expect(result.error.message).toContain('50')
+			expect(validationResult.success).toBe(false)
+			if (!validationResult.success) {
+				expect(validationResult.error.code).toBe('VALIDATION_ERROR')
+				expect(validationResult.error.message).toContain('51')
+				expect(validationResult.error.message).toContain('50')
 			}
 		})
 	})

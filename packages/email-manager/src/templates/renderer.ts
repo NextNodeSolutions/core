@@ -26,7 +26,7 @@ const DEFAULT_OPTIONS: Required<TemplateRenderOptions> = {
  * Render a React Email template to HTML and optionally plain text (FR-11)
  *
  * Returns a Result to handle rendering failures gracefully (EC-1).
- * Never throws — all errors are returned as TEMPLATE_ERROR.
+ * Never throws - all errors are returned as TEMPLATE_ERROR.
  *
  * @param template - React Email component function
  * @param props - Props to pass to the template

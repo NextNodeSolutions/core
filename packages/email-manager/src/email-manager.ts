@@ -1,6 +1,6 @@
 /**
  * Email Manager (FR-5, FR-7, FR-9)
- * Main facade for email operations — the primary public API
+ * Main facade for email operations - the primary public API
  */
 
 import { createLogger } from '@nextnode-solutions/logger'
@@ -35,7 +35,7 @@ export interface EmailManagerConfig<
 	templateOptions?: TemplateRenderOptions | undefined
 	/**
 	 * Logger instance for observability.
-	 * Defaults to a silent logger — inject your own to capture events.
+	 * Defaults to a silent logger - inject your own to capture events.
 	 */
 	logger?: Logger | undefined
 }
@@ -61,6 +61,96 @@ const resolveFrom = (
 	messageFrom: EmailRecipient | undefined,
 	defaultFrom: string | undefined,
 ): EmailRecipient | undefined => messageFrom ?? defaultFrom
+
+/**
+ * Assemble the internal EmailMessage from a templated message + rendered body
+ */
+const buildEmailMessage = <TProps>(
+	message: TemplatedEmailMessage<TProps>,
+	from: EmailRecipient,
+	body: { html: string; text?: string | undefined },
+): EmailMessage => ({
+	from,
+	to: message.to,
+	subject: message.subject,
+	html: body.html,
+	text: body.text,
+	cc: message.cc,
+	bcc: message.bcc,
+	replyTo: message.replyTo,
+	attachments: message.attachments,
+	headers: message.headers,
+	tags: message.tags,
+	scheduledAt: message.scheduledAt,
+})
+
+/**
+ * Emit the success/failure log for a completed send
+ */
+const logSendOutcome = (logger: Logger, sendResult: SendResult): void => {
+	if (sendResult.success) {
+		logger.info('Email sent successfully', {
+			details: { messageId: sendResult.data.id },
+		})
+		return
+	}
+	logger.error('Email send failed', {
+		details: {
+			errorCode: sendResult.error.code,
+			errorMessage: sendResult.error.message,
+		},
+	})
+}
+
+/**
+ * Send an email with a React Email template (FR-9)
+ */
+const sendTemplatedEmail = async <TProps>(
+	deps: {
+		provider: EmailProvider
+		logger: Logger
+		defaultFrom: string | undefined
+		templateOptions: TemplateRenderOptions | undefined
+	},
+	message: TemplatedEmailMessage<TProps>,
+): Promise<SendResult> => {
+	const { provider, logger, defaultFrom, templateOptions } = deps
+
+	// FR-9: Apply defaultFrom if from is not provided
+	const from = resolveFrom(message.from, defaultFrom)
+	if (!from) {
+		return emailFail(
+			'VALIDATION_ERROR',
+			'No "from" address provided and no defaultFrom configured',
+		)
+	}
+
+	logger.debug('Rendering email template', {
+		details: {
+			recipientCount: Array.isArray(message.to) ? message.to.length : 1,
+		},
+	})
+
+	// FR-9: Render template to HTML (and optionally plain text)
+	const renderResult = await renderTemplate(
+		message.template,
+		message.props,
+		templateOptions,
+	)
+
+	if (!renderResult.success) {
+		logger.error('Template rendering failed', {
+			details: { error: renderResult.error.message },
+		})
+		return renderResult
+	}
+
+	const sendResult = await provider.send(
+		buildEmailMessage(message, from, renderResult.data),
+	)
+	logSendOutcome(logger, sendResult)
+	return sendResult
+}
 
 /**
  * Create an email manager instance (FR-5)
@@ -90,7 +180,7 @@ const resolveFrom = (
 export async function createEmailManager<P extends keyof ProviderConfigMap>(
 	config: EmailManagerConfig<P>,
 ): Promise<EmailManager> {
-	// Business rule: silent by default — caller opts into logging by injecting a logger
+	// Business rule: silent by default - caller opts into logging by injecting a logger
 	const logger = config.logger ?? createLogger({ silent: true })
 
 	// PERF-2: Provider client created once, reused for all sends
@@ -100,89 +190,20 @@ export async function createEmailManager<P extends keyof ProviderConfigMap>(
 		logger.child({ scope: 'PROVIDER' }),
 	)
 
-	/**
-	 * Send an email with a React Email template (FR-9)
-	 */
-	const send = async <TProps>(
-		message: TemplatedEmailMessage<TProps>,
-	): Promise<SendResult> => {
-		// FR-9: Apply defaultFrom if from is not provided
-		const from = resolveFrom(message.from, config.defaultFrom)
-		if (!from) {
-			return emailFail(
-				'VALIDATION_ERROR',
-				'No "from" address provided and no defaultFrom configured',
-			)
-		}
-
-		logger.debug('Rendering email template', {
-			details: {
-				recipientCount: Array.isArray(message.to)
-					? message.to.length
-					: 1,
-			},
-		})
-
-		// FR-9: Render template to HTML (and optionally plain text)
-		const renderResult = await renderTemplate(
-			message.template,
-			message.props,
-			config.templateOptions,
-		)
-
-		if (!renderResult.success) {
-			logger.error('Template rendering failed', {
-				details: { error: renderResult.error.message },
-			})
-			return renderResult
-		}
-
-		// Build the internal EmailMessage
-		const emailMessage: EmailMessage = {
-			from,
-			to: message.to,
-			subject: message.subject,
-			html: renderResult.data.html,
-			text: renderResult.data.text,
-			cc: message.cc,
-			bcc: message.bcc,
-			replyTo: message.replyTo,
-			attachments: message.attachments,
-			headers: message.headers,
-			tags: message.tags,
-			scheduledAt: message.scheduledAt,
-		}
-
-		// Delegate to provider
-		const result = await provider.send(emailMessage)
-
-		if (result.success) {
-			logger.info('Email sent successfully', {
-				details: { messageId: result.data.id },
-			})
-		} else {
-			logger.error('Email send failed', {
-				details: {
-					errorCode: result.error.code,
-					errorMessage: result.error.message,
-				},
-			})
-		}
-
-		return result
-	}
-
-	/**
-	 * Validate provider configuration (FR-10)
-	 */
-	const validateConfig = async (): Promise<boolean> =>
-		provider.validateConfig()
-
 	return {
 		get provider(): EmailProvider {
 			return provider
 		},
-		send,
-		validateConfig,
+		send: <TProps>(message: TemplatedEmailMessage<TProps>) =>
+			sendTemplatedEmail(
+				{
+					provider,
+					logger,
+					defaultFrom: config.defaultFrom,
+					templateOptions: config.templateOptions,
+				},
+				message,
+			),
+		validateConfig: () => provider.validateConfig(),
 	}
 }

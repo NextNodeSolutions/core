@@ -6,7 +6,7 @@
 import type React from 'react'
 
 /**
- * Email recipient — string or object with name
+ * Email recipient - string or object with name
  */
 export type EmailRecipient = string | { email: string; name?: string }
 
@@ -69,7 +69,7 @@ export interface RenderedTemplate {
 export interface EmailMessage {
 	/** Sender email address or object with name */
 	from: EmailRecipient
-	/** Primary recipient(s) — max 50 */
+	/** Primary recipient(s) - max 50 */
 	to: EmailRecipient | EmailRecipient[]
 	/** Email subject */
 	subject: string

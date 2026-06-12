@@ -9,16 +9,16 @@ import { emailError, emailFail, fail } from '../src/types/result.js'
 describe('fail()', () => {
 	it('wraps an error value into a failure result', () => {
 		const err = new Error('boom')
-		const result = fail(err)
+		const failure = fail(err)
 
-		expect(result).toEqual({ success: false, error: err })
+		expect(failure).toEqual({ success: false, error: err })
 	})
 
 	it('preserves the error identity', () => {
 		const err = new Error('boom')
-		const result = fail(err)
+		const failure = fail(err)
 
-		expect(result.error).toBe(err)
+		expect(failure.error).toBe(err)
 	})
 })
 
@@ -57,9 +57,9 @@ describe('emailError()', () => {
 
 describe('emailFail()', () => {
 	it('wraps an EmailError into a failure result', () => {
-		const result = emailFail('AUTHENTICATION_ERROR', 'bad key')
+		const failure = emailFail('AUTHENTICATION_ERROR', 'bad key')
 
-		expect(result).toEqual({
+		expect(failure).toEqual({
 			success: false,
 			error: {
 				code: 'AUTHENTICATION_ERROR',
@@ -69,11 +69,11 @@ describe('emailFail()', () => {
 	})
 
 	it('forwards optional fields to the underlying EmailError', () => {
-		const result = emailFail('RATE_LIMIT_ERROR', 'slow down', {
+		const failure = emailFail('RATE_LIMIT_ERROR', 'slow down', {
 			provider: 'resend',
 		})
 
-		expect(result.error).toMatchObject({
+		expect(failure.error).toMatchObject({
 			code: 'RATE_LIMIT_ERROR',
 			message: 'slow down',
 			provider: 'resend',

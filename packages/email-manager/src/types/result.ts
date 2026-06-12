@@ -4,7 +4,7 @@
  */
 
 /**
- * Base result type — discriminated union for success/error
+ * Base result type - discriminated union for success/error
  */
 export type Result<T, E = Error> =
 	| { success: true; data: T }

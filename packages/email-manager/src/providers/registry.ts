@@ -62,7 +62,7 @@ export async function createProvider(
 	config: ProviderConfigMap[keyof ProviderConfigMap],
 	logger?: Logger,
 ): Promise<EmailProvider> {
-	// Business rule: silent by default — caller opts into logging by injecting a logger
+	// Business rule: silent by default - caller opts into logging by injecting a logger
 	const resolvedLogger = logger ?? createLogger({ silent: true })
 
 	switch (name) {

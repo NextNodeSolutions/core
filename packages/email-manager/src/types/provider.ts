@@ -7,7 +7,7 @@ import type { EmailMessage } from './email.js'
 import type { SendResult } from './result.js'
 
 /**
- * Email provider interface — Strategy pattern
+ * Email provider interface - Strategy pattern
  * All providers must implement this contract
  */
 export interface EmailProvider {

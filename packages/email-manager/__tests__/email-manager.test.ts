@@ -16,12 +16,12 @@ import type { ReactElement } from 'react'
 import type { EmailProvider } from '../src/types/provider.js'
 import type { SendResult } from '../src/types/result.js'
 
-// Stub the provider registry — isolates the facade from real provider construction
+// Stub the provider registry - isolates the facade from real provider construction
 vi.mock('../src/providers/registry.js', () => ({
 	createProvider: vi.fn(),
 }))
 
-// Stub the template renderer — isolates the facade from React Email rendering
+// Stub the template renderer - isolates the facade from React Email rendering
 vi.mock('../src/templates/renderer.js', () => ({
 	renderTemplate: vi.fn(),
 }))
@@ -39,12 +39,16 @@ const successSendResult: SendResult = {
 }
 
 let mockProvider: EmailProvider
+let mockSend: ReturnType<typeof vi.fn>
+let mockValidateConfig: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
+	mockSend = vi.fn().mockResolvedValue(successSendResult)
+	mockValidateConfig = vi.fn().mockResolvedValue(true)
 	mockProvider = {
 		name: 'resend',
-		send: vi.fn().mockResolvedValue(successSendResult),
-		validateConfig: vi.fn().mockResolvedValue(true),
+		send: mockSend,
+		validateConfig: mockValidateConfig,
 	}
 	vi.mocked(mockCreateProvider).mockResolvedValue(mockProvider)
 	vi.mocked(mockRenderTemplate).mockResolvedValue({
@@ -92,7 +96,7 @@ describe('createEmailManager() (FR-5)', () => {
 	})
 })
 
-describe('EmailManager.send() — defaultFrom resolution (FR-9)', () => {
+describe('EmailManager.send() - defaultFrom resolution (FR-9)', () => {
 	it('applies defaultFrom when the message has no from', async () => {
 		const manager = await createEmailManager({
 			provider: 'resend',
@@ -107,7 +111,7 @@ describe('EmailManager.send() — defaultFrom resolution (FR-9)', () => {
 			props: { name: 'Test' },
 		})
 
-		expect(mockProvider.send).toHaveBeenCalledWith(
+		expect(mockSend).toHaveBeenCalledWith(
 			expect.objectContaining({ from: 'default@test.com' }),
 		)
 	})
@@ -127,7 +131,7 @@ describe('EmailManager.send() — defaultFrom resolution (FR-9)', () => {
 			from: 'custom@test.com',
 		})
 
-		expect(mockProvider.send).toHaveBeenCalledWith(
+		expect(mockSend).toHaveBeenCalledWith(
 			expect.objectContaining({ from: 'custom@test.com' }),
 		)
 	})
@@ -138,23 +142,23 @@ describe('EmailManager.send() — defaultFrom resolution (FR-9)', () => {
 			providerConfig: { apiKey: 're_test' },
 		})
 
-		const result = await manager.send({
+		const sendResult = await manager.send({
 			to: 'user@test.com',
 			subject: 'Test',
 			template: testTemplate,
 			props: { name: 'Test' },
 		})
 
-		expect(result.success).toBe(false)
-		if (!result.success) {
-			expect(result.error.code).toBe('VALIDATION_ERROR')
-			expect(result.error.message).toContain('from')
+		expect(sendResult.success).toBe(false)
+		if (!sendResult.success) {
+			expect(sendResult.error.code).toBe('VALIDATION_ERROR')
+			expect(sendResult.error.message).toContain('from')
 		}
-		expect(mockProvider.send).not.toHaveBeenCalled()
+		expect(mockSend).not.toHaveBeenCalled()
 	})
 })
 
-describe('EmailManager.send() — template rendering', () => {
+describe('EmailManager.send() - template rendering', () => {
 	it('renders the template with props then passes the html/text to the provider', async () => {
 		const manager = await createEmailManager({
 			provider: 'resend',
@@ -162,20 +166,20 @@ describe('EmailManager.send() — template rendering', () => {
 			defaultFrom: 'noreply@test.com',
 		})
 
-		const result = await manager.send({
+		const sendResult = await manager.send({
 			to: 'user@test.com',
 			subject: 'Welcome',
 			template: testTemplate,
 			props: { name: 'John' },
 		})
 
-		expect(result).toEqual(successSendResult)
+		expect(sendResult).toEqual(successSendResult)
 		expect(mockRenderTemplate).toHaveBeenCalledWith(
 			testTemplate,
 			{ name: 'John' },
 			undefined,
 		)
-		expect(mockProvider.send).toHaveBeenCalledWith(
+		expect(mockSend).toHaveBeenCalledWith(
 			expect.objectContaining({
 				from: 'noreply@test.com',
 				to: 'user@test.com',
@@ -220,22 +224,22 @@ describe('EmailManager.send() — template rendering', () => {
 			defaultFrom: 'noreply@test.com',
 		})
 
-		const result = await manager.send({
+		const sendResult = await manager.send({
 			to: 'user@test.com',
 			subject: 'Test',
 			template: testTemplate,
 			props: { name: 'Test' },
 		})
 
-		expect(result.success).toBe(false)
-		if (!result.success) {
-			expect(result.error.code).toBe('TEMPLATE_ERROR')
+		expect(sendResult.success).toBe(false)
+		if (!sendResult.success) {
+			expect(sendResult.error.code).toBe('TEMPLATE_ERROR')
 		}
-		expect(mockProvider.send).not.toHaveBeenCalled()
+		expect(mockSend).not.toHaveBeenCalled()
 	})
 })
 
-describe('EmailManager.send() — optional field forwarding', () => {
+describe('EmailManager.send() - optional field forwarding', () => {
 	it.each([
 		{ field: 'cc', value: 'cc@test.com' },
 		{ field: 'bcc', value: 'bcc@test.com' },
@@ -262,7 +266,7 @@ describe('EmailManager.send() — optional field forwarding', () => {
 			[field]: value,
 		})
 
-		expect(mockProvider.send).toHaveBeenCalledWith(
+		expect(mockSend).toHaveBeenCalledWith(
 			expect.objectContaining({ [field]: value }),
 		)
 	})
@@ -275,9 +279,7 @@ describe('EmailManager.validateConfig() (FR-10)', () => {
 	])(
 		'delegates to provider.validateConfig() and returns $expected',
 		async ({ providerResult, expected }) => {
-			vi.mocked(mockProvider.validateConfig).mockResolvedValue(
-				providerResult,
-			)
+			vi.mocked(mockValidateConfig).mockResolvedValue(providerResult)
 
 			const manager = await createEmailManager({
 				provider: 'resend',
@@ -285,12 +287,12 @@ describe('EmailManager.validateConfig() (FR-10)', () => {
 			})
 
 			await expect(manager.validateConfig()).resolves.toBe(expected)
-			expect(mockProvider.validateConfig).toHaveBeenCalledOnce()
+			expect(mockValidateConfig).toHaveBeenCalledOnce()
 		},
 	)
 })
 
-describe('EmailManager — logger injection', () => {
+describe('EmailManager - logger injection', () => {
 	it('forwards an "Email sent successfully" info log with the message id when send succeeds', async () => {
 		const spy = createSpyLogger()
 
@@ -316,7 +318,7 @@ describe('EmailManager — logger injection', () => {
 	})
 
 	it('forwards an "Email send failed" error log when the provider fails', async () => {
-		vi.mocked(mockProvider.send).mockResolvedValue({
+		vi.mocked(mockSend).mockResolvedValue({
 			success: false,
 			error: {
 				code: 'PROVIDER_ERROR',
@@ -366,13 +368,13 @@ describe('EmailManager — logger injection', () => {
 			defaultFrom: 'noreply@test.com',
 		})
 
-		const result = await manager.send({
+		const sendResult = await manager.send({
 			to: 'user@test.com',
 			subject: 'Test',
 			template: testTemplate,
 			props: { name: 'Test' },
 		})
 
-		expect(result.success).toBe(true)
+		expect(sendResult.success).toBe(true)
 	})
 })
