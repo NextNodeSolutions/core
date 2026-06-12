@@ -1,11 +1,10 @@
 /**
- * Custom oxlint plugin that forbids `as` type assertions except `as const`.
+ * Forbid `as` type assertions except `as const`.
  *
- * Rationale: `as` assertions bypass the type checker and hide type errors.
+ * `as` assertions bypass the type checker and hide type errors.
  * Use type guards, `satisfies`, or refine your types instead.
  */
-
-const noTypeAssertion = {
+export const noTypeAssertion = {
 	meta: {
 		type: 'problem',
 		docs: {
@@ -20,7 +19,7 @@ const noTypeAssertion = {
 	create(context) {
 		return {
 			TSAsExpression(node) {
-				const typeAnnotation = node.typeAnnotation
+				const { typeAnnotation } = node
 
 				const isAsConst =
 					typeAnnotation.type === 'TSTypeReference' &&
@@ -39,14 +38,3 @@ const noTypeAssertion = {
 		}
 	},
 }
-
-const plugin = {
-	meta: {
-		name: 'nextnode',
-	},
-	rules: {
-		'no-type-assertion': noTypeAssertion,
-	},
-}
-
-export default plugin

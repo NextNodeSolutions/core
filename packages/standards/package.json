@@ -30,7 +30,7 @@
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "lint": "oxlint",
-    "test": "echo 'Configuration package — no tests needed'"
+    "test": "vitest run"
   },
   "dependencies": {
     "@semantic-release/git": "^10.0.1",
@@ -44,14 +44,17 @@
     "husky": "^9.0.11",
     "lint-staged": "^15.2.2",
     "oxfmt": "^0.43.0",
-    "oxlint": "^1.58.0"
+    "oxlint": "^1.62.0",
+    "oxlint-tsgolint": "^0.23.0",
+    "vitest": "^3.2.4"
   },
   "peerDependencies": {
     "@commitlint/cli": "^19.0.0",
     "@commitlint/config-conventional": "^19.0.0",
     "astro": "^6.0.0",
     "oxfmt": ">=0.43.0",
-    "oxlint": ">=1.58.0",
+    "oxlint": ">=1.62.0",
+    "oxlint-tsgolint": ">=0.23.0",
     "tailwindcss": "^4.0.0",
     "tsdown": ">=0.21.0",
     "vitest": "^3.0.0 || ^4.0.0"
@@ -71,6 +74,9 @@
     },
     "oxlint": {
       "optional": false
+    },
+    "oxlint-tsgolint": {
+      "optional": true
     },
     "tailwindcss": {
       "optional": true

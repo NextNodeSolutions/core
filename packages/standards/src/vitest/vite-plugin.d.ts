@@ -6,7 +6,7 @@
  * This declaration re-applies the augmentation so it works regardless of
  * which vite version is resolved.
  *
- * Usage — add a triple-slash directive at the top of your vite/vitest config:
+ * Usage - add a triple-slash directive at the top of your vite/vitest config:
  *   /// <reference types="@nextnode-solutions/standards/vitest/vite-plugin" />
  */
 

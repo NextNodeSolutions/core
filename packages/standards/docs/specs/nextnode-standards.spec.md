@@ -265,3 +265,43 @@ N/A — configuration package with no runtime code execution, no user input hand
 ## Open Questions
 
 None — all decisions resolved during interview.
+
+---
+
+## Addendum 2026-06-10 — Skill mechanization (v4 coding skills → lint rules)
+
+Every mechanizable rule from the `coding`, `javascript`, `typescript` and `react` skills is now enforced by the exported oxlint config, TDD-covered by `src/__tests__/oxlint/` (functional + edge + non-regression case per rule, executed against the real oxlint binary).
+
+### Added native rules
+
+- **Control flow (coding R1/R2/R9)**: `no-else-return`, `no-lonely-if`, `no-negated-condition`, `max-depth: 2`, `max-nested-callbacks: 3` (off in tests — vitest DSL)
+- **Size (coding R3/R13)**: `max-lines-per-function: 50`, `max-lines: 250` (both skip blanks/comments, off in tests)
+- **Immutability (coding R7)**: `no-param-reassign` (props: true), `unicorn/no-array-sort` (toSorted)
+- **Dead code / errors (coding R10/R11, js)**: `no-empty`, `no-empty-function` (arrows allowed), `preserve-caught-error`, `no-eval`, `prefer-rest-params`
+- **JS idioms**: `prefer-destructuring` (warn), `promise/prefer-await-to-then` (warn — also flags the sanctioned `.catch(report)` detach), `no-await-in-loop` (warn), `unicorn/prefer-structured-clone`, `unicorn/prefer-array-some`, `guard-for-in`, `import/no-default-export` (off for config files / Next.js app router / pages / middleware / stories)
+- **TS**: `ban-ts-comment`, `no-non-null-assertion` (warn — `!` tolerated when provable), `no-inferrable-types`
+- **React**: `no-array-index-key`, `react-in-jsx-scope` off (modern JSX runtime)
+- **SRP proxies (coding R13 / react composition)**: `react/no-multi-comp` (warn), `react/jsx-max-depth: 8`, `max-params: 4`, `import/max-dependencies: 20` (warn)
+- **Misc**: `no-underscore-dangle` (warn, `__dirname`/`__filename` allowed)
+
+### Type-aware rules (require `oxlint --type-aware` + optional `oxlint-tsgolint` peer)
+
+`no-floating-promises`, `no-misused-promises`, `prefer-nullish-coalescing`, `switch-exhaustiveness-check` (a `default` clause does NOT count as exhaustive), `no-for-in-array`, `prefer-optional-chain` — all error.
+
+### Custom plugin `nextnode` (src/oxlint/plugins/)
+
+One rule per file under `plugins/rules/`, aggregated by `plugins/nextnode.js`:
+
+| Rule                | Level | Skill source                                             |
+| ------------------- | ----- | -------------------------------------------------------- |
+| `no-type-assertion` | error | typescript R0 (`as` banned except `as const`)            |
+| `no-enum`           | error | typescript (unions over enums; `declare enum` tolerated) |
+| `no-boolean-params` | error | coding R6 (2+ boolean params)                            |
+| `boolean-naming`    | error | coding R4 (is/has/can/should prefixes, no negated names) |
+| `no-generic-names`  | warn  | coding R4 (data, info, result, item, value, temp, stuff) |
+| `no-em-dash`        | error | coding quick-ref (U+2014 in strings AND comments)        |
+| `no-use-effect`     | warn  | react R1 (every useEffect questioned)                    |
+
+### Not mechanizable (stays in skills)
+
+Domain naming, single level of abstraction, DRY/rule-of-three vs AHA, architecture.md entirely (deep modules, god objects, dispatch tables, ownership), `allSettled` vs `all` choice, Map/Set over objects, domain/infra type separation.
