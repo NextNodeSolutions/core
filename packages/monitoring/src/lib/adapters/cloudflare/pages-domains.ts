@@ -8,13 +8,13 @@ import type { CloudflareClient } from '@/lib/adapters/cloudflare/client.ts'
 import type { CloudflarePagesDomain } from '@/lib/domain/cloudflare/pages-domain.ts'
 
 // Cloudflare rejects per_page > 25 on /pages/projects/:name/domains with error
-// 8000024 ("Invalid list options provided"). Undocumented cap — used as the
+// 8000024 ("Invalid list options provided"). Undocumented cap - used as the
 // chunk size for auto-pagination.
 const PAGES_DOMAINS_MAX_PER_PAGE = 25
 
-const parseVerificationData = (value: unknown): string | null => {
-	if (!isRecord(value)) return null
-	return parseStringOrNull(value.error_message)
+const parseVerificationData = (raw: unknown): string | null => {
+	if (!isRecord(raw)) return null
+	return parseStringOrNull(raw.error_message)
 }
 
 const parsePagesDomain = (

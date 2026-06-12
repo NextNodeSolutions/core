@@ -4,6 +4,7 @@ import { runListEndpoint } from '@/lib/adapters/endpoint-runner.ts'
 
 import type { APIRoute } from 'astro'
 
+// oxlint-disable-next-line nextnode/boolean-naming -- prerender is Astro's required route export name
 export const prerender = false
 
 export const GET: APIRoute = () =>

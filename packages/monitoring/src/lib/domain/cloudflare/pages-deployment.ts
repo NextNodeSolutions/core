@@ -27,9 +27,13 @@ export type CloudflarePagesDeploymentEnvironment =
 	(typeof CLOUDFLARE_PAGES_DEPLOYMENT_ENVIRONMENTS)[number]
 
 export const parseCloudflarePagesDeploymentEnvironment = (
-	value: unknown,
+	candidate: unknown,
 ): CloudflarePagesDeploymentEnvironment =>
-	parseStringUnion(value, CLOUDFLARE_PAGES_DEPLOYMENT_ENVIRONMENTS, 'preview')
+	parseStringUnion(
+		candidate,
+		CLOUDFLARE_PAGES_DEPLOYMENT_ENVIRONMENTS,
+		'preview',
+	)
 
 export interface CloudflarePagesDeployment {
 	readonly id: string
@@ -63,9 +67,9 @@ export const DEPLOYMENT_BADGE_STATUS: Record<
 }
 
 export const parseCloudflarePagesDeploymentStatus = (
-	value: unknown,
+	candidate: unknown,
 ): CloudflarePagesDeploymentStatus =>
-	parseStringUnion(value, CLOUDFLARE_PAGES_DEPLOYMENT_STATUSES, 'unknown')
+	parseStringUnion(candidate, CLOUDFLARE_PAGES_DEPLOYMENT_STATUSES, 'unknown')
 
 const isSuccessfulProductionDeployment = (
 	deployment: CloudflarePagesDeployment,

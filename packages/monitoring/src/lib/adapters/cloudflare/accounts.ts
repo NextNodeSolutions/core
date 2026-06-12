@@ -8,19 +8,19 @@ import type { CloudflareClient } from '@/lib/adapters/cloudflare/client.ts'
 // CLOUDFLARE_ACCOUNT_ID set explicitly to avoid picking the wrong one.
 export const resolveAccountId = async (token: string): Promise<string> => {
 	const context = 'Cloudflare accounts list'
-	const data = await apiGet('/accounts', token, context)
-	const result = extractArrayResult(data, context)
-	if (result.length === 0) {
+	const envelope = await apiGet('/accounts', token, context)
+	const accounts = extractArrayResult(envelope, context)
+	if (accounts.length === 0) {
 		throw new Error(
-			`${context}: token grants access to no accounts — check token scope`,
+			`${context}: token grants access to no accounts - check token scope`,
 		)
 	}
-	if (result.length > 1) {
+	if (accounts.length > 1) {
 		throw new Error(
-			`${context}: token grants access to ${String(result.length)} accounts — set CLOUDFLARE_ACCOUNT_ID to disambiguate`,
+			`${context}: token grants access to ${String(accounts.length)} accounts - set CLOUDFLARE_ACCOUNT_ID to disambiguate`,
 		)
 	}
-	const [first] = result
+	const [first] = accounts
 	if (!isRecord(first) || typeof first.id !== 'string') {
 		throw new Error(`${context}: malformed account entry (missing id)`)
 	}

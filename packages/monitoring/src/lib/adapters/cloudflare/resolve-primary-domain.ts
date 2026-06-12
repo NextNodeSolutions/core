@@ -11,7 +11,7 @@ export interface ResolvePrimaryDomainOptions {
 
 /**
  * Orchestrates list + parallel probe + selection. Only `active` domains are
- * probed — pending/error/canceled domains cannot meaningfully serve traffic,
+ * probed - pending/error/canceled domains cannot meaningfully serve traffic,
  * so we skip them to avoid paying their timeout.
  */
 export const resolvePrimaryDomain = async ({

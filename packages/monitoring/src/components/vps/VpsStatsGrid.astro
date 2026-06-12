@@ -43,7 +43,7 @@ const locationHint =
 	<StatCard label="Location" value={locationValue} hint={locationHint} />
 	<StatCard
 		label="Image"
-		value={server.image ?? '—'}
+		value={server.image ?? '-'}
 		hint={server.image ? 'Operating system' : undefined}
 	/>
 	<StatCard label="Age" value={formatRelativeTime(server.createdAt, nowMs)} />

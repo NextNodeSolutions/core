@@ -4,6 +4,7 @@ import { notImplemented } from '@/lib/domain/api-result.ts'
 
 import type { APIRoute } from 'astro'
 
+// oxlint-disable-next-line nextnode/boolean-naming -- prerender is Astro's required route export name
 export const prerender = false
 
 export const DELETE: APIRoute = ({ params }) =>

@@ -17,13 +17,13 @@ import type {
 	CloudflarePagesDeploymentStatus,
 } from '@/lib/domain/cloudflare/pages-deployment.ts'
 
-const parseTrigger = (value: unknown): string | null => {
-	if (!isRecord(value)) return null
-	const type = typeof value.type === 'string' ? value.type : null
-	if (!isRecord(value.metadata)) return type
+const parseTrigger = (raw: unknown): string | null => {
+	if (!isRecord(raw)) return null
+	const type = typeof raw.type === 'string' ? raw.type : null
+	if (!isRecord(raw.metadata)) return type
 	const triggerName =
-		typeof value.metadata.trigger_name === 'string'
-			? value.metadata.trigger_name
+		typeof raw.metadata.trigger_name === 'string'
+			? raw.metadata.trigger_name
 			: null
 	return triggerName ?? type
 }
@@ -42,9 +42,9 @@ const EMPTY_COMMIT_META: CommitMeta = {
 	author: null,
 }
 
-const parseCommitMeta = (value: unknown): CommitMeta => {
-	if (!isRecord(value) || !isRecord(value.metadata)) return EMPTY_COMMIT_META
-	const meta = value.metadata
+const parseCommitMeta = (raw: unknown): CommitMeta => {
+	if (!isRecord(raw) || !isRecord(raw.metadata)) return EMPTY_COMMIT_META
+	const meta = raw.metadata
 	return {
 		branch: parseStringOrNull(meta.branch),
 		commitHash: parseStringOrNull(meta.commit_hash),
@@ -53,9 +53,9 @@ const parseCommitMeta = (value: unknown): CommitMeta => {
 	}
 }
 
-const parseLatestStage = (value: unknown): string | null => {
-	if (!isRecord(value)) return null
-	return parseStringOrNull(value.name)
+const parseLatestStage = (raw: unknown): string | null => {
+	if (!isRecord(raw)) return null
+	return parseStringOrNull(raw.name)
 }
 
 const parsePagesDeployment = (
@@ -110,7 +110,7 @@ export interface ListPagesDeploymentsOptions {
 	readonly limit: number
 }
 
-// Deployments are the most dynamic CF data — a build can finish during the
+// Deployments are the most dynamic CF data - a build can finish during the
 // dashboard session. Keep TTL short so refreshing the page surfaces new
 // deployments quickly while still collapsing duplicate concurrent renders.
 const PAGES_DEPLOYMENTS_TTL_MS = 15_000
@@ -126,14 +126,14 @@ const fetchPagesDeployments = async ({
 	ReadonlyArray<CloudflarePagesDeployment>
 > => {
 	const context = `Cloudflare Pages deployments for "${projectName}"`
-	const data = await apiGet(
+	const envelope = await apiGet(
 		`/accounts/${client.accountId}/pages/projects/${encodeURIComponent(projectName)}/deployments`,
 		client.token,
 		context,
 		{ per_page: limit },
 	)
-	const result = extractArrayResult(data, context)
-	return result.map(parsePagesDeployment)
+	const deployments = extractArrayResult(envelope, context)
+	return deployments.map(parsePagesDeployment)
 }
 
 const memoizedListPagesDeployments = keyedMemoizeAsync(

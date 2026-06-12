@@ -14,6 +14,7 @@ import { getServerByName } from '@/lib/adapters/hetzner/servers.ts'
 import { loadPageState } from '@/lib/adapters/load-page-state.ts'
 import { computeVpsHealth } from '@/lib/domain/hetzner/vps-health.ts'
 
+// oxlint-disable-next-line nextnode/boolean-naming -- prerender is Astro's required route export name
 export const prerender = false
 
 const { slug } = Astro.params

@@ -15,7 +15,7 @@ export default defineConfig({
 	site: process.env.SITE_URL,
 	env: { schema: envSchema },
 	// `noExternal: true` inlines every SSR dep into dist/server/entry.mjs so
-	// the runtime image needs no node_modules. Strict ESM stack — no CommonJS
+	// the runtime image needs no node_modules. Strict ESM stack - no CommonJS
 	// interop pitfalls. Skipped under vitest: `getViteConfig` reuses this file
 	// and vite-node crashes on `noExternal: true`.
 	vite: {

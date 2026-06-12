@@ -20,6 +20,6 @@ export interface CloudflareZone {
 }
 
 export const parseCloudflareZoneStatus = (
-	value: unknown,
+	candidate: unknown,
 ): CloudflareZoneStatus =>
-	parseStringUnion(value, CLOUDFLARE_ZONE_STATUSES, 'unknown')
+	parseStringUnion(candidate, CLOUDFLARE_ZONE_STATUSES, 'unknown')

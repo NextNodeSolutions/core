@@ -36,11 +36,13 @@ const authHeaders = (token: string): Record<string, string> => ({
 	'Content-Type': 'application/json',
 })
 
-const parseApiError = (item: unknown): CloudflareApiError => {
-	if (!isRecord(item)) return { code: 0, message: 'unknown error' }
-	const code = typeof item.code === 'number' ? item.code : 0
+const parseApiError = (rawError: unknown): CloudflareApiError => {
+	if (!isRecord(rawError)) return { code: 0, message: 'unknown error' }
+	const code = typeof rawError.code === 'number' ? rawError.code : 0
 	const message =
-		typeof item.message === 'string' ? item.message : 'unknown error'
+		typeof rawError.message === 'string'
+			? rawError.message
+			: 'unknown error'
 	return { code, message }
 }
 
@@ -64,15 +66,15 @@ const parseApiResponse = async (
 	response: Response,
 	context: string,
 ): Promise<unknown> => {
-	const data: unknown = await response.json()
-	if (!response.ok || !isRecord(data) || data.success !== true) {
+	const body: unknown = await response.json()
+	if (!response.ok || !isRecord(body) || body.success !== true) {
 		const errors =
-			isRecord(data) && Array.isArray(data.errors)
-				? data.errors.map(parseApiError)
+			isRecord(body) && Array.isArray(body.errors)
+				? body.errors.map(parseApiError)
 				: []
 		throw new CloudflareApiFailure(context, response.status, errors)
 	}
-	return data
+	return body
 }
 
 export const apiGet = async (
@@ -114,32 +116,32 @@ export const apiDelete = async (
 }
 
 export const extractArrayResult = (
-	data: unknown,
+	envelope: unknown,
 	context: string,
 ): ReadonlyArray<unknown> => {
-	if (!isRecord(data) || !Array.isArray(data.result)) {
+	if (!isRecord(envelope) || !Array.isArray(envelope.result)) {
 		throw new Error(`${context}: \`result\` must be an array`)
 	}
-	return data.result
+	return envelope.result
 }
 
 export const extractObjectResult = (
-	data: unknown,
+	envelope: unknown,
 	context: string,
 ): Record<string, unknown> => {
-	if (!isRecord(data) || !isRecord(data.result)) {
+	if (!isRecord(envelope) || !isRecord(envelope.result)) {
 		throw new Error(`${context}: \`result\` must be an object`)
 	}
-	return data.result
+	return envelope.result
 }
 
-const extractTotalPages = (data: unknown, context: string): number => {
-	if (!isRecord(data) || !isRecord(data.result_info)) {
+const extractTotalPages = (envelope: unknown, context: string): number => {
+	if (!isRecord(envelope) || !isRecord(envelope.result_info)) {
 		throw new Error(
-			`${context}: missing \`result_info\` — endpoint did not return pagination metadata`,
+			`${context}: missing \`result_info\` - endpoint did not return pagination metadata`,
 		)
 	}
-	const total = data.result_info.total_pages
+	const total = envelope.result_info.total_pages
 	if (typeof total !== 'number' || total < 1) {
 		throw new Error(
 			`${context}: invalid \`result_info.total_pages\` (got ${String(total)})`,
@@ -151,7 +153,7 @@ const extractTotalPages = (data: unknown, context: string): number => {
 /**
  * Fetch every page of a paginated Cloudflare list endpoint and return the
  * concatenated array. Callers pass the endpoint's maximum `per_page` as the
- * chunk size — Cloudflare Pages endpoints enforce undocumented caps (see each
+ * chunk size - Cloudflare Pages endpoints enforce undocumented caps (see each
  * adapter for the measured value), so auto-pagination here is the only way to
  * surface the full data set without silent truncation.
  */
@@ -164,13 +166,13 @@ export const listAll = async (
 	const fetchPage = async (
 		page: number,
 	): Promise<{ items: ReadonlyArray<unknown>; totalPages: number }> => {
-		const data = await apiGet(path, token, context, {
+		const envelope = await apiGet(path, token, context, {
 			per_page: perPage,
 			page,
 		})
 		return {
-			items: extractArrayResult(data, context),
-			totalPages: extractTotalPages(data, context),
+			items: extractArrayResult(envelope, context),
+			totalPages: extractTotalPages(envelope, context),
 		}
 	}
 	const first = await fetchPage(1)

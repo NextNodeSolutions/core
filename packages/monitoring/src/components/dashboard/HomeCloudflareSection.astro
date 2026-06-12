@@ -31,7 +31,7 @@ const groups = state.kind === 'ok' ? groupPagesProjects(state.data) : []
 	<div class="grid grid-cols-1 gap-4 sm:grid-cols-1">
 		<StatCard
 			label="Cloudflare projects"
-			value={state.kind === 'ok' ? groups.length : '—'}
+			value={state.kind === 'ok' ? groups.length : '-'}
 			hint="Pages logical groups"
 		/>
 	</div>

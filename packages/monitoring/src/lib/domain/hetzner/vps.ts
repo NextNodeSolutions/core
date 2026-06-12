@@ -66,11 +66,11 @@ export interface HetznerVps {
 	readonly volumeCount: number
 }
 
-export const parseVpsStatus = (value: unknown): VpsStatus =>
-	parseStringUnion(value, VPS_STATUSES, 'unknown')
+export const parseVpsStatus = (candidate: unknown): VpsStatus =>
+	parseStringUnion(candidate, VPS_STATUSES, 'unknown')
 
-export const parseVpsCpuType = (value: unknown): VpsCpuType =>
-	parseStringUnion(value, VPS_CPU_TYPES, 'unknown')
+export const parseVpsCpuType = (candidate: unknown): VpsCpuType =>
+	parseStringUnion(candidate, VPS_CPU_TYPES, 'unknown')
 
-export const parseVpsArchitecture = (value: unknown): VpsArchitecture =>
-	parseStringUnion(value, VPS_ARCHITECTURES, 'unknown')
+export const parseVpsArchitecture = (candidate: unknown): VpsArchitecture =>
+	parseStringUnion(candidate, VPS_ARCHITECTURES, 'unknown')

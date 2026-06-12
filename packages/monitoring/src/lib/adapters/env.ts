@@ -15,12 +15,12 @@ export class MissingEnvError extends Error {
 }
 
 export const getEnv = (name: string): string | undefined => {
-	const value = getSecret(name)
-	return value && value.length > 0 ? value : undefined
+	const secret = getSecret(name)
+	return secret && secret.length > 0 ? secret : undefined
 }
 
 export const requireEnv = (name: string): string => {
-	const value = getEnv(name)
-	if (!value) throw new MissingEnvError(name)
-	return value
+	const secret = getEnv(name)
+	if (!secret) throw new MissingEnvError(name)
+	return secret
 }

@@ -17,10 +17,10 @@ interface Row {
 
 const rows: ReadonlyArray<Row> = [
 	{ label: 'Server ID', value: String(server.id), mono: true },
-	{ label: 'IPv4', value: server.ipv4 ?? '—', mono: true },
-	{ label: 'IPv6', value: server.ipv6 ?? '—', mono: true },
-	{ label: 'Datacenter', value: server.location.datacenter ?? '—', mono: true },
-	{ label: 'Region', value: server.location.country ?? '—' },
+	{ label: 'IPv4', value: server.ipv4 ?? '-', mono: true },
+	{ label: 'IPv6', value: server.ipv6 ?? '-', mono: true },
+	{ label: 'Datacenter', value: server.location.datacenter ?? '-', mono: true },
+	{ label: 'Region', value: server.location.country ?? '-' },
 	{ label: 'Traffic in', value: formatBytes(server.traffic.ingoingBytes) },
 	{ label: 'Traffic out', value: formatBytes(server.traffic.outgoingBytes) },
 	{ label: 'Traffic included', value: formatBytes(server.traffic.includedBytes) },
@@ -32,7 +32,7 @@ const rows: ReadonlyArray<Row> = [
 	{ label: 'Locked', value: server.locked ? 'Yes' : 'No' },
 	{
 		label: 'Volumes',
-		value: server.volumeCount === 0 ? '—' : String(server.volumeCount),
+		value: server.volumeCount === 0 ? '-' : String(server.volumeCount),
 	},
 ]
 ---

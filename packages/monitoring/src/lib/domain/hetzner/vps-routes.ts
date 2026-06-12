@@ -11,5 +11,5 @@ export const vpsApiPath = (
 
 // Hetzner does not expose project numbers via API, so we cannot deep link
 // to a specific server in the console. The generic projects page is the
-// closest landing page — Hetzner redirects there to the active project.
+// closest landing page - Hetzner redirects there to the active project.
 export const HETZNER_CONSOLE_URL = 'https://console.hetzner.cloud/projects'

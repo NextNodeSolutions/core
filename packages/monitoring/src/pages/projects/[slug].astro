@@ -9,6 +9,7 @@ import {
 	METHOD_OVERRIDE_FIELD,
 } from '@/lib/adapters/method-override-route.ts'
 
+// oxlint-disable-next-line nextnode/boolean-naming -- prerender is Astro's required route export name
 export const prerender = false
 
 const { slug } = Astro.params
@@ -122,10 +123,10 @@ if (!slug) {
 			description="Read-only metrics from the host this project runs on. Destroying the VPS happens on the VPS view."
 		/>
 		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-			<StatCard label="CPU" value="—" hint="15 min avg" />
-			<StatCard label="Memory" value="—" hint="Resident" />
-			<StatCard label="Disk" value="—" hint="Root volume" />
-			<StatCard label="Uptime" value="—" hint="systemd reported" />
+			<StatCard label="CPU" value="-" hint="15 min avg" />
+			<StatCard label="Memory" value="-" hint="Resident" />
+			<StatCard label="Disk" value="-" hint="Root volume" />
+			<StatCard label="Uptime" value="-" hint="systemd reported" />
 		</div>
 	</section>
 

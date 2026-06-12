@@ -33,6 +33,6 @@ export const DOMAIN_BADGE_STATUS: Record<
 }
 
 export const parseCloudflarePagesDomainStatus = (
-	value: unknown,
+	candidate: unknown,
 ): CloudflarePagesDomainStatus =>
-	parseStringUnion(value, CLOUDFLARE_PAGES_DOMAIN_STATUSES, 'unknown')
+	parseStringUnion(candidate, CLOUDFLARE_PAGES_DOMAIN_STATUSES, 'unknown')

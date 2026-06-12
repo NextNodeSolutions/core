@@ -16,7 +16,7 @@ const toIsoDate = (ms: number): string =>
 
 export const formatIsoDate = (isoString: string): string => {
 	const ms = parseIsoMs(isoString)
-	return ms === null ? '—' : toIsoDate(ms)
+	return ms === null ? '-' : toIsoDate(ms)
 }
 
 export const formatRelativeTime = (
@@ -24,7 +24,7 @@ export const formatRelativeTime = (
 	nowMs: number,
 ): string => {
 	const ms = parseIsoMs(isoString)
-	if (ms === null) return '—'
+	if (ms === null) return '-'
 	const diffSeconds = Math.round((nowMs - ms) / MS_PER_SECOND)
 	const minutes = Math.round(diffSeconds / SECONDS_PER_MINUTE)
 	if (minutes < 1) return 'just now'

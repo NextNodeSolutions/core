@@ -7,7 +7,7 @@
  * `cachified` collapses the redundant work:
  *
  * - **TTL cache**: a successful fetch is reused until `ttlMs` elapses. Failed
- *   fetches are NEVER cached — the next call retries fresh.
+ *   fetches are NEVER cached - the next call retries fresh.
  * - **In-flight dedup**: when two callers ask for the same key while a fetch
  *   is in flight, the second one awaits the first instead of duplicating it.
  *
@@ -32,8 +32,8 @@ const createLRUBackedCache = <Value>(max: number): BackedCache<Value> => {
 	const lru = new LRUCache<string, CacheEntry<Value>>({ max })
 	const cache: Cache<Value> = {
 		get: key => lru.get(key),
-		set: (key, value) => {
-			lru.set(key, value)
+		set: (key, entry) => {
+			lru.set(key, entry)
 		},
 		delete: key => {
 			lru.delete(key)

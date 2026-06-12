@@ -17,7 +17,7 @@ export interface ApiErr {
 
 export type ApiResult<T> = ApiOk<T> | ApiErr
 
-export const apiOk = <T>(data: T): ApiOk<T> => ({ ok: true, data })
+export const apiOk = <T>(payload: T): ApiOk<T> => ({ ok: true, data: payload })
 
 export const apiErr = (code: ApiErrCode, message: string): ApiErr => ({
 	ok: false,

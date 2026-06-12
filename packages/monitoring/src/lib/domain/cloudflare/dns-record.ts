@@ -27,5 +27,5 @@ export interface CloudflareDnsRecord {
 	readonly comment: string | null
 }
 
-export const parseDnsRecordType = (value: unknown): DnsRecordType =>
-	parseStringUnion(value, DNS_RECORD_TYPES, 'unknown')
+export const parseDnsRecordType = (candidate: unknown): DnsRecordType =>
+	parseStringUnion(candidate, DNS_RECORD_TYPES, 'unknown')

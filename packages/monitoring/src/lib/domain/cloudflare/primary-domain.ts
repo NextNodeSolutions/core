@@ -11,10 +11,10 @@ export interface DomainProbe {
  *
  * A custom domain often coexists with its apex/www counterpart that only
  * serves a redirect (HTTP 301/302) to the canonical hostname. We want the
- * canonical one — the one that returns a real page (HTTP 200).
+ * canonical one - the one that returns a real page (HTTP 200).
  *
  * Tie-break rule: the oldest `createdAt` wins (ISO-8601 lex-sort is safe).
- * Returns null when no probed domain returned 200 — callers should fall
+ * Returns null when no probed domain returned 200 - callers should fall
  * back to the Cloudflare-issued `*.pages.dev` subdomain in that case.
  */
 export const selectPrimaryDomain = (

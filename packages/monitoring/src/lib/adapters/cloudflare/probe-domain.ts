@@ -10,7 +10,7 @@ const PROBE_TIMEOUT_MS = 3000
 const PROBE_TTL_MS = 300_000
 
 // `redirect: 'manual'` is load-bearing: distinguishing 200 from 302 is the
-// whole point of the probe — see `selectPrimaryDomain`. Returns `null` on
+// whole point of the probe - see `selectPrimaryDomain`. Returns `null` on
 // timeout / network error so a single broken domain cannot take down the
 // listing page.
 const runProbe = async (hostname: string): Promise<number | null> => {

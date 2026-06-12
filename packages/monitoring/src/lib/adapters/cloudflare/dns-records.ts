@@ -51,7 +51,7 @@ export interface ListDnsRecordsByContentOptions {
 	readonly content: string
 }
 
-// DNS records can change but rarely faster than a minute — operator-driven
+// DNS records can change but rarely faster than a minute - operator-driven
 // edits are confirm-gated and not the common navigation case.
 const DNS_RECORDS_TTL_MS = 60_000
 
@@ -70,7 +70,7 @@ const fetchDnsRecordsByContent = async ({
 		context,
 		DNS_RECORDS_MAX_PER_PAGE,
 	)
-	return raw.map((item, index) => parseDnsRecord(item, index, zoneName))
+	return raw.map((entry, index) => parseDnsRecord(entry, index, zoneName))
 }
 
 const memoizedListDnsRecordsByContent = keyedMemoizeAsync(

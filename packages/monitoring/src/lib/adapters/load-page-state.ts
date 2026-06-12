@@ -9,8 +9,8 @@ export const loadPageState = async <T>(
 	fetcher: () => Promise<T>,
 ): Promise<LoadState<T>> => {
 	try {
-		const data = await fetcher()
-		return { kind: 'ok', data }
+		const payload = await fetcher()
+		return { kind: 'ok', data: payload }
 	} catch (error) {
 		if (error instanceof MissingEnvError) {
 			logger.error(`${scope}: missing config`, { varName: error.varName })

@@ -16,14 +16,14 @@ const exchangeClientSecret = async (clientSecret: string): Promise<string> => {
 	if (!response.ok) {
 		const body = await response.text()
 		throw new Error(
-			`Tailscale OAuth token exchange: ${String(response.status)} — ${body}`,
+			`Tailscale OAuth token exchange: ${String(response.status)} - ${body}`,
 		)
 	}
-	const data: unknown = await response.json()
-	if (!isRecord(data) || typeof data.access_token !== 'string') {
+	const body: unknown = await response.json()
+	if (!isRecord(body) || typeof body.access_token !== 'string') {
 		throw new Error('Tailscale OAuth token exchange: missing access_token')
 	}
-	return data.access_token
+	return body.access_token
 }
 
 const listDevices = async (accessToken: string): Promise<unknown> => {
@@ -33,7 +33,7 @@ const listDevices = async (accessToken: string): Promise<unknown> => {
 	if (!response.ok) {
 		const body = await response.text()
 		throw new Error(
-			`Tailscale list devices: ${String(response.status)} — ${body}`,
+			`Tailscale list devices: ${String(response.status)} - ${body}`,
 		)
 	}
 	return response.json()
@@ -82,22 +82,22 @@ const findDeviceIpv4 = (devices: unknown, hostname: string): string | null => {
 	)
 }
 
-// Tailscale device IPs change only when a host re-registers — rare enough
+// Tailscale device IPs change only when a host re-registers - rare enough
 // that 60 s is well within "fresh enough" for the monitoring view, and it
 // collapses two sequential fetches (token exchange + list devices) into a
 // single cached lookup per host per minute.
 const TAILNET_IP_TTL_MS = 60_000
 
 // Returns `null` instead of throwing when the device is not (yet) on the
-// tailnet. The monitoring dashboard surfaces this via the empty state — it
+// tailnet. The monitoring dashboard surfaces this via the empty state - it
 // does not poll.
 const fetchTailnetIpByHostname = async (args: {
 	clientSecret: string
 	hostname: string
 }): Promise<string | null> => {
 	const accessToken = await exchangeClientSecret(args.clientSecret)
-	const data = await listDevices(accessToken)
-	return findDeviceIpv4(data, args.hostname)
+	const devices = await listDevices(accessToken)
+	return findDeviceIpv4(devices, args.hostname)
 }
 
 const memoizedGetTailnetIpByHostname = keyedMemoizeAsync(

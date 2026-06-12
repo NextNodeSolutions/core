@@ -1,11 +1,11 @@
 export const parseStringUnion = <T extends string>(
-	value: unknown,
+	candidate: unknown,
 	allowed: ReadonlyArray<T>,
 	fallback: T,
 ): T => {
-	if (typeof value !== 'string') return fallback
-	for (const candidate of allowed) {
-		if (candidate === value) return candidate
+	if (typeof candidate !== 'string') return fallback
+	for (const allowedValue of allowed) {
+		if (allowedValue === candidate) return allowedValue
 	}
 	return fallback
 }

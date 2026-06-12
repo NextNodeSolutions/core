@@ -30,7 +30,7 @@ const tailBasePath = (
 	`/accounts/${accountId}/pages/projects/${encodeURIComponent(projectName)}/deployments/${encodeURIComponent(deploymentId)}/tails`
 
 // Creates a live log tail session on Cloudflare and returns its WebSocket URL.
-// The same endpoint `wrangler pages deployment tail` uses — the returned `url`
+// The same endpoint `wrangler pages deployment tail` uses - the returned `url`
 // is a short-lived pre-authenticated wss endpoint that must be consumed with
 // the `trace-v1` subprotocol.
 export const createPagesTail = async ({
@@ -39,21 +39,21 @@ export const createPagesTail = async ({
 	deploymentId,
 }: CreatePagesTailOptions): Promise<PagesTailSession> => {
 	const context = `Cloudflare Pages tail session for "${projectName}"/"${deploymentId}"`
-	const data = await apiPost(
+	const envelope = await apiPost(
 		tailBasePath(client.accountId, projectName, deploymentId),
 		client.token,
 		context,
 	)
-	const result = extractObjectResult(data, context)
-	if (typeof result.id !== 'string') {
+	const session = extractObjectResult(envelope, context)
+	if (typeof session.id !== 'string') {
 		throw new Error(`${context}: missing \`id\``)
 	}
-	if (typeof result.url !== 'string') {
+	if (typeof session.url !== 'string') {
 		throw new Error(`${context}: missing \`url\``)
 	}
 	const expiresAt =
-		typeof result.expires_at === 'string' ? result.expires_at : null
-	return { id: result.id, url: result.url, expiresAt }
+		typeof session.expires_at === 'string' ? session.expires_at : null
+	return { id: session.id, url: session.url, expiresAt }
 }
 
 export interface DeletePagesTailOptions {
@@ -63,7 +63,7 @@ export interface DeletePagesTailOptions {
 	readonly tailId: string
 }
 
-// Best-effort cleanup — Cloudflare auto-expires tails, so a failed delete is
+// Best-effort cleanup - Cloudflare auto-expires tails, so a failed delete is
 // logged but never raised: the main request pipeline must not fail because a
 // housekeeping call did.
 export const deletePagesTail = async ({

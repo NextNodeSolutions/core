@@ -26,5 +26,11 @@ export const runListEndpoint = async <T>(
 				apiErr('internal_error', state.message),
 				HTTP_STATUS.INTERNAL_SERVER_ERROR,
 			)
+		default:
+			return assertNeverState(state)
 	}
+}
+
+const assertNeverState = (state: never): never => {
+	throw new Error(`Unhandled load state: ${JSON.stringify(state)}`)
 }

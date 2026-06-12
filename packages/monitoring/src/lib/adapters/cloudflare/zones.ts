@@ -26,7 +26,7 @@ const parseZone = (raw: unknown, index: number): CloudflareZone => {
 	}
 }
 
-// Zones change very rarely — adding a new zone is a manual operator step. A
+// Zones change very rarely - adding a new zone is a manual operator step. A
 // 5 min TTL is plenty fresh and removes most of the per-page-render fan-out.
 const ZONES_TTL_MS = 300_000
 

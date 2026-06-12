@@ -10,7 +10,7 @@ import type { CloudflareClient } from '@/lib/adapters/cloudflare/client.ts'
 import type { CloudflarePagesProject } from '@/lib/domain/cloudflare/pages-project.ts'
 
 // Cloudflare rejects per_page > 10 on /pages/projects with error 8000024
-// ("Invalid list options provided"). Undocumented cap — used as the chunk size
+// ("Invalid list options provided"). Undocumented cap - used as the chunk size
 // for auto-pagination.
 const PAGES_PROJECTS_MAX_PER_PAGE = 10
 
@@ -59,8 +59,8 @@ const fetchPagesProjects = async ({
 		context,
 		PAGES_PROJECTS_MAX_PER_PAGE,
 	)
-	return raw.map((item, index) =>
-		parsePagesProject(item, `Cloudflare Pages project[${String(index)}]`),
+	return raw.map((entry, index) =>
+		parsePagesProject(entry, `Cloudflare Pages project[${String(index)}]`),
 	)
 }
 
@@ -85,13 +85,13 @@ const fetchPagesProject = async ({
 	projectName,
 }: GetPagesProjectOptions): Promise<CloudflarePagesProject> => {
 	const context = `Cloudflare Pages project "${projectName}"`
-	const data = await apiGet(
+	const envelope = await apiGet(
 		`/accounts/${client.accountId}/pages/projects/${encodeURIComponent(projectName)}`,
 		client.token,
 		context,
 	)
-	const result = extractObjectResult(data, context)
-	return parsePagesProject(result, context)
+	const project = extractObjectResult(envelope, context)
+	return parsePagesProject(project, context)
 }
 
 const memoizedGetPagesProject = keyedMemoizeAsync(

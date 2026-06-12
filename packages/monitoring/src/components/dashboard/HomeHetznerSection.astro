@@ -30,12 +30,12 @@ const runningCount = servers.filter((s) => s.status === 'running').length
 	<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
 		<StatCard
 			label="Hetzner VPS"
-			value={state.kind === 'ok' ? servers.length : '—'}
+			value={state.kind === 'ok' ? servers.length : '-'}
 			hint="Tailscale fleet"
 		/>
 		<StatCard
 			label="Running"
-			value={state.kind === 'ok' ? runningCount : '—'}
+			value={state.kind === 'ok' ? runningCount : '-'}
 			hint="status=running"
 			tone="positive"
 		/>

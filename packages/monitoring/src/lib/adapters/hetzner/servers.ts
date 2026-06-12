@@ -24,19 +24,19 @@ import type {
 // private-net-only), so `null` is a domain value, not a silent fallback.
 const parseIpv4 = (publicNet: unknown): string | null => {
 	if (!isRecord(publicNet)) return null
-	const ipv4 = publicNet.ipv4
+	const { ipv4 } = publicNet
 	if (!isRecord(ipv4)) return null
 	return typeof ipv4.ip === 'string' ? ipv4.ip : null
 }
 
 const parseIpv6 = (publicNet: unknown): string | null => {
 	if (!isRecord(publicNet)) return null
-	const ipv6 = publicNet.ipv6
+	const { ipv6 } = publicNet
 	if (!isRecord(ipv6)) return null
 	return typeof ipv6.ip === 'string' ? ipv6.ip : null
 }
 
-// `labels` is an optional map in the Hetzner API — absent means "no labels".
+// `labels` is an optional map in the Hetzner API - absent means "no labels".
 const parseLabels = (
 	raw: unknown,
 	context: string,
@@ -84,7 +84,7 @@ const parseLocation = (
 	if (!isRecord(datacenter)) {
 		throw new Error(`${context}: missing \`datacenter\``)
 	}
-	const location = datacenter.location
+	const { location } = datacenter
 	if (!isRecord(location) || typeof location.name !== 'string') {
 		throw new Error(`${context}: missing \`datacenter.location.name\``)
 	}
@@ -160,13 +160,13 @@ const parseServer = (raw: unknown, index: number): HetznerVps => {
 }
 
 const parseServerList = (
-	data: unknown,
+	envelope: unknown,
 	context: string,
 ): ReadonlyArray<HetznerVps> => {
-	if (!isRecord(data) || !Array.isArray(data.servers)) {
+	if (!isRecord(envelope) || !Array.isArray(envelope.servers)) {
 		throw new Error(`${context}: missing \`servers\` array`)
 	}
-	return data.servers.map(parseServer)
+	return envelope.servers.map(parseServer)
 }
 
 // VPS state changes rarely (create/destroy/reboot are operator-driven and
@@ -178,7 +178,7 @@ const SERVER_BY_NAME_TTL_MS = 30_000
 /**
  * List every Hetzner server reachable by the given token.
  *
- * Not paginated — NextNode's project fleet is a handful of VPSs, well
+ * Not paginated - NextNode's project fleet is a handful of VPSs, well
  * under the Hetzner default per-page cap. If the fleet grows past one
  * page, switch to iterating `meta.pagination.next_page`.
  */
@@ -186,8 +186,8 @@ const fetchServerList = async (
 	token: string,
 ): Promise<ReadonlyArray<HetznerVps>> => {
 	const context = 'Hetzner servers list'
-	const data = await hetznerGet('/servers', token, context)
-	return parseServerList(data, context)
+	const envelope = await hetznerGet('/servers', token, context)
+	return parseServerList(envelope, context)
 }
 
 const memoizedListServers = keyedMemoizeAsync(
@@ -203,7 +203,7 @@ export const listServers = (
 /**
  * Fetch a single Hetzner server by name.
  *
- * Hetzner has no `/servers/by-name/{name}` route — the canonical lookup is
+ * Hetzner has no `/servers/by-name/{name}` route - the canonical lookup is
  * `/servers?name=<name>`, which returns a list filtered server-side. Names
  * are unique within a project, so we expect zero or one match.
  */
@@ -212,12 +212,12 @@ const fetchServerByName = async (args: {
 	name: string
 }): Promise<HetznerVps | null> => {
 	const context = `Hetzner server "${args.name}"`
-	const data = await hetznerGet(
+	const envelope = await hetznerGet(
 		`/servers?name=${encodeURIComponent(args.name)}`,
 		args.token,
 		context,
 	)
-	const servers = parseServerList(data, context)
+	const servers = parseServerList(envelope, context)
 	return servers[0] ?? null
 }
 
