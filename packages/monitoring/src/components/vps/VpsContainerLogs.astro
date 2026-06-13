@@ -1,0 +1,50 @@
+---
+import SectionHeader from '@/components/dashboard/SectionHeader.astro'
+import type { LogLine } from '@/lib/domain/monitoring/log-query.ts'
+
+interface Props {
+	project: string | null
+	lines: ReadonlyArray<LogLine>
+}
+
+const MAX_VISIBLE_LINES = 50
+
+const { project, lines } = Astro.props
+const recent = lines.slice(0, MAX_VISIBLE_LINES)
+---
+
+<article
+	class="rounded-2xl border border-base-100 bg-white p-6 shadow-subtle"
+>
+	<SectionHeader kicker="Logs" title="Live container logs" />
+	{
+		project === null ? (
+			<p class="mt-4 font-mono text-xs text-base-500">
+				No project resolved for this VPS yet - logs appear once a
+				project is deployed.
+			</p>
+		) : recent.length === 0 ? (
+			<p class="mt-4 font-mono text-xs text-base-500">
+				No log lines from <code>{project}</code> in VictoriaLogs.
+			</p>
+		) : (
+			<div class="mt-4 max-h-80 space-y-1 overflow-y-auto font-mono text-[11px] leading-relaxed">
+				{recent.map(line => (
+					<div class="flex gap-3">
+						<span class="shrink-0 text-base-400">
+							{line.time.slice(11, 19)}
+						</span>
+						{line.container && (
+							<span class="shrink-0 text-accent-700">
+								{line.container}
+							</span>
+						)}
+						<span class="truncate text-base-700" title={line.message}>
+							{line.message}
+						</span>
+					</div>
+				))}
+			</div>
+		)
+	}
+</article>

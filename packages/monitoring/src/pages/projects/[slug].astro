@@ -1,6 +1,8 @@
 ---
 import DashboardLayout from '@/layouts/DashboardLayout.astro'
 import Button from '@/components/foundations/Button.astro'
+import ProjectObservability from '@/components/projects/ProjectObservability.astro'
+import Skeleton from '@/components/dashboard/Skeleton.astro'
 import StatusBadge from '@/components/dashboard/StatusBadge.astro'
 import SectionHeader from '@/components/dashboard/SectionHeader.astro'
 import StatCard from '@/components/dashboard/StatCard.astro'
@@ -147,12 +149,14 @@ if (!slug) {
 	</section>
 
 	<section class="mt-10 space-y-6">
-		<SectionHeader kicker="Observability" title="Live logs" />
-		<pre
-			class="max-h-80 overflow-auto rounded-2xl border border-base-100 bg-base-950 p-5 font-mono text-xs text-base-200"
-		>
-			<code>// logs stream placeholder</code>
-		</pre>
+		<SectionHeader
+			kicker="Observability"
+			title="Logs &amp; HTTP"
+			description="Container logs and per-domain Caddy access stats for this project, from VictoriaLogs over the tailnet."
+		/>
+		<ProjectObservability server:defer project={slug}>
+			<Skeleton slot="fallback" rows={4} />
+		</ProjectObservability>
 	</section>
 </DashboardLayout>
 

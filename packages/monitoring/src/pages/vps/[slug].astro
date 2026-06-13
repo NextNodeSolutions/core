@@ -6,7 +6,7 @@ import VpsHeader from '@/components/vps/VpsHeader.astro'
 import VpsHostedProjectsDeferred from '@/components/vps/VpsHostedProjectsDeferred.astro'
 import VpsLabels from '@/components/vps/VpsLabels.astro'
 import VpsNetworkInfo from '@/components/vps/VpsNetworkInfo.astro'
-import VpsObservabilityPlaceholders from '@/components/vps/VpsObservabilityPlaceholders.astro'
+import VpsObservability from '@/components/vps/VpsObservability.astro'
 import VpsStatsGrid from '@/components/vps/VpsStatsGrid.astro'
 import DashboardLayout from '@/layouts/DashboardLayout.astro'
 import { ENV_KEYS, requireEnv } from '@/lib/adapters/env.ts'
@@ -57,7 +57,9 @@ const nowMs = Date.now()
 				</VpsHostedProjectsDeferred>
 				<VpsLabels labels={server.labels} />
 				<VpsActions serverName={server.name} />
-				<VpsObservabilityPlaceholders />
+				<VpsObservability server:defer slug={slug}>
+					<Skeleton slot="fallback" rows={4} class="mt-10" />
+				</VpsObservability>
 			</>
 		)
 	}

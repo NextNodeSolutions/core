@@ -1,0 +1,33 @@
+---
+import LoadStateBanner from '@/components/dashboard/LoadStateBanner.astro'
+import VpsCaddyStats from '@/components/vps/VpsCaddyStats.astro'
+import VpsContainerLogs from '@/components/vps/VpsContainerLogs.astro'
+import { loadPageState } from '@/lib/adapters/load-page-state.ts'
+import {
+	loadCaddyStats,
+	loadProjectLogs,
+} from '@/lib/adapters/victoria/observability.ts'
+
+interface Props {
+	project: string
+}
+
+const { project } = Astro.props
+
+const logsState = await loadPageState(`project.logs.${project}`, () =>
+	loadProjectLogs(project),
+)
+const caddyState = await loadPageState(`project.caddy.${project}`, () =>
+	loadCaddyStats(project),
+)
+
+const logs = logsState.kind === 'ok' ? logsState.data : []
+const caddyStats = caddyState.kind === 'ok' ? caddyState.data : []
+---
+
+<section class="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-2">
+	<VpsContainerLogs project={project} lines={logs} />
+	<VpsCaddyStats project={project} stats={caddyStats} />
+</section>
+
+<LoadStateBanner state={logsState} upstreamLabel="VictoriaLogs error" />

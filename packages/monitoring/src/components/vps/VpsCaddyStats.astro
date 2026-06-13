@@ -1,0 +1,70 @@
+---
+import SectionHeader from '@/components/dashboard/SectionHeader.astro'
+import type { CaddyHostStat } from '@/lib/domain/monitoring/caddy-stats.ts'
+
+interface Props {
+	project: string | null
+	stats: ReadonlyArray<CaddyHostStat>
+}
+
+const { project, stats } = Astro.props
+
+const MS_PER_SECOND = 1000
+const PERCENT = 100
+
+const formatErrorRatio = (ratio: number): string =>
+	`${(ratio * PERCENT).toFixed(1)}%`
+const formatP95 = (seconds: number): string =>
+	`${Math.round(seconds * MS_PER_SECOND)}ms`
+---
+
+<article
+	class="rounded-2xl border border-base-100 bg-white p-6 shadow-subtle"
+>
+	<SectionHeader kicker="Analytics" title="Caddy access logs" />
+	{
+		project === null ? (
+			<p class="mt-4 font-mono text-xs text-base-500">
+				No project resolved for this VPS yet.
+			</p>
+		) : stats.length === 0 ? (
+			<p class="mt-4 font-mono text-xs text-base-500">
+				No HTTP traffic for <code>{project}</code> in the last hour.
+			</p>
+		) : (
+			<table class="mt-4 w-full text-left text-xs">
+				<thead class="font-mono text-[10px] uppercase tracking-wider text-base-500">
+					<tr>
+						<th class="pb-2">Host</th>
+						<th class="pb-2 text-right">Reqs</th>
+						<th class="pb-2 text-right">5xx</th>
+						<th class="pb-2 text-right">p95</th>
+					</tr>
+				</thead>
+				<tbody class="font-mono">
+					{stats.map(stat => (
+						<tr class="border-t border-base-100">
+							<td class="py-2 truncate" title={stat.host}>
+								{stat.host}
+							</td>
+							<td class="py-2 text-right">{stat.requests}</td>
+							<td
+								class:list={[
+									'py-2 text-right',
+									stat.errorRatio > 0.02
+										? 'text-red-700'
+										: 'text-base-700',
+								]}
+							>
+								{formatErrorRatio(stat.errorRatio)}
+							</td>
+							<td class="py-2 text-right">
+								{formatP95(stat.p95Seconds)}
+							</td>
+						</tr>
+					))}
+				</tbody>
+			</table>
+		)
+	}
+</article>

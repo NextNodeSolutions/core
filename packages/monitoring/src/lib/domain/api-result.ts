@@ -3,6 +3,7 @@ export type ApiErrCode =
 	| 'missing_config'
 	| 'upstream_error'
 	| 'internal_error'
+	| 'bad_request'
 
 export interface ApiOk<T> {
 	readonly ok: true

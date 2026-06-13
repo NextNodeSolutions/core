@@ -1,0 +1,33 @@
+---
+import SectionHeader from '@/components/dashboard/SectionHeader.astro'
+import StatCard from '@/components/dashboard/StatCard.astro'
+import { formatHostMetrics } from '@/lib/domain/monitoring/host-metrics-display.ts'
+import type { HostMetrics } from '@/lib/domain/monitoring/host-metrics.ts'
+
+interface Props {
+	metrics: HostMetrics
+}
+
+const { metrics } = Astro.props
+const rows = formatHostMetrics(metrics)
+---
+
+<section class="mt-10 space-y-6">
+	<SectionHeader
+		kicker="Observability"
+		title="Live host metrics"
+		description="CPU, memory, disk and uptime from node_exporter, scraped over the tailnet via VictoriaMetrics."
+	/>
+	<div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+		{
+			rows.map(row => (
+				<StatCard
+					label={row.label}
+					value={row.value}
+					hint={row.hint}
+					tone={row.tone}
+				/>
+			))
+		}
+	</div>
+</section>
