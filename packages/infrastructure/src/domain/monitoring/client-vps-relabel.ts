@@ -33,10 +33,11 @@ export const CLIENT_VPS_LABEL_WHITELIST = [
 export type ClientVpsLabel = (typeof CLIENT_VPS_LABEL_WHITELIST)[number]
 
 export interface RelabelRule {
-	readonly action: 'keep' | 'replace' | 'labelkeep'
+	readonly action: 'keep' | 'replace' | 'labelkeep' | 'labeldrop'
 	readonly source_labels?: ReadonlyArray<string>
 	readonly target_label?: string
 	readonly regex?: string
+	readonly replacement?: string
 }
 
 /**
@@ -54,6 +55,18 @@ const SD_CLIENT_ID = '__meta_nextnode_client_id'
 const SD_PROJECT = '__meta_nextnode_project'
 const SD_ENVIRONMENT = '__meta_nextnode_environment'
 const SD_CONTAINER_NAME = '__meta_nextnode_container_name'
+
+/**
+ * SD-time meta label carrying which exporter a target is (one target per
+ * (VPS, exporter port) couple). The scrape config runs one job per
+ * exporter - `node`, `cadvisor`, `postgres` - each keeping only its own
+ * targets, so alert expressions can address a precise signal
+ * (`up{job="node"} == 0` means the VPS is down, not just one exporter).
+ */
+export const SD_EXPORTER = '__meta_nextnode_exporter'
+
+export const CLIENT_VPS_EXPORTERS = ['node', 'cadvisor', 'postgres'] as const
+export type ClientVpsExporter = (typeof CLIENT_VPS_EXPORTERS)[number]
 
 /**
  * Source → whitelist mapping. The renderer iterates this map to emit one
@@ -96,12 +109,27 @@ const SOURCE_BY_LABEL: Readonly<Record<ClientVpsLabel, string | null>> = {
  * future inline-emitter) can serialise it whichever way the consumer
  * needs.
  */
-export function buildClientVpsRelabelRules(): ReadonlyArray<RelabelRule> {
+export function buildClientVpsRelabelRules(
+	exporter?: ClientVpsExporter,
+): ReadonlyArray<RelabelRule> {
 	const keepClientVps: RelabelRule = {
 		action: 'keep',
 		source_labels: [SD_TAGS],
 		regex: `^(.+,)?tag:${CLIENT_VPS_TAG}(,.+)?$`,
 	}
+
+	// One scrape job per exporter: when the caller names one, drop every
+	// target the SD layer attributed to another exporter port.
+	const keepExporter: ReadonlyArray<RelabelRule> =
+		exporter === undefined
+			? []
+			: [
+					{
+						action: 'keep' as const,
+						source_labels: [SD_EXPORTER],
+						regex: `^${exporter}$`,
+					},
+				]
 
 	const replaceRules: ReadonlyArray<RelabelRule> =
 		CLIENT_VPS_LABEL_WHITELIST.flatMap(label => {
@@ -116,12 +144,19 @@ export function buildClientVpsRelabelRules(): ReadonlyArray<RelabelRule> {
 			]
 		})
 
+	// The closed whitelist, plus the labels a scrape target cannot live
+	// without: `__.*` covers `__address__`/`__scheme__`/`__metrics_path__`
+	// (consumed to issue the scrape; `__meta_*`/`__*` are auto-dropped
+	// after relabeling anyway) and `job`/`instance` are the standard
+	// identity pair every alert expression keys on. Without these three
+	// entries the labelkeep would strip `__address__` and the scrape
+	// would never be issued.
 	const whitelist: RelabelRule = {
 		action: 'labelkeep',
-		regex: `^(__name__|${CLIENT_VPS_LABEL_WHITELIST.join('|')})$`,
+		regex: `^(__.*|job|instance|${CLIENT_VPS_LABEL_WHITELIST.join('|')})$`,
 	}
 
-	return [keepClientVps, ...replaceRules, whitelist]
+	return [keepClientVps, ...keepExporter, ...replaceRules, whitelist]
 }
 
 /**
@@ -131,6 +166,8 @@ export function buildClientVpsRelabelRules(): ReadonlyArray<RelabelRule> {
  * config (job_name, http_sd_configs URL, scrape_interval - all
  * deployment-side concerns) at deploy time.
  */
-export function renderClientVpsRelabelYaml(): string {
-	return stringify({ relabel_configs: buildClientVpsRelabelRules() })
+export function renderClientVpsRelabelYaml(
+	exporter?: ClientVpsExporter,
+): string {
+	return stringify({ relabel_configs: buildClientVpsRelabelRules(exporter) })
 }

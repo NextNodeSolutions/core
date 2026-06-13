@@ -1,0 +1,118 @@
+import type { RuleGroup } from './alert-rule.ts'
+
+/** External-view HTTPS probes (blackbox_exporter, PRD P4). */
+export const UPTIME_RULE_GROUP: RuleGroup = {
+	name: 'uptime',
+	rules: [
+		{
+			alert: 'ProbeFailed',
+			expr: 'probe_success{job="blackbox"} == 0',
+			for: '3m',
+			labels: { severity: 'critical' },
+			annotations: {
+				summary: 'Probe failed for {{ $labels.instance }}',
+				description:
+					'External HTTPS probe of {{ $labels.instance }} has been failing for 3 minutes. The visitor view is broken - check DNS, Caddy and the app.',
+			},
+		},
+		{
+			alert: 'CertExpirySoon',
+			expr: '(probe_ssl_earliest_cert_expiry - time()) / 86400 < 14',
+			for: '1h',
+			labels: { severity: 'warning' },
+			annotations: {
+				summary: 'Certificate of {{ $labels.instance }} expires < 14d',
+				description:
+					'The TLS certificate served at {{ $labels.instance }} expires in under 14 days - Caddy auto-renewal has failed. Check the Caddy logs.',
+			},
+		},
+	],
+}
+
+/**
+ * HTTP truth from inside (Caddy access logs): the alert expressions join
+ * the `nn:http_*` recording rules the vlogs vmalert remote-writes into
+ * VictoriaMetrics (see VLOGS_RECORDING_RULE_GROUP).
+ */
+export const HTTP_RULE_GROUP: RuleGroup = {
+	name: 'http',
+	rules: [
+		{
+			alert: 'Http5xxRateHigh',
+			expr: '(nn:http_5xx_5m / nn:http_requests_5m) > 0.02 and nn:http_requests_5m > 10',
+			for: '5m',
+			labels: { severity: 'critical' },
+			annotations: {
+				summary: '5xx > 2% on {{ $labels.host }}',
+				description:
+					'More than 2% of requests to {{ $labels.host }} returned 5xx over the last 5 minutes (from Caddy access logs). Correlate with app logs; consider a rollback.',
+			},
+		},
+		{
+			alert: 'HttpLatencyP95High',
+			expr: 'nn:http_duration_p95_5m > 1.5',
+			for: '10m',
+			labels: { severity: 'warning' },
+			annotations: {
+				summary: 'p95 latency > 1.5s on {{ $labels.host }}',
+				description:
+					'The p95 request duration on {{ $labels.host }} exceeded 1.5s for 10 minutes (Caddy access logs). Profile the app and check the database.',
+			},
+		},
+	],
+}
+
+/** Database signals (postgres-exporter, PRD P6). */
+export const POSTGRES_RULE_GROUP: RuleGroup = {
+	name: 'postgres',
+	rules: [
+		{
+			alert: 'PgDown',
+			expr: 'pg_up == 0',
+			for: '2m',
+			labels: { severity: 'critical' },
+			annotations: {
+				summary: 'Postgres down for {{ $labels.project }}',
+				description:
+					'postgres-exporter on {{ $labels.vps_name }} reports the database unreachable. Read the sidecar logs; restore from backup if needed.',
+			},
+		},
+		{
+			alert: 'PgConnectionsHigh',
+			expr: 'sum by (vps_name, project, environment) (pg_stat_activity_count) > 0.8 * max by (vps_name, project, environment) (pg_settings_max_connections)',
+			for: '10m',
+			labels: { severity: 'warning' },
+			annotations: {
+				summary: 'Postgres connections > 80% for {{ $labels.project }}',
+				description:
+					'Active connections exceed 80% of max_connections for {{ $labels.project }} on {{ $labels.vps_name }}. Check the app connection pool for leaks.',
+			},
+		},
+	],
+}
+
+/**
+ * 26 hours = one daily backup + 2h of slack before the alert fires. The
+ * `nn_backup_last_success_timestamp_seconds` sample is pushed by the
+ * postgres-backup sidecar after each successful upload (PRD P6) - the
+ * only push-based metric of the system.
+ */
+const BACKUP_STALE_HOURS = 26
+const SECONDS_PER_HOUR = 3600
+const BACKUP_STALE_SECONDS = BACKUP_STALE_HOURS * SECONDS_PER_HOUR
+
+export const BACKUPS_RULE_GROUP: RuleGroup = {
+	name: 'backups',
+	rules: [
+		{
+			alert: 'BackupStale',
+			expr: `time() - nn_backup_last_success_timestamp_seconds > ${String(BACKUP_STALE_SECONDS)}`,
+			labels: { severity: 'critical' },
+			annotations: {
+				summary: 'Backup stale for {{ $labels.project }}',
+				description:
+					'No successful pg_dump upload for {{ $labels.project }} in over 26 hours. Read the postgres-backup container logs and run a manual backup.',
+			},
+		},
+	],
+}

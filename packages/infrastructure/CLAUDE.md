@@ -230,13 +230,13 @@ secrets = [
   unknown generators, and out-of-range lengths fail loud at parse.
 - **Provision** (`cli/deploy/ensure-generated-secrets.ts`): for each generated
   secret ABSENT from `ALL_SECRETS`, generate the value and `gh secret set
-  <name> --env <env>` (reuses the supabase `EnvSecretsAdapter`). **Idempotent +
+<name> --env <env>` (reuses the supabase `EnvSecretsAdapter`). **Idempotent +
   non-rotating** — a secret already in `ALL_SECRETS` is left untouched
   (regenerating would invalidate every live token / break the DB connection).
   Fails loud if gh is unavailable but a push is needed.
 - **Contract**: a secret pushed during provision lands in a LATER run's
   `ALL_SECRETS` snapshot (GitHub freezes secrets at job start), so the flow is
-  *provision → re-trigger deploy* — the same contract the supabase service uses.
+  _provision → re-trigger deploy_ — the same contract the supabase service uses.
 
 ## How It Runs
 

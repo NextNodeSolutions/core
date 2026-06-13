@@ -97,17 +97,17 @@ describe('buildClientVpsRelabelRules', () => {
 		expect(targets).not.toContain('db_role')
 	})
 
-	it('closes with a labelkeep rule pinned to the whitelist plus __name__', () => {
+	it('closes with a labelkeep rule pinned to the whitelist plus the scrape-machinery labels', () => {
 		const rules = buildClientVpsRelabelRules()
 		const last = rules.at(-1)
 
 		expect(last).toEqual({
 			action: 'labelkeep',
-			regex: '^(__name__|client_id|project|environment|vps_name|container_name|region|db_role)$',
+			regex: '^(__.*|job|instance|client_id|project|environment|vps_name|container_name|region|db_role)$',
 		})
 	})
 
-	it('labelkeep regex accepts every whitelist label plus __name__ and rejects anything else', () => {
+	it('labelkeep regex keeps the whitelist, __-internal labels and the job/instance identity pair, rejects anything else', () => {
 		const last = buildClientVpsRelabelRules().at(-1)
 		const regex = new RegExp(last?.regex ?? '')
 
@@ -115,15 +115,23 @@ describe('buildClientVpsRelabelRules', () => {
 			expect(regex.test(label)).toBe(true)
 		}
 		expect(regex.test('__name__')).toBe(true)
+		// __address__ is consumed to ISSUE the scrape - dropping it here
+		// would silently kill every scrape (the bug this regex fixes).
+		expect(regex.test('__address__')).toBe(true)
+		expect(regex.test('__scheme__')).toBe(true)
+		// __meta_* labels survive the relabel stage and are auto-dropped
+		// by the scraper afterwards - keeping them here is harmless and
+		// required (they share the __ prefix with __address__).
+		expect(regex.test('__meta_tailscale_device_tags')).toBe(true)
+		// The identity pair every alert expression keys on.
+		expect(regex.test('job')).toBe(true)
+		expect(regex.test('instance')).toBe(true)
 
-		// Anything outside the whitelist - including SD meta labels,
-		// exporter-emitted noise, and prefix-matching look-alikes - is dropped.
-		expect(regex.test('__meta_tailscale_device_tags')).toBe(false)
-		expect(regex.test('instance')).toBe(false)
-		expect(regex.test('job')).toBe(false)
+		// Anything else - exporter-emitted noise, prefix look-alikes - drops.
 		expect(regex.test('pod')).toBe(false)
 		expect(regex.test('client_id_v2')).toBe(false)
 		expect(regex.test('client_id_extra')).toBe(false)
+		expect(regex.test('container_label_com_docker_compose')).toBe(false)
 	})
 
 	it('orders the pipeline as keep → replace × N → labelkeep so the whitelist is the last word', () => {
@@ -132,6 +140,26 @@ describe('buildClientVpsRelabelRules', () => {
 		expect(actions[0]).toBe('keep')
 		expect(actions.at(-1)).toBe('labelkeep')
 		expect(actions.slice(1, -1).every(a => a === 'replace')).toBe(true)
+	})
+
+	it('inserts a keep rule on the exporter meta label when a job names its exporter', () => {
+		const rules = buildClientVpsRelabelRules('cadvisor')
+		const [first, second] = rules
+
+		expect(first?.action).toBe('keep')
+		expect(second).toEqual({
+			action: 'keep',
+			source_labels: ['__meta_nextnode_exporter'],
+			regex: '^cadvisor$',
+		})
+	})
+
+	it('emits no exporter keep rule when no exporter is named', () => {
+		const keepRules = buildClientVpsRelabelRules().filter(
+			r => r.action === 'keep',
+		)
+
+		expect(keepRules).toHaveLength(1)
 	})
 })
 

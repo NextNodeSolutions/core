@@ -8,16 +8,19 @@ import {
 	selectBackingSecrets,
 } from '#/domain/hetzner/service-env.ts'
 import { buildServiceUpstreams } from '#/domain/hetzner/service-upstreams.ts'
+import { buildObservabilityUpstreams } from '#/domain/monitoring/observability-upstreams.ts'
 import {
 	POSTGRES_BACKUP_SERVICE_NAME,
 	POSTGRES_SIDECAR_SERVICE_NAME,
 } from '#/domain/services/postgres.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
+import { writeObservabilityFiles } from './observability-rollout.ts'
 import { shellEscape } from './ssh/shell-escape.ts'
 
 import type {
 	DeployVolume,
+	ObservabilityServiceConfig,
 	PostgresServiceConfig,
 	UserServiceConfig,
 } from '#/config/types.ts'
@@ -60,6 +63,17 @@ export interface DeployContainerInput {
 	readonly registryToken: string | undefined
 	readonly volumes: ReadonlyArray<DeployVolume>
 	readonly postgres: PostgresServiceConfig | undefined
+	// `[services.observability]` of the project, when declared: injects the
+	// VictoriaLogs/VictoriaMetrics/vmagent/vmalert/Alertmanager/blackbox
+	// stack into the compose file and writes its rendered configs.
+	readonly observability: ObservabilityServiceConfig | undefined
+	// Tailnet IPv4 of the VPS - consumed by the observability config
+	// renderers (cAdvisor self-scrape target). Always known at deploy time.
+	readonly tailnetIp: string
+	// Hostname of the VPS this deploy lands on (self-scrape vps_name label).
+	readonly vpsName: string
+	// NN client id (NN_CLIENT_ID); undefined until the org variable is set.
+	readonly clientId: string | undefined
 	// User workloads declared under [deploy.services.<name>]. The compose
 	// renderer loops these, pairing each with its ref from `images`.
 	readonly services: Readonly<Record<string, UserServiceConfig>>
@@ -110,11 +124,19 @@ export async function deployContainer(
 	})
 
 	const silo = computeSilo(input.projectName, input.environment)
-	const upstreams = buildServiceUpstreams(
-		input.services,
-		input.hostPorts,
-		input.environment,
-	)
+	const upstreams = [
+		...buildServiceUpstreams(
+			input.services,
+			input.hostPorts,
+			input.environment,
+		),
+		...(input.observability
+			? buildObservabilityUpstreams(
+					input.observability,
+					input.environment,
+				)
+			: []),
+	]
 	logger.info(
 		`Deployed ${silo.id} with ${String(upstreams.length)} routed service(s)`,
 	)
@@ -169,9 +191,13 @@ export async function stageRollout(
 			volumes: input.volumes,
 			projectName: input.projectName,
 			postgres: input.postgres,
+			observability: input.observability,
 			environment: input.environment,
 		}),
 	)
+	if (input.observability !== undefined) {
+		await writeObservabilityFiles(session, envDir, input)
+	}
 
 	if (input.registryToken !== undefined) {
 		await loginToRegistries(session, input, input.registryToken)

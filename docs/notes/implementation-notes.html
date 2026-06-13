@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Implementation notes — Monitoring VPS</title>
+<style>
+body{font-family:system-ui,sans-serif;max-width:900px;margin:2rem auto;padding:0 1rem;line-height:1.55;color:#1a2233}
+h1{font-size:1.5rem}h2{font-size:1.15rem;margin-top:2rem;border-bottom:1px solid #d8dee9;padding-bottom:.3rem}
+code{background:#f0f3f8;padding:.1em .35em;border-radius:4px;font-size:.92em}
+.decision{border-left:4px solid #3b6ea5;background:#f4f8fc;padding:.6rem 1rem;margin:1rem 0}
+.tradeoff{border-left:4px solid #b5832a;background:#fdf8ef;padding:.6rem 1rem;margin:1rem 0}
+.changed{border-left:4px solid #7a3ba5;background:#faf4fd;padding:.6rem 1rem;margin:1rem 0}
+.todo{border-left:4px solid #a53b3b;background:#fdf4f4;padding:.6rem 1rem;margin:1rem 0}
+small.meta{color:#6a7385}
+</style>
+</head>
+<body>
+<h1>Implementation notes — PRD Monitoring VPS</h1>
+<p><small class="meta">Démarré le 2026-06-13. Décisions hors-spec, changements et tradeoffs pris pendant l'implémentation de <code>docs/plans/2026-06-13-prd-monitoring-vps.html</code>.</small></p>
+
+<h2>Décisions d'architecture (hors spec ou précisées)</h2>
+
+<div class="decision">
+<strong>vmagent en <code>network_mode: host</code></strong> — la PRD ne précise pas le réseau de vmagent. Depuis le réseau compose, scraper les exporters des VPS clients via le tailnet fonctionne (MASQUERADE docker), mais scraper le node_exporter/cAdvisor de nn-internals lui-même est bloqué par UFW (le trafic conteneur→hôte arrive sur docker0, interface non autorisée). En host networking, vmagent voit nativement tailscale0 (scrape tailnet), localhost:9100/9101 (self), 127.0.0.1:8428 (remote_write VM) et le host-port de l'app Astro (endpoint SD). Aucune règle UFW supplémentaire, aucune exposition réseau nouvelle.
+</div>
+
+<div class="decision">
+<strong>Endpoint SD joint via le host-port de l'app</strong> — vmagent (host net) appelle <code>http://127.0.0.1:&lt;hostPort app&gt;/api/sd/targets</code> (le port que Caddy utilise déjà), pas le vhost HTTPS. Évite une dépendance TLS/DNS interne pour la découverte.
+</div>
+
+<div class="decision">
+<strong>VL/VM exposés sur des ports localhost fixes</strong> — <code>127.0.0.1:9428</code> (VictoriaLogs) et <code>127.0.0.1:8428</code> (VictoriaMetrics), hors plage apps [8080,8200). Caddy route les vhosts <code>logs.</code>/<code>metrics.</code> vers ces ports. Pas d'allocation dynamique : ports bien connus, déterministes, un seul stack observability par VPS (fail loud sinon).
+</div>
+
+<div class="decision">
+<strong>Choix du tag Tailscale</strong> — la PRD demande <code>tag:client-vps</code> pour les VPS clients et <code>tag:monitoring</code> pour nn-internals, sans dire comment décider. Règle : un projet qui déclare <code>[services.observability]</code> → son VPS reçoit <code>tag:monitoring</code> ; sinon <code>tag:client-vps</code>. Reproductible, pas de cas spécial nn-internals.
+</div>
+
+<div class="decision">
+<strong>Secrets Alertmanager rendus inline au deploy</strong> — Alertmanager ne fait pas d'interpolation d'env dans son YAML (contrairement à ce que la PRD esquisse avec <code>"${RESEND_API_KEY}"</code>). Le fichier <code>alertmanager.yml</code> est rendu en TS au deploy avec les valeurs injectées, poussé par SFTP à côté de <code>compose.yaml</code> — même posture de sécurité que les <code>.env.*</code> déjà poussés.
+</div>
+
+<h2>Tradeoffs</h2>
+
+<h2>Changements par rapport à la spec</h2>
+
+<h2>À savoir / actions opérateur</h2>
+
+<div class="todo">
+<strong>ACL Tailscale (action manuelle)</strong> — ajouter dans l'ACL du tailnet : <code>tagOwners</code> pour <code>tag:client-vps</code> et <code>tag:monitoring</code> (owner = le client OAuth d'infra), et un grant <code>tag:monitoring → tag:client-vps:9100,9101,9187</code>. Sans ça, le mint d'authkey taggué échoue et vmagent ne pourra pas scraper.
+</div>
+
+<div class="todo">
+<strong>Variables d'org GitHub</strong> — définir <code>NN_VL_URL=https://logs.monitoring.nextnode.fr</code> et <code>NN_CLIENT_ID=nextnode</code> après le déploiement P1, puis re-provisionner la flotte.
+</div>
+
+<div class="todo">
+<strong>Compte healthchecks.io</strong> — créer le check (période ~5 min, grâce ~10 min) et pousser <code>HEALTHCHECKS_PING_URL</code> en secret GitHub du projet monitoring. <code>RESEND_API_KEY</code> doit aussi exister.
+</div>
+
+</body>
+</html>

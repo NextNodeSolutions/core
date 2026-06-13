@@ -11,6 +11,7 @@ import { runHetznerTeardown } from './teardown.ts'
 import type {
 	DeployVolume,
 	HetznerVpsDeploySection,
+	ObservabilityServiceConfig,
 	PostgresServiceConfig,
 	UserServiceConfig,
 } from '#/config/types.ts'
@@ -55,6 +56,7 @@ export interface HetznerVpsTargetConfig {
 	readonly hetzner: HetznerVpsDeploySection['hetzner']
 	readonly volumes: ReadonlyArray<DeployVolume>
 	readonly postgres: PostgresServiceConfig | undefined
+	readonly observability: ObservabilityServiceConfig | undefined
 	// User workloads from [deploy.services.<name>], threaded into the compose
 	// renderer via deployContainer / stageRollout.
 	readonly services: Readonly<Record<string, UserServiceConfig>>
@@ -143,16 +145,27 @@ export class HetznerVpsTarget implements DeployTarget {
 		// composeCaddyConfig requests certs for. A project routes via its service
 		// urls, not the bare project `domain`, so the records derive from them;
 		// internal-only services (no url) get no record.
-		const records = Object.values(this.config.services).flatMap(service =>
-			service.url === undefined
-				? []
-				: computeVpsDnsRecords({
-						domain: service.url,
-						environment: this.config.environment,
-						publicIp: state.publicIp,
-						internal: this.config.internal,
-						tailnetIp: state.tailnetIp,
-					}),
+		const serviceDomains = Object.values(this.config.services).flatMap(
+			service => (service.url === undefined ? [] : [service.url]),
+		)
+		// The observability vhosts (logs./metrics.) route like any service
+		// url: they need their A records at the same per-environment
+		// hostname Caddy serves and requests certs for.
+		const observabilityDomains = this.config.observability
+			? [
+					this.config.observability.logsVhost,
+					this.config.observability.metricsVhost,
+				]
+			: []
+		const records = [...serviceDomains, ...observabilityDomains].flatMap(
+			recordDomain =>
+				computeVpsDnsRecords({
+					domain: recordDomain,
+					environment: this.config.environment,
+					publicIp: state.publicIp,
+					internal: this.config.internal,
+					tailnetIp: state.tailnetIp,
+				}),
 		)
 
 		await this.config.dns.reconcile(records)

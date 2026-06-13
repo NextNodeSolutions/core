@@ -1,17 +1,12 @@
-import { composeCaddyConfig } from '#/domain/caddy/compose.ts'
-import { extractUpstreams } from '#/domain/caddy/config.ts'
-import { CADDY_ENV_PATH, renderCaddyEnv } from '#/domain/caddy/env.ts'
-import { buildR2CaddyBinding } from '#/domain/cloudflare/r2/caddy-binding.ts'
 import { allocateHostPort } from '#/domain/hetzner/host-port.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
-import { CADDY_CONFIG_PATH } from './constants.ts'
 import { deployContainer, stageRollout } from './deploy-container.ts'
+import { reconcileCaddy } from './reconcile-caddy.ts'
 import { createSshSession } from './ssh/session.ts'
 import { readState, writeState } from './state/read-write.ts'
 import { releaseProjectHostPort } from './teardown-project.ts'
 
-import type { CaddyUpstream } from '#/domain/caddy/config.ts'
 import type {
 	DeployEnv,
 	DeployInput,
@@ -109,6 +104,7 @@ async function openRolloutSession(
 	readonly session: SshSession
 	readonly hostPorts: Readonly<Record<string, number>>
 	readonly hasAllocated: boolean
+	readonly tailnetIp: string
 }> {
 	requireImages(input)
 	const { vpsName } = ctx.config
@@ -138,7 +134,12 @@ async function openRolloutSession(
 		expectedHostKeyFingerprint: existing.state.sshHostKeyFingerprint,
 	})
 
-	return { session, hostPorts, hasAllocated }
+	return {
+		session,
+		hostPorts,
+		hasAllocated,
+		tailnetIp: existing.state.tailnetIp,
+	}
 }
 
 // Compensates a freshly-allocated host port when the rollout that
@@ -178,11 +179,12 @@ interface ContainerInputSeed {
 	readonly hostPorts: Readonly<Record<string, number>>
 	readonly input: DeployInput
 	readonly env: DeployEnv
+	readonly tailnetIp: string
 }
 
 function buildContainerInput(
 	ctx: RolloutContext,
-	{ projectName, hostPorts, input, env }: ContainerInputSeed,
+	{ projectName, hostPorts, input, env, tailnetIp }: ContainerInputSeed,
 ): DeployContainerInput {
 	return {
 		projectName,
@@ -195,56 +197,12 @@ function buildContainerInput(
 		registryToken: input.registryToken,
 		volumes: ctx.config.volumes,
 		postgres: ctx.config.postgres,
+		observability: ctx.config.observability,
+		tailnetIp,
+		vpsName: ctx.config.vpsName,
+		clientId: ctx.config.vector?.clientId,
 		services: ctx.config.services,
 	}
-}
-
-/**
- * Multi-tenant Caddy reconfiguration: read the existing config, drop any
- * prior upstreams for THIS project's hostnames (re-deploy case), then add
- * the fresh ones. Upstreams from other projects on this VPS are preserved
- * untouched.
- */
-async function reconcileCaddy(
-	session: SshSession,
-	ctx: RolloutContext,
-	upstreams: ReadonlyArray<CaddyUpstream>,
-): Promise<void> {
-	const { vpsName } = ctx.config
-	const existingConfig = await session.readFile(CADDY_CONFIG_PATH)
-	const existingUpstreams = extractUpstreams(existingConfig ?? '')
-	const deployedHostnames = new Set(upstreams.map(u => u.hostname))
-	const otherUpstreams = existingUpstreams.filter(
-		u => !deployedHostnames.has(u.hostname),
-	)
-	const mergedUpstreams = [...otherUpstreams, ...upstreams]
-
-	const caddyConfig = JSON.stringify(
-		composeCaddyConfig({
-			storage: buildR2CaddyBinding(ctx.config.infraStorage, vpsName),
-			upstreams: mergedUpstreams,
-			acmeEmail: ctx.config.acmeEmail,
-			internal: ctx.config.internal,
-		}),
-	)
-
-	// Refresh the env file so Caddy resolves the latest R2 + CF
-	// secrets via {env.X} placeholders. Caddy re-reads EnvironmentFile
-	// on systemctl restart only, so a rotation needs a restart - but
-	// for normal deploys the values are unchanged and `caddy reload`
-	// suffices.
-	await session.writeFile(
-		CADDY_ENV_PATH,
-		renderCaddyEnv({
-			infraStorage: ctx.config.infraStorage,
-			cloudflareApiToken: ctx.config.cloudflareApiToken,
-		}),
-	)
-	await session.writeFile(CADDY_CONFIG_PATH, caddyConfig)
-	await session.exec(`caddy reload --config ${CADDY_CONFIG_PATH}`)
-	logger.info(
-		`Caddy reloaded on VPS "${vpsName}" with ${String(mergedUpstreams.length)} upstream(s)`,
-	)
 }
 
 /** Full deploy: container rollout + Caddy route reconciliation. */
@@ -255,18 +213,31 @@ export async function runDeploy(
 	env: DeployEnv,
 ): Promise<DeployResult> {
 	const start = Date.now()
-	const { session, hostPorts, hasAllocated } = await openRolloutSession(
-		ctx,
-		projectName,
-		input,
-	)
+	const { session, hostPorts, hasAllocated, tailnetIp } =
+		await openRolloutSession(ctx, projectName, input)
 
 	try {
 		const { upstreams, deployed } = await deployContainer(
 			session,
-			buildContainerInput(ctx, { projectName, hostPorts, input, env }),
+			buildContainerInput(ctx, {
+				projectName,
+				hostPorts,
+				input,
+				env,
+				tailnetIp,
+			}),
 		)
-		await reconcileCaddy(session, ctx, upstreams)
+		await reconcileCaddy(
+			session,
+			{
+				vpsName: ctx.config.vpsName,
+				internal: ctx.config.internal,
+				infraStorage: ctx.config.infraStorage,
+				acmeEmail: ctx.config.acmeEmail,
+				cloudflareApiToken: ctx.config.cloudflareApiToken,
+			},
+			upstreams,
+		)
 
 		return {
 			projectName,
@@ -288,16 +259,19 @@ export async function runPrepareRollout(
 	input: DeployInput,
 	env: DeployEnv,
 ): Promise<void> {
-	const { session, hostPorts, hasAllocated } = await openRolloutSession(
-		ctx,
-		projectName,
-		input,
-	)
+	const { session, hostPorts, hasAllocated, tailnetIp } =
+		await openRolloutSession(ctx, projectName, input)
 
 	try {
 		await stageRollout(
 			session,
-			buildContainerInput(ctx, { projectName, hostPorts, input, env }),
+			buildContainerInput(ctx, {
+				projectName,
+				hostPorts,
+				input,
+				env,
+				tailnetIp,
+			}),
 		)
 	} catch (err) {
 		if (hasAllocated) await releaseAllocatedHostPort(ctx, projectName)

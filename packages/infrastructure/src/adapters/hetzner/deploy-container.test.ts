@@ -174,6 +174,10 @@ describe('stageRollout', () => {
 		registryToken: undefined,
 		volumes: [],
 		postgres: undefined,
+		observability: undefined,
+		tailnetIp: '100.64.0.9',
+		vpsName: 'test-vps',
+		clientId: undefined,
 		services: { [name]: service },
 	})
 
@@ -249,6 +253,10 @@ describe('stageRollout', () => {
 		registryToken: undefined,
 		volumes: [],
 		postgres: undefined,
+		observability: undefined,
+		tailnetIp: '100.64.0.9',
+		vpsName: 'test-vps',
+		clientId: undefined,
 		services: {
 			front: buildService(3000, 'example.com'),
 			api: buildService(4000, 'api.example.com'),
@@ -296,6 +304,10 @@ describe('stageRollout', () => {
 		registryToken: undefined,
 		volumes: [],
 		postgres: undefined,
+		observability: undefined,
+		tailnetIp: '100.64.0.9',
+		vpsName: 'test-vps',
+		clientId: undefined,
 		services: {
 			front: secretService('example.com', ['SESSION_KEY']),
 			api: secretService('api.example.com', ['JWT_SECRET']),
@@ -346,6 +358,10 @@ describe('stageRollout', () => {
 		registryToken: undefined,
 		volumes: [],
 		postgres: { mode: 'embedded' },
+		observability: undefined,
+		tailnetIp: '100.64.0.9',
+		vpsName: 'test-vps',
+		clientId: undefined,
 		services: {
 			front: secretService('example.com', ['SESSION_KEY']),
 			api: {
@@ -427,6 +443,10 @@ describe('stageRollout', () => {
 			registryToken: 'ghcr-token',
 			volumes: [],
 			postgres: undefined,
+			observability: undefined,
+			tailnetIp: '100.64.0.9',
+			vpsName: 'test-vps',
+			clientId: undefined,
 			services: {
 				web: upstreamService(3000, 'ghcr.io/acme/web:v1', 'GHCR_PAT'),
 				cache: upstreamService(4000, 'docker.io/library/redis:7'),
@@ -467,6 +487,10 @@ describe('deployContainer', () => {
 			registryToken: undefined,
 			volumes: [],
 			postgres: undefined,
+			observability: undefined,
+			tailnetIp: '100.64.0.9',
+			vpsName: 'test-vps',
+			clientId: undefined,
 			services: {
 				front: buildService(3000, 'example.com'),
 				api: buildService(4000, 'api.example.com'),
@@ -499,6 +523,10 @@ describe('deployContainer', () => {
 			registryToken: undefined,
 			volumes: [],
 			postgres: undefined,
+			observability: undefined,
+			tailnetIp: '100.64.0.9',
+			vpsName: 'test-vps',
+			clientId: undefined,
 			services: {
 				front: buildService(3000, 'example.com'),
 				api: buildService(4000, 'api.example.com'),

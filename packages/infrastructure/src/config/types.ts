@@ -229,6 +229,25 @@ export type PostgresMode = (typeof POSTGRES_MODES)[number]
 // an actual decision to expose.
 export type SupabaseServiceConfig = Readonly<Record<string, never>>
 
+// `[services.observability]` opts the project into the self-hosted
+// observability backend (VictoriaLogs + VictoriaMetrics + vmagent +
+// vmalert + Alertmanager + blackbox_exporter) injected into the generated
+// compose file. Declared once, by the monitoring project - the stack is
+// itself a NextNode app deployed by the standard pipeline. Retentions are
+// passed verbatim to the Victoria* `-retentionPeriod` flags; vhosts are
+// the tailnet hostnames Caddy fronts VictoriaLogs (log ingestion +
+// LogsQL) and vmui (ad-hoc metrics exploration) with.
+export interface ObservabilityServiceConfig {
+	// VictoriaLogs `-retentionPeriod` (e.g. "30d").
+	readonly logsRetention: string
+	// VictoriaMetrics `-retentionPeriod`, in months (e.g. 12).
+	readonly metricsRetentionMonths: number
+	// Tailnet vhost fronting VictoriaLogs - the URL NN_VL_URL points at.
+	readonly logsVhost: string
+	// Tailnet vhost fronting VictoriaMetrics/vmui.
+	readonly metricsVhost: string
+}
+
 export interface PostgresServiceConfig {
 	readonly mode: PostgresMode
 	// Drizzle migrations folder relative to nextnode.toml. Defaults to
@@ -253,13 +272,19 @@ export interface PostgresServiceConfig {
  * to `ServiceConfigByName` - TypeScript will then force every service-aware
  * site (validators, `hasAnyService`, future routers) to handle it.
  */
-export const SERVICE_NAMES = ['r2', 'postgres', 'supabase'] as const
+export const SERVICE_NAMES = [
+	'r2',
+	'postgres',
+	'supabase',
+	'observability',
+] as const
 export type ServiceName = (typeof SERVICE_NAMES)[number]
 
 export interface ServiceConfigByName {
 	readonly r2: R2ServiceConfig
 	readonly postgres: PostgresServiceConfig
 	readonly supabase: SupabaseServiceConfig
+	readonly observability: ObservabilityServiceConfig
 }
 
 export type ServicesConfig = {
@@ -278,6 +303,9 @@ export const SERVICE_REQUIRES_INFRA_STORAGE: {
 	r2: true,
 	postgres: true,
 	supabase: true,
+	// The observability stack provisions nothing outside the VPS compose
+	// project itself - no buckets, no external state.
+	observability: false,
 }
 
 export const KEBAB_IDENTIFIER_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/

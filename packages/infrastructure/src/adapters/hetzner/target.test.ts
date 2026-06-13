@@ -191,6 +191,7 @@ const TARGET_CONFIG = {
 	hetzner: HETZNER_CONFIG,
 	volumes: [],
 	postgres: undefined,
+	observability: undefined,
 	services: {
 		app: {
 			port: 3000,
