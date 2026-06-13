@@ -134,7 +134,7 @@ describe('createPostgresService', () => {
 			const service = createPostgresService(makeCtx({}), EMBEDDED)
 
 			await expect(service.loadEnv()).rejects.toThrow(
-				'postgres service (embedded mode): "POSTGRES_PASSWORD" must be defined in repository secrets',
+				'postgres service (embedded mode): "POSTGRES_PASSWORD" is missing from ALL_SECRETS',
 			)
 		})
 
@@ -145,7 +145,7 @@ describe('createPostgresService', () => {
 			)
 
 			await expect(service.loadEnv()).rejects.toThrow(
-				'postgres service (embedded mode): "POSTGRES_PASSWORD" must be defined',
+				'postgres service (embedded mode): "POSTGRES_PASSWORD" is missing from ALL_SECRETS',
 			)
 		})
 	})

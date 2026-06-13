@@ -7,17 +7,23 @@ import {
 } from '#/domain/services/postgres.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
+import {
+	POSTGRES_PASSWORD_SECRET,
+	ensureEmbeddedPostgresPasswordSecret,
+} from './ensure-password.ts'
+
 import type {
 	Service,
 	ServiceDefinition,
 	ServiceFactoryContext,
 } from '#/cli/services/service.ts'
+import type { RepoEnvScope } from '#/adapters/github/env-secrets.ts'
 import type { PostgresServiceConfig } from '#/config/types.ts'
 import type { ServiceEnv } from '#/domain/services/service.ts'
 
 const logger = createLogger()
 
-export const POSTGRES_PASSWORD_SECRET = 'POSTGRES_PASSWORD'
+export { POSTGRES_PASSWORD_SECRET }
 export const POSTGRES_DATABASE_URL_SECRET = 'DATABASE_URL'
 
 export function createPostgresService(
@@ -42,6 +48,13 @@ export function createPostgresService(
 	return {
 		name: 'postgres',
 		async provision(): Promise<void> {
+			const scope: RepoEnvScope = {
+				owner: ctx.repository.owner,
+				repo: ctx.repository.name,
+				environment: ctx.environment,
+			}
+			await ensureEmbeddedPostgresPasswordSecret(ctx.repoSecrets, scope)
+
 			const bucketName = postgresWalgBucketName(ctx.projectName)
 			await ensureR2Bucket({
 				token: ctx.cfToken,
@@ -64,7 +77,7 @@ function loadPostgresEnv(
 		const password = ctx.repoSecrets[POSTGRES_PASSWORD_SECRET]
 		if (password === undefined || password === '') {
 			throw new Error(
-				`postgres service (embedded mode): "${POSTGRES_PASSWORD_SECRET}" must be defined in repository secrets so the sidecar can be initialised and the app can connect`,
+				`postgres service (embedded mode): "${POSTGRES_PASSWORD_SECRET}" is missing from ALL_SECRETS. It is auto-generated at provision (alphanumeric, safe to interpolate into the initdb SQL + DATABASE_URL), but GitHub freezes secrets at job start - run "provision" first so it is pushed, then re-trigger the deploy workflow so ALL_SECRETS picks it up`,
 			)
 		}
 		return buildPostgresEmbeddedEnv(ctx.projectName, password)

@@ -340,11 +340,13 @@ export const POSTGRES_EXPORTER_EMBEDDED_PASSWORD_ENV = 'POSTGRES_PASSWORD'
  * manually (the initdb hook only fires on first boot, but operators may
  * pipe this file through psql later to repair a missing role).
  *
- * Pure: returns the SQL as a string. The caller sources the password
- * (GitHub env-secret `PG_EXPORTER_PASSWORD` on the project repo, scoped
- * to the current pipeline environment) and persists the rendered file to
- * disk during provisioning. Base64 passwords are safe to single-quote
- * since the alphabet excludes `'`.
+ * Pure: returns the SQL as a string. The caller sources the password and
+ * persists the rendered file to disk during provisioning. The password is
+ * interpolated raw into the single-quoted SQL literal; both producers are
+ * safe to single-quote because neither alphabet contains `'`: the supabase
+ * exporter uses the base64 `PG_EXPORTER_PASSWORD`, and the embedded exporter
+ * reuses `POSTGRES_PASSWORD`, which `ensureEmbeddedPostgresPasswordSecret`
+ * auto-generates as an alphanumeric value for exactly this reason.
  */
 export function renderPostgresExporterBootstrapSql(password: string): string {
 	return `DO $$
