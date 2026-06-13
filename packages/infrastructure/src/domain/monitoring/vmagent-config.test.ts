@@ -9,6 +9,8 @@ import type { VmagentConfigInput } from './vmagent-config.ts'
 const INPUT: VmagentConfigInput = {
 	sdTargetsUrl: 'http://127.0.0.1:8080/api/sd/targets',
 	sdProbesUrl: 'http://127.0.0.1:8080/api/sd/probes',
+	backupMetricsAddress: '127.0.0.1:8080',
+	backupMetricsPath: '/api/metrics/backups',
 	blackboxAddress: '127.0.0.1:9115',
 	selfPorts: [8428, 9428, 9115],
 	self: {
@@ -41,14 +43,25 @@ describe('renderVmagentConfig', () => {
 	const yaml = renderVmagentConfig(INPUT)
 	const jobs = parseJobs(yaml)
 
-	it('renders five jobs: one per client exporter, self, blackbox', () => {
+	it('renders six jobs: one per client exporter, self, blackbox, backups', () => {
 		expect(jobs.map(job => job.job_name)).toEqual([
 			'node',
 			'cadvisor',
 			'postgres',
 			'self',
 			'blackbox',
+			'backups',
 		])
+	})
+
+	it('scrapes the backup-freshness exposition slowly with honored labels', () => {
+		const backups = jobs.find(job => job.job_name === 'backups')
+		expect(backups).toMatchObject({
+			scrape_interval: '5m',
+			metrics_path: '/api/metrics/backups',
+			honor_labels: true,
+			static_configs: [{ targets: ['127.0.0.1:8080'] }],
+		})
 	})
 
 	it('sets the 15s scrape cadence globally', () => {

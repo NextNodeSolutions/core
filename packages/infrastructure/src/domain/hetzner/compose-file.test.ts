@@ -326,7 +326,10 @@ describe('renderComposeFile', () => {
 			image: 'postgres:18',
 			restart: 'unless-stopped',
 			env_file: ['.env'],
-			volumes: [`${POSTGRES_DATA_VOLUME}:${POSTGRES_DATA_DIR}`],
+			volumes: [
+				`${POSTGRES_DATA_VOLUME}:${POSTGRES_DATA_DIR}`,
+				'./00-pg-monitor.sql:/docker-entrypoint-initdb.d/00-pg-monitor.sql:ro',
+			],
 			healthcheck: {
 				test: ['CMD-SHELL', 'pg_isready -U acme_web -d acme_web'],
 				interval: '10s',
@@ -609,6 +612,7 @@ describe('renderComposeFile - postgres service wiring', () => {
 			'app',
 			'postgres',
 			'postgres-backup',
+			'postgres-exporter',
 		])
 		expect(parsed.volumes).toEqual({ [POSTGRES_DATA_VOLUME]: {} })
 	})

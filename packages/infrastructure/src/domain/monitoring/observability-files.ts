@@ -51,6 +51,8 @@ export function buildObservabilityDeployFiles(
 		[VMAGENT_CONFIG_FILENAME]: renderVmagentConfig({
 			sdTargetsUrl: `${sdBaseUrl}/api/sd/targets`,
 			sdProbesUrl: `${sdBaseUrl}/api/sd/probes`,
+			backupMetricsAddress: `127.0.0.1:${String(input.appHostPort)}`,
+			backupMetricsPath: '/api/metrics/backups',
 			blackboxAddress: `127.0.0.1:${String(BLACKBOX_HOST_PORT)}`,
 			selfPorts: [
 				VICTORIAMETRICS_HOST_PORT,

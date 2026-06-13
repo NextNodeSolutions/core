@@ -114,6 +114,15 @@ export interface CaddyTlsPolicy {
 	readonly storage?: CaddyS3Storage
 }
 
+/**
+ * Per-server access-log toggle. The empty object enables Caddy's
+ * default access logger: JSON lines on stderr → journald (Caddy runs
+ * under systemd) → Vector → VictoriaLogs. No file, no rotation - the
+ * existing log chain carries HTTP statuses/latency/volumes per vhost
+ * (the `nn:http_*` recording rules consume them).
+ */
+export type CaddyServerLogs = Record<string, never>
+
 export interface CaddyJsonConfig {
 	readonly apps: {
 		readonly http: {
@@ -121,6 +130,7 @@ export interface CaddyJsonConfig {
 				readonly https: {
 					readonly listen: ReadonlyArray<string>
 					readonly routes: ReadonlyArray<CaddyRoute>
+					readonly logs: CaddyServerLogs
 				}
 			}
 		}
@@ -200,6 +210,7 @@ export function buildCaddyConfig(input: CaddyConfigInput): CaddyJsonConfig {
 					https: {
 						listen: [':443'],
 						routes: input.routes,
+						logs: {},
 					},
 				},
 			},

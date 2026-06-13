@@ -38,6 +38,12 @@ export interface VmagentConfigInput {
 	readonly sdTargetsUrl: string
 	/** http_sd URL emitting public domains to probe (`/api/sd/probes`). */
 	readonly sdProbesUrl: string
+	/**
+	 * Loopback address + path of the control plane's backup-freshness
+	 * exposition (`/api/metrics/backups`), scraped at a slow cadence.
+	 */
+	readonly backupMetricsAddress: string
+	readonly backupMetricsPath: string
 	/** Loopback address of blackbox_exporter (vmagent runs host-networked). */
 	readonly blackboxAddress: string
 	/** Loopback ports of the stack's own components for the self job. */
@@ -49,6 +55,7 @@ interface ScrapeJob {
 	readonly job_name: string
 	readonly scrape_interval?: string
 	readonly metrics_path?: string
+	readonly honor_labels?: boolean
 	readonly params?: Readonly<Record<string, ReadonlyArray<string>>>
 	readonly http_sd_configs?: ReadonlyArray<{
 		readonly url: string
@@ -175,6 +182,22 @@ function buildBlackboxJob(input: VmagentConfigInput): ScrapeJob {
 }
 
 /**
+ * Backup freshness: the control plane lists each project's backup bucket
+ * and exposes the newest dump timestamp. `honor_labels` keeps the
+ * per-project labels the exposition carries; the slow cadence matches a
+ * signal that moves once a day.
+ */
+function buildBackupsJob(input: VmagentConfigInput): ScrapeJob {
+	return {
+		job_name: 'backups',
+		scrape_interval: '5m',
+		metrics_path: input.backupMetricsPath,
+		honor_labels: true,
+		static_configs: [{ targets: [input.backupMetricsAddress] }],
+	}
+}
+
+/**
  * Render the vmagent scrape configuration: one job per client-VPS
  * exporter (node / cadvisor / postgres, all fed by the same http_sd
  * endpoint and filtered by the relabel pipeline), the self job, and the
@@ -190,6 +213,7 @@ export function renderVmagentConfig(input: VmagentConfigInput): string {
 			),
 			buildSelfJob(input),
 			buildBlackboxJob(input),
+			buildBackupsJob(input),
 		],
 	}
 	return stringify(config, { lineWidth: 0 })

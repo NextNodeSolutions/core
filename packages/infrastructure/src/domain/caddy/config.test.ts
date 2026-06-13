@@ -89,6 +89,11 @@ describe('buildCaddyConfig', () => {
 		expect(config.apps.http.servers.https.listen).toStrictEqual([':443'])
 	})
 
+	it('enables JSON access logs on the https server (journald → Vector chain)', () => {
+		const config = buildCaddyConfig(makeInput())
+		expect(config.apps.http.servers.https.logs).toStrictEqual({})
+	})
+
 	it('passes routes through verbatim', () => {
 		const routes: ReadonlyArray<CaddyRoute> = [
 			buildUpstreamRoute({

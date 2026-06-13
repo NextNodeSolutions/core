@@ -279,6 +279,58 @@ export function buildPostgresExporterSidecar(): PostgresExporterSidecarService {
 }
 
 /**
+ * Build the exporter sidecar for the EMBEDDED postgres service
+ * (`[services.postgres] mode = "embedded"`). Same image, same tailnet
+ * bind, same custom queries as the Supabase variant - only the DSN
+ * differs: the embedded sidecar's compose name is `postgres` and the
+ * database/role derive from the project. The exporter authenticates as
+ * the dedicated `postgres_exporter` role (pg_monitor, NOT superuser)
+ * created by the same bootstrap SQL, whose password deliberately reuses
+ * `${POSTGRES_PASSWORD}`: it lives in the same `.env` and the same
+ * containers either way, so a separate generated secret would add
+ * rotation machinery without shrinking any attack surface.
+ *
+ * No custom-queries mount here: the pg_stat_statements set requires
+ * `shared_preload_libraries` (preloaded on supabase/postgres, NOT on the
+ * vanilla `postgres:<v>` image) - the exporter's built-in metric set
+ * (pg_up, connections, db sizes, locks, transactions) covers the P6
+ * alert rules without it.
+ */
+export interface EmbeddedPostgresExporterSidecarService {
+	readonly image: string
+	readonly restart: string
+	readonly depends_on: ReadonlyArray<string>
+	readonly ports: ReadonlyArray<string>
+	readonly environment: Readonly<Record<string, string>>
+}
+
+export function buildEmbeddedPostgresExporterSidecar(
+	embeddedServiceName: string,
+	embeddedPort: number,
+	databaseName: string,
+): EmbeddedPostgresExporterSidecarService {
+	const dsn = `postgresql://${POSTGRES_EXPORTER_USER}:\${${POSTGRES_EXPORTER_EMBEDDED_PASSWORD_ENV}}@${embeddedServiceName}:${String(embeddedPort)}/${databaseName}?sslmode=disable`
+	return {
+		image: POSTGRES_EXPORTER_IMAGE,
+		restart: 'unless-stopped',
+		depends_on: [embeddedServiceName],
+		ports: [
+			`\${${TAILSCALE_IP_ENV}}:${String(POSTGRES_EXPORTER_PORT)}:${String(POSTGRES_EXPORTER_PORT)}`,
+		],
+		environment: {
+			[POSTGRES_EXPORTER_DSN_ENV]: dsn,
+		},
+	}
+}
+
+/**
+ * Compose env-var the embedded exporter's password interpolates from -
+ * the project's own POSTGRES_PASSWORD (see
+ * buildEmbeddedPostgresExporterSidecar for why no dedicated secret).
+ */
+export const POSTGRES_EXPORTER_EMBEDDED_PASSWORD_ENV = 'POSTGRES_PASSWORD'
+
+/**
  * Render the bootstrap SQL that the Supabase `db` container runs once on
  * first boot through `docker-entrypoint-initdb.d`. Creates the
  * `postgres_exporter` role with the supplied password and grants it the

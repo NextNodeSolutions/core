@@ -1056,7 +1056,21 @@ describe('HetznerVpsTarget', () => {
 					...TARGET_CONFIG,
 					postgres,
 				})
-				await target.deploy('acme-web', DEPLOY_INPUT, DEPLOY_ENV)
+				// Embedded postgres always carries POSTGRES_PASSWORD as a
+				// backing secret (the sidecar's initdb + the exporter
+				// bootstrap role both consume it); the real deploy never
+				// reaches stageRollout without it.
+				await target.deploy(
+					'acme-web',
+					{
+						...DEPLOY_INPUT,
+						secrets: {
+							...DEPLOY_INPUT.secrets,
+							POSTGRES_PASSWORD: 'pg-pass',
+						},
+					},
+					DEPLOY_ENV,
+				)
 
 				expect(spiedDeploy).toHaveBeenCalledTimes(1)
 				expect(spiedDeploy).toHaveBeenCalledWith(

@@ -16,6 +16,7 @@ import {
 import { createLogger } from '@nextnode-solutions/logger'
 
 import { writeObservabilityFiles } from './observability-rollout.ts'
+import { writePostgresExporterFiles } from './postgres-exporter-rollout.ts'
 import { shellEscape } from './ssh/shell-escape.ts'
 
 import type {
@@ -198,6 +199,7 @@ export async function stageRollout(
 	if (input.observability !== undefined) {
 		await writeObservabilityFiles(session, envDir, input)
 	}
+	await writePostgresExporterFiles(session, envDir, input)
 
 	if (input.registryToken !== undefined) {
 		await loginToRegistries(session, input, input.registryToken)
@@ -242,6 +244,10 @@ async function writeServiceEnvFiles(
 	)
 	const sharedEnv = formatComposeEnv({
 		...input.env,
+		// The VPS tailnet IPv4: compose interpolates `${TAILSCALE_IP}` in
+		// the exporter port bindings so /metrics endpoints bind the
+		// tailnet interface, never the public IP.
+		TAILSCALE_IP: input.tailnetIp,
 		...selectBackingSecrets(input.secrets, input.secretOrigins),
 	})
 

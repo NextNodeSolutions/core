@@ -4,15 +4,18 @@ import {
 } from '#/domain/services/observability.ts'
 import {
 	POSTGRES_EXPORTER_SERVICE_NAME,
+	buildEmbeddedPostgresExporterSidecar,
 	buildPostgresExporterInitMount,
 	buildPostgresExporterSidecar,
 } from '#/domain/services/postgres-exporter.ts'
 import {
 	POSTGRES_BACKUP_SERVICE_NAME,
 	POSTGRES_DATA_VOLUME,
+	POSTGRES_SIDECAR_PORT,
 	POSTGRES_SIDECAR_SERVICE_NAME,
 	buildPostgresBackupSidecar,
 	buildPostgresSidecar,
+	postgresProjectIdentifier,
 } from '#/domain/services/postgres.ts'
 import {
 	SUPABASE_BACKUP_SERVICE_NAME,
@@ -33,7 +36,10 @@ import type {
 } from '#/config/types.ts'
 import type { ImageRef } from '#/domain/deploy/target.ts'
 import type { ObservabilityComposeService } from '#/domain/services/observability.ts'
-import type { PostgresExporterSidecarService } from '#/domain/services/postgres-exporter.ts'
+import type {
+	EmbeddedPostgresExporterSidecarService,
+	PostgresExporterSidecarService,
+} from '#/domain/services/postgres-exporter.ts'
 import type {
 	PostgresBackupSidecarService,
 	PostgresSidecarService,
@@ -77,6 +83,7 @@ type ComposeServiceLike =
 	| SupabaseService
 	| SupabaseBackupSidecarService
 	| PostgresExporterSidecarService
+	| EmbeddedPostgresExporterSidecarService
 	| ObservabilityComposeService
 
 interface ComposeConfig {
@@ -129,13 +136,35 @@ function buildTopLevelVolumes(
 function buildPostgresServiceGroup(
 	config: PostgresServiceConfig,
 	projectName: string,
+	hasSupabase: boolean,
 ): Readonly<Record<string, ComposeServiceLike>> | null {
 	const sidecar = buildPostgresSidecar(config, projectName)
 	const backup = buildPostgresBackupSidecar(config, projectName)
 	if (sidecar === null || backup === null) return null
+	// The bootstrap SQL mount creates the pg_monitor-granted
+	// `postgres_exporter` role on first initdb; the exporter sidecar
+	// publishes /metrics on the tailnet interface for the monitoring
+	// scrape job (PRD P6 - embedded postgres gets the same observability
+	// as the Supabase variant). When the project ALSO declares supabase,
+	// the supabase group already owns the `postgres-exporter` name and
+	// the 9187 tailnet bind - one exporter per VPS port, supabase wins.
+	const instrumentedSidecar: PostgresSidecarService = {
+		...sidecar,
+		volumes: [...sidecar.volumes, buildPostgresExporterInitMount()],
+	}
 	return {
-		[POSTGRES_SIDECAR_SERVICE_NAME]: sidecar,
+		[POSTGRES_SIDECAR_SERVICE_NAME]: instrumentedSidecar,
 		[POSTGRES_BACKUP_SERVICE_NAME]: backup,
+		...(hasSupabase
+			? {}
+			: {
+					[POSTGRES_EXPORTER_SERVICE_NAME]:
+						buildEmbeddedPostgresExporterSidecar(
+							POSTGRES_SIDECAR_SERVICE_NAME,
+							POSTGRES_SIDECAR_PORT,
+							postgresProjectIdentifier(projectName),
+						),
+				}),
 	}
 }
 
@@ -161,7 +190,11 @@ function buildSupabaseServiceGroup(
 export function renderComposeFile(input: ComposeFileInput): string {
 	const userVolumes = input.volumes?.length ? input.volumes : undefined
 	const postgres = input.postgres
-		? buildPostgresServiceGroup(input.postgres, input.projectName)
+		? buildPostgresServiceGroup(
+				input.postgres,
+				input.projectName,
+				input.supabase !== undefined,
+			)
 		: null
 	const supabase = input.supabase
 		? buildSupabaseServiceGroup(input.projectName, input.environment)
