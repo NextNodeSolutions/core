@@ -234,6 +234,15 @@ export class HetznerVpsTarget implements DeployTarget {
 		}
 	}
 
+	async runFinalBackup(input: SnapshotInput): Promise<SnapshotResult> {
+		const session = await openVpsSession(this.rolloutContext())
+		try {
+			return await executeSnapshot(session, input)
+		} finally {
+			session.close()
+		}
+	}
+
 	private rolloutContext(): RolloutContext {
 		return { config: this.config, r2: this.r2 }
 	}

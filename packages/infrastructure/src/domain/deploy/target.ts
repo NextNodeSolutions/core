@@ -235,6 +235,17 @@ export interface DeployTarget {
 	 * applicable" so the caller routes accordingly.
 	 */
 	runAutoRestore(input: AutoRestoreInput): Promise<AutoRestoreResult>
+	/**
+	 * Capture a final on-demand backup of the embedded database to R2 BEFORE
+	 * a teardown destroys it, so the next provisioning of this project (on a
+	 * fresh VPS) auto-restores the very latest data instead of the last
+	 * hourly dump. Mechanically identical to `runPreMigrateSnapshot` (the
+	 * backup sidecar's `backup.sh`); the distinct method documents the intent
+	 * and lets the teardown orchestrator treat a failure as "abort, do not
+	 * destroy un-captured data". For static targets, throw "not applicable" -
+	 * no DB to back up.
+	 */
+	runFinalBackup(input: SnapshotInput): Promise<SnapshotResult>
 	teardown(
 		projectName: string,
 		domain: string | undefined,

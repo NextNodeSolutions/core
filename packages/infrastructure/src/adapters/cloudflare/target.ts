@@ -199,6 +199,13 @@ export class CloudflarePagesTarget implements DeployTarget {
 		)
 	}
 
+	runFinalBackup(input: SnapshotInput): Promise<SnapshotResult> {
+		void input
+		throw new Error(
+			`runFinalBackup is not applicable to ${this.name}: there is no embedded postgres to back up before teardown.`,
+		)
+	}
+
 	async teardown(
 		projectName: string,
 		domain: string | undefined,

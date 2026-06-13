@@ -169,6 +169,17 @@ small.meta{color:#6a7385}
 </div>
 
 <div class="decision">
+<strong>Dump final automatique au teardown (~0 perte au changement de VPS)</strong> — nouveau <code>DeployTarget.runFinalBackup</code>. Avant la destruction (<code>target.teardown</code>), pendant que postgres est encore vivant, on déclenche <code>backup.sh</code> via le sidecar → dump frais dans R2 → le prochain VPS l'auto-restore. Un teardown+redeploy planifié perd <strong>0 donnée</strong> (vs ≤1h sans). Embedded uniquement, sauté si <code>--wipe-backups</code> (on jette de toute façon) ou <code>TEARDOWN_SKIP_FINAL_BACKUP</code>.
+</div>
+
+<div class="tradeoff">
+<strong>Fail-loud : teardown ABORTE si le dump final échoue</strong> — on ne détruit jamais une donnée qu'on n'a pas pu capturer. Si <code>runFinalBackup</code> throw (VPS injoignable, disque plein…), <code>maybeCaptureFinalBackup</code> relance avec <code>cause</code> et le teardown s'arrête <em>avant</em> <code>target.teardown</code>. Override explicite <code>TEARDOWN_SKIP_FINAL_BACKUP=1</code> pour un VPS réellement mort (on accepte alors la perte ≤1h, les dumps horaires préservés couvrant jusqu'au dernier). Couvre le cas « teardown à cause d'un pb » : tant que le VPS répond en SSH, le dump passe.
+</div>
+
+<div class="todo">
+<strong>Crash brutal ≠ teardown propre</strong> — le dump final ne couvre QUE le teardown volontaire (VPS encore joignable). Un crash machine instantané reste à ≤1h (impossible de dumper une machine morte). Pour RPO ~secondes sur données critiques : réplication streaming / WAL archiving (wal-g) ou <code>postgres.mode=external</code>. Limite aussi : VPS partagé multi-projets en scope <code>vps</code> — seul le projet chargé est dumpé (les co-tenants non ; un VPS dédié par projet l'évite).</div>
+
+<div class="decision">
 <strong>Revue adversariale (workflow 22 agents, 12 findings confirmés → triés)</strong>
 <ul>
 <li><strong>Corrigés</strong> : (1) idempotence snapshot vide [ci-dessus] ; (2) <code>list-backups.ts</code> <code>instanceof NoSuchBucket</code> au lieu de <code>error.name</code> (cohérent avec <code>r2/client.ts</code> ; seul un bucket absent est bénin, toute autre erreur S3 propage et halt) ; (3) doc limite ~1000 partagée par <code>restore.sh</code>.</li>

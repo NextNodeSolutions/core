@@ -65,13 +65,15 @@ vi.mock('@nextnode-solutions/logger', () => ({
 }))
 
 // Mock HetznerVpsTarget class (network boundary: SSH, R2, Hetzner Cloud API)
-const { mockHetznerTeardown } = vi.hoisted(() => ({
+const { mockHetznerTeardown, mockRunFinalBackup } = vi.hoisted(() => ({
 	mockHetznerTeardown: vi.fn(),
+	mockRunFinalBackup: vi.fn(),
 }))
 vi.mock('../../adapters/hetzner/target.ts', () => ({
 	HetznerVpsTarget: vi.fn(() => ({
 		name: 'hetzner-vps',
 		teardown: mockHetznerTeardown,
+		runFinalBackup: mockRunFinalBackup,
 		ensureInfra: vi.fn(),
 		contributeEnv: vi.fn(),
 		deploy: vi.fn(),
@@ -302,6 +304,7 @@ describe('teardownCommand - postgres backup wipe', () => {
 			},
 			durationMs: 1234,
 		})
+		mockRunFinalBackup.mockResolvedValue({ durationMs: 50 })
 	})
 
 	afterEach(() => {
@@ -310,6 +313,7 @@ describe('teardownCommand - postgres backup wipe', () => {
 		vi.restoreAllMocks()
 		mockHetznerTeardown.mockReset()
 		mockWipePostgresBackups.mockReset()
+		mockRunFinalBackup.mockReset()
 		mockLoggerInfo.mockClear()
 	})
 
@@ -333,6 +337,50 @@ describe('teardownCommand - postgres backup wipe', () => {
 		expect(mockLoggerInfo).toHaveBeenCalledWith(
 			'Wiping backup bucket "nn-backups-my-app" (irreversible)...',
 		)
+	})
+
+	it('captures a final backup BEFORE teardown for embedded postgres', async () => {
+		await teardownCommand(APP_WITH_POSTGRES)
+
+		expect(mockRunFinalBackup).toHaveBeenCalledExactlyOnceWith({
+			projectName: 'my-app',
+			environment: 'production',
+		})
+		const [backupOrder] = mockRunFinalBackup.mock.invocationCallOrder
+		const [teardownOrder] = mockHetznerTeardown.mock.invocationCallOrder
+		if (backupOrder === undefined || teardownOrder === undefined) {
+			expect.unreachable('both spies should have been called once')
+		}
+		expect(backupOrder).toBeLessThan(teardownOrder)
+	})
+
+	it('skips the final backup when wiping the backups anyway', async () => {
+		vi.stubEnv('TEARDOWN_WIPE_BACKUPS', '1')
+
+		await teardownCommand(APP_WITH_POSTGRES)
+
+		expect(mockRunFinalBackup).not.toHaveBeenCalled()
+		expect(mockHetznerTeardown).toHaveBeenCalledOnce()
+	})
+
+	it('skips the final backup when TEARDOWN_SKIP_FINAL_BACKUP is set', async () => {
+		vi.stubEnv('TEARDOWN_SKIP_FINAL_BACKUP', '1')
+
+		await teardownCommand(APP_WITH_POSTGRES)
+
+		expect(mockRunFinalBackup).not.toHaveBeenCalled()
+		expect(mockHetznerTeardown).toHaveBeenCalledOnce()
+	})
+
+	it('ABORTS the teardown when the final backup fails', async () => {
+		mockRunFinalBackup.mockRejectedValueOnce(
+			new Error('ssh: host unreachable'),
+		)
+
+		await expect(teardownCommand(APP_WITH_POSTGRES)).rejects.toThrow(
+			/Final pre-teardown backup .* FAILED .* Teardown ABORTED/,
+		)
+		expect(mockHetznerTeardown).not.toHaveBeenCalled()
 	})
 })
 

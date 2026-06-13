@@ -18,12 +18,59 @@ import { createLogger } from '@nextnode-solutions/logger'
 import { buildRuntimeTarget } from './build-runtime-target.ts'
 import { loadInfraStorageForConfig } from './load-infra-storage.ts'
 
-import type { DeployableConfig } from '#/config/types.ts'
+import type { DeployableConfig, DeployableProjectType } from '#/config/types.ts'
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
+import type { DeployTarget } from '#/domain/deploy/target.ts'
 import type { TeardownTarget } from '#/domain/deploy/teardown-target.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 
 const logger = createLogger()
+
+interface FinalBackupGate {
+	readonly target: DeployTarget
+	readonly config: DeployableConfig
+	readonly environment: AppEnvironment
+	readonly wipeBackups: boolean
+	readonly skipFinalBackup: boolean
+}
+
+/**
+ * Capture a final dump of the embedded database to R2 BEFORE the destructive
+ * teardown runs, while postgres is still alive. The next provisioning of this
+ * project (on a fresh VPS) auto-restores this dump, so a planned teardown +
+ * redeploy loses ZERO data (vs ~1h back to the last hourly dump).
+ *
+ * No-op unless the project runs embedded postgres; skipped when we are wiping
+ * the backups anyway (`--wipe-backups`) or the operator opted out
+ * (`TEARDOWN_SKIP_FINAL_BACKUP`). Fail-loud otherwise: if the backup fails
+ * (e.g. the VPS is already unreachable), we ABORT the teardown rather than
+ * destroy data we could not capture. The override is for a genuinely dead VPS
+ * - the preserved hourly dumps still cover up to the last successful one.
+ */
+async function maybeCaptureFinalBackup(gate: FinalBackupGate): Promise<void> {
+	if (gate.config.services.postgres?.mode !== 'embedded') return
+	if (gate.wipeBackups || gate.skipFinalBackup) return
+
+	const projectName = gate.config.project.name
+	logger.info(
+		`Capturing a final backup of "${projectName}" (${gate.environment}) before teardown...`,
+	)
+	try {
+		const { durationMs } = await gate.target.runFinalBackup({
+			projectName,
+			environment: gate.environment,
+		})
+		logger.info(
+			`Final backup of "${projectName}" uploaded to R2 in ${String(durationMs)}ms - the next VPS will auto-restore it.`,
+		)
+	} catch (error) {
+		const reason = error instanceof Error ? error.message : String(error)
+		throw new Error(
+			`Final pre-teardown backup of "${projectName}" FAILED (${reason}). Teardown ABORTED so no un-captured data is destroyed. If the VPS is already unreachable and you accept losing writes since the last hourly dump, re-run with TEARDOWN_SKIP_FINAL_BACKUP=1.`,
+			{ cause: error },
+		)
+	}
+}
 
 // Either wipe the project's postgres backup bucket (irreversible) or log that
 // it was preserved. Driven by the TEARDOWN_WIPE_BACKUPS opt-in.
@@ -98,11 +145,18 @@ async function teardownR2CustomDomains(
 	)
 }
 
-export async function teardownCommand(config: DeployableConfig): Promise<void> {
-	const environment = resolveEnvironment(
-		config.project.type,
-		getEnv('PIPELINE_ENVIRONMENT'),
-	)
+interface TeardownOptions {
+	readonly teardownTarget: TeardownTarget
+	readonly shouldWipeVolumes: boolean
+	readonly wipeBackups: boolean
+	readonly skipFinalBackup: boolean
+}
+
+// Read + validate the teardown opt-ins from the environment. Extracted to keep
+// teardownCommand a thin orchestrator.
+function readTeardownOptions(
+	projectType: DeployableProjectType,
+): TeardownOptions {
 	const teardownTarget = getEnumEnv(
 		'TEARDOWN_TARGET',
 		TEARDOWN_TARGETS,
@@ -110,11 +164,18 @@ export async function teardownCommand(config: DeployableConfig): Promise<void> {
 	)
 	const shouldWipeVolumes = isEnvSet('TEARDOWN_WITH_VOLUMES')
 	const wipeBackups = isEnvSet('TEARDOWN_WIPE_BACKUPS')
-	validateTeardownOptions(
+	const skipFinalBackup = isEnvSet('TEARDOWN_SKIP_FINAL_BACKUP')
+	validateTeardownOptions(projectType, teardownTarget, shouldWipeVolumes)
+	return { teardownTarget, shouldWipeVolumes, wipeBackups, skipFinalBackup }
+}
+
+export async function teardownCommand(config: DeployableConfig): Promise<void> {
+	const environment = resolveEnvironment(
 		config.project.type,
-		teardownTarget,
-		shouldWipeVolumes,
+		getEnv('PIPELINE_ENVIRONMENT'),
 	)
+	const { teardownTarget, shouldWipeVolumes, wipeBackups, skipFinalBackup } =
+		readTeardownOptions(config.project.type)
 	const infraStorage = await loadInfraStorageForConfig(config)
 	const target = buildRuntimeTarget(config, environment, infraStorage)
 
@@ -122,8 +183,18 @@ export async function teardownCommand(config: DeployableConfig): Promise<void> {
 	// reconstruct the exact scope of the teardown (project, env, target type,
 	// domain) even if a later step fails mid-flight.
 	logger.info(
-		`Teardown starting: project="${config.project.name}" env="${environment}" target="${target.name}" scope="${teardownTarget}" shouldWipeVolumes=${String(shouldWipeVolumes)} wipeBackups=${String(wipeBackups)} domain="${config.project.domain ?? '(none)'}"`,
+		`Teardown starting: project="${config.project.name}" env="${environment}" target="${target.name}" scope="${teardownTarget}" shouldWipeVolumes=${String(shouldWipeVolumes)} wipeBackups=${String(wipeBackups)} skipFinalBackup=${String(skipFinalBackup)} domain="${config.project.domain ?? '(none)'}"`,
 	)
+
+	// Final backup BEFORE the destructive teardown. Aborts the teardown on
+	// failure - see maybeCaptureFinalBackup.
+	await maybeCaptureFinalBackup({
+		target,
+		config,
+		environment,
+		wipeBackups,
+		skipFinalBackup,
+	})
 
 	const teardownResult = await target.teardown(
 		config.project.name,
