@@ -40,7 +40,7 @@ export function computeImageRefCommand(config: DeployableConfig): void {
 	const repository = requireEnv('GITHUB_REPOSITORY')
 	const sha = requireEnv('GITHUB_SHA')
 	// A root-level project (nextnode.toml at the repo root, not packages/<pkg>/)
-	// has an empty package dir — that's valid, not missing. `renderBakeFile`
+	// has an empty package dir - that's valid, not missing. `renderBakeFile`
 	// already maps '' to a root-level `Dockerfile`, so default to '' rather than
 	// rejecting it like `requireEnv` would.
 	const packageDir = getEnv('PACKAGE_DIR') ?? ''

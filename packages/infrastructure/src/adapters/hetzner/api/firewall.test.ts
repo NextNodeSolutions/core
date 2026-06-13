@@ -235,4 +235,37 @@ describe('applyFirewall', () => {
 			/apply firewall 99 to server 123.*404/,
 		)
 	})
+
+	it('returns silently when the firewall is already applied', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi
+				.fn()
+				.mockResolvedValue(
+					httpError(
+						422,
+						'{"error":{"code":"firewall_already_applied","message":"firewall has already been applied to resource"}}',
+					),
+				),
+		)
+
+		await expect(
+			applyFirewall(TEST_TOKEN, 42, 123),
+		).resolves.toBeUndefined()
+	})
+
+	it('throws on other 422 errors', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi
+				.fn()
+				.mockResolvedValue(
+					httpError(422, '{"error":{"code":"invalid_input"}}'),
+				),
+		)
+
+		await expect(applyFirewall(TEST_TOKEN, 42, 123)).rejects.toThrow(
+			/apply firewall 42 to server 123.*422/,
+		)
+	})
 })
