@@ -351,9 +351,10 @@ describe('renderComposeFile', () => {
 			],
 			environment: {
 				WALG_S3_PREFIX: 's3://nn-walg-acme-web',
-				AWS_ACCESS_KEY_ID: '${R2_ACCESS_KEY_ID}',
-				AWS_SECRET_ACCESS_KEY: '${R2_SECRET_ACCESS_KEY}',
-				AWS_ENDPOINT: '${R2_ENDPOINT}',
+				AWS_ACCESS_KEY_ID: '${POSTGRES_BACKUP_R2_ACCESS_KEY_ID}',
+				AWS_SECRET_ACCESS_KEY:
+					'${POSTGRES_BACKUP_R2_SECRET_ACCESS_KEY}',
+				AWS_ENDPOINT: '${POSTGRES_BACKUP_R2_ENDPOINT}',
 				AWS_REGION: 'auto',
 				AWS_S3_FORCE_PATH_STYLE: 'true',
 				WALG_COMPRESSION_METHOD: 'lz4',
@@ -412,12 +413,14 @@ describe('renderComposeFile', () => {
 			volumes: [`${POSTGRES_DATA_VOLUME}:${POSTGRES_DATA_DIR}:ro`],
 			environment: {
 				WALG_S3_PREFIX: 's3://nn-walg-acme-web',
-				AWS_ACCESS_KEY_ID: '${R2_ACCESS_KEY_ID}',
-				AWS_SECRET_ACCESS_KEY: '${R2_SECRET_ACCESS_KEY}',
-				AWS_ENDPOINT: '${R2_ENDPOINT}',
+				AWS_ACCESS_KEY_ID: '${POSTGRES_BACKUP_R2_ACCESS_KEY_ID}',
+				AWS_SECRET_ACCESS_KEY:
+					'${POSTGRES_BACKUP_R2_SECRET_ACCESS_KEY}',
+				AWS_ENDPOINT: '${POSTGRES_BACKUP_R2_ENDPOINT}',
 				AWS_REGION: 'auto',
 				AWS_S3_FORCE_PATH_STYLE: 'true',
 				WALG_COMPRESSION_METHOD: 'lz4',
+				PGDATA: '/var/lib/postgresql/18/docker',
 				WALG_BACKUP_INTERVAL: '86400',
 				WALG_RETAIN_COUNT: '7',
 				PGHOST: 'postgres',

@@ -1,4 +1,7 @@
-import { HTTP_NOT_FOUND } from '#/domain/http/status.ts'
+import {
+	HTTP_NOT_FOUND,
+	HTTP_UNPROCESSABLE_ENTITY,
+} from '#/domain/http/status.ts'
 import { isRecord } from '#/kernel/guards.ts'
 
 import { HCLOUD_API_BASE, authHeaders, requireOk } from './base.ts'
@@ -96,11 +99,19 @@ export async function ensureFirewall(
 	return parseFirewall(responseBody, `create firewall "${name}"`)
 }
 
+/**
+ * Apply a firewall to a server. Returns silently when Hetzner reports
+ * `firewall_already_applied` (422): a provision re-run (attach / resume)
+ * re-applies the firewall {@link ensureFirewall} reused, and the
+ * already-applied state is exactly the desired outcome. Mirrors the
+ * idempotent contracts of {@link ensureFirewall} and {@link deleteFirewall}.
+ */
 export async function applyFirewall(
 	token: string,
 	firewallId: number,
 	serverId: number,
 ): Promise<void> {
+	const context = `apply firewall ${firewallId} to server ${serverId}`
 	const response = await fetch(
 		`${HCLOUD_API_BASE}/firewalls/${firewallId}/actions/apply_to_resources`,
 		{
@@ -111,10 +122,13 @@ export async function applyFirewall(
 			}),
 		},
 	)
-	await requireOk(
-		response,
-		`apply firewall ${firewallId} to server ${serverId}`,
-	)
+	if (response.status === HTTP_UNPROCESSABLE_ENTITY) {
+		const body = await response.text()
+		// Hetzner error payload: {"error":{"code":"firewall_already_applied",...}}
+		if (body.includes('firewall_already_applied')) return
+		throw new Error(`Hetzner API ${context}: ${response.status} - ${body}`)
+	}
+	await requireOk(response, context)
 }
 
 /**

@@ -1,10 +1,10 @@
 import { formatImageRef } from '#/domain/deploy/image-ref.ts'
 import { computeSilo } from '#/domain/hetzner/env-silo.ts'
-import { POSTGRES_WALG_SERVICE_NAME } from '#/domain/services/postgres-walg.ts'
 import {
-	POSTGRES_BACKUP_SERVICE_NAME,
-	POSTGRES_DATA_DIR,
-} from '#/domain/services/postgres.ts'
+	POSTGRES_PGDATA,
+	POSTGRES_WALG_SERVICE_NAME,
+} from '#/domain/services/postgres-walg.ts'
+import { POSTGRES_BACKUP_SERVICE_NAME } from '#/domain/services/postgres.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
 import { shellEscape } from './ssh/shell-escape.ts'
@@ -210,7 +210,7 @@ export function buildWalgFinalBackupCommand(input: SnapshotInput): string {
 		POSTGRES_WALG_SERVICE_NAME,
 		'wal-g',
 		'backup-push',
-		shellEscape(POSTGRES_DATA_DIR),
+		shellEscape(POSTGRES_PGDATA),
 	].join(' ')
 }
 

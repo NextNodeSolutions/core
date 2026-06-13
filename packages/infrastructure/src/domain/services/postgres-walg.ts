@@ -21,6 +21,15 @@ import type { PostgresServiceConfig } from '#/config/types.ts'
 export const NEXTNODE_POSTGRES_WALG_IMAGE = `ghcr.io/nextnodesolutions/postgres-walg:${NEXTNODE_POSTGRES_VERSION}`
 
 /**
+ * The ACTUAL postgres data directory (PGDATA) inside the container, distinct
+ * from {@link POSTGRES_DATA_DIR} (the volume MOUNT point). postgres:18+ stores
+ * data in a major-version subdir under the mounted parent, so the cluster lives
+ * at `/var/lib/postgresql/<major>/docker`. wal-g `backup-push`/`backup-fetch`
+ * and the image restore entrypoint operate on THIS path, not the mount point.
+ */
+export const POSTGRES_PGDATA = `/var/lib/postgresql/${NEXTNODE_POSTGRES_VERSION}/docker`
+
+/**
  * Backup-loop sidecar service name. Runs the SAME fleet image as the server,
  * shares the data volume read-only, and performs the periodic base backups
  * (`wal-g backup-push`) that anchor the WAL chain so PITR has a start point and
@@ -62,16 +71,19 @@ export function postgresWalgS3Prefix(projectName: string): string {
 
 /**
  * WALG_* + AWS_* env shared by the server (archive/restore commands) and the
- * backup-loop sidecar. R2 credentials are remapped from the project `.env`
- * (`R2_*`, written by the deploy pipeline) to the AWS_* names wal-g expects via
- * compose `${...}` interpolation. Path-style + region `auto` are R2 requirements.
+ * backup-loop sidecar. Credentials come from the DEDICATED, infra-owned R2
+ * token scoped to the wal-g bucket alone - projected into the project `.env` as
+ * `POSTGRES_BACKUP_R2_*` (see postgres-backup-creds) and remapped here to the
+ * AWS_* names wal-g expects via compose `${...}` interpolation. Using the scoped
+ * token (not the app `[services.r2]` creds) keeps a backup-credential leak
+ * contained. Path-style + region `auto` are R2 requirements.
  */
 function buildWalgEnv(projectName: string): Record<string, string> {
 	return {
 		WALG_S3_PREFIX: postgresWalgS3Prefix(projectName),
-		AWS_ACCESS_KEY_ID: '${R2_ACCESS_KEY_ID}',
-		AWS_SECRET_ACCESS_KEY: '${R2_SECRET_ACCESS_KEY}',
-		AWS_ENDPOINT: '${R2_ENDPOINT}',
+		AWS_ACCESS_KEY_ID: '${POSTGRES_BACKUP_R2_ACCESS_KEY_ID}',
+		AWS_SECRET_ACCESS_KEY: '${POSTGRES_BACKUP_R2_SECRET_ACCESS_KEY}',
+		AWS_ENDPOINT: '${POSTGRES_BACKUP_R2_ENDPOINT}',
 		AWS_REGION: 'auto',
 		AWS_S3_FORCE_PATH_STYLE: 'true',
 		WALG_COMPRESSION_METHOD: POSTGRES_WALG_COMPRESSION,
@@ -197,6 +209,9 @@ export function buildPostgresWalgSidecar(
 		volumes: [`${POSTGRES_DATA_VOLUME}:${POSTGRES_DATA_DIR}:ro`],
 		environment: {
 			...buildWalgEnv(projectName),
+			// The actual pg18 cluster path under the mounted parent; the loop runs
+			// `wal-g backup-push "$PGDATA"`.
+			PGDATA: POSTGRES_PGDATA,
 			WALG_BACKUP_INTERVAL: String(POSTGRES_WALG_BACKUP_INTERVAL_SECONDS),
 			WALG_RETAIN_COUNT: String(POSTGRES_WALG_RETAIN_COUNT),
 			PGHOST: POSTGRES_SIDECAR_SERVICE_NAME,

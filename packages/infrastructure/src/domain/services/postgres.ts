@@ -47,11 +47,22 @@ export function postgresProjectIdentifier(projectName: string): string {
 export const POSTGRES_DATA_VOLUME = 'postgres-data'
 
 /**
- * Default postgres data directory inside the official image. The image
- * also accepts `PGDATA` overrides via env, but we mount onto the default
- * so a sidecar with no extra env still persists correctly.
+ * Volume mount point for the postgres data, INSIDE the official image.
+ *
+ * postgres:18+ changed the on-disk layout: the image now stores data in a
+ * major-version-specific subdirectory and its default `PGDATA` is
+ * `/var/lib/postgresql/<major>/docker`, with the `VOLUME` declared at
+ * `/var/lib/postgresql` (not the legacy `/var/lib/postgresql/data`). Mounting
+ * onto the legacy path trips the image's own guard ("there appears to be
+ * PostgreSQL data in /var/lib/postgresql/data (unused mount/volume)") and the
+ * container crash-loops on first boot. We mount the named volume at the
+ * image's default parent so initdb writes the version subdir into the volume
+ * and no `PGDATA` override is needed. See docker-library/postgres#1259 / #37.
+ *
+ * Pinned to the 18+ layout to match {@link NEXTNODE_POSTGRES_VERSION}; if that
+ * pin ever drops below 18, revert this to `/var/lib/postgresql/data`.
  */
-export const POSTGRES_DATA_DIR = '/var/lib/postgresql/data'
+export const POSTGRES_DATA_DIR = '/var/lib/postgresql'
 
 /**
  * Compose the `DATABASE_URL` the app uses to reach the embedded sidecar.
@@ -425,10 +436,14 @@ export interface PostgresBackupSidecarService {
  * is the maintained fork of the now-unmaintained `eeshugerman/postgres-
  * backup-s3`; it adds support for postgres 17+ and ships an identical
  * env-var contract (`SCHEDULE`, `S3_*`, `POSTGRES_*`, `sh backup.sh`
- * triggering an ad-hoc dump). R2 credentials come from the project's
- * `[services.r2]` block (the `R2_*` env vars are already written to
- * `.env` by the deploy pipeline), renamed to `S3_*` via compose YAML
- * interpolation so the image sees the names it expects.
+ * triggering an ad-hoc dump). R2 credentials are INFRA-owned, not the app
+ * `[services.r2]` block: the backup bucket `nn-backups-<project>` is infra
+ * storage (like the state + certs buckets), reached via a dedicated R2 token
+ * scoped to that one bucket. `createPostgresService` provisions the token and
+ * `loadEnv` projects it as `POSTGRES_BACKUP_R2_*` into the shared `.env`;
+ * those names are renamed to the `S3_*` the image expects via compose
+ * interpolation. Dedicated names (not the generic `R2_*`) so a project that
+ * ALSO declares `[services.r2]` does not collide in `mergeServiceEnvs`.
  */
 export function buildPostgresBackupSidecar(
 	config: PostgresServiceConfig,
@@ -446,9 +461,9 @@ export function buildPostgresBackupSidecar(
 			SCHEDULE: POSTGRES_BACKUP_SCHEDULE,
 			BACKUP_KEEP_DAYS: POSTGRES_BACKUP_KEEP_DAYS,
 			S3_REGION: 'auto',
-			S3_ACCESS_KEY_ID: '${R2_ACCESS_KEY_ID}',
-			S3_SECRET_ACCESS_KEY: '${R2_SECRET_ACCESS_KEY}',
-			S3_ENDPOINT: '${R2_ENDPOINT}',
+			S3_ACCESS_KEY_ID: '${POSTGRES_BACKUP_R2_ACCESS_KEY_ID}',
+			S3_SECRET_ACCESS_KEY: '${POSTGRES_BACKUP_R2_SECRET_ACCESS_KEY}',
+			S3_ENDPOINT: '${POSTGRES_BACKUP_R2_ENDPOINT}',
 			S3_BUCKET: postgresBackupBucketName(projectName),
 			S3_PREFIX: POSTGRES_BACKUP_PREFIX,
 			S3_S3V4: 'yes',

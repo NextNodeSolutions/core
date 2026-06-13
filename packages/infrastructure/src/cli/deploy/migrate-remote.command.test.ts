@@ -87,6 +87,19 @@ vi.mock(import('#/cli/r2/load-runtime.ts'), async () => ({
 	})),
 }))
 
+// Mock the postgres backup R2 credentials load (network boundary: reads the
+// dedicated, infra-owned backup token from the state bucket). Provision writes
+// it; migrate-remote only reads it back to project POSTGRES_BACKUP_R2_* into
+// the shared `.env` the backup sidecar interpolates.
+vi.mock('#/cli/services/postgres/postgres-backup-creds.ts', () => ({
+	loadPostgresBackupCreds: vi.fn(async () => ({
+		endpoint: 'https://r2.example.com',
+		accessKeyId: 'bk-key',
+		secretAccessKey: 'bk-secret',
+	})),
+	provisionPostgresBackupCreds: vi.fn(),
+}))
+
 // Mock HetznerVpsTarget (network boundary: SSH, R2 state, Hetzner Cloud API).
 // prepareRollout + runMigrate are routed through the hoisted spies so each test
 // can assert on the args + ordering.
@@ -168,10 +181,16 @@ describe('migrateRemoteCommand', () => {
 					POSTGRES_PASSWORD: 'pg-password',
 					DATABASE_URL:
 						'postgres://my_app:pg-password@postgres:5432/my_app',
+					POSTGRES_BACKUP_R2_ACCESS_KEY_ID: 'bk-key',
+					POSTGRES_BACKUP_R2_SECRET_ACCESS_KEY: 'bk-secret',
+					POSTGRES_BACKUP_R2_ENDPOINT: 'https://r2.example.com',
 				},
 				secretOrigins: {
 					POSTGRES_PASSWORD: 'postgres',
 					DATABASE_URL: 'postgres',
+					POSTGRES_BACKUP_R2_ACCESS_KEY_ID: 'postgres',
+					POSTGRES_BACKUP_R2_SECRET_ACCESS_KEY: 'postgres',
+					POSTGRES_BACKUP_R2_ENDPOINT: 'postgres',
 				},
 				images: {
 					app: {

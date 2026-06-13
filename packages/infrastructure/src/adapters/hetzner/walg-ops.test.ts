@@ -29,7 +29,7 @@ describe('buildWalgFinalBackupCommand', () => {
 		expect(buildWalgFinalBackupCommand(INPUT)).toBe(
 			"docker compose -p 'acme-web-production'" +
 				" -f '/opt/apps/acme-web/production/compose.yaml'" +
-				" exec -T postgres-walg wal-g backup-push '/var/lib/postgresql/data'",
+				" exec -T postgres-walg wal-g backup-push '/var/lib/postgresql/18/docker'",
 		)
 	})
 

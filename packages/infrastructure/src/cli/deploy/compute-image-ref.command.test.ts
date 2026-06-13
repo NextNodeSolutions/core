@@ -156,12 +156,29 @@ describe('computeImageRefCommand', () => {
 		}).toThrow('GITHUB_SHA env var')
 	})
 
-	it('throws when PACKAGE_DIR is not set', () => {
+	it('treats an unset PACKAGE_DIR as a root-level project (Dockerfile at the repo root)', () => {
 		vi.stubEnv('PACKAGE_DIR', undefined)
 
-		expect(() => {
-			computeImageRefCommand(APP_WITH_DOMAIN)
-		}).toThrow('PACKAGE_DIR env var')
+		computeImageRefCommand(APP_WITH_DOMAIN)
+
+		const bake = parseJsonOrThrow(
+			readFileSync(join(workspace, 'docker-bake.json'), 'utf-8'),
+			'docker-bake.json',
+		)
+		expect(bake).toEqual({
+			group: { default: { targets: ['app'] } },
+			target: {
+				app: {
+					context: '.',
+					dockerfile: 'Dockerfile',
+					target: 'app',
+					args: { SITE_URL: 'https://example.com' },
+					tags: ['ghcr.io/nextnodesolutions/core-app:sha-abc1234'],
+					'cache-from': ['type=gha,scope=app'],
+					'cache-to': ['type=gha,scope=app,mode=max'],
+				},
+			},
+		})
 	})
 
 	it('throws when GITHUB_WORKSPACE is not set', () => {

@@ -113,10 +113,11 @@ describe('buildPostgresWalgSidecar', () => {
 
 		expect(sidecar?.environment).toMatchObject({
 			WALG_S3_PREFIX: 's3://nn-walg-acme-web',
-			AWS_ACCESS_KEY_ID: '${R2_ACCESS_KEY_ID}',
-			AWS_SECRET_ACCESS_KEY: '${R2_SECRET_ACCESS_KEY}',
-			AWS_ENDPOINT: '${R2_ENDPOINT}',
+			AWS_ACCESS_KEY_ID: '${POSTGRES_BACKUP_R2_ACCESS_KEY_ID}',
+			AWS_SECRET_ACCESS_KEY: '${POSTGRES_BACKUP_R2_SECRET_ACCESS_KEY}',
+			AWS_ENDPOINT: '${POSTGRES_BACKUP_R2_ENDPOINT}',
 			AWS_S3_FORCE_PATH_STYLE: 'true',
+			PGDATA: '/var/lib/postgresql/18/docker',
 			PGHOST: POSTGRES_SIDECAR_SERVICE_NAME,
 			PGUSER: 'acme_web',
 			PGDATABASE: 'acme_web',
