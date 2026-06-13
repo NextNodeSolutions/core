@@ -49,13 +49,13 @@ describe('ensureEmbeddedPostgresPasswordSecret', () => {
 		)
 
 		expect(setRepoEnvSecret).toHaveBeenCalledOnce()
-		const call = setRepoEnvSecret.mock.calls[0]
-		expect(call?.[0]).toBe(POSTGRES_PASSWORD_SECRET)
-		expect(call?.[2]).toEqual(SCOPE)
+		const [name, value, scope] = setRepoEnvSecret.mock.calls[0] ?? []
+		expect(name).toBe(POSTGRES_PASSWORD_SECRET)
+		expect(scope).toEqual(SCOPE)
 		// The whole point of #2: the value carries no character that would break
 		// the raw SQL literal (`'`) or the DATABASE_URL (`@ : / + =`). A base64
 		// generator would fail this assertion.
-		expect(call?.[1]).toMatch(/^[A-Za-z0-9]{32}$/)
+		expect(value).toMatch(/^[A-Za-z0-9]{32}$/)
 	})
 
 	it('fails loud when gh is unavailable but a push is needed', async () => {
