@@ -9,8 +9,11 @@ import type {
 
 // `[deploy].secrets` entries are either a bare NAME (a must-exist GitHub secret)
 // or a `{ name, generate, length }` table (the infra generates + pushes it at
-// provision). `length` is the produced secret's CHARACTER count.
-const MIN_SECRET_LENGTH = 8
+// provision). `length` is the produced secret's CHARACTER count. The floor of
+// 16 keeps a generated signing key / password above ~95 bits of entropy for
+// the narrowest (alphanumeric) generator - below that the value is too weak to
+// back a JWT secret or a DB password.
+const MIN_SECRET_LENGTH = 16
 const MAX_SECRET_LENGTH = 256
 
 const SECRETS_NOT_ARRAY = 'deploy.secrets must be an array'

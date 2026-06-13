@@ -919,7 +919,7 @@ describe('parseConfig', () => {
 			if (parsed.ok) expect.unreachable('expected validation to fail')
 
 			expect(parsed.errors).toContain(
-				'deploy.secrets entry "X" `length` must be an integer between 8 and 256',
+				'deploy.secrets entry "X" `length` must be an integer between 16 and 256',
 			)
 		})
 

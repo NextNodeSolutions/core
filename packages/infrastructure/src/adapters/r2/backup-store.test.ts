@@ -1,7 +1,16 @@
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { Readable } from 'node:stream'
+
 import { S3Client } from '@aws-sdk/client-s3'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { wipePostgresBackups } from './backup-store.ts'
+import {
+	downloadPostgresBackup,
+	listPostgresBackupSnapshots,
+	wipePostgresBackups,
+} from './backup-store.ts'
 
 const send = vi.fn()
 const fakeS3 = new S3Client({ region: 'auto' })
@@ -135,5 +144,84 @@ describe('wipePostgresBackups', () => {
 		for (const [command] of send.mock.calls) {
 			expect(command.input.Bucket).toBe(BUCKET)
 		}
+	})
+})
+
+describe('listPostgresBackupSnapshots', () => {
+	it('scopes the listing to the postgres/ prefix', async () => {
+		send.mockResolvedValue({ Contents: [], NextContinuationToken: undefined })
+
+		await listPostgresBackupSnapshots(fakeS3, BUCKET)
+
+		expect(send.mock.calls[0]?.[0].input).toMatchObject({
+			Bucket: BUCKET,
+			Prefix: 'postgres/',
+		})
+	})
+
+	it('walks every page and drops keys that are not sidecar dumps', async () => {
+		let listCalls = 0
+		send.mockImplementation(async () => {
+			listCalls += 1
+			if (listCalls === 1) {
+				return {
+					Contents: [
+						{ Key: 'postgres/acme_2026-05-19T10:00:00.dump' },
+						// foreign upload under the prefix - must be dropped so it
+						// can never displace a real dump during selection.
+						{ Key: 'postgres/not-a-backup.txt' },
+					],
+					NextContinuationToken: 'page-2',
+				}
+			}
+			return {
+				Contents: [{ Key: 'postgres/acme_2026-05-19T11:00:00.dump' }],
+				NextContinuationToken: undefined,
+			}
+		})
+
+		const snapshots = await listPostgresBackupSnapshots(fakeS3, BUCKET)
+
+		// Two list pages were consumed (proves the continuation loop)...
+		expect(listCalls).toBe(2)
+		expect(send.mock.calls[1]?.[0].input.ContinuationToken).toBe('page-2')
+		// ...and only the two well-formed keys survived the filter.
+		expect(snapshots.map(snapshot => snapshot.key)).toEqual([
+			'postgres/acme_2026-05-19T10:00:00.dump',
+			'postgres/acme_2026-05-19T11:00:00.dump',
+		])
+	})
+})
+
+describe('downloadPostgresBackup', () => {
+	it('streams a Node Readable body to the destination path', async () => {
+		const dir = await mkdtemp(join(tmpdir(), 'backup-store-'))
+		const destPath = join(dir, 'dump.bin')
+		send.mockResolvedValue({ Body: Readable.from('PGDUMP-bytes') })
+
+		try {
+			await downloadPostgresBackup(fakeS3, BUCKET, 'postgres/x.dump', destPath)
+			expect(await readFile(destPath, 'utf8')).toBe('PGDUMP-bytes')
+		} finally {
+			await rm(dir, { recursive: true, force: true })
+		}
+	})
+
+	it('cancels a non-Readable stream body and throws rather than leaking it', async () => {
+		const cancel = vi.fn(async () => {})
+		send.mockResolvedValue({ Body: { cancel } })
+
+		await expect(
+			downloadPostgresBackup(fakeS3, BUCKET, 'postgres/x.dump', '/dev/null'),
+		).rejects.toThrow('expected a Node Readable body')
+		expect(cancel).toHaveBeenCalledOnce()
+	})
+
+	it('throws when the body is absent', async () => {
+		send.mockResolvedValue({ Body: undefined })
+
+		await expect(
+			downloadPostgresBackup(fakeS3, BUCKET, 'postgres/x.dump', '/dev/null'),
+		).rejects.toThrow('expected a Node Readable body')
 	})
 })

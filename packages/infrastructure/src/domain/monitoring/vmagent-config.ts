@@ -131,6 +131,16 @@ function buildSelfJob(input: VmagentConfigInput): ScrapeJob {
 				},
 			},
 		],
+		// FOOTGUN: this cAdvisor explosion-control relabel applies to EVERY self
+		// target (node_exporter, the cAdvisor :9101 it actually targets, AND the
+		// internal VictoriaMetrics/VictoriaLogs/blackbox components), because they
+		// share one static_configs target list. It is a no-op today only because
+		// those internal exporters use prefixed label names (type, path,
+		// accountID...). The day any of them emits a bare `id`/`name`/`image`
+		// label, the labeldrop here will silently collapse distinct series into
+		// one. If that happens, split the self job so this relabel is scoped to the
+		// :9101 cAdvisor target alone (as the per-exporter `keep` in
+		// buildClientVpsJob already does for client VPSs).
 		metric_relabel_configs: buildCadvisorMetricRelabel(),
 	}
 }
