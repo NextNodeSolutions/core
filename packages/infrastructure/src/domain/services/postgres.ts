@@ -452,10 +452,14 @@ export interface PostgresBackupSidecarService {
  * is the maintained fork of the now-unmaintained `eeshugerman/postgres-
  * backup-s3`; it adds support for postgres 17+ and ships an identical
  * env-var contract (`SCHEDULE`, `S3_*`, `POSTGRES_*`, `sh backup.sh`
- * triggering an ad-hoc dump). R2 credentials come from the project's
- * `[services.r2]` block (the `R2_*` env vars are already written to
- * `.env` by the deploy pipeline), renamed to `S3_*` via compose YAML
- * interpolation so the image sees the names it expects.
+ * triggering an ad-hoc dump). R2 credentials are INFRA-owned, not the app
+ * `[services.r2]` block: the backup bucket `nn-backups-<project>` is infra
+ * storage (like the state + certs buckets), reached via a dedicated R2 token
+ * scoped to that one bucket. `createPostgresService` provisions the token and
+ * `loadEnv` projects it as `POSTGRES_BACKUP_R2_*` into the shared `.env`;
+ * those names are renamed to the `S3_*` the image expects via compose
+ * interpolation. Dedicated names (not the generic `R2_*`) so a project that
+ * ALSO declares `[services.r2]` does not collide in `mergeServiceEnvs`.
  */
 export function buildPostgresBackupSidecar(
 	config: PostgresServiceConfig,
@@ -473,9 +477,9 @@ export function buildPostgresBackupSidecar(
 			SCHEDULE: POSTGRES_BACKUP_SCHEDULE,
 			BACKUP_KEEP_DAYS: '0',
 			S3_REGION: 'auto',
-			S3_ACCESS_KEY_ID: '${R2_ACCESS_KEY_ID}',
-			S3_SECRET_ACCESS_KEY: '${R2_SECRET_ACCESS_KEY}',
-			S3_ENDPOINT: '${R2_ENDPOINT}',
+			S3_ACCESS_KEY_ID: '${POSTGRES_BACKUP_R2_ACCESS_KEY_ID}',
+			S3_SECRET_ACCESS_KEY: '${POSTGRES_BACKUP_R2_SECRET_ACCESS_KEY}',
+			S3_ENDPOINT: '${POSTGRES_BACKUP_R2_ENDPOINT}',
 			S3_BUCKET: postgresBackupBucketName(projectName),
 			S3_PREFIX: POSTGRES_BACKUP_PREFIX,
 			S3_S3V4: 'yes',

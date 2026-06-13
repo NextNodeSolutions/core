@@ -1,0 +1,132 @@
+import { resolveR2PermissionGroupIds } from '#/adapters/cloudflare/permission-groups.ts'
+import { createR2Token } from '#/adapters/cloudflare/r2/tokens.ts'
+import { R2Client } from '#/adapters/r2/client.ts'
+import {
+	readPostgresBackupState,
+	writePostgresBackupState,
+} from '#/adapters/services/postgres-backup-state.ts'
+import {
+	awaitTokenPropagation,
+	revokeStaleTokens,
+} from '#/cli/r2/token-lifecycle.ts'
+import { deriveR2Credentials } from '#/domain/cloudflare/r2/credentials.ts'
+import {
+	postgresBackupStateKey,
+	postgresBackupTokenName,
+} from '#/domain/services/postgres-backup.ts'
+import { createLogger } from '@nextnode-solutions/logger'
+
+import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
+import type { AppEnvironment } from '#/domain/environment.ts'
+import type { PostgresBackupCredsState } from '#/domain/services/postgres-backup.ts'
+import type { ObjectStoreClient } from '#/domain/storage/object-store.ts'
+
+const logger = createLogger()
+
+export interface ProvisionPostgresBackupCredsInput {
+	readonly cfToken: string
+	readonly infraStorage: InfraStorageRuntimeConfig
+	readonly projectName: string
+	readonly environment: AppEnvironment
+	readonly bucketName: string
+}
+
+export interface LoadPostgresBackupCredsInput {
+	readonly infraStorage: InfraStorageRuntimeConfig
+	readonly projectName: string
+	readonly environment: AppEnvironment
+}
+
+// State-bucket client: the persisted backup creds live in the infra STATE
+// bucket, reached with the infra credentials - never the freshly-minted backup
+// token (which is scoped to the backup bucket only and cannot read state).
+function stateClient(
+	infraStorage: InfraStorageRuntimeConfig,
+): ObjectStoreClient {
+	return new R2Client({
+		endpoint: infraStorage.endpoint,
+		accessKeyId: infraStorage.accessKeyId,
+		secretAccessKey: infraStorage.secretAccessKey,
+		bucket: infraStorage.stateBucket,
+	})
+}
+
+/**
+ * Provision-time bootstrap for the postgres backup R2 credentials. Mints a
+ * Cloudflare R2 API token scoped to the project's `nn-backups-<project>`
+ * bucket alone, waits for it to propagate, revokes any prior token of the same
+ * name, then persists the derived S3 credentials to the infra state bucket.
+ *
+ * Rotates on every call (revoke-by-name), mirroring the R2 service: a leaked
+ * or corrupted backup credential self-heals on the next provision without
+ * touching the dumps already in the bucket.
+ */
+export async function provisionPostgresBackupCreds(
+	input: ProvisionPostgresBackupCredsInput,
+): Promise<void> {
+	const { accountId } = input.infraStorage
+	const tokenName = postgresBackupTokenName(
+		input.projectName,
+		input.environment,
+	)
+	logger.info(
+		`Creating postgres backup R2 token "${tokenName}" scoped to "${input.bucketName}"`,
+	)
+	const permissions = await resolveR2PermissionGroupIds(input.cfToken)
+	const tokenResult = await createR2Token({
+		token: input.cfToken,
+		tokenName,
+		accountId,
+		bucketNames: [input.bucketName],
+		permissions,
+	})
+	const creds = deriveR2Credentials(tokenResult)
+
+	await awaitTokenPropagation({
+		accountId,
+		accessKeyId: creds.accessKeyId,
+		secretAccessKey: creds.secretAccessKey,
+		probeBucket: input.bucketName,
+	})
+	await revokeStaleTokens(input.cfToken, tokenName, tokenResult.id)
+
+	const state: PostgresBackupCredsState = {
+		endpoint: input.infraStorage.endpoint,
+		accessKeyId: creds.accessKeyId,
+		secretAccessKey: creds.secretAccessKey,
+	}
+	const stateKey = postgresBackupStateKey(
+		input.projectName,
+		input.environment,
+	)
+	await writePostgresBackupState(
+		stateClient(input.infraStorage),
+		stateKey,
+		state,
+	)
+	logger.info(`postgres backup R2 token "${tokenName}" created and persisted`)
+}
+
+/**
+ * Deploy/migrate-time load of the backup R2 credentials. Throws on missing
+ * state - the operator re-runs provision rather than having deploy self-heal
+ * (provision always runs before migrate/deploy in the pipeline).
+ */
+export async function loadPostgresBackupCreds(
+	input: LoadPostgresBackupCredsInput,
+): Promise<PostgresBackupCredsState> {
+	const stateKey = postgresBackupStateKey(
+		input.projectName,
+		input.environment,
+	)
+	const state = await readPostgresBackupState(
+		stateClient(input.infraStorage),
+		stateKey,
+	)
+	if (!state) {
+		throw new Error(
+			`postgres backup R2 credentials not found at "${stateKey}" - run provision before deploy`,
+		)
+	}
+	return state
+}

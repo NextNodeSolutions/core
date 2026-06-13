@@ -144,7 +144,7 @@ describe('buildPostgresBackupSidecar', () => {
 		expect(sidecar.depends_on).toEqual([POSTGRES_SIDECAR_SERVICE_NAME])
 	})
 
-	it('renames the project-level R2 creds to the S3_* names the image expects via compose interpolation', () => {
+	it('renames the infra-owned backup R2 creds to the S3_* names the image expects via compose interpolation', () => {
 		const sidecar = buildPostgresBackupSidecar(
 			{
 				mode: 'embedded',
@@ -153,9 +153,9 @@ describe('buildPostgresBackupSidecar', () => {
 		)
 
 		expect(sidecar?.environment).toMatchObject({
-			S3_ACCESS_KEY_ID: '${R2_ACCESS_KEY_ID}',
-			S3_SECRET_ACCESS_KEY: '${R2_SECRET_ACCESS_KEY}',
-			S3_ENDPOINT: '${R2_ENDPOINT}',
+			S3_ACCESS_KEY_ID: '${POSTGRES_BACKUP_R2_ACCESS_KEY_ID}',
+			S3_SECRET_ACCESS_KEY: '${POSTGRES_BACKUP_R2_SECRET_ACCESS_KEY}',
+			S3_ENDPOINT: '${POSTGRES_BACKUP_R2_ENDPOINT}',
 			S3_REGION: 'auto',
 			S3_S3V4: 'yes',
 		})

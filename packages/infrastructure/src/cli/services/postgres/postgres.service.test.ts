@@ -5,10 +5,23 @@ import type { PostgresServiceConfig } from '#/config/types.ts'
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 
 const ensureR2BucketMock = vi.hoisted(() => vi.fn())
+const provisionPostgresBackupCredsMock = vi.hoisted(() => vi.fn())
+const loadPostgresBackupCredsMock = vi.hoisted(() => vi.fn())
 
 vi.mock('#/adapters/cloudflare/r2/buckets.ts', () => ({
 	ensureR2Bucket: ensureR2BucketMock,
 }))
+
+vi.mock('./postgres-backup-creds.ts', () => ({
+	provisionPostgresBackupCreds: provisionPostgresBackupCredsMock,
+	loadPostgresBackupCreds: loadPostgresBackupCredsMock,
+}))
+
+const BACKUP_CREDS = {
+	endpoint: 'https://acct.r2.cloudflarestorage.com',
+	accessKeyId: 'bk-key',
+	secretAccessKey: 'bk-secret',
+}
 
 import {
 	createPostgresService,
@@ -80,6 +93,22 @@ describe('createPostgresService', () => {
 			})
 		})
 
+		it('provisions a dedicated R2 token scoped to the backup bucket', async () => {
+			ensureR2BucketMock.mockResolvedValue(true)
+			const service = createPostgresService(makeCtx(), EMBEDDED)
+
+			await service.provision()
+
+			expect(provisionPostgresBackupCredsMock).toHaveBeenCalledTimes(1)
+			expect(provisionPostgresBackupCredsMock).toHaveBeenCalledWith({
+				cfToken: 'cf-token',
+				infraStorage: INFRA_STORAGE,
+				projectName: 'myapp',
+				environment: 'production',
+				bucketName: 'nn-backups-myapp',
+			})
+		})
+
 		it('is safe to call multiple times - delegates idempotency to ensureR2Bucket', async () => {
 			ensureR2BucketMock
 				.mockResolvedValueOnce(true)
@@ -110,7 +139,8 @@ describe('createPostgresService', () => {
 	})
 
 	describe('embedded mode', () => {
-		it('builds DATABASE_URL from POSTGRES_PASSWORD pointing at the sidecar host', async () => {
+		it('merges the connection env with the infra-owned backup R2 creds', async () => {
+			loadPostgresBackupCredsMock.mockResolvedValue(BACKUP_CREDS)
 			const service = createPostgresService(
 				makeCtx({ POSTGRES_PASSWORD: 's3cret' }),
 				EMBEDDED,
@@ -126,7 +156,16 @@ describe('createPostgresService', () => {
 				secret: {
 					POSTGRES_PASSWORD: 's3cret',
 					DATABASE_URL: 'postgres://myapp:s3cret@postgres:5432/myapp',
+					POSTGRES_BACKUP_R2_ACCESS_KEY_ID: 'bk-key',
+					POSTGRES_BACKUP_R2_SECRET_ACCESS_KEY: 'bk-secret',
+					POSTGRES_BACKUP_R2_ENDPOINT:
+						'https://acct.r2.cloudflarestorage.com',
 				},
+			})
+			expect(loadPostgresBackupCredsMock).toHaveBeenCalledWith({
+				infraStorage: INFRA_STORAGE,
+				projectName: 'myapp',
+				environment: 'production',
 			})
 		})
 
