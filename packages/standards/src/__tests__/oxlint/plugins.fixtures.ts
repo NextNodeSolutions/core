@@ -208,6 +208,53 @@ export function Card({ title, children }: CardProps): unknown {
 		goodFile: 'UserCard.good.tsx',
 	},
 
+	// coding R13 - the primary export can be a default export
+	{
+		rule: 'nextnode(component-filename-match)',
+		severity: 'error',
+		ext: 'tsx',
+		bad: `export default function Gizmo(): unknown {
+	return <div>g</div>
+}
+`,
+		badFile: 'Widget.bad.tsx',
+		// `export default <Identifier>` still names the component
+		edge: `const Gizmo = (): unknown => <div>g</div>
+export default Gizmo
+`,
+		edgeFile: 'Sidebar.edge.tsx',
+		edgeExpect: 'fire',
+		good: `export default function Hero(): unknown {
+	return <div>h</div>
+}
+`,
+		goodFile: 'Hero.good.tsx',
+	},
+
+	// coding R13 - `export { Component }` shorthand names the primary export
+	{
+		rule: 'nextnode(component-filename-match)',
+		severity: 'error',
+		ext: 'tsx',
+		bad: `function Drawer(): unknown {
+	return <div>d</div>
+}
+export { Drawer }
+`,
+		badFile: 'Panel.bad.tsx',
+		// a re-export from another module is a barrel, out of scope
+		edge: `export { Drawer } from './drawer.ts'
+`,
+		edgeFile: 'Panel.edge.tsx',
+		edgeExpect: 'clean',
+		good: `function Modal(): unknown {
+	return <div>m</div>
+}
+export { Modal }
+`,
+		goodFile: 'Modal.good.tsx',
+	},
+
 	// coding R13 - no utils.ts grab-bags of unrelated helpers
 	{
 		rule: 'nextnode(no-grab-bag-files)',
