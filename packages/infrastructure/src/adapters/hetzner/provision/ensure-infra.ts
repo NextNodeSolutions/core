@@ -73,6 +73,16 @@ export async function freshProvision(
 		return attachToExistingVps(config, r2, vpsName, existingServer)
 	}
 
+	return provisionFreshServer(config, r2, vpsName)
+}
+
+// Create the server from the golden image, seed phase=created state, and
+// run the shared provisioning tail.
+async function provisionFreshServer(
+	config: HetznerVpsTargetConfig,
+	r2: ObjectStoreClient,
+	vpsName: string,
+): Promise<VpsResourceOutcome> {
 	const goldenImageId = await ensureGoldenImage(
 		config.credentials.hcloudToken,
 	)
@@ -86,6 +96,7 @@ export async function freshProvision(
 		hetzner: config.hetzner,
 		internal: config.internal,
 		goldenImageId,
+		hasObservability: config.observability !== undefined,
 	})
 
 	const createdEtag = await writeState(r2, vpsName, {

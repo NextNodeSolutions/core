@@ -15,6 +15,7 @@ function makeInput(overrides?: Partial<ConvergenceInput>): ConvergenceInput {
 		vectorToml: VECTOR_TOML,
 		vectorEnv: VECTOR_ENV,
 		caddyConfig: CADDY_CONFIG,
+		monitoringEnv: 'TS_IP=100.64.0.9\n',
 		...overrides,
 	}
 }
@@ -108,6 +109,7 @@ describe('converge', () => {
 			['/etc/vector/vector.toml', VECTOR_TOML],
 			['/etc/vector/vector.env', VECTOR_ENV],
 			['/etc/caddy/config.json', CADDY_CONFIG],
+			['/etc/monitoring/env', 'TS_IP=100.64.0.9\n'],
 		])
 		const session = createFakeSession(files)
 

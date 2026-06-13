@@ -8,6 +8,7 @@ const PROJECT_INPUT = {
 	tailscaleHostname: 'my-project',
 	deployPublicKey: 'ssh-ed25519 AAAAC3Nz... deploy@ci',
 	isInternal: false,
+	tailscaleTags: ['tag:server', 'tag:client-vps'],
 } as const
 
 const INTERNAL_PROJECT_INPUT = { ...PROJECT_INPUT, isInternal: true } as const
@@ -110,10 +111,10 @@ describe('renderProjectCloudInit', () => {
 		)
 	})
 
-	it('runs tailscale up reading the auth key from the write_files path', () => {
+	it('runs tailscale up reading the auth key from the write_files path, advertising the tags', () => {
 		const config = parseProjectCloudInit()
 		expect(config.runcmd).toContain(
-			'tailscale up --authkey="$(cat /root/.tailscale-authkey)" --hostname=my-project',
+			'tailscale up --authkey="$(cat /root/.tailscale-authkey)" --hostname=my-project --advertise-tags=tag:server,tag:client-vps',
 		)
 	})
 
@@ -156,5 +157,13 @@ describe('renderProjectCloudInit', () => {
 		)
 		expect(cmds).not.toContain('ufw allow 80/tcp')
 		expect(cmds).not.toContain('ufw allow 443/tcp')
+	})
+
+	it('opens node_exporter to the tailnet only, in both modes', () => {
+		const rule = 'ufw allow in on tailscale0 to any port 9100 proto tcp'
+		expect(parseProjectCloudInit().runcmd).toContain(rule)
+		expect(parseProjectCloudInit(INTERNAL_PROJECT_INPUT).runcmd).toContain(
+			rule,
+		)
 	})
 })

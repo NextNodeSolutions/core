@@ -7,12 +7,16 @@ const logger = createLogger()
 
 const VECTOR_TOML_PATH = '/etc/vector/vector.toml'
 const VECTOR_ENV_PATH = '/etc/vector/vector.env'
+const MONITORING_ENV_PATH = '/etc/monitoring/env'
 
 export interface ConvergenceInput {
 	readonly vpsName: string
 	readonly vectorToml: string | undefined
 	readonly vectorEnv: string | undefined
 	readonly caddyConfig: string
+	// /etc/monitoring/env content (TS_IP=<tailnet ip>) - written before
+	// the cadvisor unit (shipped disabled in the golden image) is enabled.
+	readonly monitoringEnv: string
 }
 
 async function pushFileIfChanged(
@@ -64,6 +68,20 @@ export async function converge(
 	if (caddyChanged) {
 		await session.exec('sudo systemctl restart caddy')
 		logger.info('Restarted caddy')
+	}
+
+	// cAdvisor: write the TS_IP env file the golden-image unit reads,
+	// then (re)enable it. `enable --now` is idempotent; a changed IP
+	// (VPS recreation) needs the restart to re-bind the publish address.
+	const monitoringEnvChanged = await pushFileIfChanged(
+		session,
+		MONITORING_ENV_PATH,
+		input.monitoringEnv,
+	)
+	await session.exec('sudo systemctl enable --now cadvisor')
+	if (monitoringEnvChanged) {
+		await session.exec('sudo systemctl restart cadvisor')
+		logger.info('Restarted cadvisor')
 	}
 
 	// Per-project directories are created on demand by deployContainer when

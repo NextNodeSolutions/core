@@ -11,11 +11,11 @@ import {
 	MAX_POLL_ATTEMPTS,
 	POLL_INTERVAL_MS,
 	TAILSCALE_AUTHKEY_TTL_SECONDS,
-	TAILSCALE_TAG,
 } from '#/adapters/hetzner/constants.ts'
 import { waitUntil } from '#/adapters/hetzner/wait.ts'
 import { renderProjectCloudInit } from '#/domain/hetzner/cloud-init.ts'
 import { computeFirewallRules } from '#/domain/hetzner/firewall-rules.ts'
+import { computeTailscaleTags } from '#/domain/tailnet/tags.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
 import { waitForSsh } from './wait-for-ssh.ts'
@@ -39,6 +39,10 @@ export interface CreateVpsInput {
 	readonly hetzner: HetznerVpsDeploySection['hetzner']
 	readonly internal: boolean
 	readonly goldenImageId: number
+	// True when the project declares [services.observability]: the VPS is
+	// the monitoring host and joins the tailnet as tag:monitoring instead
+	// of tag:client-vps (see computeTailscaleTags).
+	readonly hasObservability: boolean
 }
 
 export interface CreateVpsResult {
@@ -118,13 +122,14 @@ async function renderCloudInitWithFreshAuthkey(
 		)
 	}
 
+	const tags = computeTailscaleTags(input.hasObservability)
 	const minted = await credentials.tailnet.mintAuthkey(
-		[TAILSCALE_TAG],
+		tags,
 		TAILSCALE_AUTHKEY_TTL_SECONDS,
 		`nextnode-infra provisioning ${input.vpsName}`,
 	)
 	logger.info(
-		`Minted ephemeral Tailscale authkey for "${input.vpsName}" (expires ${minted.expires})`,
+		`Minted ephemeral Tailscale authkey for "${input.vpsName}" (expires ${minted.expires}, tags ${tags.join(',')})`,
 	)
 
 	return renderProjectCloudInit({
@@ -132,6 +137,7 @@ async function renderCloudInitWithFreshAuthkey(
 		tailscaleHostname: input.vpsName,
 		deployPublicKey: credentials.deployPublicKey,
 		isInternal: input.internal,
+		tailscaleTags: tags,
 	})
 }
 

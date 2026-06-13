@@ -134,7 +134,7 @@ describe('renderGoldenImageCloudInit', () => {
 
 	it('enables caddy and vector systemd units', () => {
 		const cmds = parseGoldenImage().runcmd
-		expect(cmds).toContain('systemctl enable caddy vector')
+		expect(cmds).toContain('systemctl enable caddy vector node_exporter')
 	})
 
 	it('shuts the VPS down at the end so the orchestrator can snapshot status=off', () => {

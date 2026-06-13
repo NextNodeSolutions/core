@@ -3,6 +3,7 @@ import { composeCaddyConfig } from '#/domain/caddy/compose.ts'
 import { extractUpstreams } from '#/domain/caddy/config.ts'
 import { CADDY_ENV_PATH, renderCaddyEnv } from '#/domain/caddy/env.ts'
 import { buildR2CaddyBinding } from '#/domain/cloudflare/r2/caddy-binding.ts'
+import { renderMonitoringEnv } from '#/domain/hetzner/monitoring-env.ts'
 import { selectVectorConfig } from '#/domain/hetzner/vector-config.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
@@ -80,6 +81,9 @@ export async function convergeVps(input: ConvergeVpsInput): Promise<void> {
 			vectorToml: vectorSelection.vectorToml,
 			vectorEnv: vectorSelection.vectorEnv,
 			caddyConfig,
+			// input.host IS the tailnet IP (SSH reaches the VPS over the
+			// tailnet) - the cadvisor publish binding reuses it.
+			monitoringEnv: renderMonitoringEnv(input.host),
 		})
 	} finally {
 		session.close()
