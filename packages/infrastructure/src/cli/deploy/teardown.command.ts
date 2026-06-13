@@ -35,17 +35,18 @@ interface FinalBackupGate {
 }
 
 /**
- * Capture a final dump of the embedded database to R2 BEFORE the destructive
- * teardown runs, while postgres is still alive. The next provisioning of this
- * project (on a fresh VPS) auto-restores this dump, so a planned teardown +
- * redeploy loses ZERO data (vs ~1h back to the last hourly dump).
+ * Capture a final wal-g base backup of the embedded database to R2 BEFORE the
+ * destructive teardown runs, while postgres is still alive. The next
+ * provisioning of this project (on a fresh VPS) restores this backup + replays
+ * archived WAL, so a planned teardown + redeploy loses ZERO data (vs up to the
+ * archive_timeout window, ~180s, back to the last archived WAL segment).
  *
  * No-op unless the project runs embedded postgres; skipped when we are wiping
  * the backups anyway (`--wipe-backups`) or the operator opted out
  * (`TEARDOWN_SKIP_FINAL_BACKUP`). Fail-loud otherwise: if the backup fails
  * (e.g. the VPS is already unreachable), we ABORT the teardown rather than
  * destroy data we could not capture. The override is for a genuinely dead VPS
- * - the preserved hourly dumps still cover up to the last successful one.
+ * - the continuously-archived WAL still covers up to the last archived segment.
  */
 async function maybeCaptureFinalBackup(gate: FinalBackupGate): Promise<void> {
 	if (gate.config.services.postgres?.mode !== 'embedded') return
@@ -66,7 +67,7 @@ async function maybeCaptureFinalBackup(gate: FinalBackupGate): Promise<void> {
 	} catch (error) {
 		const reason = error instanceof Error ? error.message : String(error)
 		throw new Error(
-			`Final pre-teardown backup of "${projectName}" FAILED (${reason}). Teardown ABORTED so no un-captured data is destroyed. If the VPS is already unreachable and you accept losing writes since the last hourly dump, re-run with TEARDOWN_SKIP_FINAL_BACKUP=1.`,
+			`Final pre-teardown backup of "${projectName}" FAILED (${reason}). Teardown ABORTED so no un-captured data is destroyed. If the VPS is already unreachable and you accept losing writes since the last archived WAL segment (~180s), re-run with TEARDOWN_SKIP_FINAL_BACKUP=1.`,
 			{ cause: error },
 		)
 	}

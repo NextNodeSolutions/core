@@ -1,6 +1,10 @@
 import { formatImageRef } from '#/domain/deploy/image-ref.ts'
 import { computeSilo } from '#/domain/hetzner/env-silo.ts'
-import { POSTGRES_BACKUP_SERVICE_NAME } from '#/domain/services/postgres.ts'
+import { POSTGRES_WALG_SERVICE_NAME } from '#/domain/services/postgres-walg.ts'
+import {
+	POSTGRES_BACKUP_SERVICE_NAME,
+	POSTGRES_DATA_DIR,
+} from '#/domain/services/postgres.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
 import { shellEscape } from './ssh/shell-escape.ts'
@@ -175,6 +179,58 @@ export async function executeSnapshot(
 	const durationMs = Date.now() - start
 	logger.info(
 		`Pre-migrate snapshot uploaded for "${input.projectName}" (${input.environment}) in ${String(durationMs)}ms`,
+	)
+	return { durationMs }
+}
+
+/**
+ * Pure command builder for the final pre-teardown wal-g base backup:
+ *
+ *   docker compose -p <silo> -f <composeFile> exec -T postgres-walg wal-g backup-push <PGDATA>
+ *
+ * Runs inside the already-up `postgres-walg` sidecar, which carries wal-g, the
+ * read-only data volume, the R2 credentials, and a libpq connection for the
+ * non-exclusive pg_backup_start/stop handshake. A base backup is a complete,
+ * consistent snapshot of the instant - it does NOT depend on the last partial
+ * WAL segment - so the next VPS restores it exactly and a planned teardown +
+ * redeploy loses ZERO data. `-T` disables pseudo-TTY (non-interactive SSH).
+ */
+export function buildWalgFinalBackupCommand(input: SnapshotInput): string {
+	const silo = computeSilo(input.projectName, input.environment)
+	const composeFile = `/opt/apps/${input.projectName}/${input.environment}/compose.yaml`
+	return [
+		'docker',
+		'compose',
+		'-p',
+		shellEscape(silo.id),
+		'-f',
+		shellEscape(composeFile),
+		'exec',
+		'-T',
+		POSTGRES_WALG_SERVICE_NAME,
+		'wal-g',
+		'backup-push',
+		shellEscape(POSTGRES_DATA_DIR),
+	].join(' ')
+}
+
+/**
+ * Run the final base backup over SSH before a teardown. A non-zero exit (or
+ * transport error) propagates as a thrown error so the teardown orchestrator
+ * ABORTS rather than destroy un-captured data (see maybeCaptureFinalBackup).
+ */
+export async function executeWalgFinalBackup(
+	session: SshSession,
+	input: SnapshotInput,
+): Promise<SnapshotResult> {
+	const start = Date.now()
+	logger.info(
+		`Capturing a final wal-g base backup for "${input.projectName}" (${input.environment}) before teardown`,
+	)
+	await session.exec(buildWalgFinalBackupCommand(input))
+	const durationMs = Date.now() - start
+	logger.info(
+		`Final wal-g base backup uploaded for "${input.projectName}" (${input.environment}) in ${String(durationMs)}ms`,
 	)
 	return { durationMs }
 }

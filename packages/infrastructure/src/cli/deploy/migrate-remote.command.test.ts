@@ -23,31 +23,9 @@ import {
 } from '#/cli/fixtures.ts'
 
 import type { DeployableConfig } from '#/config/types.ts'
-import type { AutoRestoreResult } from '#/domain/deploy/auto-restore.ts'
-import type { MigrateResult, SnapshotResult } from '#/domain/deploy/target.ts'
+import type { MigrateResult } from '#/domain/deploy/target.ts'
 
 const MIGRATE_RESULT: MigrateResult = { durationMs: 1234 }
-const SNAPSHOT_RESULT: SnapshotResult = { durationMs: 4321 }
-// Default: a populated DB (redeploy) - so the pre-migrate snapshot still runs
-// in the existing tests. Empty-DB cases (which skip the snapshot) override it.
-const AUTO_RESTORE_RESULT: AutoRestoreResult = {
-	action: 'skip-db-populated',
-	tableCountBefore: 7,
-	tableCountAfter: null,
-	durationMs: 10,
-}
-const AUTO_RESTORE_EMPTY: AutoRestoreResult = {
-	action: 'skip-no-backup',
-	tableCountBefore: 0,
-	tableCountAfter: null,
-	durationMs: 10,
-}
-const AUTO_RESTORE_RESTORED: AutoRestoreResult = {
-	action: 'restore',
-	tableCountBefore: 0,
-	tableCountAfter: 12,
-	durationMs: 10,
-}
 
 // front + api both build; only api owns the schema (needs = ["postgres"]). The
 // migrate image must be api's, never front's.
@@ -86,34 +64,18 @@ const APP_MULTI_SERVICE_POSTGRES: DeployableConfig = {
 
 import { migrateRemoteCommand } from './migrate-remote.command.ts'
 
-// Hoisted vi.fn()s so the HetznerVpsTarget mock can route every target
-// method through assertable spies. Hoisting is required because vi.mock
-// runs before module imports - without it, the target factory would
-// close over `undefined`.
-const {
-	mockPrepareRollout,
-	mockRunMigrate,
-	mockRunPreMigrateSnapshot,
-	mockRunAutoRestore,
-	mockListProjectBackupSnapshots,
-} = vi.hoisted(() => ({
+// Hoisted vi.fn()s so the HetznerVpsTarget mock can route every target method
+// through assertable spies. With wal-g, the pre-migrate auto-restore + snapshot
+// are gone (restore happens in the postgres image entrypoint; continuity is
+// continuous WAL archiving), so the command is just prepareRollout -> migrate.
+const { mockPrepareRollout, mockRunMigrate } = vi.hoisted(() => ({
 	mockPrepareRollout: vi.fn(),
 	mockRunMigrate: vi.fn(),
-	mockRunPreMigrateSnapshot: vi.fn(),
-	mockRunAutoRestore: vi.fn(),
-	mockListProjectBackupSnapshots: vi.fn(),
-}))
-
-// Mock the R2 backup listing (network boundary: S3 ListObjectsV2). The
-// command lists the project's backup bucket to feed `snapshotCount` into
-// the auto-restore decision; the count is asserted via the spy.
-vi.mock(import('./list-backups.ts'), () => ({
-	listProjectBackupSnapshots: mockListProjectBackupSnapshots,
 }))
 
 // Mock loadR2Runtime (network boundary: Cloudflare accounts API + SigV4
-// verify). migrate-remote must NOT depend on R2 bootstrap - that lives
-// in provision.
+// verify). migrate-remote must NOT depend on R2 bootstrap - that lives in
+// provision.
 vi.mock(import('#/cli/r2/load-runtime.ts'), async () => ({
 	loadR2Runtime: vi.fn(async () => ({
 		accountId: 'acct',
@@ -125,9 +87,9 @@ vi.mock(import('#/cli/r2/load-runtime.ts'), async () => ({
 	})),
 }))
 
-// Mock HetznerVpsTarget (network boundary: SSH, R2 state, Hetzner Cloud
-// API). prepareRollout + runPreMigrateSnapshot + runMigrate are routed
-// through the hoisted spies so each test can assert on the args + ordering.
+// Mock HetznerVpsTarget (network boundary: SSH, R2 state, Hetzner Cloud API).
+// prepareRollout + runMigrate are routed through the hoisted spies so each test
+// can assert on the args + ordering.
 vi.mock('../../adapters/hetzner/target.ts', () => ({
 	HetznerVpsTarget: vi.fn(() => ({
 		name: 'hetzner-vps',
@@ -137,8 +99,6 @@ vi.mock('../../adapters/hetzner/target.ts', () => ({
 		}),
 		prepareRollout: mockPrepareRollout,
 		runMigrate: mockRunMigrate,
-		runPreMigrateSnapshot: mockRunPreMigrateSnapshot,
-		runAutoRestore: mockRunAutoRestore,
 		deploy: vi.fn(),
 		ensureInfra: vi.fn(),
 		reconcileDns: vi.fn(),
@@ -189,9 +149,6 @@ describe('migrateRemoteCommand', () => {
 
 		mockPrepareRollout.mockResolvedValue(undefined)
 		mockRunMigrate.mockResolvedValue(MIGRATE_RESULT)
-		mockRunPreMigrateSnapshot.mockResolvedValue(SNAPSHOT_RESULT)
-		mockRunAutoRestore.mockResolvedValue(AUTO_RESTORE_RESULT)
-		mockListProjectBackupSnapshots.mockResolvedValue([])
 	})
 
 	afterEach(() => {
@@ -199,9 +156,6 @@ describe('migrateRemoteCommand', () => {
 		vi.unstubAllEnvs()
 		mockPrepareRollout.mockReset()
 		mockRunMigrate.mockReset()
-		mockRunPreMigrateSnapshot.mockReset()
-		mockRunAutoRestore.mockReset()
-		mockListProjectBackupSnapshots.mockReset()
 	})
 
 	it('runs prepareRollout with the resolved env+input when postgres is configured', async () => {
@@ -236,91 +190,18 @@ describe('migrateRemoteCommand', () => {
 		)
 	})
 
-	it('orders prepareRollout < auto-restore < snapshot < migrate in embedded mode', async () => {
+	it('orders prepareRollout before migrate', async () => {
 		await migrateRemoteCommand(APP_WITH_POSTGRES)
-
-		expect(mockRunPreMigrateSnapshot).toHaveBeenCalledExactlyOnceWith({
-			projectName: 'my-app',
-			environment: 'production',
-		})
 
 		const [prepareOrder] = mockPrepareRollout.mock.invocationCallOrder
-		const [autoRestoreOrder] = mockRunAutoRestore.mock.invocationCallOrder
-		const [snapshotOrder] =
-			mockRunPreMigrateSnapshot.mock.invocationCallOrder
 		const [migrateOrder] = mockRunMigrate.mock.invocationCallOrder
-		if (
-			prepareOrder === undefined ||
-			autoRestoreOrder === undefined ||
-			snapshotOrder === undefined ||
-			migrateOrder === undefined
-		) {
-			expect.unreachable('all four spies should have been called once')
+		if (prepareOrder === undefined || migrateOrder === undefined) {
+			expect.unreachable('both spies should have been called once')
 		}
-		expect(prepareOrder).toBeLessThan(autoRestoreOrder)
-		expect(autoRestoreOrder).toBeLessThan(snapshotOrder)
-		expect(snapshotOrder).toBeLessThan(migrateOrder)
+		expect(prepareOrder).toBeLessThan(migrateOrder)
 	})
 
-	it('runs auto-restore with the snapshot count listed from the backup bucket', async () => {
-		mockListProjectBackupSnapshots.mockResolvedValueOnce([
-			{
-				key: 'postgres/my_app_2026-06-13T10:00:00.dump',
-				timestamp: new Date(),
-			},
-			{
-				key: 'postgres/my_app_2026-06-13T11:00:00.dump',
-				timestamp: new Date(),
-			},
-		])
-
-		await migrateRemoteCommand(APP_WITH_POSTGRES)
-
-		expect(mockRunAutoRestore).toHaveBeenCalledExactlyOnceWith({
-			projectName: 'my-app',
-			environment: 'production',
-			snapshotCount: 2,
-		})
-	})
-
-	it('does NOT call snapshot or migrate when auto-restore fails', async () => {
-		mockRunAutoRestore.mockRejectedValueOnce(
-			new Error(
-				'the database is still empty after restoring the latest R2 dump',
-			),
-		)
-
-		await expect(migrateRemoteCommand(APP_WITH_POSTGRES)).rejects.toThrow(
-			/still empty after restoring/,
-		)
-		expect(mockPrepareRollout).toHaveBeenCalledOnce()
-		expect(mockRunPreMigrateSnapshot).not.toHaveBeenCalled()
-		expect(mockRunMigrate).not.toHaveBeenCalled()
-	})
-
-	it('skips the pre-migrate snapshot on a fresh empty DB, but still migrates', async () => {
-		mockRunAutoRestore.mockResolvedValueOnce(AUTO_RESTORE_EMPTY)
-
-		await migrateRemoteCommand(APP_WITH_POSTGRES)
-
-		expect(mockRunAutoRestore).toHaveBeenCalledOnce()
-		expect(mockRunPreMigrateSnapshot).not.toHaveBeenCalled()
-		expect(mockRunMigrate).toHaveBeenCalledOnce()
-
-		const summary = readFileSync(summaryFile, 'utf-8')
-		expect(summary).not.toContain('Pre-migrate snapshot')
-	})
-
-	it('takes the pre-migrate snapshot after a restore rehydrated the DB', async () => {
-		mockRunAutoRestore.mockResolvedValueOnce(AUTO_RESTORE_RESTORED)
-
-		await migrateRemoteCommand(APP_WITH_POSTGRES)
-
-		expect(mockRunPreMigrateSnapshot).toHaveBeenCalledOnce()
-		expect(mockRunMigrate).toHaveBeenCalledOnce()
-	})
-
-	it('runs runMigrate with the default migrate command after the snapshot', async () => {
+	it('runs runMigrate with the default migrate command', async () => {
 		await migrateRemoteCommand(APP_WITH_POSTGRES)
 
 		expect(mockRunMigrate).toHaveBeenCalledExactlyOnceWith({
@@ -375,12 +256,10 @@ describe('migrateRemoteCommand', () => {
 		)
 	})
 
-	it('skips auto-restore and snapshot when postgres mode is external', async () => {
+	it('stages + migrates for external postgres too', async () => {
 		await migrateRemoteCommand(APP_WITH_POSTGRES_EXTERNAL)
 
 		expect(mockPrepareRollout).toHaveBeenCalledOnce()
-		expect(mockRunAutoRestore).not.toHaveBeenCalled()
-		expect(mockRunPreMigrateSnapshot).not.toHaveBeenCalled()
 		expect(mockRunMigrate).toHaveBeenCalledOnce()
 	})
 
@@ -388,8 +267,6 @@ describe('migrateRemoteCommand', () => {
 		await migrateRemoteCommand(APP_WITH_DOMAIN)
 
 		expect(mockPrepareRollout).not.toHaveBeenCalled()
-		expect(mockRunAutoRestore).not.toHaveBeenCalled()
-		expect(mockRunPreMigrateSnapshot).not.toHaveBeenCalled()
 		expect(mockRunMigrate).not.toHaveBeenCalled()
 	})
 
@@ -401,38 +278,17 @@ describe('migrateRemoteCommand', () => {
 		await expect(migrateRemoteCommand(APP_WITH_POSTGRES)).rejects.toThrow(
 			'postgres container unhealthy',
 		)
-		expect(mockRunPreMigrateSnapshot).not.toHaveBeenCalled()
 		expect(mockRunMigrate).not.toHaveBeenCalled()
 	})
 
-	it('does NOT call runMigrate when runPreMigrateSnapshot fails', async () => {
-		mockRunPreMigrateSnapshot.mockRejectedValueOnce(
-			new Error('backup sidecar exited with code 1'),
-		)
-
-		await expect(migrateRemoteCommand(APP_WITH_POSTGRES)).rejects.toThrow(
-			'backup sidecar exited with code 1',
-		)
-		expect(mockPrepareRollout).toHaveBeenCalledOnce()
-		expect(mockRunMigrate).not.toHaveBeenCalled()
-	})
-
-	it('writes a step summary with the snapshot duration after a successful migrate', async () => {
+	it('writes a step summary after a successful migrate (no pre-migrate snapshot row)', async () => {
 		await migrateRemoteCommand(APP_WITH_POSTGRES)
 
 		const summary = readFileSync(summaryFile, 'utf-8')
 		expect(summary).toContain('## Migrate')
 		expect(summary).toContain('| **Project** | my-app |')
 		expect(summary).toContain('| **Environment** | production |')
-		expect(summary).toContain('| **Pre-migrate snapshot** | 4.3s |')
 		expect(summary).toContain('| **Migrate duration** | 1.2s |')
-	})
-
-	it('omits the snapshot row from the summary when postgres mode is external', async () => {
-		await migrateRemoteCommand(APP_WITH_POSTGRES_EXTERNAL)
-
-		const summary = readFileSync(summaryFile, 'utf-8')
-		expect(summary).toContain('## Migrate')
 		expect(summary).not.toContain('Pre-migrate snapshot')
 	})
 
@@ -459,10 +315,6 @@ describe('migrateRemoteCommand', () => {
 
 		await migrateRemoteCommand(APP_WITH_POSTGRES)
 
-		expect(mockRunPreMigrateSnapshot).toHaveBeenCalledExactlyOnceWith({
-			projectName: 'my-app',
-			environment: 'development',
-		})
 		expect(mockRunMigrate).toHaveBeenCalledExactlyOnceWith(
 			expect.objectContaining({ environment: 'development' }),
 		)

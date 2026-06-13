@@ -9,10 +9,7 @@ import {
 } from '#/domain/hetzner/service-env.ts'
 import { buildServiceUpstreams } from '#/domain/hetzner/service-upstreams.ts'
 import { buildObservabilityUpstreams } from '#/domain/monitoring/observability-upstreams.ts'
-import {
-	POSTGRES_BACKUP_SERVICE_NAME,
-	POSTGRES_SIDECAR_SERVICE_NAME,
-} from '#/domain/services/postgres.ts'
+import { POSTGRES_SIDECAR_SERVICE_NAME } from '#/domain/services/postgres.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
 import { writeObservabilityFiles } from './observability-rollout.ts'
@@ -161,8 +158,8 @@ export async function deployContainer(
 
 /**
  * Phase 1 in full: write the env + compose files, login to the registry
- * if needed, pull the app image, and bring postgres + postgres-backup up
- * to healthy. The migrate-remote CLI command calls this directly (then
+ * if needed, pull the app image, and bring postgres up to healthy. The
+ * migrate-remote CLI command calls this directly (then
  * runs migrate inside an ephemeral container joined to the same docker
  * network); the deploy CLI command reaches it via `deployContainer`.
  *
@@ -304,14 +301,19 @@ function requiresRegistryLogin(service: UserServiceConfig): boolean {
 }
 
 /**
- * Phase 1: bring postgres + postgres-backup up and block until postgres
- * reports healthy via the compose healthcheck. We use Docker Compose's
- * native `--wait` flag - the CLI subscribes to daemon health events
- * directly, so there is no polling loop in this codebase and no JSON
- * status parsing. `--wait-timeout` caps the blocking duration; the CLI
- * exits non-zero (which `session.exec` propagates as a thrown error) on
- * timeout or unhealthy state. No-op when the project does not declare a
- * postgres service - phase 2 then performs a single combined bring-up.
+ * Phase 1: bring postgres up and block until it reports healthy via the compose
+ * healthcheck. We use Docker Compose's native `--wait` flag - the CLI subscribes
+ * to daemon health events directly, so there is no polling loop in this codebase
+ * and no JSON status parsing. `--wait-timeout` caps the blocking duration; the
+ * CLI exits non-zero (which `session.exec` propagates as a thrown error) on
+ * timeout or unhealthy state. No-op when the project does not declare a postgres
+ * service - phase 2 then performs a single combined bring-up.
+ *
+ * Only the server is gated here. On a fresh VPS the wal-g image entrypoint
+ * restores the latest base backup + replays archived WAL before the healthcheck
+ * passes, so `--wait` blocks through recovery. The `postgres-walg` base-backup
+ * loop has no healthcheck and is not deploy-critical; it starts with everything
+ * else in phase 2's bare `up -d`.
  */
 export async function bringUpDb(
 	session: SshSession,
@@ -325,7 +327,7 @@ export async function bringUpDb(
 	const composeFileQ = shellEscape(composeFile)
 
 	await session.exec(
-		`docker compose -p ${siloIdQ} -f ${composeFileQ} up -d --wait --wait-timeout ${String(POSTGRES_WAIT_TIMEOUT_SECONDS)} ${POSTGRES_SIDECAR_SERVICE_NAME} ${POSTGRES_BACKUP_SERVICE_NAME}`,
+		`docker compose -p ${siloIdQ} -f ${composeFileQ} up -d --wait --wait-timeout ${String(POSTGRES_WAIT_TIMEOUT_SECONDS)} ${POSTGRES_SIDECAR_SERVICE_NAME}`,
 	)
 }
 

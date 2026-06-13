@@ -65,7 +65,7 @@ describe('createPostgresService', () => {
 	})
 
 	describe('provision() - embedded mode', () => {
-		it('calls ensureR2Bucket once with the derived backup bucket name', async () => {
+		it('calls ensureR2Bucket once with the derived wal-g bucket name', async () => {
 			ensureR2BucketMock.mockResolvedValue(true)
 			const service = createPostgresService(makeCtx(), EMBEDDED)
 
@@ -75,7 +75,7 @@ describe('createPostgresService', () => {
 			expect(ensureR2BucketMock).toHaveBeenCalledWith({
 				token: 'cf-token',
 				accountId: 'acct',
-				bucketName: 'nn-backups-myapp',
+				bucketName: 'nn-walg-myapp',
 				locationHint: 'weur',
 			})
 		})
@@ -94,7 +94,7 @@ describe('createPostgresService', () => {
 				{
 					token: 'cf-token',
 					accountId: 'acct',
-					bucketName: 'nn-backups-myapp',
+					bucketName: 'nn-walg-myapp',
 					locationHint: 'weur',
 				},
 			])
@@ -102,7 +102,7 @@ describe('createPostgresService', () => {
 				{
 					token: 'cf-token',
 					accountId: 'acct',
-					bucketName: 'nn-backups-myapp',
+					bucketName: 'nn-walg-myapp',
 					locationHint: 'weur',
 				},
 			])

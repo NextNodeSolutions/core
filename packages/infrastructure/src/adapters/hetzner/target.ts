@@ -2,7 +2,11 @@ import { computeSiteUrl } from '#/domain/deploy/domain.ts'
 import { computeVpsDnsRecords } from '#/domain/hetzner/dns-records.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
-import { executeMigrate, executeSnapshot } from './migrate.ts'
+import {
+	executeMigrate,
+	executeSnapshot,
+	executeWalgFinalBackup,
+} from './migrate.ts'
 import { freshProvision, resumeFromState } from './provision/ensure-infra.ts'
 import { executeAutoRestore } from './restore.ts'
 import { openVpsSession, runDeploy, runPrepareRollout } from './rollout.ts'
@@ -237,7 +241,7 @@ export class HetznerVpsTarget implements DeployTarget {
 	async runFinalBackup(input: SnapshotInput): Promise<SnapshotResult> {
 		const session = await openVpsSession(this.rolloutContext())
 		try {
-			return await executeSnapshot(session, input)
+			return await executeWalgFinalBackup(session, input)
 		} finally {
 			session.close()
 		}

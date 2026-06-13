@@ -83,13 +83,13 @@ function recordingSession(): SshSession {
 }
 
 describe('bringUpDb', () => {
-	it('issues a single `up -d --wait` for postgres + postgres-backup', async () => {
+	it('issues a single `up -d --wait` gating only the postgres server', async () => {
 		const session = recordingSession()
 
 		await bringUpDb(session, BASE_INPUT)
 
 		expect(session.exec).toHaveBeenCalledExactlyOnceWith(
-			"docker compose -p 'acme-web-production' -f '/opt/apps/acme-web/production/compose.yaml' up -d --wait --wait-timeout 60 postgres postgres-backup",
+			"docker compose -p 'acme-web-production' -f '/opt/apps/acme-web/production/compose.yaml' up -d --wait --wait-timeout 60 postgres",
 		)
 	})
 

@@ -1,9 +1,9 @@
 import { ensureR2Bucket } from '#/adapters/cloudflare/r2/buckets.ts'
 import { R2_BUCKET_LOCATION_HINT } from '#/config/types.ts'
+import { postgresWalgBucketName } from '#/domain/services/postgres-walg.ts'
 import {
 	buildPostgresEmbeddedEnv,
 	buildPostgresExternalEnv,
-	postgresBackupBucketName,
 } from '#/domain/services/postgres.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
@@ -42,14 +42,14 @@ export function createPostgresService(
 	return {
 		name: 'postgres',
 		async provision(): Promise<void> {
-			const bucketName = postgresBackupBucketName(ctx.projectName)
+			const bucketName = postgresWalgBucketName(ctx.projectName)
 			await ensureR2Bucket({
 				token: ctx.cfToken,
 				accountId,
 				bucketName,
 				locationHint: R2_BUCKET_LOCATION_HINT,
 			})
-			logger.info(`postgres backup bucket ${bucketName} provisioned`)
+			logger.info(`wal-g backup bucket ${bucketName} provisioned`)
 		},
 		loadEnv: async (): Promise<ServiceEnv> =>
 			Promise.resolve(loadPostgresEnv(ctx, config)),
