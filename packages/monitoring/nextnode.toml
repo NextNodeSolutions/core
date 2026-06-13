@@ -7,6 +7,10 @@ filter = "@nextnode-solutions/monitoring"
 
 [deploy]
 vps = "nn-internals"
+# Global secret pool: consumed at deploy time by the observability config
+# renderers (Alertmanager email routing + dead man's switch) - never by
+# the app runtime.
+secrets = ["RESEND_API_KEY", "HEALTHCHECKS_PING_URL"]
 
 [deploy.hetzner]
 server_type = "cx33"
@@ -29,7 +33,23 @@ secrets = [
 	"CLOUDFLARE_ACCOUNT_ID",
 	"HETZNER_API_TOKEN",
 	"TS_OAUTH_SECRET",
+	# Read-only access to the nextnode-state bucket: the /api/sd/* service
+	# discovery endpoints join tailnet devices with hetzner/<vps>.json.
+	"R2_ACCESS_KEY_ID",
+	"R2_SECRET_ACCESS_KEY",
 ]
+
+# The self-hosted observability backend (PRD monitoring-vps, option A):
+# VictoriaLogs + VictoriaMetrics + vmagent + vmalert x2 + Alertmanager +
+# blackbox_exporter, injected into the generated compose file by the
+# infrastructure pipeline. The vhosts resolve to the tailnet IP
+# (internal = true): logs.* is the fleet-wide NN_VL_URL Vector pushes to,
+# metrics.* serves vmui for ad-hoc exploration.
+[services.observability]
+logs_retention = "30d"
+metrics_retention_months = 12
+logs_vhost = "logs.monitoring.nextnode.fr"
+metrics_vhost = "metrics.monitoring.nextnode.fr"
 
 [environment]
 development = false

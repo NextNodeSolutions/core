@@ -3,7 +3,9 @@ import { isRecord } from '@/lib/domain/is-record.ts'
 
 const TAILSCALE_API_BASE = 'https://api.tailscale.com/api/v2'
 
-const exchangeClientSecret = async (clientSecret: string): Promise<string> => {
+export const exchangeClientSecret = async (
+	clientSecret: string,
+): Promise<string> => {
 	const basic = Buffer.from(`${clientSecret}:`).toString('base64')
 	const response = await fetch(`${TAILSCALE_API_BASE}/oauth/token`, {
 		method: 'POST',
@@ -26,7 +28,7 @@ const exchangeClientSecret = async (clientSecret: string): Promise<string> => {
 	return body.access_token
 }
 
-const listDevices = async (accessToken: string): Promise<unknown> => {
+export const listDevices = async (accessToken: string): Promise<unknown> => {
 	const response = await fetch(`${TAILSCALE_API_BASE}/tailnet/-/devices`, {
 		headers: { Authorization: `Bearer ${accessToken}` },
 	})

@@ -23,4 +23,19 @@ export const envSchema = {
 		access: 'secret',
 		optional: true,
 	}),
+	R2_ACCESS_KEY_ID: envField.string({
+		context: 'server',
+		access: 'secret',
+		optional: true,
+	}),
+	R2_SECRET_ACCESS_KEY: envField.string({
+		context: 'server',
+		access: 'secret',
+		optional: true,
+	}),
+	NN_CLIENT_ID: envField.string({
+		context: 'server',
+		access: 'secret',
+		optional: true,
+	}),
 } as const
