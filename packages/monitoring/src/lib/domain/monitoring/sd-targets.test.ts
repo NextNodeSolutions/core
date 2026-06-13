@@ -41,6 +41,16 @@ describe('buildSdTargets', () => {
 					__meta_nextnode_project: 'stylot',
 				},
 			},
+			{
+				targets: ['100.64.0.21:9187'],
+				labels: {
+					__meta_tailscale_device_tags: 'tag:server,tag:client-vps',
+					__meta_tailscale_device_hostname: 'stylot',
+					__meta_nextnode_exporter: 'postgres',
+					__meta_nextnode_client_id: 'nextnode',
+					__meta_nextnode_project: 'stylot',
+				},
+			},
 		])
 	})
 

@@ -18,15 +18,18 @@ export interface SdTargetGroup {
 export const CLIENT_VPS_TAG = 'tag:client-vps'
 
 /**
- * Exporter ports on every client VPS (golden image contract):
- * node_exporter on 9100, cAdvisor on 9101. postgres-exporter (9187) is
- * deliberately absent until the state records which VPS actually runs
- * one - emitting it blindly would fill the postgres job with dead
- * targets.
+ * Exporter ports on every client VPS: node_exporter on 9100 and cAdvisor
+ * on 9101 (golden image contract), postgres-exporter on 9187 (compose
+ * sidecar, present whenever the project embeds postgres or Supabase).
+ * The state file does not record which VPS actually runs a
+ * postgres-exporter, so 9187 is emitted for every client VPS; a VPS
+ * without one just shows up=0 on the postgres job, which no alert keys
+ * on (PgDown watches pg_up, a metric only an answering exporter emits).
  */
 const EXPORTER_PORTS = {
 	node: 9100,
 	cadvisor: 9101,
+	postgres: 9187,
 } as const
 
 export interface SdTargetsInput {
