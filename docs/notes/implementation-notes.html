@@ -61,7 +61,7 @@ small.meta{color:#6a7385}
 </div>
 
 <div class="decision">
-<strong>Sémantique <code>nn_project</code> (niveau VPS) — vue VPS par slug, vue projet par container_name</strong> — Vector est configuré à la convergence au niveau VPS : <code>NN_PROJECT</code> = nom du VPS (<code>input.vpsName</code>), donc <em>toutes</em> les lignes d'un VPS portent <code>nn_project=&lt;vpsName&gt;</code>, pas le nom du projet déployé. La désambiguïsation par projet se fait via <code>container_name</code> = <code>&lt;project&gt;-&lt;env&gt;-&lt;service&gt;-N</code> (compose <code>-p &lt;project&gt;-&lt;env&gt;</code>). Conséquence sur les dashboards P5 : la vue VPS interroge les logs par <code>nn_project:&lt;slug&gt;</code> (= vpsName, toujours correct) ; la vue projet doit filtrer par préfixe <code>container_name</code>. <em>[À vérifier/corriger selon l'audit — voir section Changements.]</em>
+<strong>Sémantique <code>nn_project</code> (niveau VPS) — vue VPS par slug, vue projet par container_name</strong> — Vector est configuré à la convergence au niveau VPS : <code>NN_PROJECT</code> = nom du VPS (<code>input.vpsName</code>), donc <em>toutes</em> les lignes d'un VPS portent <code>nn_project=&lt;vpsName&gt;</code>, pas le nom du projet déployé. La désambiguïsation par projet se fait via <code>container_name</code> = <code>&lt;project&gt;-&lt;env&gt;-&lt;service&gt;-N</code> (compose <code>-p &lt;project&gt;-&lt;env&gt;</code>). <strong>Résolu après audit</strong> : la vue VPS interroge logs+Caddy par <code>nn_project:&lt;slug&gt;</code> (= vpsName, montre tout le VPS) ; la vue projet isole les logs conteneurs par préfixe regex <code>container_name:~"^&lt;project&gt;-"</code>. Aucun remap VRL fragile dans Vector : la correction est entièrement côté requête. Les stats Caddy sont par-VPS (Caddy est un service hôte unique qui reverse-proxy tous les vhosts) — la vue projet ne montre donc que les logs conteneurs, pas de panneau HTTP par-projet (les lignes par domaine sont sur la vue VPS).
 </div>
 
 <h2>Tradeoffs</h2>
@@ -84,7 +84,26 @@ small.meta{color:#6a7385}
 <strong>labelkeep relabel élargi</strong> — la whitelist fermée d'origine (<code>^(__name__|client_id|...)$</code>) aurait supprimé <code>__address__</code>/<code>job</code>/<code>instance</code> au scrape, tuant toute collecte. Corrigé en <code>^(__.*|job|instance|&lt;whitelist&gt;)$</code> : <code>__address__</code> est consommé pour émettre le scrape, <code>job</code>/<code>instance</code> sont l'identité sur laquelle chaque alerte s'appuie.
 </div>
 
+<h2>Revue adversariale (workflow multi-agents)</h2>
+
+<div class="changed">
+<strong>Audit cross-fichiers — 10 problèmes confirmés, corrigés</strong> — un workflow de 5 reviewers (contrats, sémantique-logs, sécurité, PromQL/LogsQL, reproductibilité) + vérification adversariale (22 agents) a trouvé un cluster de bugs log-pipeline maintenant corrigés :
+<ul>
+<li><strong>CRITIQUE</strong> — sink Vector n'envoyait pas <code>_msg_field</code>/<code>_time_field</code> → logs vides côté VictoriaLogs. Corrigé (<code>vector-toml.ts</code>).</li>
+<li><strong>CRITIQUE</strong> — filtre Caddy <code>"logger":"http.log.access"</code> ne matchait jamais (valeur réelle <code>http.log.access.logN</code>, et corps dans <code>message</code> pas <code>_msg</code>). Corrigé : <code>unpack_json</code> puis <code>filter logger:~"^http\.log\.access"</code>.</li>
+<li><strong>CRITIQUE</strong> — alertes HTTP lisaient <code>$labels.host</code> mais les recording rules émettent <code>request.host</code> → annotation vide. Corrigé via <code>label_replace</code>.</li>
+<li><strong>CRITIQUE/HIGH</strong> — dashboards interrogeaient par slug projet alors que <code>nn_project</code>=vpsName → zéro ligne sur hôte partagé. Corrigé (vue VPS par nn_project, vue projet par container_name).</li>
+<li><strong>HIGH</strong> — VectorSilent joignait sur <code>project</code> (jamais satisfiable : logs host-keyed, metrics project-keyed). Corrigé : join sur <code>vps_name</code>.</li>
+<li><strong>HIGH/MEDIUM</strong> — labels relabel <code>environment</code>/<code>region</code>/<code>container_name</code> sans source SD → réservés <code>null</code> (contrat honnête), retirés des <code>by</code> d'alerte.</li>
+</ul>
+7 faux positifs réfutés (ex. ordering metric_relabel cAdvisor correct, BackupStale aligné, volumes teardown non-orphelins). La sécurité a passé l'audit : aucune exposition publique nouvelle (firewall Hetzner 80/443/22, UFW tailscale0-only, exporters bind <code>${TS_IP}</code>, vhosts internal), pas de fuite de secrets.
+</div>
+
 <h2>À savoir / actions opérateur</h2>
+
+<div class="todo">
+<strong>2 tests préexistants rouges (hors scope)</strong> — <code>create-hetzner-target.test.ts</code> et <code>create-cloudflare-pages-target.test.ts</code> « throws when CLOUDFLARE_API_TOKEN is missing » échouent localement car la variable <code>CLOUDFLARE_API_TOKEN</code> est exportée dans le shell du dev (le test ne l'isole pas). Rouges avant tout ce travail (baseline), sans rapport avec le monitoring, verts en CI. Bug d'isolation de test à corriger séparément.
+</div>
 
 <div class="todo">
 <strong>ACL Tailscale (action manuelle)</strong> — ajouter dans l'ACL du tailnet : <code>tagOwners</code> pour <code>tag:client-vps</code> et <code>tag:monitoring</code> (owner = le client OAuth d'infra), et un grant <code>tag:monitoring → tag:client-vps:9100,9101,9187</code>. Sans ça, le mint d'authkey taggué échoue et vmagent ne pourra pas scraper.
@@ -95,7 +114,30 @@ small.meta{color:#6a7385}
 </div>
 
 <div class="todo">
-<strong>Compte healthchecks.io</strong> — créer le check (période ~5 min, grâce ~10 min) et pousser <code>HEALTHCHECKS_PING_URL</code> en secret GitHub du projet monitoring. <code>RESEND_API_KEY</code> doit aussi exister.
+<strong>Compte healthchecks.io</strong> — créer le check (période ~5 min, grâce ~10 min) et pousser <code>HEALTHCHECKS_PING_URL</code> en secret GitHub du projet monitoring. <code>RESEND_API_KEY</code> doit aussi exister. Le domaine <code>alerts@nextnode.fr</code> doit être vérifié dans Resend (from des emails d'alerte).
+</div>
+
+<h2>Validation stylot + ordre de déploiement</h2>
+
+<div class="decision">
+<strong>Config stylot — compatible, deploy-ready</strong> — <code>~/Development/tools/stylot/nextnode.toml</code> parse avec le nouveau schéma : <code>type=app</code>, <code>postgres mode=embedded</code>, pas de <code>[services.observability]</code> (correct : c'est un client, pas l'hôte monitoring) → tag <code>client-vps</code>. Le compose généré inclut bien : web (healthcheck /healthz, depends_on postgres healthy), postgres:18 + mount <code>00-pg-monitor.sql</code>, postgres-backup (<code>nn-backups-stylot</code>), postgres-exporter bindé <code>${TAILSCALE_IP}:9187</code> connecté en <code>postgres_exporter@postgres/stylot</code>. node_exporter/cAdvisor viennent de la golden image. Tout le monitoring de stylot est automatique au provisioning.
+</div>
+
+<div class="decision">
+<strong>Recommandation — VPS dédié pour stylot</strong> — sans <code>vps=</code> dans <code>[deploy]</code>, stylot atterrit sur le VPS prod partagé <code>nn-prod</code> (défaut). Le monitoring fonctionne (logs par container_name, métriques par projet, probes par domaine), mais la page VPS est <code>/vps/nn-prod</code> et <code>nn_project=nn-prod</code>. Pour matcher la PRD (<code>/vps/stylot</code>, <code>nn_project=stylot</code>) et isoler proprement le premier client de prod, ajouter <code>vps = "stylot"</code> sous <code>[deploy]</code> de stylot (repo stylot, hors core). Non bloquant.
+</div>
+
+<div class="todo">
+<strong>Ordre de déploiement (greenfield)</strong>
+<ol>
+<li>Merge ce travail dans <code>main</code> de core (les workflows lisent l'infra depuis le monorepo).</li>
+<li>Préparer l'ACL Tailscale (tagOwners <code>client-vps</code>+<code>monitoring</code>, grant <code>monitoring→client-vps:9100,9101,9187</code>), le compte healthchecks.io, les secrets <code>RESEND_API_KEY</code>+<code>HEALTHCHECKS_PING_URL</code> sur le projet monitoring, le domaine Resend.</li>
+<li>Déployer le projet <strong>monitoring</strong> (nn-internals) : provision recrée le VPS depuis la nouvelle golden image (node_exporter+cAdvisor+tag:monitoring), le compose injecte le stack observability (VL/VM/vmagent/vmalert×2/AM/blackbox), Caddy front logs./metrics.</li>
+<li>Définir les variables d'org GitHub <code>NN_VL_URL=https://logs.monitoring.nextnode.fr</code> et <code>NN_CLIENT_ID=nextnode</code>.</li>
+<li>Provisionner/déployer <strong>stylot</strong> (après P2) : naît de la nouvelle golden image, Vector ship les logs (convergence écrit vector.env avec NN_VL_URL), SD le découvre par tag, les 18 règles le couvrent sans déclaration.</li>
+<li>Valider les critères §11 par injection de panne sur l'env dev de stylot avant prod.</li>
+</ol>
+<em>Note : le déploiement réel se fait via la pipeline GitHub Actions (secrets CI Hetzner/Tailscale/R2). Il n'a pas été exécuté depuis cette session — uniquement validé côté config + génération compose.</em>
 </div>
 
 </body>
