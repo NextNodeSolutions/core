@@ -43,8 +43,8 @@ export const buildContainerLogsQuery = (project: string): string =>
 // Escape the project slug for safe embedding in a LogsQL regex. Project
 // names are kebab identifiers (no regex metachars today), but a deploy
 // could in principle carry one - escape defensively.
-const escapeRegex = (value: string): string =>
-	value.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)
+const escapeRegex = (slug: string): string =>
+	slug.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)
 
 /**
  * Parse the newline-delimited JSON VictoriaLogs streams back. Tolerant:
