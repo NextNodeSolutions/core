@@ -47,11 +47,22 @@ export function postgresProjectIdentifier(projectName: string): string {
 export const POSTGRES_DATA_VOLUME = 'postgres-data'
 
 /**
- * Default postgres data directory inside the official image. The image
- * also accepts `PGDATA` overrides via env, but we mount onto the default
- * so a sidecar with no extra env still persists correctly.
+ * Volume mount point for the postgres data, INSIDE the official image.
+ *
+ * postgres:18+ changed the on-disk layout: the image now stores data in a
+ * major-version-specific subdirectory and its default `PGDATA` is
+ * `/var/lib/postgresql/<major>/docker`, with the `VOLUME` declared at
+ * `/var/lib/postgresql` (not the legacy `/var/lib/postgresql/data`). Mounting
+ * onto the legacy path trips the image's own guard ("there appears to be
+ * PostgreSQL data in /var/lib/postgresql/data (unused mount/volume)") and the
+ * container crash-loops on first boot. We mount the named volume at the
+ * image's default parent so initdb writes the version subdir into the volume
+ * and no `PGDATA` override is needed. See docker-library/postgres#1259 / #37.
+ *
+ * Pinned to the 18+ layout to match {@link NEXTNODE_POSTGRES_VERSION}; if that
+ * pin ever drops below 18, revert this to `/var/lib/postgresql/data`.
  */
-export const POSTGRES_DATA_DIR = '/var/lib/postgresql/data'
+export const POSTGRES_DATA_DIR = '/var/lib/postgresql'
 
 export interface PostgresSidecarHealthcheck {
 	readonly test: ReadonlyArray<string>
