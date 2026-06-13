@@ -3,18 +3,13 @@ import LoadStateBanner from '@/components/dashboard/LoadStateBanner.astro'
 import VpsCaddyStats from '@/components/vps/VpsCaddyStats.astro'
 import VpsContainerLogs from '@/components/vps/VpsContainerLogs.astro'
 import VpsHostMetrics from '@/components/vps/VpsHostMetrics.astro'
-import { ENV_KEYS, getEnv } from '@/lib/adapters/env.ts'
 import { loadPageState } from '@/lib/adapters/load-page-state.ts'
-import { getVpsState } from '@/lib/adapters/r2/state.ts'
 import {
-	loadCaddyStats,
 	loadHostMetrics,
-	loadProjectLogs,
+	loadVpsCaddyStats,
+	loadVpsLogs,
 } from '@/lib/adapters/victoria/observability.ts'
-import { selectOwnerProject } from '@/lib/domain/hetzner/vps-state.ts'
-import type { CaddyHostStat } from '@/lib/domain/monitoring/caddy-stats.ts'
 import type { HostMetrics } from '@/lib/domain/monitoring/host-metrics.ts'
-import type { LogLine } from '@/lib/domain/monitoring/log-query.ts'
 
 interface Props {
 	slug: string
@@ -29,37 +24,18 @@ const EMPTY_METRICS: HostMetrics = {
 	uptimeSeconds: null,
 }
 
-// Owner project drives the log + Caddy panels. Resolved from R2 state;
-// null (missing creds, fresh VPS) leaves those panels in their empty
-// state without failing the metrics panel.
-const resolveOwnerProject = async (): Promise<string | null> => {
-	const accountId = getEnv(ENV_KEYS.CLOUDFLARE_ACCOUNT_ID)
-	const accessKeyId = getEnv(ENV_KEYS.R2_ACCESS_KEY_ID)
-	const secretAccessKey = getEnv(ENV_KEYS.R2_SECRET_ACCESS_KEY)
-	if (!accountId || !accessKeyId || !secretAccessKey) return null
-	const state = await getVpsState(
-		{ accountId, accessKeyId, secretAccessKey },
-		slug,
-	)
-	return state === null ? null : selectOwnerProject(state, slug)
-}
-
-const ownerProject = await resolveOwnerProject().catch(() => null)
-
+// Everything keys on the VPS itself: host metrics by vps_name, logs and
+// Caddy stats by nn_project (Vector stamps it = the VPS hostname = slug),
+// so each panel shows the whole VPS. No project resolution needed - the
+// per-project breakdown lives on the project view.
 const metricsState = await loadPageState(`observability.metrics.${slug}`, () =>
 	loadHostMetrics(slug),
 )
-
 const logsState = await loadPageState(`observability.logs.${slug}`, () =>
-	ownerProject === null
-		? Promise.resolve<ReadonlyArray<LogLine>>([])
-		: loadProjectLogs(ownerProject),
+	loadVpsLogs(slug),
 )
-
 const caddyState = await loadPageState(`observability.caddy.${slug}`, () =>
-	ownerProject === null
-		? Promise.resolve<ReadonlyArray<CaddyHostStat>>([])
-		: loadCaddyStats(ownerProject),
+	loadVpsCaddyStats(slug),
 )
 
 const metrics = metricsState.kind === 'ok' ? metricsState.data : EMPTY_METRICS
@@ -70,8 +46,8 @@ const caddyStats = caddyState.kind === 'ok' ? caddyState.data : []
 <VpsHostMetrics metrics={metrics} />
 
 <section class="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-2">
-	<VpsContainerLogs project={ownerProject} lines={logs} />
-	<VpsCaddyStats project={ownerProject} stats={caddyStats} />
+	<VpsContainerLogs project={slug} lines={logs} />
+	<VpsCaddyStats project={slug} stats={caddyStats} />
 </section>
 
 <LoadStateBanner state={metricsState} upstreamLabel="VictoriaMetrics error" />

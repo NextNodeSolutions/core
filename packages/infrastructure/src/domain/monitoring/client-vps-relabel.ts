@@ -50,11 +50,8 @@ export interface RelabelRule {
  */
 const SD_TAGS = '__meta_tailscale_device_tags'
 const SD_HOSTNAME = '__meta_tailscale_device_hostname'
-const SD_LOCATION = '__meta_tailscale_device_location'
 const SD_CLIENT_ID = '__meta_nextnode_client_id'
 const SD_PROJECT = '__meta_nextnode_project'
-const SD_ENVIRONMENT = '__meta_nextnode_environment'
-const SD_CONTAINER_NAME = '__meta_nextnode_container_name'
 
 /**
  * SD-time meta label carrying which exporter a target is (one target per
@@ -74,15 +71,28 @@ export type ClientVpsExporter = (typeof CLIENT_VPS_EXPORTERS)[number]
  * `Record<ClientVpsLabel, …>` shape is exhaustive over the whitelist, so
  * adding a label to `CLIENT_VPS_LABEL_WHITELIST` is a compile error until
  * its entry lands here. Set the entry to `null` to reserve the slot in
- * the whitelist without emitting an SD source rule (used by `db_role`).
+ * the whitelist without emitting an SD source rule.
+ *
+ * Only the labels the SD endpoint actually emits are sourced
+ * (client_id, project, vps_name). The rest stay reserved at `null` -
+ * the whitelist keeps the slot so wiring a source later is churn-free,
+ * but emitting a `replace` for a `__meta_*` no source produces is dead
+ * config (an empty label VictoriaMetrics drops):
+ *   - `environment` / `region`: no SD source today (the VPS state slice
+ *     carries neither; Tailscale device records have no reliable region).
+ *   - `container_name`: NOT sourced on the SD path - it is populated only
+ *     on cAdvisor series, by the `name -> container_name` metric_relabel
+ *     in the vmagent scrape config; node/postgres series legitimately
+ *     have no container.
+ *   - `db_role`: reserved pending the canceled per-instance role tagging.
  */
 const SOURCE_BY_LABEL: Readonly<Record<ClientVpsLabel, string | null>> = {
 	client_id: SD_CLIENT_ID,
 	project: SD_PROJECT,
-	environment: SD_ENVIRONMENT,
+	environment: null,
 	vps_name: SD_HOSTNAME,
-	container_name: SD_CONTAINER_NAME,
-	region: SD_LOCATION,
+	container_name: null,
+	region: null,
 	db_role: null,
 }
 

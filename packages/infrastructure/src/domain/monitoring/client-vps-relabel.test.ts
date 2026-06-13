@@ -68,32 +68,20 @@ describe('buildClientVpsRelabelRules', () => {
 			},
 			{
 				action: 'replace',
-				source_labels: ['__meta_nextnode_environment'],
-				target_label: 'environment',
-			},
-			{
-				action: 'replace',
 				source_labels: ['__meta_tailscale_device_hostname'],
 				target_label: 'vps_name',
-			},
-			{
-				action: 'replace',
-				source_labels: ['__meta_nextnode_container_name'],
-				target_label: 'container_name',
-			},
-			{
-				action: 'replace',
-				source_labels: ['__meta_tailscale_device_location'],
-				target_label: 'region',
 			},
 		])
 	})
 
-	it('does not emit a replace rule for db_role - source is reserved pending P6-08 revival', () => {
+	it('does not emit a replace rule for the unsourced whitelist slots (environment, container_name, region, db_role)', () => {
 		const targets = buildClientVpsRelabelRules()
 			.filter(r => r.action === 'replace')
 			.map(r => r.target_label)
 
+		expect(targets).not.toContain('environment')
+		expect(targets).not.toContain('container_name')
+		expect(targets).not.toContain('region')
 		expect(targets).not.toContain('db_role')
 	})
 

@@ -167,11 +167,6 @@ function buildBlackboxJob(input: VmagentConfigInput): ScrapeJob {
 			},
 			{
 				action: 'replace',
-				source_labels: ['__meta_nextnode_environment'],
-				target_label: 'environment',
-			},
-			{
-				action: 'replace',
 				// A fixed replacement needs no source; YAML renders the
 				// `replacement` key directly.
 				replacement: input.blackboxAddress,

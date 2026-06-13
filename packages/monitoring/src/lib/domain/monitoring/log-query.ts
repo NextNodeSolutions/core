@@ -14,15 +14,37 @@ export interface LogLine {
 
 const LOGSQL_QUERY_LIMIT = 200
 
+// Bound the container-name scan (container_name is a regular field, not a
+// stream field, so an unbounded scan would read the whole retention).
+const CONTAINER_SCAN_WINDOW = '6h'
+
 /**
- * Build a LogsQL query for the most recent lines of one VPS over a
- * window. The `nn_project` stream is not used here because machine-level
- * views key on `vps_name`, which Vector stamps via the relabel - but the
- * container view filters by `nn_project`. Both selectors are exposed as
- * dedicated builders so the call site reads declaratively.
+ * Build a LogsQL query for the most recent lines of one VPS. `nn_project`
+ * is the VPS-level stream field Vector stamps (= the host hostname), so
+ * this returns EVERY line on the VPS - container logs + journald
+ * (Caddy/sshd/kernel) - which is exactly the VPS view's scope. Indexed by
+ * the stream field, so no time bound is needed for correctness.
  */
-export const buildProjectLogsQuery = (project: string): string =>
-	`nn_project:${JSON.stringify(project)} | sort by (_time desc) | limit ${String(LOGSQL_QUERY_LIMIT)}`
+export const buildVpsLogsQuery = (vpsName: string): string =>
+	`nn_project:${JSON.stringify(vpsName)} | sort by (_time desc) | limit ${String(LOGSQL_QUERY_LIMIT)}`
+
+/**
+ * Build a LogsQL query for the most recent lines of one PROJECT, across
+ * whichever VPS hosts it. Because `nn_project` is host-level, per-project
+ * disambiguation is by `container_name`, which compose names
+ * `<project>-<env>-<service>-N`; the `<project>-` prefix isolates the
+ * project's containers (journald/host lines, which have no
+ * container_name, are correctly excluded). Bounded by a time window since
+ * container_name is not a stream field.
+ */
+export const buildContainerLogsQuery = (project: string): string =>
+	`_time:${CONTAINER_SCAN_WINDOW} container_name:~${JSON.stringify(`^${escapeRegex(project)}-`)} | sort by (_time desc) | limit ${String(LOGSQL_QUERY_LIMIT)}`
+
+// Escape the project slug for safe embedding in a LogsQL regex. Project
+// names are kebab identifiers (no regex metachars today), but a deploy
+// could in principle carry one - escape defensively.
+const escapeRegex = (value: string): string =>
+	value.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)
 
 /**
  * Parse the newline-delimited JSON VictoriaLogs streams back. Tolerant:

@@ -8,7 +8,8 @@ import {
 } from '@/lib/domain/monitoring/caddy-stats.ts'
 import { buildHostMetricExprs } from '@/lib/domain/monitoring/host-metrics.ts'
 import {
-	buildProjectLogsQuery,
+	buildContainerLogsQuery,
+	buildVpsLogsQuery,
 	parseLogLines,
 } from '@/lib/domain/monitoring/log-query.ts'
 import { parseInstantScalar } from '@/lib/domain/monitoring/promql-response.ts'
@@ -41,18 +42,26 @@ const scalarOrNull = async (expr: string): Promise<number | null> => {
 	return parseInstantScalar(payload)
 }
 
-/** Most-recent log lines for a project, newest first. */
-export const loadProjectLogs = async (
-	project: string,
+/** Most-recent log lines from a whole VPS (container + journald), newest first. */
+export const loadVpsLogs = async (
+	vpsName: string,
 ): Promise<ReadonlyArray<LogLine>> => {
-	const body = await queryVictoriaLogs(buildProjectLogsQuery(project))
+	const body = await queryVictoriaLogs(buildVpsLogsQuery(vpsName))
 	return parseLogLines(body)
 }
 
-/** Per-host Caddy access summary for a project over the last hour. */
-export const loadCaddyStats = async (
+/** Most-recent container log lines for one project, across its host VPS. */
+export const loadProjectLogs = async (
 	project: string,
+): Promise<ReadonlyArray<LogLine>> => {
+	const body = await queryVictoriaLogs(buildContainerLogsQuery(project))
+	return parseLogLines(body)
+}
+
+/** Per-domain Caddy access summary for a VPS over the last hour. */
+export const loadVpsCaddyStats = async (
+	vpsName: string,
 ): Promise<ReadonlyArray<CaddyHostStat>> => {
-	const body = await queryVictoriaLogs(buildCaddyStatsQuery(project))
+	const body = await queryVictoriaLogs(buildCaddyStatsQuery(vpsName))
 	return parseCaddyStats(body)
 }

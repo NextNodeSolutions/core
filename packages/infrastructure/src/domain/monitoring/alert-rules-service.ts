@@ -32,14 +32,26 @@ export const UPTIME_RULE_GROUP: RuleGroup = {
 /**
  * HTTP truth from inside (Caddy access logs): the alert expressions join
  * the `nn:http_*` recording rules the vlogs vmalert remote-writes into
- * VictoriaMetrics (see VLOGS_RECORDING_RULE_GROUP).
+ * VictoriaMetrics (see VLOGS_RECORDING_RULE_GROUP). Those rules group by
+ * the LogsQL field `request.host`, so the alert series carry a dotted
+ * `request.host` label, not `host`. `label_replace` copies it into a
+ * clean `host` label so the `{{ $labels.host }}` annotations resolve (the
+ * binary ops still match on the shared `request.host`, so adding `host`
+ * is purely additive).
  */
+const HOST_FROM_REQUEST_HOST = (series: string): string =>
+	`label_replace(${series}, "host", "$1", "request.host", "(.+)")`
+
+const HTTP_5XX = HOST_FROM_REQUEST_HOST('nn:http_5xx_5m')
+const HTTP_REQUESTS = HOST_FROM_REQUEST_HOST('nn:http_requests_5m')
+const HTTP_P95 = HOST_FROM_REQUEST_HOST('nn:http_duration_p95_5m')
+
 export const HTTP_RULE_GROUP: RuleGroup = {
 	name: 'http',
 	rules: [
 		{
 			alert: 'Http5xxRateHigh',
-			expr: '(nn:http_5xx_5m / nn:http_requests_5m) > 0.02 and nn:http_requests_5m > 10',
+			expr: `(${HTTP_5XX} / ${HTTP_REQUESTS}) > 0.02 and ${HTTP_REQUESTS} > 10`,
 			for: '5m',
 			labels: { severity: 'critical' },
 			annotations: {
@@ -50,7 +62,7 @@ export const HTTP_RULE_GROUP: RuleGroup = {
 		},
 		{
 			alert: 'HttpLatencyP95High',
-			expr: 'nn:http_duration_p95_5m > 1.5',
+			expr: `${HTTP_P95} > 1.5`,
 			for: '10m',
 			labels: { severity: 'warning' },
 			annotations: {
@@ -79,7 +91,7 @@ export const POSTGRES_RULE_GROUP: RuleGroup = {
 		},
 		{
 			alert: 'PgConnectionsHigh',
-			expr: 'sum by (vps_name, project, environment) (pg_stat_activity_count) > 0.8 * max by (vps_name, project, environment) (pg_settings_max_connections)',
+			expr: 'sum by (vps_name, project) (pg_stat_activity_count) > 0.8 * max by (vps_name, project) (pg_settings_max_connections)',
 			for: '10m',
 			labels: { severity: 'warning' },
 			annotations: {

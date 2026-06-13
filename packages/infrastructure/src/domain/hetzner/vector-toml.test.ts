@@ -58,4 +58,10 @@ describe('renderVectorToml', () => {
 			'_stream_fields=nn_project,nn_client_id',
 		)
 	})
+
+	it('maps Vector message/timestamp onto VictoriaLogs _msg/_time at ingest', () => {
+		const { uri } = parseVectorConfig().sinks.victorialogs
+		expect(uri).toContain('_msg_field=message')
+		expect(uri).toContain('_time_field=timestamp')
+	})
 })

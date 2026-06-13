@@ -40,9 +40,49 @@ small.meta{color:#6a7385}
 <strong>Secrets Alertmanager rendus inline au deploy</strong> — Alertmanager ne fait pas d'interpolation d'env dans son YAML (contrairement à ce que la PRD esquisse avec <code>"${RESEND_API_KEY}"</code>). Le fichier <code>alertmanager.yml</code> est rendu en TS au deploy avec les valeurs injectées, poussé par SFTP à côté de <code>compose.yaml</code> — même posture de sécurité que les <code>.env.*</code> déjà poussés.
 </div>
 
+<div class="decision">
+<strong>Deux instances vmalert (metrics + vlogs)</strong> — vmalert ne lie qu'une datasource par process. <code>vmalert</code> évalue les règles PromQL contre VictoriaMetrics ; <code>vmalert-vlogs</code> évalue les groupes <code>type: vlogs</code> (LogsQL) contre VictoriaLogs et <em>remote-write</em> ses recording rules (<code>nn:log_lines_15m</code>, <code>nn:http_*</code>) dans VictoriaMetrics. Toutes les <em>alertes</em> vivent donc côté metrics ; le vlogs ne fait que des recording rules. Cela contourne le risque PRD §11 (compat vmalert↔VictoriaLogs sur l'état d'alerte) : les LogsQL ne servent qu'à produire des séries jointes ensuite en PromQL.
+</div>
+
+<div class="decision">
+<strong>Watchdog sévérité <code>none</code> + receiver <code>devnull</code></strong> — si <code>HEALTHCHECKS_PING_URL</code> n'est pas configuré, le Watchdog (qui fire en permanence) ne doit jamais tomber sur l'email. Route <code>severity = "none" → devnull</code> (sink), et si le DMS est configuré, route <code>alertname = "Watchdog" → deadmansswitch</code> (heartbeat ~4 min).
+</div>
+
+<div class="decision">
+<strong>Métrique de fraîcheur des backups en PULL, pas PUSH</strong> — la PRD esquissait un <code>curl</code> push depuis le conteneur postgres-backup. À la place, l'app control-plane liste le bucket <code>nn-backups-&lt;project&gt;</code> (SigV4 GET, lecture seule) et expose <code>nn_backup_last_success_timestamp_seconds{project}</code> sur <code>/api/metrics/backups</code>, scrapé par un job vmagent <code>backups</code> (5 min, honor_labels). Avantage : zéro modification du conteneur de backup, zéro credential d'écriture nouveau, et ça marche pour le mode embedded comme Supabase.
+</div>
+
+<div class="decision">
+<strong>postgres-exporter embedded : rôle dédié, mot de passe = POSTGRES_PASSWORD</strong> — le sidecar exporter du Postgres embedded monte le même bootstrap SQL que Supabase (rôle <code>postgres_exporter</code> pg_monitor, PAS superuser) et bind <code>${TS_IP}:9187</code>. Le mot de passe du rôle réutilise <code>POSTGRES_PASSWORD</code> : même <code>.env</code>, mêmes conteneurs, un secret généré séparé n'ajouterait que de la rotation sans réduire la surface. Pas de custom-queries (pg_stat_statements nécessite <code>shared_preload_libraries</code>, absent de l'image <code>postgres:18</code> vanilla — présent sur supabase/postgres) : le metric set built-in (pg_up, connexions, tailles) couvre les règles P6. Si Supabase ET postgres embedded sont déclarés, Supabase possède le nom <code>postgres-exporter</code> et le port 9187 (un seul exporter par port VPS).
+</div>
+
+<div class="decision">
+<strong>URLs VictoriaMetrics/VictoriaLogs en dur dans l'app (P5)</strong> — l'app monitoring et le stack observability partagent le même projet compose (le stack est injecté dans le compose de l'app via <code>[services.observability]</code>). L'app atteint <code>http://victoriametrics:8428</code> / <code>http://victorialogs:9428</code> par nom de service compose : contrat fixe du stack, pas une config. Jamais de host-port, jamais l'IP publique. En dev local le stack est injoignable → les panneaux dégradent en bannière d'erreur (loadPageState). Requêtes bornées par timeout 5 s.
+</div>
+
+<div class="decision">
+<strong>Sémantique <code>nn_project</code> (niveau VPS) — vue VPS par slug, vue projet par container_name</strong> — Vector est configuré à la convergence au niveau VPS : <code>NN_PROJECT</code> = nom du VPS (<code>input.vpsName</code>), donc <em>toutes</em> les lignes d'un VPS portent <code>nn_project=&lt;vpsName&gt;</code>, pas le nom du projet déployé. La désambiguïsation par projet se fait via <code>container_name</code> = <code>&lt;project&gt;-&lt;env&gt;-&lt;service&gt;-N</code> (compose <code>-p &lt;project&gt;-&lt;env&gt;</code>). Conséquence sur les dashboards P5 : la vue VPS interroge les logs par <code>nn_project:&lt;slug&gt;</code> (= vpsName, toujours correct) ; la vue projet doit filtrer par préfixe <code>container_name</code>. <em>[À vérifier/corriger selon l'audit — voir section Changements.]</em>
+</div>
+
 <h2>Tradeoffs</h2>
 
+<div class="tradeoff">
+<strong>cAdvisor en host-publish <code>${TS_IP}:9101</code> vs UFW</strong> — comme postgres-exporter, la publication Docker contourne UFW (iptables DOCKER chain). La seule protection est donc l'adresse de bind = IP tailnet. node_exporter (binaire hôte, :9100 sur toutes interfaces) est lui protégé par double couche UFW (tailscale0 only) + firewall Hetzner Cloud (80/443/22). Acceptable : c'est exactement le pattern postgres-exporter déjà en prod.
+</div>
+
+<div class="tradeoff">
+<strong>SD émet 9187 pour tout VPS client</strong> — l'état R2 n'enregistre pas quels VPS ont un postgres-exporter. Le job <code>postgres</code> reçoit donc une cible 9187 pour chaque VPS client ; un VPS sans exporter montre <code>up=0</code> sur ce job, mais aucune alerte ne s'en sert (PgDown surveille <code>pg_up</code>, métrique émise seulement par un exporter répondant). Évite de maintenir une liste.
+</div>
+
 <h2>Changements par rapport à la spec</h2>
+
+<div class="changed">
+<strong>Alertes machine scopées <code>job="node"</code> (PRD : <code>job="client-vps"</code>)</strong> — la découverte émet un job vmagent par exporter (<code>node</code>, <code>cadvisor</code>, <code>postgres</code>) plutôt qu'un seul <code>client-vps</code>, pour qu'une cible postgres-exporter morte ne fasse pas croire le VPS down. <code>VpsDown</code> = <code>up{job="node"} == 0</code> : seul node_exporter atteste la liveness machine.
+</div>
+
+<div class="changed">
+<strong>labelkeep relabel élargi</strong> — la whitelist fermée d'origine (<code>^(__name__|client_id|...)$</code>) aurait supprimé <code>__address__</code>/<code>job</code>/<code>instance</code> au scrape, tuant toute collecte. Corrigé en <code>^(__.*|job|instance|&lt;whitelist&gt;)$</code> : <code>__address__</code> est consommé pour émettre le scrape, <code>job</code>/<code>instance</code> sont l'identité sur laquelle chaque alerte s'appuie.
+</div>
 
 <h2>À savoir / actions opérateur</h2>
 

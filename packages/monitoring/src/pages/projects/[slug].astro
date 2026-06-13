@@ -151,8 +151,8 @@ if (!slug) {
 	<section class="mt-10 space-y-6">
 		<SectionHeader
 			kicker="Observability"
-			title="Logs &amp; HTTP"
-			description="Container logs and per-domain Caddy access stats for this project, from VictoriaLogs over the tailnet."
+			title="Container logs"
+			description="Container logs for this project (isolated by container name), from VictoriaLogs over the tailnet. Per-domain HTTP stats are on the VPS view."
 		/>
 		<ProjectObservability server:defer project={slug}>
 			<Skeleton slot="fallback" rows={4} />

@@ -34,6 +34,21 @@ export function isVectorConfig(candidate: unknown): candidate is VectorConfig {
 
 const VL_STREAM_FIELDS = 'nn_project,nn_client_id'
 
+// VictoriaLogs maps these Vector fields onto its built-in `_msg` / `_time`
+// at ingest. Without them the log body stays trapped in `message`
+// (VictoriaLogs' `_msg` is empty) and `unpack_json` - which defaults to
+// `_msg` - cannot reach the Caddy access-log JSON, and the dashboard log
+// parser (which reads `_msg`/`_time`) surfaces blank lines. Both Vector
+// sources (docker_logs, journald) expose `.message` and `.timestamp`.
+const VL_MSG_FIELD = 'message'
+const VL_TIME_FIELD = 'timestamp'
+
+// `nn_project` is the VPS-level tenant stream (= the host hostname): one
+// Vector agent per VPS stamps every line with it, so it identifies the
+// VPS log stream, NOT the deploying project. Per-project disambiguation
+// uses the `container_name` field docker_logs emits
+// (`<project>-<env>-<service>-N`); the dashboards key the VPS view on
+// `nn_project` and the project view on a `container_name` prefix.
 const REMAP_SOURCE = [
 	'.nn_client_id = "${NN_CLIENT_ID}"',
 	'.nn_project = "${NN_PROJECT}"',
@@ -63,7 +78,7 @@ export function renderVectorToml(): string {
 			victorialogs: {
 				type: 'http',
 				inputs: ['enrich'],
-				uri: `\${NN_VL_URL}/insert/jsonline?_stream_fields=${VL_STREAM_FIELDS}`,
+				uri: `\${NN_VL_URL}/insert/jsonline?_stream_fields=${VL_STREAM_FIELDS}&_msg_field=${VL_MSG_FIELD}&_time_field=${VL_TIME_FIELD}`,
 				encoding: { codec: 'json' },
 				framing: { method: 'newline_delimited' },
 			},

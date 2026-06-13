@@ -36,17 +36,23 @@ export const SELF_RULE_GROUP: RuleGroup = {
 			},
 		},
 		{
-			// A project whose VPS answers scrapes but whose logs stopped:
-			// Vector (or its sink) is broken on that host. The join works
-			// on the `project` label - nn:log_lines_15m is recorded by the
-			// vlogs vmalert with the nn_project stream field, renamed here.
+			// A VPS that answers scrapes but stopped shipping logs: Vector
+			// (or its sink) is broken on that host. The join is on
+			// `vps_name`, the host identity present on BOTH sides:
+			// node_exporter series carry it via the relabel (SD_HOSTNAME ->
+			// vps_name), and nn:log_lines_15m is grouped by nn_project
+			// which - one Vector agent per VPS - IS the host hostname, so
+			// label_replace copies it into vps_name. Per-host, not
+			// per-project: a shared host's Vector ships ALL its projects'
+			// lines under one stream, so log silence is only observable at
+			// host granularity.
 			alert: 'VectorSilent',
-			expr: 'max by (project) (up{job="node"}) == 1 unless on (project) (label_replace(nn:log_lines_15m, "project", "$1", "nn_project", "(.+)") > 0)',
+			expr: 'max by (vps_name) (up{job="node"}) == 1 unless on (vps_name) (label_replace(nn:log_lines_15m, "vps_name", "$1", "nn_project", "(.+)") > 0)',
 			labels: { severity: 'warning' },
 			annotations: {
-				summary: 'No logs from project {{ $labels.project }}',
+				summary: 'No logs from VPS {{ $labels.vps_name }}',
 				description:
-					'The VPS of {{ $labels.project }} is up (node_exporter answers) but VictoriaLogs received zero log lines from it in 15 minutes - Vector or its sink is broken on that host.',
+					'VPS {{ $labels.vps_name }} is up (node_exporter answers) but VictoriaLogs received zero log lines from it in 15 minutes - Vector or its sink is broken on that host.',
 			},
 		},
 	],
@@ -59,30 +65,39 @@ export const SELF_RULE_GROUP: RuleGroup = {
  * record-only sidesteps the vmalert↔VictoriaLogs alerting-state quirks
  * the PRD flags as a risk: alerts always evaluate in the metrics vmalert.
  *
- * The `http.log.access` filter matches Caddy's access-log logger name -
- * those lines reach VictoriaLogs via journald → Vector once the Caddy
- * config enables per-server logging (P4).
+ * Caddy's access-log logger field is `http.log.access.logN` (per-server
+ * suffix), so the filter must run AFTER `unpack_json` (the raw `_msg`
+ * carries the suffix, so a pre-unpack phrase match on the bare name
+ * fails) and match it as a prefix regex. `unpack_json` defaults to
+ * `_msg`, which carries the Caddy JSON body once the Vector sink maps
+ * `message -> _msg` (see vector-toml.ts). The host label is emitted as
+ * `request.host`; the consuming HTTP alerts `label_replace` it to `host`.
  */
+const CADDY_ACCESS_FILTER =
+	'| unpack_json | filter logger:~"^http\\.log\\.access"'
+
 export const VLOGS_RECORDING_RULE_GROUP: RuleGroup = {
 	name: 'logs-derived',
 	type: 'vlogs',
 	interval: '60s',
 	rules: [
 		{
+			// Grouped by nn_project, which is the VPS hostname (one Vector
+			// agent per VPS). VectorSilent joins it into `vps_name`.
 			record: 'nn:log_lines_15m',
 			expr: '_time:15m | stats by (nn_project) count() as value',
 		},
 		{
 			record: 'nn:http_requests_5m',
-			expr: '_time:5m nn_project:* "logger":"http.log.access" | unpack_json | stats by (request.host) count() as value',
+			expr: `_time:5m ${CADDY_ACCESS_FILTER} | stats by (request.host) count() as value`,
 		},
 		{
 			record: 'nn:http_5xx_5m',
-			expr: '_time:5m nn_project:* "logger":"http.log.access" | unpack_json | filter status:>=500 | stats by (request.host) count() as value',
+			expr: `_time:5m ${CADDY_ACCESS_FILTER} status:>=500 | stats by (request.host) count() as value`,
 		},
 		{
 			record: 'nn:http_duration_p95_5m',
-			expr: '_time:5m nn_project:* "logger":"http.log.access" | unpack_json | stats by (request.host) quantile(0.95, duration) as value',
+			expr: `_time:5m ${CADDY_ACCESS_FILTER} | stats by (request.host) quantile(0.95, duration) as value`,
 		},
 	],
 }

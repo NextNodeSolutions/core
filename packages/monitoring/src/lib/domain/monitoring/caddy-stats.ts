@@ -16,18 +16,22 @@ export interface CaddyHostStat {
 const STATS_WINDOW = '1h'
 
 /**
- * LogsQL producing per-host request totals, 5xx totals and p95 duration
- * over the window for one project's Caddy access logs. The
- * `http.log.access` logger name is Caddy's; `status` and `duration` are
- * the JSON access-log fields. `unpack_json` lifts the nested object so
- * `request.host` / `status` / `duration` become addressable fields.
+ * LogsQL producing per-domain request totals, 5xx totals and p95 duration
+ * over the window from a VPS's Caddy access logs. Caddy runs once per
+ * host (systemd), reverse-proxying every project's vhost, so its access
+ * logs are a HOST-level stream keyed by `nn_project` (= the VPS
+ * hostname); the per-domain `request.host` rows show each project's
+ * traffic. `unpack_json` lifts the Caddy JSON from `_msg` (Vector maps
+ * `message -> _msg`); the `logger` filter runs AFTER unpack and matches
+ * the `http.log.access.logN` per-server suffix as a prefix regex (a
+ * pre-unpack phrase match on the bare name fails because of the suffix).
  */
-export const buildCaddyStatsQuery = (project: string): string =>
+export const buildCaddyStatsQuery = (vpsName: string): string =>
 	[
 		`_time:${STATS_WINDOW}`,
-		`nn_project:${JSON.stringify(project)}`,
-		'"logger":"http.log.access"',
+		`nn_project:${JSON.stringify(vpsName)}`,
 		'| unpack_json',
+		String.raw`| filter logger:~"^http\.log\.access"`,
 		'| stats by (request.host)',
 		'count() as requests,',
 		'count() if (status:>=500) as errors,',

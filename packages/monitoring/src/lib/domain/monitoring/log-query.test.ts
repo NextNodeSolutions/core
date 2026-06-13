@@ -1,17 +1,35 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildProjectLogsQuery, parseLogLines } from './log-query.ts'
+import {
+	buildContainerLogsQuery,
+	buildVpsLogsQuery,
+	parseLogLines,
+} from './log-query.ts'
 
-describe('buildProjectLogsQuery', () => {
-	it('filters by project, newest first, bounded', () => {
-		const query = buildProjectLogsQuery('stylot')
-		expect(query).toContain('nn_project:"stylot"')
+describe('buildVpsLogsQuery', () => {
+	it('filters by the VPS stream field (nn_project = hostname), newest first, bounded', () => {
+		const query = buildVpsLogsQuery('nn-prod')
+		expect(query).toContain('nn_project:"nn-prod"')
+		expect(query).toContain('sort by (_time desc)')
+		expect(query).toContain('limit 200')
+	})
+})
+
+describe('buildContainerLogsQuery', () => {
+	it('isolates a project by the container_name prefix, time-bounded', () => {
+		const query = buildContainerLogsQuery('stylot')
+		expect(query).toContain('container_name:~"^stylot-"')
+		expect(query).toContain('_time:6h')
 		expect(query).toContain('sort by (_time desc)')
 		expect(query).toContain('limit 200')
 	})
 
-	it('quotes a project name defensively', () => {
-		expect(buildProjectLogsQuery('a b')).toContain('nn_project:"a b"')
+	it('escapes regex metacharacters in the project slug', () => {
+		const query = buildContainerLogsQuery('a.b')
+		// JSON.stringify encodes the regex `^a\.b-` as the LogsQL string
+		// literal "^a\\.b-" (backslash doubled), which LogsQL unescapes
+		// back to the literal-dot regex.
+		expect(query).toContain(String.raw`container_name:~"^a\\.b-"`)
 	})
 })
 

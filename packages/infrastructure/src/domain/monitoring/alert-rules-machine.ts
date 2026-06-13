@@ -31,7 +31,7 @@ export const MACHINE_RULE_GROUP: RuleGroup = {
 		},
 		{
 			alert: 'HighCpu',
-			expr: '100 - (avg by (vps_name, project, environment, client_id) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90',
+			expr: '100 - (avg by (vps_name, project, client_id) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90',
 			for: '15m',
 			labels: { severity: 'warning' },
 			annotations: {
