@@ -9,12 +9,14 @@ import {
 	buildPostgresExporterSidecar,
 } from '#/domain/services/postgres-exporter.ts'
 import {
-	POSTGRES_BACKUP_SERVICE_NAME,
+	POSTGRES_WALG_SERVICE_NAME,
+	buildPostgresSidecar,
+	buildPostgresWalgSidecar,
+} from '#/domain/services/postgres-walg.ts'
+import {
 	POSTGRES_DATA_VOLUME,
 	POSTGRES_SIDECAR_PORT,
 	POSTGRES_SIDECAR_SERVICE_NAME,
-	buildPostgresBackupSidecar,
-	buildPostgresSidecar,
 	postgresProjectIdentifier,
 } from '#/domain/services/postgres.ts'
 import {
@@ -41,9 +43,9 @@ import type {
 	PostgresExporterSidecarService,
 } from '#/domain/services/postgres-exporter.ts'
 import type {
-	PostgresBackupSidecarService,
 	PostgresSidecarService,
-} from '#/domain/services/postgres.ts'
+	PostgresWalgSidecarService,
+} from '#/domain/services/postgres-walg.ts'
 import type {
 	SupabaseBackupSidecarService,
 	SupabaseService,
@@ -79,7 +81,7 @@ export interface ComposeFileInput {
 type ComposeServiceLike =
 	| ComposeUserService
 	| PostgresSidecarService
-	| PostgresBackupSidecarService
+	| PostgresWalgSidecarService
 	| SupabaseService
 	| SupabaseBackupSidecarService
 	| PostgresExporterSidecarService
@@ -128,19 +130,28 @@ function buildTopLevelVolumes(
 }
 
 /**
- * Build the postgres group (sidecar + backup) for the compose file.
- * Returns `null` when `mode = external` - the build helpers also gate on
- * mode, so this central check keeps the caller free of the per-sidecar
+ * Build the postgres group (server + wal-g backup loop + exporter) for the
+ * compose file. Returns `null` when `mode = external` - the server build helper
+ * gates on mode, so this central check keeps the caller free of the per-sidecar
  * null fan-out and lets the spread into `services` stay one-liner clean.
+ *
+ * The wal-g backup loop is production-only (dev runs zero backups), so it is
+ * spread in conditionally; WAL archiving itself rides on the server's
+ * archive_command (see `buildPostgresSidecar`).
  */
 function buildPostgresServiceGroup(
 	config: PostgresServiceConfig,
 	projectName: string,
+	environment: string,
 	hasSupabase: boolean,
 ): Readonly<Record<string, ComposeServiceLike>> | null {
-	const sidecar = buildPostgresSidecar(config, projectName)
-	const backup = buildPostgresBackupSidecar(config, projectName)
-	if (sidecar === null || backup === null) return null
+	const sidecar = buildPostgresSidecar(config, projectName, environment)
+	if (sidecar === null) return null
+	const walgBackup = buildPostgresWalgSidecar(
+		config,
+		projectName,
+		environment,
+	)
 	// The bootstrap SQL mount creates the pg_monitor-granted
 	// `postgres_exporter` role on first initdb; the exporter sidecar
 	// publishes /metrics on the tailnet interface for the monitoring
@@ -154,7 +165,7 @@ function buildPostgresServiceGroup(
 	}
 	return {
 		[POSTGRES_SIDECAR_SERVICE_NAME]: instrumentedSidecar,
-		[POSTGRES_BACKUP_SERVICE_NAME]: backup,
+		...(walgBackup ? { [POSTGRES_WALG_SERVICE_NAME]: walgBackup } : {}),
 		...(hasSupabase
 			? {}
 			: {
@@ -193,6 +204,7 @@ export function renderComposeFile(input: ComposeFileInput): string {
 		? buildPostgresServiceGroup(
 				input.postgres,
 				input.projectName,
+				input.environment,
 				input.supabase !== undefined,
 			)
 		: null

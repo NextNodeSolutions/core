@@ -53,47 +53,6 @@ export const POSTGRES_DATA_VOLUME = 'postgres-data'
  */
 export const POSTGRES_DATA_DIR = '/var/lib/postgresql/data'
 
-export interface PostgresSidecarHealthcheck {
-	readonly test: ReadonlyArray<string>
-	readonly interval: string
-	readonly timeout: string
-	readonly retries: number
-}
-
-export interface PostgresSidecarService {
-	readonly image: string
-	readonly restart: string
-	readonly env_file: ReadonlyArray<string>
-	readonly volumes: ReadonlyArray<string>
-	readonly healthcheck: PostgresSidecarHealthcheck
-}
-
-/**
- * Build the compose sidecar definition for the embedded postgres service.
- * Returns `null` when `mode = external` - the app talks to a remote DB
- * and no sidecar is needed.
- */
-export function buildPostgresSidecar(
-	config: PostgresServiceConfig,
-	projectName: string,
-): PostgresSidecarService | null {
-	if (config.mode !== 'embedded') return null
-
-	const id = postgresProjectIdentifier(projectName)
-	return {
-		image: `postgres:${NEXTNODE_POSTGRES_VERSION}`,
-		restart: 'unless-stopped',
-		env_file: ['.env'],
-		volumes: [`${POSTGRES_DATA_VOLUME}:${POSTGRES_DATA_DIR}`],
-		healthcheck: {
-			test: ['CMD-SHELL', `pg_isready -U ${id} -d ${id}`],
-			interval: '10s',
-			timeout: '5s',
-			retries: 5,
-		},
-	}
-}
-
 /**
  * Compose the `DATABASE_URL` the app uses to reach the embedded sidecar.
  * The host is the docker compose service name (`postgres`), reachable on
@@ -500,3 +459,5 @@ export function buildPostgresBackupSidecar(
 		},
 	}
 }
+
+// WAL-G archiving + PITR live in ./postgres-walg.ts.

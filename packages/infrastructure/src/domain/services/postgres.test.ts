@@ -1,16 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-	POSTGRES_BACKUP_PREFIX,
-	POSTGRES_BACKUP_SCHEDULE,
-	POSTGRES_DATA_DIR,
-	POSTGRES_DATA_VOLUME,
-	POSTGRES_SIDECAR_SERVICE_NAME,
-	buildPostgresBackupSidecar,
 	buildPostgresEmbeddedDatabaseUrl,
 	buildPostgresEmbeddedEnv,
 	buildPostgresExternalEnv,
-	buildPostgresSidecar,
 	ensurePostgresRestoreConfirmed,
 	parsePostgresBackupKey,
 	parsePostgresRestoreArgs,
@@ -34,41 +27,6 @@ describe('postgresProjectIdentifier', () => {
 
 	it('rewrites every dash in multi-segment names', () => {
 		expect(postgresProjectIdentifier('acme-web-prod')).toBe('acme_web_prod')
-	})
-})
-
-describe('buildPostgresSidecar', () => {
-	it('returns a sidecar spec pinned to NEXTNODE_POSTGRES_VERSION when mode is embedded', () => {
-		const sidecar = buildPostgresSidecar(
-			{
-				mode: 'embedded',
-			},
-			'acme-web',
-		)
-
-		expect(sidecar).not.toBeNull()
-		if (sidecar === null) return
-		expect(sidecar.image).toBe('postgres:18')
-		expect(sidecar.restart).toBe('unless-stopped')
-		expect(sidecar.env_file).toEqual(['.env'])
-		expect(sidecar.volumes).toEqual([
-			`${POSTGRES_DATA_VOLUME}:${POSTGRES_DATA_DIR}`,
-		])
-		expect(sidecar.healthcheck.test).toEqual([
-			'CMD-SHELL',
-			'pg_isready -U acme_web -d acme_web',
-		])
-	})
-
-	it('returns null when mode is external', () => {
-		const sidecarValue = buildPostgresSidecar(
-			{
-				mode: 'external',
-			},
-			'acme-web',
-		)
-
-		expect(sidecarValue).toBeNull()
 	})
 })
 
@@ -114,94 +72,6 @@ describe('buildPostgresExternalEnv', () => {
 describe('postgresBackupBucketName', () => {
 	it('namespaces backups under nn-backups-<project>', () => {
 		expect(postgresBackupBucketName('acme-web')).toBe('nn-backups-acme-web')
-	})
-})
-
-describe('buildPostgresBackupSidecar', () => {
-	it('returns null when mode is external (user-owned DB)', () => {
-		const sidecarValue = buildPostgresBackupSidecar(
-			{
-				mode: 'external',
-			},
-			'acme-web',
-		)
-
-		expect(sidecarValue).toBeNull()
-	})
-
-	it('builds a solectrus/postgres-s3-backup sidecar pinned to NEXTNODE_POSTGRES_VERSION', () => {
-		const sidecar = buildPostgresBackupSidecar(
-			{
-				mode: 'embedded',
-			},
-			'acme-web',
-		)
-
-		expect(sidecar).not.toBeNull()
-		if (sidecar === null) return
-		expect(sidecar.image).toBe('ghcr.io/solectrus/postgres-s3-backup:18')
-		expect(sidecar.restart).toBe('unless-stopped')
-		expect(sidecar.depends_on).toEqual([POSTGRES_SIDECAR_SERVICE_NAME])
-	})
-
-	it('renames the project-level R2 creds to the S3_* names the image expects via compose interpolation', () => {
-		const sidecar = buildPostgresBackupSidecar(
-			{
-				mode: 'embedded',
-			},
-			'acme-web',
-		)
-
-		expect(sidecar?.environment).toMatchObject({
-			S3_ACCESS_KEY_ID: '${R2_ACCESS_KEY_ID}',
-			S3_SECRET_ACCESS_KEY: '${R2_SECRET_ACCESS_KEY}',
-			S3_ENDPOINT: '${R2_ENDPOINT}',
-			S3_REGION: 'auto',
-			S3_S3V4: 'yes',
-		})
-	})
-
-	it('targets the project-scoped R2 bucket under the postgres prefix', () => {
-		const sidecar = buildPostgresBackupSidecar(
-			{
-				mode: 'embedded',
-			},
-			'acme-web',
-		)
-
-		expect(sidecar?.environment['S3_BUCKET']).toBe('nn-backups-acme-web')
-		expect(sidecar?.environment['S3_PREFIX']).toBe(POSTGRES_BACKUP_PREFIX)
-	})
-
-	it('runs the dump on the hourly schedule with a 30-day age retention', () => {
-		const sidecarValue = buildPostgresBackupSidecar(
-			{
-				mode: 'embedded',
-			},
-			'acme-web',
-		)
-
-		expect(sidecarValue?.environment['SCHEDULE']).toBe(
-			POSTGRES_BACKUP_SCHEDULE,
-		)
-		expect(POSTGRES_BACKUP_SCHEDULE).toBe('@hourly')
-		expect(sidecarValue?.environment['BACKUP_KEEP_DAYS']).toBe('30')
-	})
-
-	it('connects to the in-network postgres sidecar with the project-scoped role+db', () => {
-		const sidecarValue = buildPostgresBackupSidecar(
-			{
-				mode: 'embedded',
-			},
-			'acme-web',
-		)
-
-		expect(sidecarValue?.environment).toMatchObject({
-			POSTGRES_HOST: POSTGRES_SIDECAR_SERVICE_NAME,
-			POSTGRES_DATABASE: 'acme_web',
-			POSTGRES_USER: 'acme_web',
-			POSTGRES_PASSWORD: '${POSTGRES_PASSWORD}',
-		})
 	})
 })
 

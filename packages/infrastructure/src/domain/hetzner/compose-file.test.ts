@@ -317,13 +317,13 @@ describe('renderComposeFile', () => {
 		])
 	})
 
-	it('emits a postgres sidecar when services.postgres.mode is embedded', () => {
+	it('emits a wal-g postgres sidecar with archiving enabled in production', () => {
 		const parsed = parse(
 			renderComposeFile(baseInput({ postgres: { mode: 'embedded' } })),
 		)
 
 		expect(parsed.services.postgres).toEqual({
-			image: 'postgres:18',
+			image: 'ghcr.io/nextnodesolutions/postgres-walg:18',
 			restart: 'unless-stopped',
 			env_file: ['.env'],
 			volumes: [
@@ -336,8 +336,49 @@ describe('renderComposeFile', () => {
 				timeout: '5s',
 				retries: 5,
 			},
+			command: [
+				'postgres',
+				'-c',
+				'wal_level=replica',
+				'-c',
+				'archive_mode=on',
+				'-c',
+				'archive_command=wal-g wal-push %p',
+				'-c',
+				'archive_timeout=180',
+				'-c',
+				'restore_command=wal-g wal-fetch %f %p',
+			],
+			environment: {
+				WALG_S3_PREFIX: 's3://nn-walg-acme-web',
+				AWS_ACCESS_KEY_ID: '${R2_ACCESS_KEY_ID}',
+				AWS_SECRET_ACCESS_KEY: '${R2_SECRET_ACCESS_KEY}',
+				AWS_ENDPOINT: '${R2_ENDPOINT}',
+				AWS_REGION: 'auto',
+				AWS_S3_FORCE_PATH_STYLE: 'true',
+				WALG_COMPRESSION_METHOD: 'lz4',
+			},
 		})
 		expect(parsed.volumes).toEqual({ [POSTGRES_DATA_VOLUME]: {} })
+	})
+
+	it('runs the postgres sidecar with no archiving in development', () => {
+		const parsed = parse(
+			renderComposeFile(
+				baseInput({
+					environment: 'development',
+					postgres: { mode: 'embedded' },
+				}),
+			),
+		)
+
+		expect(parsed.services.postgres.image).toBe(
+			'ghcr.io/nextnodesolutions/postgres-walg:18',
+		)
+		expect(parsed.services.postgres).not.toHaveProperty('command')
+		expect(parsed.services.postgres).not.toHaveProperty('environment')
+		// Zero backups in dev: no wal-g loop sidecar.
+		expect(parsed.services).not.toHaveProperty('postgres-walg')
 	})
 
 	it('does not expose postgres on a host port', () => {
@@ -354,43 +395,46 @@ describe('renderComposeFile', () => {
 		)
 
 		expect(parsed.services).not.toHaveProperty('postgres')
-		expect(parsed.services).not.toHaveProperty('postgres-backup')
+		expect(parsed.services).not.toHaveProperty('postgres-walg')
 		expect(parsed).not.toHaveProperty('volumes')
 	})
 
-	it('emits a postgres-backup sidecar when postgres is embedded', () => {
+	it('emits a wal-g base-backup loop sidecar when postgres is embedded in production', () => {
 		const parsed = parse(
 			renderComposeFile(baseInput({ postgres: { mode: 'embedded' } })),
 		)
 
-		expect(parsed.services['postgres-backup']).toEqual({
-			image: 'ghcr.io/solectrus/postgres-s3-backup:18',
+		expect(parsed.services['postgres-walg']).toEqual({
+			image: 'ghcr.io/nextnodesolutions/postgres-walg:18',
 			restart: 'unless-stopped',
 			depends_on: ['postgres'],
+			command: ['walg-backup-loop.sh'],
+			volumes: [`${POSTGRES_DATA_VOLUME}:${POSTGRES_DATA_DIR}:ro`],
 			environment: {
-				SCHEDULE: '@hourly',
-				BACKUP_KEEP_DAYS: '30',
-				S3_REGION: 'auto',
-				S3_ACCESS_KEY_ID: '${R2_ACCESS_KEY_ID}',
-				S3_SECRET_ACCESS_KEY: '${R2_SECRET_ACCESS_KEY}',
-				S3_ENDPOINT: '${R2_ENDPOINT}',
-				S3_BUCKET: 'nn-backups-acme-web',
-				S3_PREFIX: 'postgres',
-				S3_S3V4: 'yes',
-				POSTGRES_HOST: 'postgres',
-				POSTGRES_DATABASE: 'acme_web',
-				POSTGRES_USER: 'acme_web',
-				POSTGRES_PASSWORD: '${POSTGRES_PASSWORD}',
+				WALG_S3_PREFIX: 's3://nn-walg-acme-web',
+				AWS_ACCESS_KEY_ID: '${R2_ACCESS_KEY_ID}',
+				AWS_SECRET_ACCESS_KEY: '${R2_SECRET_ACCESS_KEY}',
+				AWS_ENDPOINT: '${R2_ENDPOINT}',
+				AWS_REGION: 'auto',
+				AWS_S3_FORCE_PATH_STYLE: 'true',
+				WALG_COMPRESSION_METHOD: 'lz4',
+				WALG_BACKUP_INTERVAL: '86400',
+				WALG_RETAIN_COUNT: '7',
+				PGHOST: 'postgres',
+				PGPORT: '5432',
+				PGUSER: 'acme_web',
+				PGDATABASE: 'acme_web',
+				PGPASSWORD: '${POSTGRES_PASSWORD}',
 			},
 		})
 	})
 
-	it('does not expose postgres-backup on a host port', () => {
+	it('does not expose the wal-g backup loop on a host port', () => {
 		const parsed = parse(
 			renderComposeFile(baseInput({ postgres: { mode: 'embedded' } })),
 		)
 
-		expect(parsed.services['postgres-backup']).not.toHaveProperty('ports')
+		expect(parsed.services['postgres-walg']).not.toHaveProperty('ports')
 	})
 
 	it('merges the postgres-data volume with user-declared volumes', () => {
@@ -603,7 +647,7 @@ describe('renderComposeFile - multiple user services', () => {
 })
 
 describe('renderComposeFile - postgres service wiring', () => {
-	it('renders both postgres and postgres-backup sidecars in embedded mode', () => {
+	it('renders the postgres server, wal-g backup loop, and exporter in embedded mode', () => {
 		const parsed = parse(
 			renderComposeFile(baseInput({ postgres: { mode: 'embedded' } })),
 		)
@@ -611,7 +655,7 @@ describe('renderComposeFile - postgres service wiring', () => {
 		expect(Object.keys(parsed.services)).toEqual([
 			'app',
 			'postgres',
-			'postgres-backup',
+			'postgres-walg',
 			'postgres-exporter',
 		])
 		expect(parsed.volumes).toEqual({ [POSTGRES_DATA_VOLUME]: {} })
@@ -779,7 +823,7 @@ describe('renderComposeFile - supabase service wiring', () => {
 		expect(Object.keys(parsed.services)).toEqual([
 			'app',
 			'postgres',
-			'postgres-backup',
+			'postgres-walg',
 			'db',
 			'auth',
 			'realtime',
