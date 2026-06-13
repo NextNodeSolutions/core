@@ -1,3 +1,5 @@
+import { ENV_KEYS, requireEnv } from '@/lib/adapters/env.ts'
+import { getServerByName } from '@/lib/adapters/hetzner/servers.ts'
 import { HTTP_STATUS } from '@/lib/adapters/http-status.ts'
 import { jsonResponse } from '@/lib/adapters/json-response.ts'
 import { loadPageState } from '@/lib/adapters/load-page-state.ts'
@@ -6,6 +8,7 @@ import { apiErr, apiOk } from '@/lib/domain/api-result.ts'
 import { parseMetricRangeRequest } from '@/lib/domain/monitoring/metric-range-request.ts'
 
 import type { APIRoute } from 'astro'
+import type { LoadState } from '@/lib/domain/load-state.ts'
 
 // oxlint-disable-next-line nextnode/boolean-naming -- prerender is Astro's required route export name
 export const prerender = false
@@ -18,8 +21,14 @@ const NOW_MS_DIVISOR = 1000
  * whitelisted metric keys are accepted (no arbitrary PromQL passthrough),
  * and the window is bounded - the endpoint is tailnet-only and read-only,
  * but the validation keeps the surface tight regardless.
+ *
+ * The slug is resolved against a real Hetzner server before it ever reaches
+ * the PromQL label builder: an unknown slug is a 404, and a validated
+ * Hetzner name (its charset excludes `"`) cannot rewrite the `vps_name`
+ * matcher. This mirrors the page path, which only renders metrics for a
+ * server `getServerByName` matched.
  */
-export const GET: APIRoute = ({ params, url }) => {
+export const GET: APIRoute = async ({ params, url }) => {
 	const { slug } = params
 	if (!slug) {
 		return jsonResponse(
@@ -43,6 +52,19 @@ export const GET: APIRoute = ({ params, url }) => {
 		)
 	}
 
+	const serverState = await loadPageState(`hetzner.servers.${slug}.metrics`, () =>
+		getServerByName(requireEnv(ENV_KEYS.HETZNER_API_TOKEN), slug),
+	)
+	if (serverState.kind !== 'ok') {
+		return loadStateErrorResponse(serverState)
+	}
+	if (serverState.data === null) {
+		return jsonResponse(
+			apiErr('not_found', `no VPS named "${slug}"`),
+			HTTP_STATUS.NOT_FOUND,
+		)
+	}
+
 	return runRangeQuery(`vps.${slug}.metrics`, parsed.request)
 }
 
@@ -56,6 +78,16 @@ const runRangeQuery = async (
 	if (state.kind === 'ok') {
 		return jsonResponse(apiOk(state.data), HTTP_STATUS.OK)
 	}
+	return loadStateErrorResponse(state)
+}
+
+/**
+ * Map a non-ok load state to its API error response: an upstream failure is
+ * a 502, every other non-ok kind (missing config, unexpected error) is a 500.
+ */
+const loadStateErrorResponse = (
+	state: Exclude<LoadState<unknown>, { kind: 'ok' }>,
+): Response => {
 	if (state.kind === 'upstream_error') {
 		return jsonResponse(
 			apiErr('upstream_error', state.message),

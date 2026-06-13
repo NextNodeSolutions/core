@@ -40,6 +40,16 @@ describe('signSigV4Request', () => {
 		expect(a.headers.Authorization).not.toBe(b.headers.Authorization)
 	})
 
+	it('percent-encodes special characters in the path for the canonical URI and URL', () => {
+		const signed = signSigV4Request({ ...BASE, path: '/bucket/a b+c.json' })
+		// Slash separators are preserved; the segment is RFC 3986-encoded
+		// (space -> %20, '+' -> %2B). A raw, un-encoded path would send the
+		// literal space and sign a different canonical URI.
+		expect(signed.url).toBe(
+			'https://acct.r2.cloudflarestorage.com/bucket/a%20b%2Bc.json',
+		)
+	})
+
 	it('appends the query string to the URL when present', () => {
 		const signed = signSigV4Request({
 			...BASE,

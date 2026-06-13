@@ -8,6 +8,18 @@ export interface ProjectBackups {
 	readonly objects: ReadonlyArray<BackupObject> | null
 }
 
+/**
+ * Escape a string for use as a Prometheus exposition label value: the format
+ * requires backslash, double-quote and line feed to be backslash-escaped (in
+ * that order, backslash first). Project names are normally inert, but escaping
+ * keeps a stray character from breaking the line the scraper parses.
+ */
+const escapeLabelValue = (labelValue: string): string =>
+	labelValue
+		.replaceAll('\\', '\\\\')
+		.replaceAll('"', '\\"')
+		.replaceAll('\n', '\\n')
+
 const latestEpochSeconds = (
 	objects: ReadonlyArray<BackupObject>,
 ): number | null => {
@@ -43,7 +55,7 @@ export const renderBackupMetrics = (
 		const epoch = latestEpochSeconds(entry.objects)
 		if (epoch === null) continue
 		lines.push(
-			`nn_backup_last_success_timestamp_seconds{project="${entry.project}"} ${String(epoch)}`,
+			`nn_backup_last_success_timestamp_seconds{project="${escapeLabelValue(entry.project)}"} ${String(epoch)}`,
 		)
 	}
 	return `${lines.join('\n')}\n`

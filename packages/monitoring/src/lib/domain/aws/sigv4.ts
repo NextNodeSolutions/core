@@ -33,6 +33,27 @@ const sha256Hex = (message: string): string =>
 	createHash('sha256').update(message).digest('hex')
 
 const DATE_STAMP_LENGTH = 8
+const HEX_RADIX = 16
+
+/**
+ * AWS SigV4 canonical URI: each path segment is RFC 3986-encoded with the
+ * slashes preserved (S3/R2 use single-pass encoding). `encodeURIComponent`
+ * already leaves the unreserved set `A-Za-z0-9-_.~` intact and percent-encodes
+ * the rest, except `!*'()` which AWS also requires encoded. The same encoded
+ * path must go into both the canonical request and the request URL so the
+ * server re-derives the identical signature. For inert keys (the only ones we
+ * sign today) this is a no-op.
+ */
+const encodeCanonicalUri = (path: string): string =>
+	path
+		.split('/')
+		.map(segment =>
+			encodeURIComponent(segment).replaceAll(
+				/[!*'()]/g,
+				char => `%${char.charCodeAt(0).toString(HEX_RADIX).toUpperCase()}`,
+			),
+		)
+		.join('/')
 
 const formatAmzDate = (now: Date): string =>
 	now
@@ -46,13 +67,14 @@ export const signSigV4Request = (
 	const amzDate = formatAmzDate(input.now)
 	const dateStamp = amzDate.slice(0, DATE_STAMP_LENGTH)
 	const payloadHash = sha256Hex(input.payload)
+	const canonicalUri = encodeCanonicalUri(input.path)
 
 	const canonicalHeaders = `host:${input.host}\nx-amz-content-sha256:${payloadHash}\nx-amz-date:${amzDate}\n`
 	const signedHeaders = 'host;x-amz-content-sha256;x-amz-date'
 
 	const canonicalRequest = [
 		input.method,
-		input.path,
+		canonicalUri,
 		input.query,
 		canonicalHeaders,
 		signedHeaders,
@@ -81,7 +103,7 @@ export const signSigV4Request = (
 
 	const authorization = `AWS4-HMAC-SHA256 Credential=${input.accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`
 
-	const url = `https://${input.host}${input.path}${input.query ? `?${input.query}` : ''}`
+	const url = `https://${input.host}${canonicalUri}${input.query ? `?${input.query}` : ''}`
 	return {
 		url,
 		headers: {

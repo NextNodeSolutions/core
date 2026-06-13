@@ -16,6 +16,11 @@ export const prerender = false
 const SSE_KEEPALIVE_MS = 15_000
 const TAIL_SUBPROTOCOL = 'trace-v1'
 
+// Abort reason set by the ReadableStream `cancel` hook. The consumer-cancel
+// path closes the stream BEFORE our abort listener runs, so the listener must
+// skip controller.close() for this reason to avoid a double-close TypeError.
+const CONSUMER_CANCEL_REASON = 'consumer-cancel'
+
 const SSE_RESPONSE_HEADERS: Record<string, string> = {
 	'Content-Type': 'text/event-stream; charset=utf-8',
 	'Cache-Control': 'no-cache, no-transform',
@@ -120,7 +125,16 @@ const registerTailCleanup = (
 		() => {
 			clearInterval(keepalive)
 			ws.close()
-			controller.close()
+			// On the consumer-cancel path the ReadableStream has ALREADY
+			// transitioned to "closed" before this listener runs (cancel() closes
+			// the stream, then invokes our abort), so calling controller.close()
+			// again throws a TypeError per the WHATWG Streams spec. Our own
+			// terminal paths (ws-error, ws-close) abort while the stream is still
+			// readable, so they must close it. The cancel hook normalises its
+			// reason to CONSUMER_CANCEL_REASON, making this guard reliable.
+			if (signal.reason !== CONSUMER_CANCEL_REASON) {
+				controller.close()
+			}
 			void deletePagesTail({
 				client,
 				projectName,
@@ -243,8 +257,12 @@ export const GET: APIRoute = async ({ params }) => {
 				abort,
 			})
 		},
-		cancel(reason) {
-			abort(typeof reason === 'string' ? reason : 'consumer-cancel')
+		cancel() {
+			// Always normalise to the sentinel: the runtime may pass an arbitrary
+			// reason (or none), but every cancel here is a consumer disconnect, and
+			// the abort listener relies on this exact value to skip the
+			// already-done controller.close() (see registerTailCleanup).
+			abort(CONSUMER_CANCEL_REASON)
 		},
 	})
 

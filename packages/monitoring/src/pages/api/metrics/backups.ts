@@ -1,6 +1,5 @@
 import { ENV_KEYS, requireEnv } from '@/lib/adapters/env.ts'
-import { HTTP_STATUS } from '@/lib/adapters/http-status.ts'
-import { loadPageState } from '@/lib/adapters/load-page-state.ts'
+import { runExpositionEndpoint } from '@/lib/adapters/exposition-response.ts'
 import { listBackupObjects } from '@/lib/adapters/r2/backups.ts'
 import { getVpsState } from '@/lib/adapters/r2/state.ts'
 import { listTaggedDevices } from '@/lib/adapters/tailscale/devices.ts'
@@ -43,8 +42,8 @@ const listClientProjects = async (
  * exposes the newest dump's timestamp - no backup-container change, no
  * write credential anywhere new.
  */
-export const GET: APIRoute = async () => {
-	const state = await loadPageState('metrics.backups', async () => {
+export const GET: APIRoute = () =>
+	runExpositionEndpoint('metrics.backups', async () => {
 		const client = resolveStateClient()
 		const projects = await listClientProjects(client)
 		const entries = await Promise.all(
@@ -55,15 +54,3 @@ export const GET: APIRoute = async () => {
 		)
 		return renderBackupMetrics(entries)
 	})
-
-	if (state.kind === 'ok') {
-		return new Response(state.data, {
-			status: HTTP_STATUS.OK,
-			headers: { 'content-type': 'text/plain; version=0.0.4' },
-		})
-	}
-	return new Response(state.message, {
-		status: HTTP_STATUS.INTERNAL_SERVER_ERROR,
-		headers: { 'content-type': 'text/plain' },
-	})
-}

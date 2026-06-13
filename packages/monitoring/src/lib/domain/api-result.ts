@@ -4,6 +4,7 @@ export type ApiErrCode =
 	| 'upstream_error'
 	| 'internal_error'
 	| 'bad_request'
+	| 'not_found'
 
 export interface ApiOk<T> {
 	readonly ok: true
