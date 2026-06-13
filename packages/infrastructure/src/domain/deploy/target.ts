@@ -1,5 +1,6 @@
 import type { AppEnvironment } from '#/domain/environment.ts'
 import type { ServiceEnv } from '#/domain/services/service.ts'
+import type { AutoRestoreInput, AutoRestoreResult } from './auto-restore.ts'
 import type {
 	PagesResourceOutcome,
 	VpsResourceOutcome,
@@ -222,6 +223,18 @@ export interface DeployTarget {
 	 * targets, throw "not applicable" - no DB to snapshot.
 	 */
 	runPreMigrateSnapshot(input: SnapshotInput): Promise<SnapshotResult>
+	/**
+	 * Rehydrate a freshly-provisioned embedded database from the latest R2
+	 * dump. Called by `migrate-remote` AFTER `prepareRollout` (DB up and
+	 * healthy) and BEFORE the pre-migrate snapshot + `runMigrate`, so a
+	 * replaced/disposable VPS recovers its data before forward-only
+	 * migrations apply on top. Probes the live database first and restores
+	 * ONLY when it is provably empty AND a prior dump exists
+	 * (`planAutoRestore`); a populated database is never overwritten. For
+	 * static targets (Cloudflare Pages), this is a wiring bug - throw "not
+	 * applicable" so the caller routes accordingly.
+	 */
+	runAutoRestore(input: AutoRestoreInput): Promise<AutoRestoreResult>
 	teardown(
 		projectName: string,
 		domain: string | undefined,

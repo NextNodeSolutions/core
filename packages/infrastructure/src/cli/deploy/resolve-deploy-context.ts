@@ -15,11 +15,13 @@ import { buildRuntimeTarget } from './build-runtime-target.ts'
 import { loadInfraStorageForConfig } from './load-infra-storage.ts'
 import { pickSecrets } from './secrets.ts'
 
+import type { GithubRepository } from '#/cli/env.ts'
 import type {
 	DeployableConfig,
 	HetznerDeployableConfig,
 	UserServiceConfig,
 } from '#/config/types.ts'
+import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import type {
 	DeployEnv,
 	DeployInput,
@@ -42,6 +44,11 @@ export interface DeployContext {
 	readonly environment: AppEnvironment
 	readonly merged: ServiceEnv
 	readonly repoSecrets: Readonly<Record<string, string>>
+	// R2 runtime config (state + certs + S3 creds) when the config needs it;
+	// `null` for static targets with no infra storage. Surfaced so rollout
+	// commands can list the project's backup bucket (auto-restore) without
+	// re-resolving the Cloudflare account id + re-verifying creds.
+	readonly infraStorage: InfraStorageRuntimeConfig | null
 }
 
 /**
@@ -65,16 +72,61 @@ export async function resolveDeployContext(
 	const infraStorage = await loadInfraStorageForConfig(config)
 	const target = buildRuntimeTarget(config, environment, infraStorage)
 
-	const services = resolveServices({
+	const { merged, secretOrigins } = await resolveMergedDeployEnv({
 		config,
 		environment,
 		repository,
 		cfToken,
 		infraStorage,
 		repoSecrets,
+		target,
 	})
 
-	const targetEnv = await target.contributeEnv(config.project.name)
+	const env = buildDeployEnv(merged.public)
+	const input = buildDeployInput(
+		config,
+		merged.secret,
+		repoSecrets,
+		secretOrigins,
+	)
+
+	return {
+		target,
+		env,
+		input,
+		environment,
+		merged,
+		repoSecrets,
+		infraStorage,
+	}
+}
+
+interface MergedDeployEnvInput {
+	readonly config: DeployableConfig
+	readonly environment: AppEnvironment
+	readonly repository: GithubRepository
+	readonly cfToken: string
+	readonly infraStorage: InfraStorageRuntimeConfig | null
+	readonly repoSecrets: Readonly<Record<string, string>>
+	readonly target: DeployTarget
+}
+
+// Resolve every service, load its env, and merge target + services + user
+// secrets into a single ServiceEnv (with the per-secret provenance map).
+// Extracted from resolveDeployContext to keep that orchestrator small.
+async function resolveMergedDeployEnv(
+	args: MergedDeployEnvInput,
+): Promise<{ merged: ServiceEnv; secretOrigins: Record<string, string> }> {
+	const services = resolveServices({
+		config: args.config,
+		environment: args.environment,
+		repository: args.repository,
+		cfToken: args.cfToken,
+		infraStorage: args.infraStorage,
+		repoSecrets: args.repoSecrets,
+	})
+
+	const targetEnv = await args.target.contributeEnv(args.config.project.name)
 	const serviceEnvs = await Promise.all(
 		services.map(async service => ({
 			name: service.name,
@@ -85,19 +137,10 @@ export async function resolveDeployContext(
 	const secretOrigins = buildSecretOrigins(serviceEnvs)
 	const userSecretsEnv: ServiceEnv = {
 		public: {},
-		secret: pickSecrets(repoSecrets, config.deploy.secrets),
+		secret: pickSecrets(args.repoSecrets, args.config.deploy.secrets),
 	}
 	const merged = mergeServiceEnvs([targetEnv, servicesEnv, userSecretsEnv])
-
-	const env = buildDeployEnv(merged.public)
-	const input = buildDeployInput(
-		config,
-		merged.secret,
-		repoSecrets,
-		secretOrigins,
-	)
-
-	return { target, env, input, environment, merged, repoSecrets }
+	return { merged, secretOrigins }
 }
 
 // Map every backing service's secret keys back to the service that produced

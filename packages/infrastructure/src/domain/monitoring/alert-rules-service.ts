@@ -104,12 +104,14 @@ export const POSTGRES_RULE_GROUP: RuleGroup = {
 }
 
 /**
- * 26 hours = one daily backup + 2h of slack before the alert fires. The
- * `nn_backup_last_success_timestamp_seconds` sample is pushed by the
- * postgres-backup sidecar after each successful upload (PRD P6) - the
- * only push-based metric of the system.
+ * 3 hours = three missed hourly backups before the alert fires (the sidecar
+ * runs `@hourly`, see POSTGRES_BACKUP_SCHEDULE). Tight enough to surface a
+ * broken backup pipeline within a few cycles, loose enough to absorb a
+ * single slow dump plus the 5-minute scrape cadence without flapping. The
+ * `nn_backup_last_success_timestamp_seconds` sample reflects the newest
+ * dump's timestamp, surfaced by the monitoring control plane from R2 (PRD P6).
  */
-const BACKUP_STALE_HOURS = 26
+const BACKUP_STALE_HOURS = 3
 const SECONDS_PER_HOUR = 3600
 const BACKUP_STALE_SECONDS = BACKUP_STALE_HOURS * SECONDS_PER_HOUR
 
@@ -123,7 +125,7 @@ export const BACKUPS_RULE_GROUP: RuleGroup = {
 			annotations: {
 				summary: 'Backup stale for {{ $labels.project }}',
 				description:
-					'No successful pg_dump upload for {{ $labels.project }} in over 26 hours. Read the postgres-backup container logs and run a manual backup.',
+					'No successful pg_dump upload for {{ $labels.project }} in over 3 hours (the sidecar runs hourly). Read the postgres-backup container logs and run a manual backup.',
 			},
 		},
 	],

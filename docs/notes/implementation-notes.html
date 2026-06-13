@@ -140,5 +140,50 @@ small.meta{color:#6a7385}
 <em>Note : le déploiement réel se fait via la pipeline GitHub Actions (secrets CI Hetzner/Tailscale/R2). Il n'a pas été exécuté depuis cette session — uniquement validé côté config + génération compose.</em>
 </div>
 
+<h2>Durabilité DB : RPO horaire + auto-restore sur VPS jetable (2026-06-13)</h2>
+
+<p><small class="meta">Suite à la question « si je change de VPS, je perds la bdd ? ». La donnée Postgres vit dans un volume docker local (<code>postgres-data</code>), perdu à la destruction du VPS — mais sauvegardée hors-VPS par le sidecar <code>postgres-backup</code> vers R2. Deux failles corrigées côté core, reproductibles fleet-wide.</small></p>
+
+<div class="changed">
+<strong>Cadence backup <code>@daily</code> → <code>@hourly</code></strong> — <code>POSTGRES_BACKUP_SCHEDULE</code> (<code>domain/services/postgres.ts</code>). RPO 24h → 1h. Les dumps d'une petite DB embedded sont négligeables (KB-MB). Gros projets : passer en <code>postgres.mode=external</code> (DB managée, backups propres).
+</div>
+
+<div class="changed">
+<strong>Rétention réellement appliquée : <code>BACKUP_KEEP_DAYS</code> <code>'0'</code> → <code>'30'</code></strong> — bug préexistant : l'image (<code>solectrus/postgres-s3-backup</code>) traite <code>'0'</code> comme une chaîne <em>non-vide</em> (<code>[ -n "0" ]</code> vrai) → <code>backup.sh</code> purgeait tout ce qui précède aujourd'hui à chaque run, ne laissant qu'~1 jour d'historique. <code>'30'</code> donne une vraie fenêtre de 30 j. Choix de 30 : ~720 objets en horaire, sous la limite ~1000 du <code>aws s3 ls</code>/<code>s3api list-objects</code> non-paginé de l'image (utilisé à la fois par la purge et par la recherche du dernier dump de <code>restore.sh</code>) — au-delà, la purge raterait des objets et le restore pourrait pointer un dump périmé.
+</div>
+
+<div class="changed">
+<strong>Alerte <code>BackupStale</code> 26h → 3h</strong> — <code>alert-rules-service.ts</code> (<code>93600</code> → <code>10800</code> s). Adaptée au cadencement horaire : 3 backups horaires manqués avant le critical, assez lâche pour absorber un dump lent + le scrape 5 min sans flapper.
+</div>
+
+<div class="decision">
+<strong>Auto-restore sur DB embedded fraîche</strong> — nouveau <code>DeployTarget.runAutoRestore</code>. Dans <code>migrate-remote</code>, après <code>prepareRollout</code> (postgres healthy) et AVANT le snapshot + migrate : si la DB est <em>prouvée vide</em> ET qu'un dump R2 existe, on rejoue le dernier dump. Un VPS remplacé se réhydrate seul. Mécanisme : <code>docker compose exec -T postgres-backup sh restore.sh</code> (symétrique du snapshot <code>backup.sh</code>, mêmes creds R2 dans le conteneur), <code>restore.sh</code> sans argument prend le dernier dump et fait <code>pg_restore --clean --if-exists</code>. Tout reste interne au VPS (le Postgres embedded n'a pas de port host ; un <code>runPgRestore</code> depuis le runner serait injoignable). Listing R2 fait côté CLI (<code>list-backups.ts</code>) — l'adapter hetzner ne peut pas appeler l'adapter r2 (règle layering). Décision pure : <code>domain/deploy/auto-restore.ts</code> (<code>planAutoRestore</code>).
+</div>
+
+<div class="decision">
+<strong>Garde anti-destruction</strong> — <code>restore.sh</code> fait <code>--clean</code> (DROP) : catastrophique sur une DB peuplée. On ne restaure QUE si le probe compte 0 table utilisateur (<code>information_schema.tables</code> hors <code>pg_catalog</code>/<code>information_schema</code>). Probe via <code>psql -U &lt;id&gt; -d &lt;id&gt;</code> (socket trust de l'image officielle) : si la DB <code>&lt;id&gt;</code> n'existe pas (mauvais conteneur), psql erreur → fail-loud, jamais de faux 0. <code>restore.sh</code> omet <code>set -e</code> (exit code non fiable) → post-condition : re-probe, throw si toujours vide (<code>assertDbPopulatedAfterRestore</code>). Default-on pour embedded (pas de flag : YAGNI, le gate vide rend le default-on sûr).
+</div>
+
+<div class="tradeoff">
+<strong>Snapshot conditionnel (fix idempotence, revue adversariale)</strong> — le pre-migrate snapshot n'est pris QUE si la DB contient des données après auto-restore (<code>databaseHasData</code>). Sans ça : un premier déploiement dont le migrate échoue puis est relancé restaurait son propre snapshot pre-migrate (DB vide) → re-probe vide → <code>assertDbPopulatedAfterRestore</code> throw « still empty » → échec spurious bloquant. Racine supprimée : on ne snapshote plus une DB vide (rien à protéger, et plus de dump vide qu'un retry restaurerait à tort). Aucune perte : un migrate raté sur DB vide se relance simplement.
+</div>
+
+<div class="decision">
+<strong>Revue adversariale (workflow 22 agents, 12 findings confirmés → triés)</strong>
+<ul>
+<li><strong>Corrigés</strong> : (1) idempotence snapshot vide [ci-dessus] ; (2) <code>list-backups.ts</code> <code>instanceof NoSuchBucket</code> au lieu de <code>error.name</code> (cohérent avec <code>r2/client.ts</code> ; seul un bucket absent est bénin, toute autre erreur S3 propage et halt) ; (3) doc limite ~1000 partagée par <code>restore.sh</code>.</li>
+<li><strong>Écartés avec raison</strong> : wrong-DB cross-projet déjà bloqué par <code>-d &lt;id&gt;</code> (psql erreur si DB absente) + buckets <code>nn-backups-&lt;project&gt;</code> isolés ; <code>exec -T postgres-backup</code> est le pattern existant prouvé (le snapshot l'utilise déjà, <code>--wait</code> ne bloque pas sur un service sans healthcheck) ; pagination bornée par la rétention 30 j ; <code>set -u</code>/PASSPHRASE défaultés par l'image (prouvé : <code>backup.sh</code> tourne déjà).</li>
+</ul>
+</div>
+
+<div class="todo">
+<strong>Limites connues (non bloquantes)</strong>
+<ul>
+<li><strong>Restore partiel</strong> : si <code>pg_restore</code> échoue en cours (disque plein, coupure) après avoir créé ≥1 table, le gate <code>count&gt;0</code> passe alors que le schéma est incomplet. Probabilité faible (restore d'un petit dump quasi-atomique) ; le migrate suivant échouerait sur un schéma cassé, ce qui le surfacerait. Pour données critiques : <code>external</code> ou wal-g (PITR).</li>
+<li><strong>Fenêtre DR 30 j</strong> : un VPS détruit puis reconstruit &gt;30 j plus tard a vu ses dumps purgés par l'âge → démarre vide. OK pour VPS jetables redéployés vite ; sinon allonger <code>BACKUP_KEEP_DAYS</code> (attention au plafond ~1000 objets de l'image).</li>
+<li><strong>GFS dormant</strong> : <code>selectPostgresBackupsToPrune</code> (7j/4sem/3mois) reste du code non câblé — la rétention réellement appliquée est l'âge plat 30 j de l'image. Réservé à un futur prune planifié.</li>
+</ul>
+</div>
+
 </body>
 </html>

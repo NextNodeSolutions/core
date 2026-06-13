@@ -4,6 +4,7 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 import { executeMigrate, executeSnapshot } from './migrate.ts'
 import { freshProvision, resumeFromState } from './provision/ensure-infra.ts'
+import { executeAutoRestore } from './restore.ts'
 import { openVpsSession, runDeploy, runPrepareRollout } from './rollout.ts'
 import { readState } from './state/read-write.ts'
 import { runHetznerTeardown } from './teardown.ts'
@@ -16,6 +17,10 @@ import type {
 	UserServiceConfig,
 } from '#/config/types.ts'
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
+import type {
+	AutoRestoreInput,
+	AutoRestoreResult,
+} from '#/domain/deploy/auto-restore.ts'
 import type { VpsResourceOutcome } from '#/domain/deploy/resource-outcome.ts'
 import type {
 	DeployEnv,
@@ -215,6 +220,15 @@ export class HetznerVpsTarget implements DeployTarget {
 		const session = await openVpsSession(this.rolloutContext())
 		try {
 			return await executeSnapshot(session, input)
+		} finally {
+			session.close()
+		}
+	}
+
+	async runAutoRestore(input: AutoRestoreInput): Promise<AutoRestoreResult> {
+		const session = await openVpsSession(this.rolloutContext())
+		try {
+			return await executeAutoRestore(session, input)
 		} finally {
 			session.close()
 		}

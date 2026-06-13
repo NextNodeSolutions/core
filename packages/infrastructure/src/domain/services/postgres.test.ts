@@ -173,7 +173,7 @@ describe('buildPostgresBackupSidecar', () => {
 		expect(sidecar?.environment['S3_PREFIX']).toBe(POSTGRES_BACKUP_PREFIX)
 	})
 
-	it('runs the dump on the canonical daily schedule with retention disabled (handled separately)', () => {
+	it('runs the dump on the hourly schedule with a 30-day age retention', () => {
 		const sidecarValue = buildPostgresBackupSidecar(
 			{
 				mode: 'embedded',
@@ -184,7 +184,8 @@ describe('buildPostgresBackupSidecar', () => {
 		expect(sidecarValue?.environment['SCHEDULE']).toBe(
 			POSTGRES_BACKUP_SCHEDULE,
 		)
-		expect(sidecarValue?.environment['BACKUP_KEEP_DAYS']).toBe('0')
+		expect(POSTGRES_BACKUP_SCHEDULE).toBe('@hourly')
+		expect(sidecarValue?.environment['BACKUP_KEEP_DAYS']).toBe('30')
 	})
 
 	it('connects to the in-network postgres sidecar with the project-scoped role+db', () => {

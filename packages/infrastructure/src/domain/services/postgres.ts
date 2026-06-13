@@ -154,11 +154,36 @@ export function buildPostgresExternalEnv(databaseUrl: string): ServiceEnv {
 export const POSTGRES_BACKUP_SERVICE_NAME = 'postgres-backup'
 
 /**
- * Cron schedule string consumed by the backup image. `@daily` runs once
- * per day at 00:00 UTC inside the sidecar. Plenty granular for the MVP;
- * a config field for it would be premature.
+ * Cron schedule string consumed by the backup image. `@hourly` runs once
+ * per hour inside the sidecar, capping the worst-case data loss (RPO) on a
+ * disposable VPS at ~1h instead of ~24h. The dumps are cheap (a small
+ * embedded DB compresses to KB-MB), so the higher cadence does not strain
+ * storage. Projects with large, write-heavy databases should move to
+ * `[services.postgres].mode = "external"` (managed DB, owns its own
+ * backups). Pairs with auto-restore: a freshly re-provisioned VPS
+ * rehydrates from the latest of these dumps before migrate runs (see
+ * `domain/deploy/auto-restore.ts`).
  */
-export const POSTGRES_BACKUP_SCHEDULE = '@daily'
+export const POSTGRES_BACKUP_SCHEDULE = '@hourly'
+
+/**
+ * Age-based retention the backup image enforces itself: after each
+ * successful upload, `backup.sh` deletes every dump older than this many
+ * days. Despite the `KEEP_DAYS` name, `'0'` does NOT disable pruning - the
+ * image guards with `[ -n "$BACKUP_KEEP_DAYS" ]`, so `'0'` is a non-empty
+ * (truthy) string and prunes everything older than *today*, leaving barely
+ * a day of history. We set a real window instead: 30 days of hourly dumps
+ * is ~720 objects, comfortably under the image's single-page (non-
+ * paginated) `s3api list-objects` prune scan of ~1000, so every stale dump
+ * is actually swept rather than silently surviving past the first page. The
+ * SAME ~1000 cap applies to `restore.sh`'s latest-dump lookup (`aws s3 ls |
+ * sort | tail -n1`, also non-paginated), so this window keeps auto-restore
+ * correct too: with the object count held under 1000, `tail` always sees the
+ * genuine newest dump. This is the ENFORCED retention; the richer GFS
+ * `selectPostgresBackupsToPrune` helper is reserved for a future scheduled
+ * prune and is not wired today.
+ */
+export const POSTGRES_BACKUP_KEEP_DAYS = '30'
 
 /**
  * R2 bucket name for the project's postgres dumps. The bucket is project-
@@ -460,7 +485,7 @@ export function buildPostgresBackupSidecar(
 		depends_on: [POSTGRES_SIDECAR_SERVICE_NAME],
 		environment: {
 			SCHEDULE: POSTGRES_BACKUP_SCHEDULE,
-			BACKUP_KEEP_DAYS: '0',
+			BACKUP_KEEP_DAYS: POSTGRES_BACKUP_KEEP_DAYS,
 			S3_REGION: 'auto',
 			S3_ACCESS_KEY_ID: '${R2_ACCESS_KEY_ID}',
 			S3_SECRET_ACCESS_KEY: '${R2_SECRET_ACCESS_KEY}',

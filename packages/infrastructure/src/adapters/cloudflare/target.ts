@@ -16,6 +16,10 @@ import { provisionProject } from './pages/project.ts'
 import { teardownPagesDns, teardownProject } from './teardown-pages.ts'
 
 import type {
+	AutoRestoreInput,
+	AutoRestoreResult,
+} from '#/domain/deploy/auto-restore.ts'
+import type {
 	DeployEnv,
 	DeployInput,
 	DeployResult,
@@ -185,6 +189,13 @@ export class CloudflarePagesTarget implements DeployTarget {
 		void input
 		throw new Error(
 			`runPreMigrateSnapshot is not applicable to ${this.name}: there is no embedded postgres sidecar to snapshot. Configure a container-based target if your app needs a postgres backup step.`,
+		)
+	}
+
+	runAutoRestore(input: AutoRestoreInput): Promise<AutoRestoreResult> {
+		void input
+		throw new Error(
+			`runAutoRestore is not applicable to ${this.name}: there is no embedded postgres to rehydrate. Configure a container-based target if your app needs auto-restore.`,
 		)
 	}
 

@@ -368,8 +368,8 @@ describe('renderComposeFile', () => {
 			restart: 'unless-stopped',
 			depends_on: ['postgres'],
 			environment: {
-				SCHEDULE: '@daily',
-				BACKUP_KEEP_DAYS: '0',
+				SCHEDULE: '@hourly',
+				BACKUP_KEEP_DAYS: '30',
 				S3_REGION: 'auto',
 				S3_ACCESS_KEY_ID: '${R2_ACCESS_KEY_ID}',
 				S3_SECRET_ACCESS_KEY: '${R2_SECRET_ACCESS_KEY}',
