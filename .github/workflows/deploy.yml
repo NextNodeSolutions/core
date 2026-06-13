@@ -79,6 +79,16 @@ jobs:
         name: Provision
         needs: [plan, quality]
         runs-on: ubuntu-latest
+        # `ensureGeneratedSecrets` skips regeneration only when the secret is
+        # already present in `ALL_SECRETS` (toJSON(secrets) of THIS job). The
+        # generated values are pushed as env-scoped secrets, so provision must
+        # bind to the environment AND receive ALL_SECRETS to see them on a
+        # re-run - otherwise it regenerates and re-pushes every generated
+        # secret on every provision, rotating e.g. BETTER_AUTH_SECRET and
+        # invalidating live sessions (the opposite of the idempotent,
+        # non-rotating contract `ensureGeneratedSecrets` documents).
+        environment:
+            name: ${{ inputs.environment }}
         steps:
             - uses: NextNodeSolutions/core/.github/actions/setup@main
               with:
@@ -115,6 +125,9 @@ jobs:
                   R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
                   R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
                   GH_TOKEN: ${{ steps.app-token.outputs.token }}
+                  # Lets ensureGeneratedSecrets see already-generated secrets
+                  # and skip regeneration (idempotent, non-rotating).
+                  ALL_SECRETS: ${{ toJSON(secrets) }}
 
     dns:
         name: DNS
@@ -199,6 +212,15 @@ jobs:
         # a schema actually exists.
         if: ${{ !cancelled() && !failure() && needs.plan.outputs.has_postgres == 'true' }}
         runs-on: ubuntu-latest
+        # migrate-remote renders the SAME per-service `.env` as deploy
+        # (resolveDeployContext → pickSecrets over the full `[deploy].secrets`
+        # pool), so it needs the project's Environment secrets in
+        # `toJSON(secrets)`. GitHub only injects env-scoped secrets into a job
+        # that declares `environment:` - without this the migrate of any
+        # postgres-backed project with env-scoped secrets throws
+        # "declared in deploy.secrets but not found in GitHub Secrets".
+        environment:
+            name: ${{ inputs.environment }}
         steps:
             - uses: NextNodeSolutions/core/.github/actions/setup@main
               with:
