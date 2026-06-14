@@ -14,6 +14,7 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 import { writeObservabilityFiles } from './observability-rollout.ts'
 import { writePostgresExporterFiles } from './postgres-exporter-rollout.ts'
+import { writePostgresWalgBuildContext } from './postgres-walg-build-context.ts'
 import { shellEscape } from './ssh/shell-escape.ts'
 
 import type {
@@ -197,12 +198,21 @@ export async function stageRollout(
 		await writeObservabilityFiles(session, envDir, input)
 	}
 	await writePostgresExporterFiles(session, envDir, input)
+	// Embedded postgres builds its image (postgres + wal-g) on the VPS from this
+	// shipped context - no registry pull. The base postgres:18 is public.
+	if (input.postgres?.mode === 'embedded') {
+		await writePostgresWalgBuildContext(session, envDir)
+	}
 
 	if (input.registryToken !== undefined) {
 		await loginToRegistries(session, input, input.registryToken)
 	}
 
-	await session.exec(`docker compose -p ${siloIdQ} -f ${composeFileQ} pull`)
+	// `--ignore-buildable` skips the buildable postgres+wal-g services (no
+	// registry image to pull); their image is built at bring-up time.
+	await session.exec(
+		`docker compose -p ${siloIdQ} -f ${composeFileQ} pull --ignore-buildable`,
+	)
 
 	await bringUpDb(session, {
 		projectName: input.projectName,
@@ -327,7 +337,7 @@ export async function bringUpDb(
 	const composeFileQ = shellEscape(composeFile)
 
 	await session.exec(
-		`docker compose -p ${siloIdQ} -f ${composeFileQ} up -d --wait --wait-timeout ${String(POSTGRES_WAIT_TIMEOUT_SECONDS)} ${POSTGRES_SIDECAR_SERVICE_NAME}`,
+		`docker compose -p ${siloIdQ} -f ${composeFileQ} up -d --build --wait --wait-timeout ${String(POSTGRES_WAIT_TIMEOUT_SECONDS)} ${POSTGRES_SIDECAR_SERVICE_NAME}`,
 	)
 }
 
@@ -358,7 +368,7 @@ export async function bringUpApp(
 	const composeFileQ = shellEscape(composeFile)
 
 	await session.exec(
-		`docker compose -p ${siloIdQ} -f ${composeFileQ} up -d --remove-orphans`,
+		`docker compose -p ${siloIdQ} -f ${composeFileQ} up -d --build --remove-orphans`,
 	)
 }
 

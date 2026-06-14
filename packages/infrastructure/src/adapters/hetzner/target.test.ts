@@ -966,7 +966,7 @@ describe('HetznerVpsTarget', () => {
 				expect.stringContaining('pull'),
 			)
 			expect(mockSession.exec).toHaveBeenCalledWith(
-				expect.stringContaining('up -d --remove-orphans'),
+				expect.stringContaining('up -d --build --remove-orphans'),
 			)
 		})
 

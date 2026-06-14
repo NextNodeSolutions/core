@@ -89,7 +89,7 @@ describe('bringUpDb', () => {
 		await bringUpDb(session, BASE_INPUT)
 
 		expect(session.exec).toHaveBeenCalledExactlyOnceWith(
-			"docker compose -p 'acme-web-production' -f '/opt/apps/acme-web/production/compose.yaml' up -d --wait --wait-timeout 60 postgres",
+			"docker compose -p 'acme-web-production' -f '/opt/apps/acme-web/production/compose.yaml' up -d --build --wait --wait-timeout 60 postgres",
 		)
 	})
 
@@ -134,7 +134,7 @@ describe('bringUpApp', () => {
 		await bringUpApp(noPg, { ...BASE_INPUT, postgres: undefined })
 
 		const expected =
-			"docker compose -p 'acme-web-production' -f '/opt/apps/acme-web/production/compose.yaml' up -d --remove-orphans"
+			"docker compose -p 'acme-web-production' -f '/opt/apps/acme-web/production/compose.yaml' up -d --build --remove-orphans"
 		expect(withPg.exec).toHaveBeenCalledExactlyOnceWith(expected)
 		expect(noPg.exec).toHaveBeenCalledExactlyOnceWith(expected)
 	})

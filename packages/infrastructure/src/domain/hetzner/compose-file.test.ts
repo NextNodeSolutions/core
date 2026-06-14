@@ -323,7 +323,8 @@ describe('renderComposeFile', () => {
 		)
 
 		expect(parsed.services.postgres).toEqual({
-			image: 'ghcr.io/nextnodesolutions/postgres-walg:18',
+			image: 'nextnode-postgres-walg:18',
+			build: { context: './postgres-walg' },
 			restart: 'unless-stopped',
 			env_file: ['.env'],
 			volumes: [
@@ -373,9 +374,10 @@ describe('renderComposeFile', () => {
 			),
 		)
 
-		expect(parsed.services.postgres.image).toBe(
-			'ghcr.io/nextnodesolutions/postgres-walg:18',
-		)
+		expect(parsed.services.postgres.image).toBe('nextnode-postgres-walg:18')
+		expect(parsed.services.postgres.build).toEqual({
+			context: './postgres-walg',
+		})
 		expect(parsed.services.postgres).not.toHaveProperty('command')
 		expect(parsed.services.postgres).not.toHaveProperty('environment')
 		// Zero backups in dev: no wal-g loop sidecar.
@@ -406,7 +408,8 @@ describe('renderComposeFile', () => {
 		)
 
 		expect(parsed.services['postgres-walg']).toEqual({
-			image: 'ghcr.io/nextnodesolutions/postgres-walg:18',
+			image: 'nextnode-postgres-walg:18',
+			build: { context: './postgres-walg' },
 			restart: 'unless-stopped',
 			depends_on: ['postgres'],
 			command: ['walg-backup-loop.sh'],

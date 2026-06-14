@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-	NEXTNODE_POSTGRES_WALG_IMAGE,
+	POSTGRES_WALG_LOCAL_IMAGE,
 	buildPostgresSidecar,
 	buildPostgresWalgSidecar,
 } from './postgres-walg.ts'
@@ -21,8 +21,9 @@ describe('buildPostgresSidecar', () => {
 
 		expect(sidecar).not.toBeNull()
 		if (sidecar === null) return
-		expect(sidecar.image).toBe(NEXTNODE_POSTGRES_WALG_IMAGE)
-		expect(sidecar.image).toBe('ghcr.io/nextnodesolutions/postgres-walg:18')
+		expect(sidecar.image).toBe(POSTGRES_WALG_LOCAL_IMAGE)
+		expect(sidecar.image).toBe('nextnode-postgres-walg:18')
+		expect(sidecar.build).toEqual({ context: './postgres-walg' })
 		expect(sidecar.restart).toBe('unless-stopped')
 		expect(sidecar.env_file).toEqual(['.env'])
 		expect(sidecar.volumes).toEqual([
@@ -49,7 +50,8 @@ describe('buildPostgresSidecar', () => {
 
 		expect(sidecar).not.toBeNull()
 		if (sidecar === null) return
-		expect(sidecar.image).toBe(NEXTNODE_POSTGRES_WALG_IMAGE)
+		expect(sidecar.image).toBe(POSTGRES_WALG_LOCAL_IMAGE)
+		expect(sidecar.build).toEqual({ context: './postgres-walg' })
 		expect(sidecar.command).toBeUndefined()
 		expect(sidecar.environment).toBeUndefined()
 	})
@@ -95,7 +97,8 @@ describe('buildPostgresWalgSidecar', () => {
 
 		expect(sidecar).not.toBeNull()
 		if (sidecar === null) return
-		expect(sidecar.image).toBe(NEXTNODE_POSTGRES_WALG_IMAGE)
+		expect(sidecar.image).toBe(POSTGRES_WALG_LOCAL_IMAGE)
+		expect(sidecar.build).toEqual({ context: './postgres-walg' })
 		expect(sidecar.restart).toBe('unless-stopped')
 		expect(sidecar.depends_on).toEqual([POSTGRES_SIDECAR_SERVICE_NAME])
 		expect(sidecar.command).toEqual(['walg-backup-loop.sh'])

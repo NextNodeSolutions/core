@@ -10,15 +10,21 @@ import {
 import type { PostgresServiceConfig } from '#/config/types.ts'
 
 /**
- * NextNode fleet postgres image with WAL-G baked in (see images/postgres-walg/).
- * Used for embedded postgres in EVERY environment so dev and prod run identical
- * binaries; WAL archiving + PITR are switched on only in production (see
- * `buildPostgresSidecar`). The wal-g entrypoint is a transparent no-op when
- * `WALG_S3_PREFIX` is unset, so dev behaves exactly like stock postgres. Pinned
- * to `NEXTNODE_POSTGRES_VERSION`; the `:18` tag is published by the
- * `build-postgres-walg` workflow on changes to the image sources.
+ * The postgres+wal-g image (postgres:18 + the wal-g binary, see
+ * images/postgres-walg/) is BUILT ON THE VPS from a context shipped next to
+ * compose - no registry, no pull auth. Used for embedded postgres in EVERY
+ * environment so dev and prod run identical binaries; WAL archiving + PITR are
+ * switched on only in production (see `buildPostgresSidecar`). The local tag
+ * below is the build output; both the server and the backup-loop sidecar
+ * reference it (and carry the same `build:`) so docker builds it exactly once.
  */
-export const NEXTNODE_POSTGRES_WALG_IMAGE = `ghcr.io/nextnodesolutions/postgres-walg:${NEXTNODE_POSTGRES_VERSION}`
+export const POSTGRES_WALG_LOCAL_IMAGE = `nextnode-postgres-walg:${NEXTNODE_POSTGRES_VERSION}`
+
+/** Compose build-context directory, shipped to `<envDir>/postgres-walg/`. */
+export const POSTGRES_WALG_BUILD_DIR = 'postgres-walg'
+
+/** Compose `build:` block - context is relative to the compose file dir. */
+const POSTGRES_WALG_BUILD = { context: `./${POSTGRES_WALG_BUILD_DIR}` }
 
 /**
  * The ACTUAL postgres data directory (PGDATA) inside the container, distinct
@@ -120,8 +126,14 @@ export interface PostgresSidecarHealthcheck {
 	readonly retries: number
 }
 
+export interface PostgresWalgBuild {
+	readonly context: string
+}
+
 export interface PostgresSidecarService {
 	readonly image: string
+	// Build the image on the VPS from the shipped context (no registry).
+	readonly build: PostgresWalgBuild
 	readonly restart: string
 	readonly env_file: ReadonlyArray<string>
 	readonly volumes: ReadonlyArray<string>
@@ -139,7 +151,7 @@ export interface PostgresSidecarService {
  * Returns `null` when `mode = external` - the app talks to a remote DB and no
  * sidecar is needed.
  *
- * Always uses the fleet `postgres+wal-g` image. In production it adds the
+ * Always uses the VPS-built `postgres+wal-g` image. In production it adds the
  * postgres flags enabling continuous WAL archiving to R2 (archive_command =
  * `wal-g wal-push`, archive_timeout caps the RPO) plus the WALG_* + AWS_* env
  * the archive/restore commands need. In dev none of that is set: the wal-g
@@ -155,7 +167,8 @@ export function buildPostgresSidecar(
 
 	const id = postgresProjectIdentifier(projectName)
 	const base: PostgresSidecarService = {
-		image: NEXTNODE_POSTGRES_WALG_IMAGE,
+		image: POSTGRES_WALG_LOCAL_IMAGE,
+		build: POSTGRES_WALG_BUILD,
 		restart: 'unless-stopped',
 		env_file: ['.env'],
 		volumes: [`${POSTGRES_DATA_VOLUME}:${POSTGRES_DATA_DIR}`],
@@ -176,6 +189,7 @@ export function buildPostgresSidecar(
 
 export interface PostgresWalgSidecarService {
 	readonly image: string
+	readonly build: PostgresWalgBuild
 	readonly restart: string
 	readonly depends_on: ReadonlyArray<string>
 	readonly command: ReadonlyArray<string>
@@ -202,7 +216,8 @@ export function buildPostgresWalgSidecar(
 
 	const id = postgresProjectIdentifier(projectName)
 	return {
-		image: NEXTNODE_POSTGRES_WALG_IMAGE,
+		image: POSTGRES_WALG_LOCAL_IMAGE,
+		build: POSTGRES_WALG_BUILD,
 		restart: 'unless-stopped',
 		depends_on: [POSTGRES_SIDECAR_SERVICE_NAME],
 		command: ['walg-backup-loop.sh'],
