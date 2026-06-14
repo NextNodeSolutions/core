@@ -14,6 +14,16 @@
 ARG POSTGRES_VERSION=18
 FROM postgres:${POSTGRES_VERSION}
 
+# wal-g (a Go binary) verifies R2's TLS certificate against the system CA bundle,
+# but the postgres:18 base image ships without `ca-certificates` - so every
+# wal-push / backup-push fails with `x509: certificate signed by unknown
+# authority` and nothing ever lands in R2. Install the bundle (its postinst runs
+# update-ca-certificates, creating /etc/ssl/certs/ca-certificates.crt where Go
+# looks). Reproducibility is unaffected: the wal-g binary stays sha256-pinned.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 # Pinned WAL-G release + sha256, so the image is reproducible and the binary
 # cannot be swapped under us. `wal-g-pg-22.04-amd64` is built against glibc 2.35;
 # postgres:18 (bookworm, glibc 2.36) is backward compatible, so it runs unmodified.
