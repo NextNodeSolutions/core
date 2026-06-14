@@ -1,49 +1,41 @@
 import { writeSummary } from '#/adapters/github/output.ts'
-import {
-	STATE_KEY_PREFIX,
-	readState,
-	vpsNameFromStateKey,
-} from '#/adapters/hetzner/state/read-write.ts'
 import { prunePostgresBackups } from '#/adapters/r2/backup-store.ts'
 import { R2Client } from '#/adapters/r2/client.ts'
 import { requireEnv } from '#/cli/env.ts'
 import { loadR2Runtime } from '#/cli/r2/load-runtime.ts'
+import { tryLoadPostgresBackupCreds } from '#/cli/services/postgres/postgres-backup-creds.ts'
 import { buildPruneBackupsSummary } from '#/domain/deploy/prune-backups-summary.ts'
+import {
+	POSTGRES_BACKUP_STATE_PREFIX,
+	parsePostgresBackupStateKey,
+} from '#/domain/services/postgres-backup.ts'
 import { postgresBackupBucketName } from '#/domain/services/postgres.ts'
 import { NoSuchBucket, S3Client } from '@aws-sdk/client-s3'
 import { createLogger } from '@nextnode-solutions/logger'
 
-import type { StateWithEtag } from '#/adapters/hetzner/state/read-write.ts'
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import type { ProjectPruneOutcome } from '#/domain/deploy/prune-backups-summary.ts'
+import type { AppEnvironment } from '#/domain/environment.ts'
 
 const logger = createLogger()
 
-/**
- * Apply the GFS retention policy to ONE project's pg_dump backup bucket
- * (`<project>-backups-dump`). Reusable from both the on-deploy hook
- * (`migrate-remote`) and the daily cron (`pruneBackupsCommand`).
- *
- * A missing bucket is benign and expected: the fleet is enumerated from the
- * VPS state files, which list every routed project - including non-postgres
- * apps that have no dump bucket. `NoSuchBucket` is reported as `bucketMissing`,
- * not an error; every other failure (AccessDenied, throttling) propagates so a
- * broken prune is never mistaken for a clean one.
- */
-export async function pruneProjectBackups(
-	infraStorage: InfraStorageRuntimeConfig,
+// The "scanned nothing, deleted nothing" outcome - reused for every benign
+// skip (no creds, or a wiped bucket).
+const nothingToPrune = (projectName: string): ProjectPruneOutcome => ({
+	project: projectName,
+	scanned: 0,
+	pruned: 0,
+	bucketMissing: true,
+})
+
+// Run the GFS prune against a resolved bucket, classifying a wiped bucket
+// (`NoSuchBucket`) as benign while letting every other failure propagate so a
+// broken prune is never mistaken for a clean one.
+async function prunePostgresBucket(
+	s3: S3Client,
+	bucket: string,
 	projectName: string,
 ): Promise<ProjectPruneOutcome> {
-	const s3 = new S3Client({
-		region: 'auto',
-		endpoint: infraStorage.endpoint,
-		credentials: {
-			accessKeyId: infraStorage.accessKeyId,
-			secretAccessKey: infraStorage.secretAccessKey,
-		},
-	})
-	const bucket = postgresBackupBucketName(projectName)
-
 	try {
 		const { scanned, pruned } = await prunePostgresBackups(s3, bucket)
 		logger.info(
@@ -53,42 +45,67 @@ export async function pruneProjectBackups(
 	} catch (error) {
 		if (error instanceof NoSuchBucket) {
 			logger.info(
-				`No pg_dump backup bucket "${bucket}" for "${projectName}" - skipping (not a postgres project, or never provisioned).`,
+				`No pg_dump backup bucket "${bucket}" for "${projectName}" - skipping (creds exist but the bucket was wiped).`,
 			)
-			return {
-				project: projectName,
-				scanned: 0,
-				pruned: 0,
-				bucketMissing: true,
-			}
+			return nothingToPrune(projectName)
 		}
 		throw error
 	}
 }
 
-// Union the project names off every VPS state file's hostPorts map (a project
-// holds a host port on the VPS that routes it). Deduped across VPSs; a state
-// object that vanished between list and read (null) is skipped.
-function collectProjectNames(
-	states: ReadonlyArray<StateWithEtag | null>,
-): string[] {
-	const names = new Set<string>()
-	for (const entry of states) {
-		if (entry === null) continue
-		for (const project of Object.keys(entry.state.hostPorts)) {
-			names.add(project)
-		}
+/**
+ * Apply the GFS retention policy to ONE project's pg_dump backup bucket
+ * (`<project>-backups-dump`). Reusable from both the on-deploy hook
+ * (`migrate-remote`) and the daily cron (`pruneBackupsCommand`).
+ *
+ * The dump bucket is reachable ONLY with the per-project backup token (scoped
+ * to `<project>-backups` + `<project>-backups-dump`), the same token the backup
+ * sidecars and `restore` use - NOT the infra state token (state + certs only),
+ * which would return AccessDenied. A project with no persisted backup creds is
+ * benign (a non-postgres app, or one that never provisioned backups): it is
+ * reported as `bucketMissing`. A `NoSuchBucket` (creds exist but the bucket was
+ * wiped) is likewise benign; every other failure propagates so a broken prune
+ * is never mistaken for a clean one.
+ */
+export async function pruneProjectBackups(
+	infraStorage: InfraStorageRuntimeConfig,
+	projectName: string,
+	environment: AppEnvironment,
+): Promise<ProjectPruneOutcome> {
+	const backupCreds = await tryLoadPostgresBackupCreds({
+		infraStorage,
+		projectName,
+		environment,
+	})
+	if (backupCreds === null) {
+		logger.info(
+			`No postgres backup credentials for "${projectName}" (${environment}) - skipping (not a postgres project, or never provisioned).`,
+		)
+		return nothingToPrune(projectName)
 	}
-	return [...names]
+
+	const s3 = new S3Client({
+		region: 'auto',
+		endpoint: backupCreds.endpoint,
+		credentials: {
+			accessKeyId: backupCreds.accessKeyId,
+			secretAccessKey: backupCreds.secretAccessKey,
+		},
+	})
+	return prunePostgresBucket(
+		s3,
+		postgresBackupBucketName(projectName),
+		projectName,
+	)
 }
 
 /**
  * Standalone cron command: prune the pg_dump backups of EVERY project in the
- * fleet under the GFS policy. Enumerates projects from the R2 state files
- * (`hetzner/<vps>.json` -> `hostPorts` keys) so it needs no per-project config
- * and no VPS access - pruning is a pure R2 list+delete with the infra creds.
- * wal-g manages its own bucket's retention, so only the `-dump` buckets are
- * touched here.
+ * fleet under the GFS policy. Enumerates targets from the persisted backup-creds
+ * state objects (`services/postgres-backup/<project>/<environment>.json`) - the
+ * authoritative list of provisioned postgres backups, each carrying both the
+ * project and the environment its dedicated token is scoped to. wal-g manages
+ * its own bucket's retention, so only the `-dump` buckets are touched here.
  */
 export async function pruneBackupsCommand(): Promise<void> {
 	const cfToken = requireEnv('CLOUDFLARE_API_TOKEN')
@@ -100,28 +117,24 @@ export async function pruneBackupsCommand(): Promise<void> {
 		bucket: infraStorage.stateBucket,
 	})
 
-	const stateKeys = await stateR2.listKeys(STATE_KEY_PREFIX)
-	const vpsNames = [
-		...new Set(
-			stateKeys
-				.map(vpsNameFromStateKey)
-				.filter((name): name is string => name !== null),
-		),
-	]
+	const stateKeys = await stateR2.listKeys(POSTGRES_BACKUP_STATE_PREFIX)
+	const targets = stateKeys
+		.map(parsePostgresBackupStateKey)
+		.filter(
+			(target): target is NonNullable<typeof target> => target !== null,
+		)
 	logger.info(
-		`Pruning postgres backups across ${String(vpsNames.length)} VPS state file(s)...`,
-	)
-
-	const states = await Promise.all(
-		vpsNames.map(name => readState(stateR2, name)),
-	)
-	const projectNames = collectProjectNames(states)
-	logger.info(
-		`Considering ${String(projectNames.length)} project(s) for GFS prune.`,
+		`Considering ${String(targets.length)} provisioned postgres backup(s) for GFS prune.`,
 	)
 
 	const outcomes = await Promise.all(
-		projectNames.map(project => pruneProjectBackups(infraStorage, project)),
+		targets.map(target =>
+			pruneProjectBackups(
+				infraStorage,
+				target.projectName,
+				target.environment,
+			),
+		),
 	)
 
 	writeSummary(buildPruneBackupsSummary(outcomes))

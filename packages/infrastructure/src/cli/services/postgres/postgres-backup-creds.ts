@@ -119,6 +119,22 @@ export async function provisionPostgresBackupCreds(
 }
 
 /**
+ * Best-effort load of the backup R2 credentials: returns null when no state
+ * exists for the (project, environment). Lets the fleet prune skip projects
+ * that never provisioned postgres backups (non-postgres apps) without treating
+ * the absence as an error.
+ */
+export async function tryLoadPostgresBackupCreds(
+	input: LoadPostgresBackupCredsInput,
+): Promise<PostgresBackupCredsState | null> {
+	const stateKey = postgresBackupStateKey(
+		input.projectName,
+		input.environment,
+	)
+	return readPostgresBackupState(stateClient(input.infraStorage), stateKey)
+}
+
+/**
  * Deploy/migrate-time load of the backup R2 credentials. Throws on missing
  * state - the operator re-runs provision rather than having deploy self-heal
  * (provision always runs before migrate/deploy in the pipeline).
@@ -126,17 +142,10 @@ export async function provisionPostgresBackupCreds(
 export async function loadPostgresBackupCreds(
 	input: LoadPostgresBackupCredsInput,
 ): Promise<PostgresBackupCredsState> {
-	const stateKey = postgresBackupStateKey(
-		input.projectName,
-		input.environment,
-	)
-	const state = await readPostgresBackupState(
-		stateClient(input.infraStorage),
-		stateKey,
-	)
+	const state = await tryLoadPostgresBackupCreds(input)
 	if (!state) {
 		throw new Error(
-			`postgres backup R2 credentials not found at "${stateKey}" - run provision before deploy`,
+			`postgres backup R2 credentials not found at "${postgresBackupStateKey(input.projectName, input.environment)}" - run provision before deploy`,
 		)
 	}
 	return state
