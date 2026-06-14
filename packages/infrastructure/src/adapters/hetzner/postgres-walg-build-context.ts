@@ -8,13 +8,13 @@ import { shellEscape } from './ssh/shell-escape.ts'
 
 import type { SshSession } from './ssh/session.types.ts'
 
-// images/postgres-walg/ lives at the repo root. Resolve it from THIS source
-// module (not cwd) so the deploy - which runs the .infra checkout source -
-// reads the real build context, and tests read the same files unmocked.
-// hetzner -> adapters -> src -> infrastructure -> packages -> repo root.
+// The build context (Dockerfile + scripts) is co-located with this module, so
+// it ships inside the package and is present in the deploy's (sparse) .infra
+// checkout - resolving via repo-root paths failed there (images/ not checked
+// out). Resolved from THIS source file so the deploy + tests read it unmocked.
 const CONTEXT_DIR = resolve(
 	dirname(fileURLToPath(import.meta.url)),
-	'../../../../../images/postgres-walg',
+	'postgres-walg-context',
 )
 
 const CONTEXT_FILES = [
