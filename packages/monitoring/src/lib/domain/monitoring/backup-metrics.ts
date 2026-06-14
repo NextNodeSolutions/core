@@ -4,7 +4,7 @@ const MS_PER_SECOND = 1000
 
 export interface ProjectBackups {
 	readonly project: string
-	/** null = no backup bucket (project has no embedded postgres). */
+	/** null = no backup bucket (project has no embedded postgres / no wal-g). */
 	readonly objects: ReadonlyArray<BackupObject> | null
 }
 
@@ -33,30 +33,57 @@ const latestEpochSeconds = (
 }
 
 /**
- * Render the Prometheus exposition for backup freshness: one
- * `nn_backup_last_success_timestamp_seconds{project="…"}` sample per
- * project that has at least one dump in its backup bucket. This is the
- * metric the BackupStale rule (> 26 h) alerts on - it closes the
- * "backups silently broken" gap the audit flagged. Projects without a
- * bucket emit nothing; projects with an empty bucket emit nothing either
- * (no successful backup yet - the absence is visible in the dashboard,
- * and alerting on never-backed-up projects is a provisioning concern,
- * not a staleness one).
+ * Render one `<metric>{project="…"} <epoch>` gauge line per project that has at
+ * least one object in its bucket: the newest object's Unix timestamp. Projects
+ * without a bucket (`objects === null`) emit nothing; projects with an empty
+ * bucket emit nothing either (no successful backup yet - the absence is visible
+ * in the dashboard, and alerting on never-backed-up projects is a provisioning
+ * concern, not a staleness one). Shared by the pg_dump and wal-g exporters so
+ * both freshness metrics stay byte-for-byte consistent.
  */
-export const renderBackupMetrics = (
+const renderFreshnessGauge = (
+	metric: string,
+	help: string,
 	projects: ReadonlyArray<ProjectBackups>,
 ): string => {
-	const lines = [
-		'# HELP nn_backup_last_success_timestamp_seconds Unix time of the newest postgres dump in the project backup bucket.',
-		'# TYPE nn_backup_last_success_timestamp_seconds gauge',
-	]
+	const lines = [`# HELP ${metric} ${help}`, `# TYPE ${metric} gauge`]
 	for (const entry of projects) {
 		if (entry.objects === null) continue
 		const epoch = latestEpochSeconds(entry.objects)
 		if (epoch === null) continue
 		lines.push(
-			`nn_backup_last_success_timestamp_seconds{project="${escapeLabelValue(entry.project)}"} ${String(epoch)}`,
+			`${metric}{project="${escapeLabelValue(entry.project)}"} ${String(epoch)}`,
 		)
 	}
 	return `${lines.join('\n')}\n`
 }
+
+/**
+ * Prometheus exposition of pg_dump (logical) backup freshness: the
+ * `nn_backup_last_success_timestamp_seconds` gauge the BackupStale rule alerts
+ * on - it closes the "backups silently broken" gap the audit flagged.
+ */
+export const renderBackupMetrics = (
+	projects: ReadonlyArray<ProjectBackups>,
+): string =>
+	renderFreshnessGauge(
+		'nn_backup_last_success_timestamp_seconds',
+		'Unix time of the newest postgres dump in the project backup bucket.',
+		projects,
+	)
+
+/**
+ * Prometheus exposition of wal-g (physical) base-backup freshness: the
+ * `nn_walg_base_backup_last_success_timestamp_seconds` gauge the
+ * WalgBaseBackupStale (warning) and WalgBaseBackupMissing (critical) rules
+ * alert on. The newest object under `basebackups_005/` is the last successful
+ * `wal-g backup-push`; a stale value means PITR's base anchor is ageing.
+ */
+export const renderWalgBackupMetrics = (
+	projects: ReadonlyArray<ProjectBackups>,
+): string =>
+	renderFreshnessGauge(
+		'nn_walg_base_backup_last_success_timestamp_seconds',
+		'Unix time of the newest wal-g base backup in the project wal-g bucket.',
+		projects,
+	)

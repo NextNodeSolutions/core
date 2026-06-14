@@ -5,7 +5,11 @@ import { signSigV4Request } from '@/lib/domain/aws/sigv4.ts'
 import type { R2StateClient } from '@/lib/adapters/r2/state.ts'
 
 const HTTP_NOT_FOUND = 404
-const BACKUP_PREFIX = 'postgres/'
+
+/** pg_dump logical backups live under this prefix in `nn-backups-<project>`. */
+const PG_DUMP_PREFIX = 'postgres/'
+/** wal-g physical base backups live under this prefix in `nn-walg-<project>`. */
+const WALG_BASE_BACKUP_PREFIX = 'basebackups_005/'
 
 export interface BackupObject {
 	readonly key: string
@@ -26,15 +30,17 @@ const parseListXml = (xml: string): ReadonlyArray<BackupObject> => {
 	return objects
 }
 
-const backupBucketName = (project: string): string => `nn-backups-${project}`
+const pgDumpBucketName = (project: string): string => `nn-backups-${project}`
+const walgBucketName = (project: string): string => `nn-walg-${project}`
 
-const fetchBackupObjects = async (args: {
+const fetchBucketObjects = async (args: {
 	client: R2StateClient
-	project: string
+	bucket: string
+	prefix: string
 }): Promise<ReadonlyArray<BackupObject> | null> => {
 	const host = `${args.client.accountId}.r2.cloudflarestorage.com`
-	const path = `/${backupBucketName(args.project)}`
-	const query = `list-type=2&prefix=${encodeURIComponent(BACKUP_PREFIX)}`
+	const path = `/${args.bucket}`
+	const query = `list-type=2&prefix=${encodeURIComponent(args.prefix)}`
 	const signed = signSigV4Request({
 		accessKeyId: args.client.accessKeyId,
 		secretAccessKey: args.client.secretAccessKey,
@@ -49,12 +55,13 @@ const fetchBackupObjects = async (args: {
 	})
 
 	const response = await fetch(signed.url, { headers: signed.headers })
-	// No backup bucket = the project has no embedded postgres - an
-	// answer, not an error.
+	// No such bucket = the project has no embedded postgres (for the dump
+	// bucket) or no wal-g archiving (for the walg bucket) - an answer, not an
+	// error. A bucket-scoped token also returns 404 for an out-of-scope bucket.
 	if (response.status === HTTP_NOT_FOUND) return null
 	if (!response.ok) {
 		throw new R2StateApiFailure(
-			`r2-backups list ${backupBucketName(args.project)}`,
+			`r2-backups list ${args.bucket}`,
 			response.status,
 			await response.text(),
 		)
@@ -62,23 +69,42 @@ const fetchBackupObjects = async (args: {
 	return parseListXml(await response.text())
 }
 
-// The freshness alert fires after 26h of silence; one listing per 5 min
-// per project keeps the signal fresh at negligible R2 cost.
+// The freshness alerts fire after hours of silence; one listing per 5 min
+// per bucket keeps the signal fresh at negligible R2 cost.
 const BACKUPS_TTL_MS = 300_000
 
-const memoizedListBackupObjects = keyedMemoizeAsync(
+const memoizedFetchBucketObjects = keyedMemoizeAsync(
 	BACKUPS_TTL_MS,
-	(args: { client: R2StateClient; project: string }) =>
-		`${args.client.accountId} ${args.project}`,
-	fetchBackupObjects,
+	(args: { client: R2StateClient; bucket: string; prefix: string }) =>
+		`${args.client.accountId} ${args.bucket} ${args.prefix}`,
+	fetchBucketObjects,
 )
 
 /**
- * List the postgres dump objects of a project's backup bucket; null when
- * the bucket does not exist (no embedded postgres).
+ * List the pg_dump objects of a project's logical-backup bucket; null when the
+ * bucket does not exist (no embedded postgres).
  */
 export const listBackupObjects = (
 	client: R2StateClient,
 	project: string,
 ): Promise<ReadonlyArray<BackupObject> | null> =>
-	memoizedListBackupObjects({ client, project })
+	memoizedFetchBucketObjects({
+		client,
+		bucket: pgDumpBucketName(project),
+		prefix: PG_DUMP_PREFIX,
+	})
+
+/**
+ * List the wal-g base-backup objects of a project's wal-g bucket; null when the
+ * bucket does not exist (no wal-g archiving, e.g. a non-production project).
+ * The newest object's timestamp is the last successful `wal-g backup-push`.
+ */
+export const listWalgBaseBackupObjects = (
+	client: R2StateClient,
+	project: string,
+): Promise<ReadonlyArray<BackupObject> | null> =>
+	memoizedFetchBucketObjects({
+		client,
+		bucket: walgBucketName(project),
+		prefix: WALG_BASE_BACKUP_PREFIX,
+	})

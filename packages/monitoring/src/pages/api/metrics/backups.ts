@@ -1,9 +1,15 @@
 import { ENV_KEYS, requireEnv } from '@/lib/adapters/env.ts'
 import { runExpositionEndpoint } from '@/lib/adapters/exposition-response.ts'
-import { listBackupObjects } from '@/lib/adapters/r2/backups.ts'
+import {
+	listBackupObjects,
+	listWalgBaseBackupObjects,
+} from '@/lib/adapters/r2/backups.ts'
 import { getVpsState } from '@/lib/adapters/r2/state.ts'
 import { listTaggedDevices } from '@/lib/adapters/tailscale/devices.ts'
-import { renderBackupMetrics } from '@/lib/domain/monitoring/backup-metrics.ts'
+import {
+	renderBackupMetrics,
+	renderWalgBackupMetrics,
+} from '@/lib/domain/monitoring/backup-metrics.ts'
 import { CLIENT_VPS_TAG } from '@/lib/domain/monitoring/sd-targets.ts'
 
 import type { APIRoute } from 'astro'
@@ -38,19 +44,29 @@ const listClientProjects = async (
 /**
  * Prometheus exposition of backup freshness per project, scraped by the
  * vmagent `backups` job. The "push" sample the PRD describes is realised
- * as a pull: the control plane lists each project's backup bucket and
- * exposes the newest dump's timestamp - no backup-container change, no
- * write credential anywhere new.
+ * as a pull: the control plane lists each project's backup buckets and
+ * exposes the newest object's timestamp - no backup-container change, no
+ * write credential anywhere new. Two metric families are emitted from the
+ * same endpoint: pg_dump (logical) freshness and wal-g (physical base
+ * backup) freshness, each alerted on independently by vmalert.
  */
 export const GET: APIRoute = () =>
 	runExpositionEndpoint('metrics.backups', async () => {
 		const client = resolveStateClient()
 		const projects = await listClientProjects(client)
-		const entries = await Promise.all(
-			projects.map(async project => ({
-				project,
-				objects: await listBackupObjects(client, project),
-			})),
-		)
-		return renderBackupMetrics(entries)
+		const [dumpEntries, walgEntries] = await Promise.all([
+			Promise.all(
+				projects.map(async project => ({
+					project,
+					objects: await listBackupObjects(client, project),
+				})),
+			),
+			Promise.all(
+				projects.map(async project => ({
+					project,
+					objects: await listWalgBaseBackupObjects(client, project),
+				})),
+			),
+		])
+		return `${renderBackupMetrics(dumpEntries)}${renderWalgBackupMetrics(walgEntries)}`
 	})
