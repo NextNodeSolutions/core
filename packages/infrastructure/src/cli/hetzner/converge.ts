@@ -73,6 +73,14 @@ export async function converge(
 	// cAdvisor: write the TS_IP env file the golden-image unit reads,
 	// then (re)enable it. `enable --now` is idempotent; a changed IP
 	// (VPS recreation) needs the restart to re-bind the publish address.
+	//
+	// Create /etc/monitoring defensively (owned by `deploy` so the sftp write
+	// below succeeds): the golden image does this, but VPSes provisioned from an
+	// image predating that step lack the directory and the write would fail with
+	// "No such file". Idempotent on a current golden image.
+	await session.exec(
+		'sudo mkdir -p /etc/monitoring && sudo chown deploy:deploy /etc/monitoring',
+	)
 	const monitoringEnvChanged = await pushFileIfChanged(
 		session,
 		MONITORING_ENV_PATH,

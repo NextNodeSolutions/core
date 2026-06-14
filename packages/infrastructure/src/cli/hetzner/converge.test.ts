@@ -65,6 +65,18 @@ describe('converge', () => {
 		expect(files.get('/etc/caddy/config.json')).toBe(CADDY_CONFIG)
 	})
 
+	it('creates /etc/monitoring (deploy-owned) before writing the env file', async () => {
+		const files = new Map<string, string>()
+		const session = createFakeSession(files)
+
+		await converge(session, makeInput())
+
+		expect(session.execCalls).toContain(
+			'sudo mkdir -p /etc/monitoring && sudo chown deploy:deploy /etc/monitoring',
+		)
+		expect(files.get('/etc/monitoring/env')).toBe('TS_IP=100.64.0.9\n')
+	})
+
 	it('restarts vector when toml changes', async () => {
 		const files = new Map<string, string>([
 			['/etc/vector/vector.toml', 'old-toml'],
