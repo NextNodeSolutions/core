@@ -32,9 +32,11 @@ import type { MigrateInput } from '#/domain/deploy/target.ts'
  *
  * No pre-migrate snapshot is taken: continuous WAL archiving (archive_command,
  * RPO <=180s) plus the periodic base backups already capture the pre-migration
- * state, and `infrastructure restore --at <ts>` can PITR to just before the
- * migration if it needs rolling back. Skipped (early-exit) when the project
- * does not declare `[services.postgres]`.
+ * state for a wal-g point-in-time recovery (operator-run, a separate follow-up,
+ * not this command). NOTE: `infrastructure restore --at <ts>` is the pg_dump
+ * LOGICAL restore - it replays the closest daily dump on the VPS, it is NOT a
+ * WAL-G PITR. Skipped (early-exit) when the project does not declare
+ * `[services.postgres]`.
  */
 export async function migrateRemoteCommand(
 	config: DeployableConfig,

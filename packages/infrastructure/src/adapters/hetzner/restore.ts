@@ -112,6 +112,61 @@ export function buildLatestRestoreCommand(ref: RestoreTargetRef): string {
 }
 
 /**
+ * Pure command builder. Renders the docker compose invocation that restores
+ * ONE specific R2 dump (by its timestamp) into the embedded database via the
+ * backup sidecar:
+ *
+ *   docker compose -p <silo> -f <composeFile> exec -T postgres-backup sh restore.sh <timestamp>
+ *
+ * The solectrus/eeshugerman image's `restore.sh` takes an optional timestamp
+ * argument that selects the dump `<db>_<timestamp>.dump` (no argument = latest,
+ * see `buildLatestRestoreCommand`). `<timestamp>` is the exact key segment the
+ * sidecar wrote (`%Y-%m-%dT%H:%M:%S`, colons, no `Z`) - the operator `restore`
+ * command derives it from the snapshot selected for `--at`. `exec -T` reuses
+ * the running `postgres-backup` container (R2 creds + POSTGRES_* env in place);
+ * `restore.sh` downloads that dump and runs `pg_restore --clean --if-exists`.
+ * Destructive - the cli command gates on the explicit `--yes` first.
+ */
+export function buildRestoreAtCommand(
+	ref: RestoreTargetRef,
+	timestamp: string,
+): string {
+	const silo = computeSilo(ref.projectName, ref.environment)
+
+	return [
+		'docker',
+		'compose',
+		'-p',
+		shellEscape(silo.id),
+		'-f',
+		shellEscape(composeFilePath(ref)),
+		'exec',
+		'-T',
+		POSTGRES_BACKUP_SERVICE_NAME,
+		'sh',
+		'restore.sh',
+		shellEscape(timestamp),
+	].join(' ')
+}
+
+/**
+ * Restore a specific R2 dump (by timestamp) into the database via the backup
+ * sidecar over SSH. Failure modes (non-zero exit, transport error) propagate
+ * from `session.exec`, so a failed restore surfaces rather than silently
+ * leaving the database half-restored.
+ */
+export async function executeRestoreAt(
+	session: SshSession,
+	ref: RestoreTargetRef,
+	timestamp: string,
+): Promise<void> {
+	logger.info(
+		`Restoring dump ${timestamp} into "${ref.projectName}" (${ref.environment}) via the backup sidecar`,
+	)
+	await session.exec(buildRestoreAtCommand(ref, timestamp))
+}
+
+/**
  * Probe the live database for its user-table count over SSH. `session.exec`
  * resolves with stdout only (psql NOTICEs go to stderr), so the returned
  * string is the bare integer the domain parser validates. A non-zero psql

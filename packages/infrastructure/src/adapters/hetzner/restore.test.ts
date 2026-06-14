@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 
 import {
 	buildLatestRestoreCommand,
+	buildRestoreAtCommand,
 	buildTableCountCommand,
 	executeAutoRestore,
 	executeLatestRestore,
+	executeRestoreAt,
 	probeUserTableCount,
 } from './restore.ts'
 import { shellEscape } from './ssh/shell-escape.ts'
@@ -62,6 +64,35 @@ describe('buildLatestRestoreCommand', () => {
 				" -f '/opt/apps/acme-web/production/compose.yaml'" +
 				' exec -T postgres-backup sh restore.sh',
 		)
+	})
+})
+
+describe('buildRestoreAtCommand', () => {
+	it('execs restore.sh with the dump timestamp in the running backup sidecar', () => {
+		expect(buildRestoreAtCommand(REF, '2026-05-16T03:00:00')).toBe(
+			"docker compose -p 'acme-web-production'" +
+				" -f '/opt/apps/acme-web/production/compose.yaml'" +
+				" exec -T postgres-backup sh restore.sh '2026-05-16T03:00:00'",
+		)
+	})
+
+	it('shell-escapes the timestamp so it cannot inject extra arguments', () => {
+		expect(
+			buildRestoreAtCommand(REF, '2026-05-16T03:00:00; rm -rf /'),
+		).toContain(shellEscape('2026-05-16T03:00:00; rm -rf /'))
+	})
+})
+
+describe('executeRestoreAt', () => {
+	it('issues the timestamped restore command it built', async () => {
+		let seen = ''
+		const session = stubSession(command => {
+			seen = command
+			return Promise.resolve('')
+		})
+
+		await executeRestoreAt(session, REF, '2026-05-16T03:00:00')
+		expect(seen).toBe(buildRestoreAtCommand(REF, '2026-05-16T03:00:00'))
 	})
 })
 
