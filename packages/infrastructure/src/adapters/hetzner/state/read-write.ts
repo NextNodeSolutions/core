@@ -58,8 +58,26 @@ function rethrowIfEtagMismatch(error: unknown, vpsName: string): void {
 	}
 }
 
+/** Key prefix every VPS state object lives under in the state bucket. */
+export const STATE_KEY_PREFIX = 'hetzner/'
+const STATE_KEY_SUFFIX = '.json'
+
 export function stateKey(vpsName: string): string {
-	return `hetzner/${vpsName}.json`
+	return `${STATE_KEY_PREFIX}${vpsName}${STATE_KEY_SUFFIX}`
+}
+
+/**
+ * Inverse of {@link stateKey}: recover the VPS name from a state object key, or
+ * `null` for a key that is not a `hetzner/<vps>.json` state object (e.g. a
+ * folder marker). Used by the backup-prune cron to enumerate the fleet from the
+ * state bucket without a per-project config.
+ */
+export function vpsNameFromStateKey(key: string): string | null {
+	if (!key.startsWith(STATE_KEY_PREFIX) || !key.endsWith(STATE_KEY_SUFFIX)) {
+		return null
+	}
+	const name = key.slice(STATE_KEY_PREFIX.length, -STATE_KEY_SUFFIX.length)
+	return name.length > 0 ? name : null
 }
 
 function requireBase(

@@ -68,9 +68,19 @@ import { migrateRemoteCommand } from './migrate-remote.command.ts'
 // through assertable spies. With wal-g, the pre-migrate auto-restore + snapshot
 // are gone (restore happens in the postgres image entrypoint; continuity is
 // continuous WAL archiving), so the command is just prepareRollout -> migrate.
-const { mockPrepareRollout, mockRunMigrate } = vi.hoisted(() => ({
-	mockPrepareRollout: vi.fn(),
-	mockRunMigrate: vi.fn(),
+const { mockPrepareRollout, mockRunMigrate, mockPruneProjectBackups } =
+	vi.hoisted(() => ({
+		mockPrepareRollout: vi.fn(),
+		mockRunMigrate: vi.fn(),
+		mockPruneProjectBackups: vi.fn(),
+	}))
+
+// Mock the on-deploy GFS prune (network boundary: R2 list+delete). The prune
+// itself is covered in prune-backups + backup-store tests; here we only assert
+// migrate-remote invokes it after a successful migrate, never before.
+vi.mock('./prune-backups.ts', () => ({
+	pruneProjectBackups: mockPruneProjectBackups,
+	pruneBackupsCommand: vi.fn(),
 }))
 
 // Mock loadR2Runtime (network boundary: Cloudflare accounts API + SigV4
@@ -162,6 +172,12 @@ describe('migrateRemoteCommand', () => {
 
 		mockPrepareRollout.mockResolvedValue(undefined)
 		mockRunMigrate.mockResolvedValue(MIGRATE_RESULT)
+		mockPruneProjectBackups.mockResolvedValue({
+			project: 'my-app',
+			scanned: 0,
+			pruned: 0,
+			bucketMissing: false,
+		})
 	})
 
 	afterEach(() => {
@@ -169,6 +185,7 @@ describe('migrateRemoteCommand', () => {
 		vi.unstubAllEnvs()
 		mockPrepareRollout.mockReset()
 		mockRunMigrate.mockReset()
+		mockPruneProjectBackups.mockReset()
 	})
 
 	it('runs prepareRollout with the resolved env+input when postgres is configured', async () => {
@@ -280,6 +297,36 @@ describe('migrateRemoteCommand', () => {
 
 		expect(mockPrepareRollout).toHaveBeenCalledOnce()
 		expect(mockRunMigrate).toHaveBeenCalledOnce()
+	})
+
+	it('prunes the pg_dump bucket AFTER a successful migrate (embedded)', async () => {
+		await migrateRemoteCommand(APP_WITH_POSTGRES)
+
+		expect(mockPruneProjectBackups).toHaveBeenCalledExactlyOnceWith(
+			expect.objectContaining({ stateBucket: 'nextnode-state' }),
+			'my-app',
+		)
+		const [migrateOrder] = mockRunMigrate.mock.invocationCallOrder
+		const [pruneOrder] = mockPruneProjectBackups.mock.invocationCallOrder
+		if (migrateOrder === undefined || pruneOrder === undefined) {
+			expect.unreachable('both spies should have been called once')
+		}
+		expect(pruneOrder).toBeGreaterThan(migrateOrder)
+	})
+
+	it('does NOT prune for external postgres (no NextNode-owned dump bucket)', async () => {
+		await migrateRemoteCommand(APP_WITH_POSTGRES_EXTERNAL)
+
+		expect(mockPruneProjectBackups).not.toHaveBeenCalled()
+	})
+
+	it('does NOT prune when prepareRollout fails (migrate never ran)', async () => {
+		mockPrepareRollout.mockRejectedValueOnce(new Error('db unhealthy'))
+
+		await expect(migrateRemoteCommand(APP_WITH_POSTGRES)).rejects.toThrow(
+			'db unhealthy',
+		)
+		expect(mockPruneProjectBackups).not.toHaveBeenCalled()
 	})
 
 	it('is a no-op when [services.postgres] is absent', async () => {

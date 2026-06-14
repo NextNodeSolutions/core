@@ -9,6 +9,7 @@ import { buildMigrateSummary } from '#/domain/deploy/migrate-summary.ts'
 import { resolveMigrationServiceName } from '#/domain/deploy/migration-service.ts'
 import { DEFAULT_MIGRATE_COMMAND } from '#/domain/deploy/target.ts'
 
+import { pruneProjectBackups } from './prune-backups.ts'
 import { resolveDeployContext } from './resolve-deploy-context.ts'
 
 import type { DeployableConfig } from '#/config/types.ts'
@@ -46,7 +47,7 @@ export async function migrateRemoteCommand(
 		return
 	}
 
-	const { target, env, input, environment } =
+	const { target, env, input, environment, infraStorage } =
 		await resolveDeployContext(config)
 
 	if (!isHetznerDeployableConfig(config) || !input.images) {
@@ -72,6 +73,13 @@ export async function migrateRemoteCommand(
 	logger.info(
 		`Migration applied for "${config.project.name}" in ${migrateResult.durationMs}ms`,
 	)
+
+	// Belt-and-suspenders GFS prune of the pg_dump bucket on every deploy, so
+	// retention holds even between daily cron runs. Embedded-only: external mode
+	// has no NextNode-owned dump bucket. wal-g manages its own retention.
+	if (postgres.mode === 'embedded' && infraStorage !== null) {
+		await pruneProjectBackups(infraStorage, config.project.name)
+	}
 
 	writeSummary(
 		buildMigrateSummary({

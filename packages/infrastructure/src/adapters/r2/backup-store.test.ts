@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
 	downloadPostgresBackup,
 	listPostgresBackupSnapshots,
+	prunePostgresBackups,
 	wipePostgresBackups,
 } from './backup-store.ts'
 
@@ -147,9 +148,96 @@ describe('wipePostgresBackups', () => {
 	})
 })
 
+function dumpKey(iso: string): string {
+	return `postgres/acme_${iso}.dump`
+}
+
+function pad(n: number): string {
+	return String(n).padStart(2, '0')
+}
+
+describe('prunePostgresBackups', () => {
+	it('deletes the dumps outside the GFS windows and keeps the newest per bucket', async () => {
+		// Three dumps on the same UTC day: daily/weekly/monthly buckets all
+		// collapse onto the newest (23:00), so the two older ones are pruned.
+		const keys = [
+			dumpKey('2026-05-16T01:00:00'),
+			dumpKey('2026-05-16T12:00:00'),
+			dumpKey('2026-05-16T23:00:00'),
+		]
+		send.mockImplementation(async command => {
+			if (command.constructor.name === 'ListObjectsV2Command') {
+				return {
+					Contents: keys.map(Key => ({ Key })),
+					NextContinuationToken: undefined,
+				}
+			}
+			return {}
+		})
+
+		const outcome = await prunePostgresBackups(fakeS3, BUCKET)
+
+		expect(outcome).toEqual({ scanned: 3, pruned: 2 })
+		const deleteCall = send.mock.calls.find(
+			c => c[0].constructor.name === 'DeleteObjectsCommand',
+		)
+		expect(deleteCall?.[0].input.Delete.Objects).toEqual([
+			{ Key: dumpKey('2026-05-16T01:00:00') },
+			{ Key: dumpKey('2026-05-16T12:00:00') },
+		])
+	})
+
+	it('sends no DeleteObjects when every dump is within retention', async () => {
+		send.mockImplementation(async command => {
+			if (command.constructor.name === 'ListObjectsV2Command') {
+				return {
+					Contents: [{ Key: dumpKey('2026-05-16T23:00:00') }],
+					NextContinuationToken: undefined,
+				}
+			}
+			return {}
+		})
+
+		const outcome = await prunePostgresBackups(fakeS3, BUCKET)
+
+		expect(outcome).toEqual({ scanned: 1, pruned: 0 })
+		const calls = send.mock.calls.map(c => c[0].constructor.name)
+		expect(calls).not.toContain('DeleteObjectsCommand')
+	})
+
+	it('batches deletes in chunks of 1000 when more than a page must be pruned', async () => {
+		// 1500 dumps on one UTC day -> 1 kept, 1499 pruned -> two delete batches.
+		const keys = Array.from({ length: 1500 }, (_, i) =>
+			dumpKey(`2026-05-16T00:${pad(Math.floor(i / 60))}:${pad(i % 60)}`),
+		)
+		send.mockImplementation(async command => {
+			if (command.constructor.name === 'ListObjectsV2Command') {
+				return {
+					Contents: keys.map(Key => ({ Key })),
+					NextContinuationToken: undefined,
+				}
+			}
+			return {}
+		})
+
+		const outcome = await prunePostgresBackups(fakeS3, BUCKET)
+
+		expect(outcome).toEqual({ scanned: 1500, pruned: 1499 })
+		const deleteCalls = send.mock.calls.filter(
+			c => c[0].constructor.name === 'DeleteObjectsCommand',
+		)
+		expect(deleteCalls).toHaveLength(2)
+		expect(deleteCalls[0]?.[0].input.Delete.Objects).toHaveLength(1000)
+		expect(deleteCalls[1]?.[0].input.Delete.Objects).toHaveLength(499)
+	})
+})
+
 describe('listPostgresBackupSnapshots', () => {
 	it('scopes the listing to the postgres/ prefix', async () => {
-		send.mockResolvedValue({ Contents: [], NextContinuationToken: undefined })
+		send.mockResolvedValue({
+			Contents: [],
+			NextContinuationToken: undefined,
+		})
 
 		await listPostgresBackupSnapshots(fakeS3, BUCKET)
 
@@ -200,7 +288,12 @@ describe('downloadPostgresBackup', () => {
 		send.mockResolvedValue({ Body: Readable.from('PGDUMP-bytes') })
 
 		try {
-			await downloadPostgresBackup(fakeS3, BUCKET, 'postgres/x.dump', destPath)
+			await downloadPostgresBackup(
+				fakeS3,
+				BUCKET,
+				'postgres/x.dump',
+				destPath,
+			)
 			expect(await readFile(destPath, 'utf8')).toBe('PGDUMP-bytes')
 		} finally {
 			await rm(dir, { recursive: true, force: true })
@@ -212,7 +305,12 @@ describe('downloadPostgresBackup', () => {
 		send.mockResolvedValue({ Body: { cancel } })
 
 		await expect(
-			downloadPostgresBackup(fakeS3, BUCKET, 'postgres/x.dump', '/dev/null'),
+			downloadPostgresBackup(
+				fakeS3,
+				BUCKET,
+				'postgres/x.dump',
+				'/dev/null',
+			),
 		).rejects.toThrow('expected a Node Readable body')
 		expect(cancel).toHaveBeenCalledOnce()
 	})
@@ -221,7 +319,12 @@ describe('downloadPostgresBackup', () => {
 		send.mockResolvedValue({ Body: undefined })
 
 		await expect(
-			downloadPostgresBackup(fakeS3, BUCKET, 'postgres/x.dump', '/dev/null'),
+			downloadPostgresBackup(
+				fakeS3,
+				BUCKET,
+				'postgres/x.dump',
+				'/dev/null',
+			),
 		).rejects.toThrow('expected a Node Readable body')
 	})
 })

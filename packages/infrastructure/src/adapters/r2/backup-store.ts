@@ -5,6 +5,7 @@ import { pipeline } from 'node:stream/promises'
 import {
 	POSTGRES_BACKUP_PREFIX,
 	parsePostgresBackupKey,
+	selectPostgresBackupsToPrune,
 } from '#/domain/services/postgres.ts'
 import {
 	DeleteBucketCommand,
@@ -15,6 +16,10 @@ import {
 
 import type { PostgresBackupSnapshot } from '#/domain/services/postgres.ts'
 import type { S3Client, _Object } from '@aws-sdk/client-s3'
+
+// S3/R2 cap a single DeleteObjects request at 1000 keys; larger prune/wipe sets
+// are split into successive batches.
+const DELETE_BATCH_SIZE = 1000
 
 // Parse the sidecar-named backup keys out of one ListObjectsV2 page, dropping
 // objects we did not write (keys that fail the naming pattern).
@@ -32,14 +37,36 @@ function collectBackupSnapshots(
 	return snapshots
 }
 
-// Extract the string keys from one ListObjectsV2 page as DeleteObjects entries.
-function toDeleteEntries(
-	objects: ReadonlyArray<_Object>,
-): Array<{ Key: string }> {
+// Extract the present string keys from one ListObjectsV2 page.
+function keysOf(objects: ReadonlyArray<_Object>): string[] {
 	return objects
 		.map(object => object.Key)
 		.filter((key): key is string => typeof key === 'string')
-		.map(key => ({ Key: key }))
+}
+
+// Delete `keys` in batches of DELETE_BATCH_SIZE. A single batch (the common
+// case: one ListObjectsV2 page <= 1000, or a GFS prune set far smaller) sends
+// exactly one DeleteObjectsCommand; an empty list sends none. Batches run
+// sequentially to stay polite to R2 under large wipes. Shared by the prune and
+// wipe paths so the chunking lives in one place.
+async function deleteObjectsChunked(
+	s3: S3Client,
+	bucket: string,
+	keys: ReadonlyArray<string>,
+): Promise<void> {
+	/* eslint-disable no-await-in-loop -- batch deletes are intentionally sequential */
+	for (let offset = 0; offset < keys.length; offset += DELETE_BATCH_SIZE) {
+		const objects = keys
+			.slice(offset, offset + DELETE_BATCH_SIZE)
+			.map(key => ({ Key: key }))
+		await s3.send(
+			new DeleteObjectsCommand({
+				Bucket: bucket,
+				Delete: { Objects: objects },
+			}),
+		)
+	}
+	/* eslint-enable no-await-in-loop */
 }
 
 /**
@@ -136,20 +163,48 @@ export async function wipePostgresBackups(
 			}),
 		)
 
-		const keysToDelete = toDeleteEntries(listResponse.Contents ?? [])
-
-		if (keysToDelete.length > 0) {
-			await s3.send(
-				new DeleteObjectsCommand({
-					Bucket: bucket,
-					Delete: { Objects: keysToDelete },
-				}),
-			)
-		}
+		await deleteObjectsChunked(
+			s3,
+			bucket,
+			keysOf(listResponse.Contents ?? []),
+		)
 
 		continuationToken = listResponse.NextContinuationToken
 	} while (continuationToken !== undefined)
 	/* eslint-enable no-await-in-loop */
 
 	await s3.send(new DeleteBucketCommand({ Bucket: bucket }))
+}
+
+export interface PrunePostgresBackupsResult {
+	// Total sidecar dumps seen under the prefix (foreign keys excluded).
+	readonly scanned: number
+	// Dumps deleted because they fell outside the GFS retention windows.
+	readonly pruned: number
+}
+
+/**
+ * Apply the GFS retention policy to a project's pg_dump backup bucket: list the
+ * dumps, ask the pure `selectPostgresBackupsToPrune` which fall outside the 7
+ * daily / 4 weekly / 3 monthly windows, and batch-delete them. The bucket and
+ * its kept dumps remain (unlike `wipePostgresBackups`, which drops everything).
+ *
+ * Keys that don't match the sidecar naming pattern are never listed as
+ * snapshots (see `listPostgresBackupSnapshots`), so a stray manual upload is
+ * neither classified nor deleted. The image-side age prune is OFF
+ * (`POSTGRES_BACKUP_KEEP_DAYS` empty), so this is the SOLE owner of pg_dump
+ * retention; wal-g manages its own bucket independently.
+ */
+export async function prunePostgresBackups(
+	s3: S3Client,
+	bucket: string,
+): Promise<PrunePostgresBackupsResult> {
+	const snapshots = await listPostgresBackupSnapshots(s3, bucket)
+	const toPrune = selectPostgresBackupsToPrune(snapshots)
+	await deleteObjectsChunked(
+		s3,
+		bucket,
+		toPrune.map(snapshot => snapshot.key),
+	)
+	return { scanned: snapshots.length, pruned: toPrune.length }
 }

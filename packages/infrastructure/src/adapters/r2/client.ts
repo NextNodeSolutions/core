@@ -97,6 +97,37 @@ export class R2Client implements ObjectStoreClient {
 		}
 	}
 
+	/**
+	 * List every object key under `prefix` (paginated). A concrete R2Client
+	 * method, deliberately NOT on the `ObjectStoreClient` interface: the
+	 * provider-agnostic state/cert contract is get/put/delete/exists, and only
+	 * the backup-prune cron needs to enumerate keys. Pagination is sequential
+	 * because each page's continuation token is server-issued.
+	 */
+	async listKeys(prefix: string): Promise<string[]> {
+		const keys: string[] = []
+		let continuationToken: string | undefined
+
+		/* eslint-disable no-await-in-loop -- pagination is intentionally sequential */
+		do {
+			const response = await this.s3.send(
+				new ListObjectsV2Command({
+					Bucket: this.bucket,
+					Prefix: prefix,
+					ContinuationToken: continuationToken,
+				}),
+			)
+			const pageKeys = (response.Contents ?? [])
+				.map(object => object.Key)
+				.filter((key): key is string => typeof key === 'string')
+			keys.push(...pageKeys)
+			continuationToken = response.NextContinuationToken
+		} while (continuationToken !== undefined)
+		/* eslint-enable no-await-in-loop */
+
+		return keys
+	}
+
 	async deleteByPrefix(
 		prefix: string,
 		predicate: (key: string) => boolean = () => true,

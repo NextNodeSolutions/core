@@ -1,3 +1,4 @@
+/* eslint-disable import/max-dependencies -- this file is the command registry; its import count scales with the number of registered commands by design */
 import { createLogger } from '@nextnode-solutions/logger'
 
 import { computeImageRefCommand } from './cli/deploy/compute-image-ref.command.ts'
@@ -5,6 +6,7 @@ import { deployCommand } from './cli/deploy/deploy.command.ts'
 import { dnsCommand } from './cli/deploy/dns.command.ts'
 import { migrateRemoteCommand } from './cli/deploy/migrate-remote.command.ts'
 import { provisionCommand } from './cli/deploy/provision.command.ts'
+import { pruneBackupsCommand } from './cli/deploy/prune-backups.ts'
 import { restoreCommand } from './cli/deploy/restore.command.ts'
 import { seoGuardCommand } from './cli/deploy/seo-guard.command.ts'
 import { teardownGuardCommand } from './cli/deploy/teardown-guard.command.ts'
@@ -51,6 +53,7 @@ const STANDALONE_COMMANDS: Record<string, StandaloneCommand> = {
 	'build-golden-image': buildGoldenImageCommand,
 	recover: recoverCommand,
 	restore: restoreCommand,
+	'prune-backups': pruneBackupsCommand,
 }
 
 const ALL_COMMAND_NAMES = [

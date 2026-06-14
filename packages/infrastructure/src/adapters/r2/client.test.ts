@@ -237,6 +237,56 @@ describe('deleteByPrefix', () => {
 	})
 })
 
+describe('listKeys', () => {
+	it('returns the keys under the prefix, scoping the listing to it', async () => {
+		send.mockResolvedValue({
+			Contents: [{ Key: 'hetzner/a.json' }, { Key: 'hetzner/b.json' }],
+			NextContinuationToken: undefined,
+		})
+
+		const keys = await client.listKeys('hetzner/')
+
+		expect(keys).toEqual(['hetzner/a.json', 'hetzner/b.json'])
+		expect(send.mock.calls[0]?.[0].input).toMatchObject({
+			Bucket: 'nextnode-state',
+			Prefix: 'hetzner/',
+		})
+	})
+
+	it('walks every page via the continuation token', async () => {
+		let callIndex = 0
+		send.mockImplementation(async () => {
+			callIndex += 1
+			if (callIndex === 1) {
+				return {
+					Contents: [{ Key: 'hetzner/a.json' }],
+					NextContinuationToken: 'page-2',
+				}
+			}
+			return {
+				Contents: [{ Key: 'hetzner/b.json' }],
+				NextContinuationToken: undefined,
+			}
+		})
+
+		const keys = await client.listKeys('hetzner/')
+
+		expect(keys).toEqual(['hetzner/a.json', 'hetzner/b.json'])
+		expect(send.mock.calls[1]?.[0].input.ContinuationToken).toBe('page-2')
+	})
+
+	it('skips entries without a Key', async () => {
+		send.mockResolvedValue({
+			Contents: [{ Key: 'hetzner/a.json' }, { Key: undefined }],
+			NextContinuationToken: undefined,
+		})
+
+		const keys = await client.listKeys('hetzner/')
+
+		expect(keys).toEqual(['hetzner/a.json'])
+	})
+})
+
 describe('exists', () => {
 	it('returns true when object exists', async () => {
 		send.mockResolvedValue({})

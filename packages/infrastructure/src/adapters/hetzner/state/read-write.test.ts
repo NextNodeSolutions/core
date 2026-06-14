@@ -4,6 +4,8 @@ import {
 	deleteState,
 	EtagMismatchError,
 	readState,
+	stateKey,
+	vpsNameFromStateKey,
 	writeState,
 } from './read-write.ts'
 
@@ -429,5 +431,27 @@ describe('deleteState', () => {
 		await deleteState(r2, 'acme-web')
 
 		expect(r2.delete).toHaveBeenCalledWith('hetzner/acme-web.json')
+	})
+})
+
+describe('vpsNameFromStateKey', () => {
+	it('round-trips with stateKey', () => {
+		expect(vpsNameFromStateKey(stateKey('acme-web'))).toBe('acme-web')
+	})
+
+	it('recovers the vps name from a state object key', () => {
+		expect(vpsNameFromStateKey('hetzner/prod-1.json')).toBe('prod-1')
+	})
+
+	it('returns null for a key outside the hetzner/ prefix', () => {
+		expect(vpsNameFromStateKey('certs/prod-1.json')).toBeNull()
+	})
+
+	it('returns null for a non-json key under the prefix', () => {
+		expect(vpsNameFromStateKey('hetzner/prod-1.txt')).toBeNull()
+	})
+
+	it('returns null for the bare prefix (folder marker)', () => {
+		expect(vpsNameFromStateKey('hetzner/.json')).toBeNull()
 	})
 })
