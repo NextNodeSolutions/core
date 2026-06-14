@@ -136,47 +136,60 @@ async function writeFileOverSsh(
 	remotePath: string,
 	content: string,
 ): Promise<void> {
+	// Each openSftp() opens a distinct SFTP channel; close it when done or the
+	// channels accumulate and the SSH server refuses new ones once MaxSessions
+	// is reached ("Channel open failure: open failed") mid-deploy.
 	const sftp = await openSftp(conn)
-	return new Promise((resolve, reject) => {
-		const ws = sftp.createWriteStream(remotePath)
-		ws.on('close', () => resolve())
-		ws.on('error', (writeErr: Error) =>
-			reject(
-				new Error(
-					`SSH writeFile "${remotePath}" failed: ${writeErr.message}`,
-					{ cause: writeErr },
+	try {
+		await new Promise<void>((resolve, reject) => {
+			const ws = sftp.createWriteStream(remotePath)
+			ws.on('close', () => resolve())
+			ws.on('error', (writeErr: Error) =>
+				reject(
+					new Error(
+						`SSH writeFile "${remotePath}" failed: ${writeErr.message}`,
+						{ cause: writeErr },
+					),
 				),
-			),
-		)
-		ws.end(content)
-	})
+			)
+			ws.end(content)
+		})
+	} finally {
+		sftp.end()
+	}
 }
 
 async function readFileOverSsh(
 	conn: Client,
 	remotePath: string,
 ): Promise<string | null> {
+	// Close the SFTP channel when done (see writeFileOverSsh) to avoid leaking
+	// channels until the server hits MaxSessions.
 	const sftp = await openSftp(conn)
-	return new Promise((resolve, reject) => {
-		let content = ''
-		const rs = sftp.createReadStream(remotePath, { encoding: 'utf8' })
-		rs.on('data', (chunk: Buffer | string) => {
-			content += String(chunk)
+	try {
+		return await new Promise<string | null>((resolve, reject) => {
+			let content = ''
+			const rs = sftp.createReadStream(remotePath, { encoding: 'utf8' })
+			rs.on('data', (chunk: Buffer | string) => {
+				content += String(chunk)
+			})
+			rs.on('end', () => resolve(content))
+			rs.on('error', (readErr: SftpError) => {
+				if (isNotFoundError(readErr)) {
+					resolve(null)
+					return
+				}
+				reject(
+					new Error(
+						`SSH readFile "${remotePath}" failed: ${readErr.message}`,
+						{ cause: readErr },
+					),
+				)
+			})
 		})
-		rs.on('end', () => resolve(content))
-		rs.on('error', (readErr: SftpError) => {
-			if (isNotFoundError(readErr)) {
-				resolve(null)
-				return
-			}
-			reject(
-				new Error(
-					`SSH readFile "${remotePath}" failed: ${readErr.message}`,
-					{ cause: readErr },
-				),
-			)
-		})
-	})
+	} finally {
+		sftp.end()
+	}
 }
 
 export async function createSshSession(

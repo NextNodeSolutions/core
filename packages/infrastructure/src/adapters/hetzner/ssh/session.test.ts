@@ -185,6 +185,7 @@ describe('writeFile', () => {
 		mockSftp.mockImplementation(
 			(cb: (err: undefined, sftp: unknown) => void) => {
 				cb(undefined, {
+					end() {},
 					createWriteStream(path: string) {
 						const ws = new EventEmitter()
 						Object.assign(ws, {
@@ -223,6 +224,7 @@ describe('readFile', () => {
 		mockSftp.mockImplementation(
 			(cb: (err: undefined, sftp: unknown) => void) => {
 				cb(undefined, {
+					end() {},
 					createReadStream() {
 						const rs = new EventEmitter()
 						process.nextTick(() => {
@@ -246,6 +248,7 @@ describe('readFile', () => {
 		mockSftp.mockImplementation(
 			(cb: (err: undefined, sftp: unknown) => void) => {
 				cb(undefined, {
+					end() {},
 					createReadStream() {
 						const rs = new EventEmitter()
 						process.nextTick(() => {
@@ -272,6 +275,7 @@ describe('readFile', () => {
 		mockSftp.mockImplementation(
 			(cb: (err: undefined, sftp: unknown) => void) => {
 				cb(undefined, {
+					end() {},
 					createReadStream() {
 						const rs = new EventEmitter()
 						process.nextTick(() => {
@@ -298,6 +302,7 @@ describe('readFile', () => {
 		mockSftp.mockImplementation(
 			(cb: (err: undefined, sftp: unknown) => void) => {
 				cb(undefined, {
+					end() {},
 					createReadStream() {
 						const rs = new EventEmitter()
 						process.nextTick(() => {
