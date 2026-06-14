@@ -368,7 +368,7 @@ export async function bringUpApp(
 	const composeFileQ = shellEscape(composeFile)
 
 	await session.exec(
-		`docker compose -p ${siloIdQ} -f ${composeFileQ} up -d --build --remove-orphans`,
+		`docker compose -p ${siloIdQ} -f ${composeFileQ} up -d --remove-orphans`,
 	)
 }
 
