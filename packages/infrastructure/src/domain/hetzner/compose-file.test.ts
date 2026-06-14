@@ -60,7 +60,7 @@ const APP_SERVICE: UserServiceConfig = {
 }
 
 const APP_HEALTHCHECK = {
-	test: ['CMD', 'wget', '-q', '-O-', 'http://localhost:3000/healthz'],
+	test: ['CMD', 'wget', '-q', '-O-', 'http://127.0.0.1:3000/healthz'],
 	interval: '10s',
 	timeout: '3s',
 	retries: 6,
@@ -122,7 +122,7 @@ describe('renderComposeFile', () => {
 		)
 
 		expect(parsed.services.app.healthcheck).toEqual({
-			test: ['CMD', 'wget', '-q', '-O-', 'http://localhost:4000/healthz'],
+			test: ['CMD', 'wget', '-q', '-O-', 'http://127.0.0.1:4000/healthz'],
 			interval: '10s',
 			timeout: '3s',
 			retries: 6,
@@ -544,7 +544,7 @@ describe('renderComposeFile - multiple user services', () => {
 		)
 		expect(parsed.services.api.env_file).toEqual(['.env.api'])
 		expect(parsed.services.api.healthcheck).toEqual({
-			test: ['CMD', 'wget', '-q', '-O-', 'http://localhost:3001/healthz'],
+			test: ['CMD', 'wget', '-q', '-O-', 'http://127.0.0.1:3001/healthz'],
 			interval: '10s',
 			timeout: '3s',
 			retries: 6,
