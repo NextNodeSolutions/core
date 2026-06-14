@@ -115,6 +115,29 @@ const BACKUP_STALE_HOURS = 3
 const SECONDS_PER_HOUR = 3600
 const BACKUP_STALE_SECONDS = BACKUP_STALE_HOURS * SECONDS_PER_HOUR
 
+/**
+ * wal-g base-backup freshness, two tiers on the SAME metric. The base-backup
+ * loop runs daily (POSTGRES_WALG_BACKUP_INTERVAL_SECONDS = 86400) and, on a
+ * failed push, retries with a short backoff - so a healthy chain anchors a
+ * fresh base backup well within ~25h. `nn_walg_base_backup_last_success_
+ * timestamp_seconds` is the newest object under `basebackups_005/`, surfaced
+ * from R2 by the control plane (same pull pattern as the pg_dump metric).
+ *
+ * The bands are disjoint so the two alerts never fire together for one project:
+ *   - warning  in [26h, 50h): one daily cycle was missed - the retries have
+ *     been failing for hours; investigate before the base anchor goes stale.
+ *   - critical at > 50h: two+ cycles with no base backup at all - PITR can
+ *     only restore to an ageing base and old WAL can no longer be pruned.
+ * Continuous WAL archiving is independent (its own archive_command) and is not
+ * what these alerts cover.
+ */
+const WALG_BACKUP_WARN_HOURS = 26
+const WALG_BACKUP_CRIT_HOURS = 50
+const WALG_BACKUP_WARN_SECONDS = WALG_BACKUP_WARN_HOURS * SECONDS_PER_HOUR
+const WALG_BACKUP_CRIT_SECONDS = WALG_BACKUP_CRIT_HOURS * SECONDS_PER_HOUR
+const WALG_BACKUP_AGE =
+	'time() - nn_walg_base_backup_last_success_timestamp_seconds'
+
 export const BACKUPS_RULE_GROUP: RuleGroup = {
 	name: 'backups',
 	rules: [
@@ -126,6 +149,27 @@ export const BACKUPS_RULE_GROUP: RuleGroup = {
 				summary: 'Backup stale for {{ $labels.project }}',
 				description:
 					'No successful pg_dump upload for {{ $labels.project }} in over 3 hours (the sidecar runs hourly). Read the postgres-backup container logs and run a manual backup.',
+			},
+		},
+		{
+			alert: 'WalgBaseBackupStale',
+			expr: `${WALG_BACKUP_AGE} > ${String(WALG_BACKUP_WARN_SECONDS)} and ${WALG_BACKUP_AGE} <= ${String(WALG_BACKUP_CRIT_SECONDS)}`,
+			labels: { severity: 'warning' },
+			annotations: {
+				summary: 'wal-g base backup stale for {{ $labels.project }}',
+				description:
+					"No new wal-g base backup for {{ $labels.project }} in over 26 hours (the loop runs daily, retrying on failure). Continuous WAL is still archiving, but PITR's base anchor is ageing - check the postgres-walg sidecar logs and R2 access.",
+			},
+		},
+		{
+			alert: 'WalgBaseBackupMissing',
+			expr: `${WALG_BACKUP_AGE} > ${String(WALG_BACKUP_CRIT_SECONDS)}`,
+			labels: { severity: 'critical' },
+			annotations: {
+				summary:
+					'wal-g base backups not running for {{ $labels.project }}',
+				description:
+					'No successful wal-g base backup for {{ $labels.project }} in over 50 hours (two+ daily cycles). PITR can only restore to an ageing base and old WAL cannot be pruned. Check the postgres-walg sidecar logs and R2 access, then run a manual `wal-g backup-push`.',
 			},
 		},
 	],

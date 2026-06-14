@@ -35,7 +35,7 @@ describe('renderVmalertMetricRulesYaml', () => {
 		group.rules.filter(rule => typeof rule.alert === 'string'),
 	)
 
-	it('covers the PRD catalogue: 18 routed alerts plus the Watchdog', () => {
+	it('covers the PRD catalogue: 21 routed alerts plus the Watchdog', () => {
 		const names = alerts
 			.map(rule => String(rule.alert))
 			.toSorted((a, b) => a.localeCompare(b))
@@ -58,6 +58,8 @@ describe('renderVmalertMetricRulesYaml', () => {
 				'PgDown',
 				'PgConnectionsHigh',
 				'BackupStale',
+				'WalgBaseBackupStale',
+				'WalgBaseBackupMissing',
 				'VectorSilent',
 				'Watchdog',
 				'ActiveSeriesBudgetExceeded',
@@ -92,6 +94,21 @@ describe('renderVmalertMetricRulesYaml', () => {
 		expect(stale?.expr).toBe(
 			'time() - nn_backup_last_success_timestamp_seconds > 10800',
 		)
+	})
+
+	it('escalates wal-g base backups from warning (26h) to critical (50h) in disjoint bands', () => {
+		const warn = alerts.find(rule => rule.alert === 'WalgBaseBackupStale')
+		const crit = alerts.find(rule => rule.alert === 'WalgBaseBackupMissing')
+		// Warning fires only inside [26h, 50h] so it never overlaps the critical.
+		expect(warn?.expr).toBe(
+			'time() - nn_walg_base_backup_last_success_timestamp_seconds > 93600 and time() - nn_walg_base_backup_last_success_timestamp_seconds <= 180000',
+		)
+		expect(severityOf(warn ?? {})).toBe('warning')
+		// Critical fires past 50h (two missed daily cycles) - the upper warning bound.
+		expect(crit?.expr).toBe(
+			'time() - nn_walg_base_backup_last_success_timestamp_seconds > 180000',
+		)
+		expect(severityOf(crit ?? {})).toBe('critical')
 	})
 
 	it('contains no vlogs group - LogsQL evaluation lives in the dedicated file', () => {
