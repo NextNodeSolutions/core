@@ -1,5 +1,5 @@
 import { NoSuchBucket } from '@aws-sdk/client-s3'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 
@@ -52,6 +52,7 @@ function stateJson(projects: ReadonlyArray<string>): string {
 
 afterEach(() => {
 	vi.clearAllMocks()
+	vi.unstubAllEnvs()
 })
 
 describe('pruneProjectBackups', () => {
@@ -95,6 +96,14 @@ describe('pruneProjectBackups', () => {
 })
 
 describe('pruneBackupsCommand', () => {
+	// pruneBackupsCommand reads CLOUDFLARE_API_TOKEN via requireEnv before the
+	// mocked loadR2Runtime ignores its value. Stub it so the test is hermetic:
+	// it must not depend on the var being exported by a dev shell (CI is not),
+	// nor be stripped by a sibling test file's vi.unstubAllEnvs() mid-suite.
+	beforeEach(() => {
+		vi.stubEnv('CLOUDFLARE_API_TOKEN', 'cf-token')
+	})
+
 	it('enumerates projects from the fleet state and prunes each unique one', async () => {
 		loadR2RuntimeMock.mockResolvedValue(INFRA_STORAGE)
 		listKeysMock.mockResolvedValue([
