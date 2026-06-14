@@ -10,7 +10,7 @@ const logger = createLogger()
 
 /**
  * List the postgres dump snapshots in a project's deterministic R2 backup
- * bucket (`nn-backups-<project>`). Lives in the cli layer because it wires
+ * bucket (`<project>-backups-dump`). Lives in the cli layer because it wires
  * the S3 adapter to a project name - the strict layering bans the hetzner
  * adapter from calling the r2 adapter directly, so the auto-restore
  * decision's "does a prior dump exist?" input is resolved here and passed

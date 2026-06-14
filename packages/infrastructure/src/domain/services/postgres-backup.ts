@@ -2,10 +2,11 @@ import type { AppEnvironment } from '#/domain/environment.ts'
 import type { ServiceEnv } from './service.ts'
 
 /**
- * Infra-owned R2 credentials for the postgres backup sidecar, scoped to the
- * project's `nn-backups-<project>` bucket alone. Provisioned at deploy
- * `provision` time, persisted to the infra state bucket, and read back at
- * deploy/migrate time to project the `POSTGRES_BACKUP_R2_*` env vars.
+ * Infra-owned R2 credentials for the postgres backup sidecars, scoped to the
+ * project's two backup buckets (`<project>-backups` wal-g + `<project>-backups-
+ * dump` pg_dump). Provisioned at deploy `provision` time, persisted to the
+ * infra state bucket, and read back at deploy/migrate time to project the
+ * `POSTGRES_BACKUP_R2_*` env vars both schemes' sidecars read.
  */
 export interface PostgresBackupCredsState {
 	readonly endpoint: string
@@ -17,7 +18,8 @@ export interface PostgresBackupCredsState {
  * Cloudflare API token name for the per-project, per-env postgres backup R2
  * token. Distinct from the R2 service token (`nextnode-r2-*`) and the infra
  * token (`nextnode-infrastructure-r2`) so `revokeStaleTokens` only ever
- * touches this project's backup token. Scoped to `nn-backups-<project>`.
+ * touches this project's backup token. Scoped to both `<project>-backups`
+ * (wal-g) and `<project>-backups-dump` (pg_dump).
  */
 export function postgresBackupTokenName(
 	projectName: string,

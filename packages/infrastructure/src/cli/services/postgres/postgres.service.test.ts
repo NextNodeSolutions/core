@@ -89,22 +89,32 @@ describe('createPostgresService', () => {
 	})
 
 	describe('provision() - embedded mode', () => {
-		it('calls ensureR2Bucket once with the derived wal-g bucket name', async () => {
+		it('ensures both backup buckets (wal-g + pg_dump) with the location hint', async () => {
 			ensureR2BucketMock.mockResolvedValue(true)
 			const service = createPostgresService(makeCtx(), EMBEDDED)
 
 			await service.provision()
 
-			expect(ensureR2BucketMock).toHaveBeenCalledTimes(1)
-			expect(ensureR2BucketMock).toHaveBeenCalledWith({
-				token: 'cf-token',
-				accountId: 'acct',
-				bucketName: 'nn-walg-myapp',
-				locationHint: 'weur',
-			})
+			expect(ensureR2BucketMock).toHaveBeenCalledTimes(2)
+			expect(ensureR2BucketMock.mock.calls[0]).toEqual([
+				{
+					token: 'cf-token',
+					accountId: 'acct',
+					bucketName: 'myapp-backups',
+					locationHint: 'weur',
+				},
+			])
+			expect(ensureR2BucketMock.mock.calls[1]).toEqual([
+				{
+					token: 'cf-token',
+					accountId: 'acct',
+					bucketName: 'myapp-backups-dump',
+					locationHint: 'weur',
+				},
+			])
 		})
 
-		it('provisions a dedicated R2 token scoped to the backup bucket', async () => {
+		it('provisions one dedicated R2 token scoped to both backup buckets', async () => {
 			ensureR2BucketMock.mockResolvedValue(true)
 			const service = createPostgresService(makeCtx(), EMBEDDED)
 
@@ -116,35 +126,36 @@ describe('createPostgresService', () => {
 				infraStorage: INFRA_STORAGE,
 				projectName: 'myapp',
 				environment: 'production',
-				bucketName: 'nn-walg-myapp',
+				bucketNames: ['myapp-backups', 'myapp-backups-dump'],
 			})
 		})
 
 		it('is safe to call multiple times - delegates idempotency to ensureR2Bucket', async () => {
-			ensureR2BucketMock
-				.mockResolvedValueOnce(true)
-				.mockResolvedValueOnce(false)
+			ensureR2BucketMock.mockResolvedValue(true)
 			const service = createPostgresService(makeCtx(), EMBEDDED)
 
 			await service.provision()
 			await service.provision()
 
-			expect(ensureR2BucketMock).toHaveBeenCalledTimes(2)
-			expect(ensureR2BucketMock.mock.calls[0]).toEqual([
-				{
-					token: 'cf-token',
-					accountId: 'acct',
-					bucketName: 'nn-walg-myapp',
-					locationHint: 'weur',
-				},
-			])
-			expect(ensureR2BucketMock.mock.calls[1]).toEqual([
-				{
-					token: 'cf-token',
-					accountId: 'acct',
-					bucketName: 'nn-walg-myapp',
-					locationHint: 'weur',
-				},
+			// Two buckets per provision, two provisions -> four ensure calls.
+			expect(ensureR2BucketMock).toHaveBeenCalledTimes(4)
+			const walg = {
+				token: 'cf-token',
+				accountId: 'acct',
+				bucketName: 'myapp-backups',
+				locationHint: 'weur',
+			}
+			const dump = {
+				token: 'cf-token',
+				accountId: 'acct',
+				bucketName: 'myapp-backups-dump',
+				locationHint: 'weur',
+			}
+			expect(ensureR2BucketMock.mock.calls).toEqual([
+				[walg],
+				[dump],
+				[walg],
+				[dump],
 			])
 		})
 	})

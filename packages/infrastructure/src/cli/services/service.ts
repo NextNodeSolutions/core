@@ -26,8 +26,9 @@ export interface Service {
  * - `accessKeyId` / `secretAccessKey` / `endpoint` to instantiate an
  * S3 client against R2, and `accountId` to call the Cloudflare R2 REST
  * API (e.g. `ensureR2Bucket`). The R2 service uses both shapes; the
- * upcoming postgres service uses `accountId` + `cfToken` at provision
- * time to ensure its `nn-backups-<project>` backup bucket.
+ * postgres service uses `accountId` + `cfToken` at provision time to
+ * ensure its two backup buckets (`<project>-backups` wal-g +
+ * `<project>-backups-dump` pg_dump).
  *
  * `repoSecrets` is the parsed `ALL_SECRETS` GitHub Secrets payload -
  * services that need user-provided credentials (e.g. postgres

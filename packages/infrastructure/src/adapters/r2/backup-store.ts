@@ -114,9 +114,10 @@ export async function downloadPostgresBackup(
 
 /**
  * Empty `bucket` (paginated list + batch delete), then delete the bucket
- * itself. Used by teardown's --wipe-backups path: the per-project bucket
- * `nn-backups-<project>` is dedicated to postgres dumps, so wiping it is
- * equivalent to dropping every snapshot. R2 (like S3) refuses
+ * itself. Used by teardown's --wipe-backups path on BOTH per-project backup
+ * buckets (`<project>-backups` wal-g + `<project>-backups-dump` pg_dump), each
+ * dedicated to its scheme, so wiping is equivalent to dropping every snapshot.
+ * R2 (like S3) refuses
  * DeleteBucket on a non-empty bucket - the empty-then-drop sequence is
  * mandatory, not a courtesy.
  */

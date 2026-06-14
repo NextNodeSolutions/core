@@ -70,8 +70,10 @@ describe('buildPostgresExternalEnv', () => {
 })
 
 describe('postgresBackupBucketName', () => {
-	it('namespaces backups under nn-backups-<project>', () => {
-		expect(postgresBackupBucketName('acme-web')).toBe('nn-backups-acme-web')
+	it('namespaces pg_dump backups under <project>-backups-dump', () => {
+		expect(postgresBackupBucketName('acme-web')).toBe(
+			'acme-web-backups-dump',
+		)
 	})
 })
 

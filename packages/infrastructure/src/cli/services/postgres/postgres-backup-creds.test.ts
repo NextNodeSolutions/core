@@ -44,7 +44,7 @@ afterEach(() => {
 })
 
 describe('provisionPostgresBackupCreds', () => {
-	it('mints a token scoped to the backup bucket, propagates, revokes stale, persists state', async () => {
+	it('mints one token scoped to both backup buckets, propagates, revokes stale, persists state', async () => {
 		resolveR2PermissionGroupIdsMock.mockResolvedValue({
 			read: 'r',
 			write: 'w',
@@ -62,19 +62,20 @@ describe('provisionPostgresBackupCreds', () => {
 			infraStorage: INFRA_STORAGE,
 			projectName: 'myapp',
 			environment: 'production',
-			bucketName: 'nn-backups-myapp',
+			bucketNames: ['myapp-backups', 'myapp-backups-dump'],
 		})
 
 		expect(createR2TokenMock).toHaveBeenCalledWith({
 			token: 'cf',
 			tokenName: 'nextnode-postgres-backup-myapp-production',
 			accountId: 'acct',
-			bucketNames: ['nn-backups-myapp'],
+			bucketNames: ['myapp-backups', 'myapp-backups-dump'],
 			permissions: { read: 'r', write: 'w' },
 		})
+		// Propagation is probed against the first (wal-g) bucket only.
 		expect(awaitTokenPropagationMock).toHaveBeenCalledWith(
 			expect.objectContaining({
-				probeBucket: 'nn-backups-myapp',
+				probeBucket: 'myapp-backups',
 				accessKeyId: 'tok-id',
 			}),
 		)
@@ -92,6 +93,19 @@ describe('provisionPostgresBackupCreds', () => {
 			accessKeyId: 'tok-id',
 			secretAccessKey: expect.any(String),
 		})
+	})
+
+	it('throws when bucketNames is empty rather than minting an unscoped token', async () => {
+		await expect(
+			provisionPostgresBackupCreds({
+				cfToken: 'cf',
+				infraStorage: INFRA_STORAGE,
+				projectName: 'myapp',
+				environment: 'production',
+				bucketNames: [],
+			}),
+		).rejects.toThrow('bucketNames must not be empty')
+		expect(createR2TokenMock).not.toHaveBeenCalled()
 	})
 })
 

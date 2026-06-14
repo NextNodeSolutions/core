@@ -5,6 +5,7 @@ import { postgresWalgBucketName } from '#/domain/services/postgres-walg.ts'
 import {
 	buildPostgresEmbeddedEnv,
 	buildPostgresExternalEnv,
+	postgresBackupBucketName,
 } from '#/domain/services/postgres.ts'
 import { mergeServiceEnvs } from '#/domain/services/service.ts'
 import { createLogger } from '@nextnode-solutions/logger'
@@ -52,40 +53,59 @@ export function createPostgresService(
 		)
 	}
 	const { infraStorage } = ctx
-	// wal-g archives the base backups + WAL here; the bucket is provisioned and
-	// accessed with a dedicated, infra-owned R2 token scoped to it alone.
-	const bucketName = postgresWalgBucketName(ctx.projectName)
 	return {
 		name: 'postgres',
-		async provision(): Promise<void> {
-			const scope: RepoEnvScope = {
-				owner: ctx.repository.owner,
-				repo: ctx.repository.name,
-				environment: ctx.environment,
-			}
-			await ensureEmbeddedPostgresPasswordSecret(ctx.repoSecrets, scope)
+		provision: async (): Promise<void> =>
+			provisionEmbeddedPostgres(ctx, infraStorage),
+		loadEnv: async (): Promise<ServiceEnv> =>
+			loadEmbeddedPostgresEnv(ctx, infraStorage),
+	}
+}
 
-			await ensureR2Bucket({
+/**
+ * Provision the embedded-postgres backup infrastructure: ensure the auto-
+ * generated `POSTGRES_PASSWORD`, the two R2 backup buckets, and one R2 token
+ * scoped to both.
+ *
+ * Two parallel backup schemes, two buckets: wal-g archives base backups + WAL
+ * under `<project>-backups`; the pg_dump sidecar writes logical dumps under
+ * `<project>-backups-dump`. Both are reached with ONE dedicated, infra-owned R2
+ * token scoped to BOTH (never the app `[services.r2]` creds) - so a leak of the
+ * app creds can never reach the backups, and vice versa.
+ */
+async function provisionEmbeddedPostgres(
+	ctx: ServiceFactoryContext,
+	infraStorage: InfraStorageRuntimeConfig,
+): Promise<void> {
+	const scope: RepoEnvScope = {
+		owner: ctx.repository.owner,
+		repo: ctx.repository.name,
+		environment: ctx.environment,
+	}
+	await ensureEmbeddedPostgresPasswordSecret(ctx.repoSecrets, scope)
+
+	const walgBucket = postgresWalgBucketName(ctx.projectName)
+	const dumpBucket = postgresBackupBucketName(ctx.projectName)
+	await Promise.all(
+		[walgBucket, dumpBucket].map(bucketName =>
+			ensureR2Bucket({
 				token: ctx.cfToken,
 				accountId: infraStorage.accountId,
 				bucketName,
 				locationHint: R2_BUCKET_LOCATION_HINT,
-			})
-			logger.info(`wal-g backup bucket ${bucketName} provisioned`)
-			// wal-g authenticates to that bucket with a dedicated R2 token scoped
-			// to it alone (infra-owned, NOT the app `[services.r2]` creds) - so a
-			// leak of the app creds can never reach the backups, and vice versa.
-			await provisionPostgresBackupCreds({
-				cfToken: ctx.cfToken,
-				infraStorage,
-				projectName: ctx.projectName,
-				environment: ctx.environment,
-				bucketName,
-			})
-		},
-		loadEnv: async (): Promise<ServiceEnv> =>
-			loadEmbeddedPostgresEnv(ctx, infraStorage),
-	}
+			}),
+		),
+	)
+	logger.info(
+		`postgres backup buckets provisioned: ${walgBucket}, ${dumpBucket}`,
+	)
+	await provisionPostgresBackupCreds({
+		cfToken: ctx.cfToken,
+		infraStorage,
+		projectName: ctx.projectName,
+		environment: ctx.environment,
+		bucketNames: [walgBucket, dumpBucket],
+	})
 }
 
 async function loadEmbeddedPostgresEnv(

@@ -28,7 +28,10 @@ export interface ProvisionPostgresBackupCredsInput {
 	readonly infraStorage: InfraStorageRuntimeConfig
 	readonly projectName: string
 	readonly environment: AppEnvironment
-	readonly bucketName: string
+	// Buckets the minted token may read+write. Both postgres backup schemes
+	// share ONE token, scoped to the wal-g bucket AND the pg_dump bucket, so
+	// the single `POSTGRES_BACKUP_R2_*` channel feeds every backup sidecar.
+	readonly bucketNames: ReadonlyArray<string>
 }
 
 export interface LoadPostgresBackupCredsInput {
@@ -53,13 +56,15 @@ function stateClient(
 
 /**
  * Provision-time bootstrap for the postgres backup R2 credentials. Mints a
- * Cloudflare R2 API token scoped to the project's `nn-backups-<project>`
- * bucket alone, waits for it to propagate, revokes any prior token of the same
- * name, then persists the derived S3 credentials to the infra state bucket.
+ * single Cloudflare R2 API token scoped to the project's backup buckets (the
+ * wal-g bucket `<project>-backups` AND the pg_dump bucket
+ * `<project>-backups-dump`), waits for it to propagate, revokes any prior
+ * token of the same name, then persists the derived S3 credentials to the
+ * infra state bucket.
  *
  * Rotates on every call (revoke-by-name), mirroring the R2 service: a leaked
  * or corrupted backup credential self-heals on the next provision without
- * touching the dumps already in the bucket.
+ * touching the dumps already in the buckets.
  */
 export async function provisionPostgresBackupCreds(
 	input: ProvisionPostgresBackupCredsInput,
@@ -69,15 +74,21 @@ export async function provisionPostgresBackupCreds(
 		input.projectName,
 		input.environment,
 	)
+	const [probeBucket] = input.bucketNames
+	if (probeBucket === undefined) {
+		throw new Error(
+			'provisionPostgresBackupCreds: bucketNames must not be empty',
+		)
+	}
 	logger.info(
-		`Creating postgres backup R2 token "${tokenName}" scoped to "${input.bucketName}"`,
+		`Creating postgres backup R2 token "${tokenName}" scoped to ${input.bucketNames.map(b => `"${b}"`).join(', ')}`,
 	)
 	const permissions = await resolveR2PermissionGroupIds(input.cfToken)
 	const tokenResult = await createR2Token({
 		token: input.cfToken,
 		tokenName,
 		accountId,
-		bucketNames: [input.bucketName],
+		bucketNames: input.bucketNames,
 		permissions,
 	})
 	const creds = deriveR2Credentials(tokenResult)
@@ -86,7 +97,7 @@ export async function provisionPostgresBackupCreds(
 		accountId,
 		accessKeyId: creds.accessKeyId,
 		secretAccessKey: creds.secretAccessKey,
-		probeBucket: input.bucketName,
+		probeBucket,
 	})
 	await revokeStaleTokens(input.cfToken, tokenName, tokenResult.id)
 

@@ -351,7 +351,7 @@ describe('renderComposeFile', () => {
 				'restore_command=wal-g wal-fetch %f %p',
 			],
 			environment: {
-				WALG_S3_PREFIX: 's3://nn-walg-acme-web',
+				WALG_S3_PREFIX: 's3://acme-web-backups',
 				AWS_ACCESS_KEY_ID: '${POSTGRES_BACKUP_R2_ACCESS_KEY_ID}',
 				AWS_SECRET_ACCESS_KEY:
 					'${POSTGRES_BACKUP_R2_SECRET_ACCESS_KEY}',
@@ -380,8 +380,9 @@ describe('renderComposeFile', () => {
 		})
 		expect(parsed.services.postgres).not.toHaveProperty('command')
 		expect(parsed.services.postgres).not.toHaveProperty('environment')
-		// Zero backups in dev: no wal-g loop sidecar.
+		// Zero backups in dev: neither the wal-g loop nor the pg_dump sidecar.
 		expect(parsed.services).not.toHaveProperty('postgres-walg')
+		expect(parsed.services).not.toHaveProperty('postgres-backup')
 	})
 
 	it('does not expose postgres on a host port', () => {
@@ -415,7 +416,7 @@ describe('renderComposeFile', () => {
 			command: ['walg-backup-loop.sh'],
 			volumes: [`${POSTGRES_DATA_VOLUME}:${POSTGRES_DATA_DIR}:ro`],
 			environment: {
-				WALG_S3_PREFIX: 's3://nn-walg-acme-web',
+				WALG_S3_PREFIX: 's3://acme-web-backups',
 				AWS_ACCESS_KEY_ID: '${POSTGRES_BACKUP_R2_ACCESS_KEY_ID}',
 				AWS_SECRET_ACCESS_KEY:
 					'${POSTGRES_BACKUP_R2_SECRET_ACCESS_KEY}',
@@ -441,6 +442,54 @@ describe('renderComposeFile', () => {
 		)
 
 		expect(parsed.services['postgres-walg']).not.toHaveProperty('ports')
+	})
+
+	it('emits the pg_dump backup sidecar (daily, image-prune off, dump bucket) in production', () => {
+		const parsed = parse(
+			renderComposeFile(baseInput({ postgres: { mode: 'embedded' } })),
+		)
+
+		expect(parsed.services['postgres-backup']).toEqual({
+			image: 'ghcr.io/solectrus/postgres-s3-backup:18',
+			restart: 'unless-stopped',
+			depends_on: ['postgres'],
+			environment: {
+				SCHEDULE: '@daily',
+				BACKUP_KEEP_DAYS: '',
+				S3_REGION: 'auto',
+				S3_ACCESS_KEY_ID: '${POSTGRES_BACKUP_R2_ACCESS_KEY_ID}',
+				S3_SECRET_ACCESS_KEY: '${POSTGRES_BACKUP_R2_SECRET_ACCESS_KEY}',
+				S3_ENDPOINT: '${POSTGRES_BACKUP_R2_ENDPOINT}',
+				S3_BUCKET: 'acme-web-backups-dump',
+				S3_PREFIX: 'postgres',
+				S3_S3V4: 'yes',
+				POSTGRES_HOST: 'postgres',
+				POSTGRES_DATABASE: 'acme_web',
+				POSTGRES_USER: 'acme_web',
+				POSTGRES_PASSWORD: '${POSTGRES_PASSWORD}',
+			},
+		})
+	})
+
+	it('does not expose the pg_dump backup sidecar on a host port', () => {
+		const parsed = parse(
+			renderComposeFile(baseInput({ postgres: { mode: 'embedded' } })),
+		)
+
+		expect(parsed.services['postgres-backup']).not.toHaveProperty('ports')
+	})
+
+	it('omits the pg_dump backup sidecar in development (zero backups in dev)', () => {
+		const parsed = parse(
+			renderComposeFile(
+				baseInput({
+					environment: 'development',
+					postgres: { mode: 'embedded' },
+				}),
+			),
+		)
+
+		expect(parsed.services).not.toHaveProperty('postgres-backup')
 	})
 
 	it('merges the postgres-data volume with user-declared volumes', () => {
@@ -653,7 +702,7 @@ describe('renderComposeFile - multiple user services', () => {
 })
 
 describe('renderComposeFile - postgres service wiring', () => {
-	it('renders the postgres server, wal-g backup loop, and exporter in embedded mode', () => {
+	it('renders the postgres server, wal-g backup loop, pg_dump backup, and exporter in embedded mode', () => {
 		const parsed = parse(
 			renderComposeFile(baseInput({ postgres: { mode: 'embedded' } })),
 		)
@@ -662,6 +711,7 @@ describe('renderComposeFile - postgres service wiring', () => {
 			'app',
 			'postgres',
 			'postgres-walg',
+			'postgres-backup',
 			'postgres-exporter',
 		])
 		expect(parsed.volumes).toEqual({ [POSTGRES_DATA_VOLUME]: {} })
@@ -830,6 +880,7 @@ describe('renderComposeFile - supabase service wiring', () => {
 			'app',
 			'postgres',
 			'postgres-walg',
+			'postgres-backup',
 			'db',
 			'auth',
 			'realtime',

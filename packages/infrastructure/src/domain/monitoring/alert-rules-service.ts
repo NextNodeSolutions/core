@@ -104,14 +104,17 @@ export const POSTGRES_RULE_GROUP: RuleGroup = {
 }
 
 /**
- * 3 hours = three missed hourly backups before the alert fires (the sidecar
- * runs `@hourly`, see POSTGRES_BACKUP_SCHEDULE). Tight enough to surface a
- * broken backup pipeline within a few cycles, loose enough to absorb a
- * single slow dump plus the 5-minute scrape cadence without flapping. The
- * `nn_backup_last_success_timestamp_seconds` sample reflects the newest
- * dump's timestamp, surfaced by the monitoring control plane from R2 (PRD P6).
+ * 50 hours = two missed daily dumps before the alert fires. The pg_dump
+ * sidecar now runs `@daily` (POSTGRES_BACKUP_SCHEDULE) - the fine-grained RPO
+ * is wal-g's job; this logical stream is the long-horizon belt. A single
+ * missed cycle (the solectrus image has no retry loop) is left to settle to
+ * avoid flapping; two missed cycles means the GFS pipeline is genuinely broken
+ * - fire critical. Mirrors the wal-g critical tier (WalgBaseBackupMissing, also
+ * 50h). The `nn_backup_last_success_timestamp_seconds` sample reflects the
+ * newest dump's timestamp, surfaced by the monitoring control plane from R2
+ * (PRD P6).
  */
-const BACKUP_STALE_HOURS = 3
+const BACKUP_STALE_HOURS = 50
 const SECONDS_PER_HOUR = 3600
 const BACKUP_STALE_SECONDS = BACKUP_STALE_HOURS * SECONDS_PER_HOUR
 
@@ -148,7 +151,7 @@ export const BACKUPS_RULE_GROUP: RuleGroup = {
 			annotations: {
 				summary: 'Backup stale for {{ $labels.project }}',
 				description:
-					'No successful pg_dump upload for {{ $labels.project }} in over 3 hours (the sidecar runs hourly). Read the postgres-backup container logs and run a manual backup.',
+					'No successful pg_dump upload for {{ $labels.project }} in over 50 hours (the sidecar runs daily; two missed cycles). Read the postgres-backup container logs and run a manual backup.',
 			},
 		},
 		{

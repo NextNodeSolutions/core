@@ -124,46 +124,41 @@ export function buildPostgresExternalEnv(databaseUrl: string): ServiceEnv {
 export const POSTGRES_BACKUP_SERVICE_NAME = 'postgres-backup'
 
 /**
- * Cron schedule string consumed by the backup image. `@hourly` runs once
- * per hour inside the sidecar, capping the worst-case data loss (RPO) on a
- * disposable VPS at ~1h instead of ~24h. The dumps are cheap (a small
- * embedded DB compresses to KB-MB), so the higher cadence does not strain
- * storage. Projects with large, write-heavy databases should move to
- * `[services.postgres].mode = "external"` (managed DB, owns its own
- * backups). Pairs with auto-restore: a freshly re-provisioned VPS
- * rehydrates from the latest of these dumps before migrate runs (see
- * `domain/deploy/auto-restore.ts`).
+ * Cron schedule string consumed by the backup image. `@daily` runs one
+ * logical dump per day inside the sidecar. The fine-grained RPO is owned by
+ * wal-g (continuous WAL archiving + periodic base backups, see
+ * postgres-walg.ts); this pg_dump stream is the portable, cross-version,
+ * long-horizon belt to wal-g's suspenders, so a daily cadence is enough - it
+ * anchors the GFS retention buckets (`selectPostgresBackupsToPrune`, 7 daily /
+ * 4 weekly / 3 monthly). Projects with large, write-heavy databases should
+ * move to `[services.postgres].mode = "external"` (managed DB, owns its own
+ * backups).
  */
-export const POSTGRES_BACKUP_SCHEDULE = '@hourly'
+export const POSTGRES_BACKUP_SCHEDULE = '@daily'
 
 /**
- * Age-based retention the backup image enforces itself: after each
- * successful upload, `backup.sh` deletes every dump older than this many
- * days. Despite the `KEEP_DAYS` name, `'0'` does NOT disable pruning - the
- * image guards with `[ -n "$BACKUP_KEEP_DAYS" ]`, so `'0'` is a non-empty
- * (truthy) string and prunes everything older than *today*, leaving barely
- * a day of history. We set a real window instead: 30 days of hourly dumps
- * is ~720 objects, comfortably under the image's single-page (non-
- * paginated) `s3api list-objects` prune scan of ~1000, so every stale dump
- * is actually swept rather than silently surviving past the first page. The
- * SAME ~1000 cap applies to `restore.sh`'s latest-dump lookup (`aws s3 ls |
- * sort | tail -n1`, also non-paginated), so this window keeps auto-restore
- * correct too: with the object count held under 1000, `tail` always sees the
- * genuine newest dump. This is the ENFORCED retention; the richer GFS
- * `selectPostgresBackupsToPrune` helper is reserved for a future scheduled
- * prune and is not wired today.
+ * Age-based retention the backup image enforces itself: after each successful
+ * upload, `backup.sh` deletes every dump older than this many days - guarded
+ * by `[ -n "$BACKUP_KEEP_DAYS" ]`, so an EMPTY string disables the image-side
+ * prune entirely. (A non-empty `'0'` would NOT disable it - `'0'` is truthy to
+ * `-n` and would prune everything older than *today*.) We deliberately turn the
+ * image prune OFF and make the GFS policy (`selectPostgresBackupsToPrune`, 7
+ * daily / 4 weekly / 3 monthly, run on deploy + a daily cron) the SOLE owner of
+ * retention: the naive age window cannot express grandfather-father-son, and
+ * two pruners racing on one bucket would fight. Keep this empty.
  */
-export const POSTGRES_BACKUP_KEEP_DAYS = '30'
+export const POSTGRES_BACKUP_KEEP_DAYS = ''
 
 /**
- * R2 bucket name for the project's postgres dumps. The bucket is project-
- * scoped (one per app) and lives outside the `[services.r2]` bucket list
- * on purpose - backups are infrastructure, not application data, and the
- * provisioning of this bucket is owned by the deploy pipeline rather than
- * declared per project.
+ * R2 bucket name for the project's pg_dump logical backups. Project-scoped
+ * (one per app) and outside the `[services.r2]` bucket list on purpose -
+ * backups are infrastructure, not application data, and this bucket is owned
+ * by the deploy pipeline, not declared per project. The `-dump` suffix keeps
+ * it distinct from the wal-g bucket (`<project>-backups`, see
+ * `postgresWalgBucketName`); the two schemes never collide.
  */
 export function postgresBackupBucketName(projectName: string): string {
-	return `nn-backups-${projectName}`
+	return `${projectName}-backups-dump`
 }
 
 /**
@@ -171,7 +166,7 @@ export function postgresBackupBucketName(projectName: string): string {
  * each file `<POSTGRES_DATABASE>_<timestamp>.dump` where timestamp is
  * `date +%Y-%m-%dT%H:%M:%S` (colons, no `Z`, no milliseconds), so the
  * full key looks like
- * `s3://nn-backups-<project>/postgres/<project_id>_2026-05-16T03:00:00.dump`.
+ * `s3://<project>-backups-dump/postgres/<project_id>_2026-05-16T03:00:00.dump`.
  */
 export const POSTGRES_BACKUP_PREFIX = 'postgres'
 
@@ -426,9 +421,12 @@ export interface PostgresBackupSidecarService {
 }
 
 /**
- * Build the compose sidecar definition for the daily postgres backup to
- * R2. Returns `null` when `mode = external` - the user owns the database
- * and is responsible for their own backups.
+ * Build the compose sidecar definition for the daily pg_dump backup to R2.
+ * Returns `null` outside production (dev runs zero backups, mirroring the
+ * wal-g loop) or for `mode = external` (the user owns the database and their
+ * own backups). Runs in PARALLEL with the wal-g sidecars: wal-g owns the
+ * fine-grained PITR window, this pg_dump stream owns the portable,
+ * cross-version, GFS-retained long-horizon snapshots.
  *
  * Image is `ghcr.io/solectrus/postgres-s3-backup` pinned to
  * `NEXTNODE_POSTGRES_VERSION` (kept in sync with the server image so the
@@ -437,19 +435,23 @@ export interface PostgresBackupSidecarService {
  * backup-s3`; it adds support for postgres 17+ and ships an identical
  * env-var contract (`SCHEDULE`, `S3_*`, `POSTGRES_*`, `sh backup.sh`
  * triggering an ad-hoc dump). R2 credentials are INFRA-owned, not the app
- * `[services.r2]` block: the backup bucket `nn-backups-<project>` is infra
+ * `[services.r2]` block: the backup bucket `<project>-backups-dump` is infra
  * storage (like the state + certs buckets), reached via a dedicated R2 token
- * scoped to that one bucket. `createPostgresService` provisions the token and
- * `loadEnv` projects it as `POSTGRES_BACKUP_R2_*` into the shared `.env`;
- * those names are renamed to the `S3_*` the image expects via compose
- * interpolation. Dedicated names (not the generic `R2_*`) so a project that
- * ALSO declares `[services.r2]` does not collide in `mergeServiceEnvs`.
+ * scoped to it AND the wal-g bucket. `createPostgresService` provisions the
+ * token and `loadEnv` projects it as `POSTGRES_BACKUP_R2_*` into the shared
+ * `.env` (the same channel the wal-g sidecars read); those names are renamed
+ * to the `S3_*` the image expects via compose interpolation. Dedicated names
+ * (not the generic `R2_*`) so a project that ALSO declares `[services.r2]`
+ * does not collide in `mergeServiceEnvs`. Image-side age prune is OFF
+ * (`BACKUP_KEEP_DAYS` empty); the GFS cron owns retention.
  */
 export function buildPostgresBackupSidecar(
 	config: PostgresServiceConfig,
 	projectName: string,
+	environment: string,
 ): PostgresBackupSidecarService | null {
 	if (config.mode !== 'embedded') return null
+	if (environment !== 'production') return null
 
 	const id = postgresProjectIdentifier(projectName)
 

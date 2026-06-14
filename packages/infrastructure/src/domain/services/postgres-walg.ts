@@ -63,11 +63,12 @@ export const POSTGRES_WALG_COMPRESSION = 'lz4'
 
 /**
  * Per-project R2 bucket holding the wal-g base backups + archived WAL. Distinct
- * from the legacy `nn-backups-<project>` (pg_dump) bucket so the two schemes
- * never collide. wal-g lays out `basebackups_005/` and `wal_005/` under it.
+ * from the pg_dump logical-backup bucket (`<project>-backups-dump`, see
+ * `postgresBackupBucketName`) so the two schemes never collide. wal-g lays out
+ * `basebackups_005/` and `wal_005/` under it.
  */
 export function postgresWalgBucketName(projectName: string): string {
-	return `nn-walg-${projectName}`
+	return `${projectName}-backups`
 }
 
 /** Full `WALG_S3_PREFIX` (bucket root) wal-g reads/writes under. */

@@ -37,7 +37,7 @@ describe('buildPostgresSidecar', () => {
 		expect(sidecar.command).toContain('archive_command=wal-g wal-push %p')
 		expect(sidecar.command).toContain('archive_timeout=180')
 		expect(sidecar.environment?.['WALG_S3_PREFIX']).toBe(
-			's3://nn-walg-acme-web',
+			's3://acme-web-backups',
 		)
 	})
 
@@ -115,7 +115,7 @@ describe('buildPostgresWalgSidecar', () => {
 		)
 
 		expect(sidecar?.environment).toMatchObject({
-			WALG_S3_PREFIX: 's3://nn-walg-acme-web',
+			WALG_S3_PREFIX: 's3://acme-web-backups',
 			AWS_ACCESS_KEY_ID: '${POSTGRES_BACKUP_R2_ACCESS_KEY_ID}',
 			AWS_SECRET_ACCESS_KEY: '${POSTGRES_BACKUP_R2_SECRET_ACCESS_KEY}',
 			AWS_ENDPOINT: '${POSTGRES_BACKUP_R2_ENDPOINT}',

@@ -14,9 +14,11 @@ import {
 	buildPostgresWalgSidecar,
 } from '#/domain/services/postgres-walg.ts'
 import {
+	POSTGRES_BACKUP_SERVICE_NAME,
 	POSTGRES_DATA_VOLUME,
 	POSTGRES_SIDECAR_PORT,
 	POSTGRES_SIDECAR_SERVICE_NAME,
+	buildPostgresBackupSidecar,
 	postgresProjectIdentifier,
 } from '#/domain/services/postgres.ts'
 import {
@@ -46,6 +48,7 @@ import type {
 	PostgresSidecarService,
 	PostgresWalgSidecarService,
 } from '#/domain/services/postgres-walg.ts'
+import type { PostgresBackupSidecarService } from '#/domain/services/postgres.ts'
 import type {
 	SupabaseBackupSidecarService,
 	SupabaseService,
@@ -82,6 +85,7 @@ type ComposeServiceLike =
 	| ComposeUserService
 	| PostgresSidecarService
 	| PostgresWalgSidecarService
+	| PostgresBackupSidecarService
 	| SupabaseService
 	| SupabaseBackupSidecarService
 	| PostgresExporterSidecarService
@@ -137,7 +141,9 @@ function buildTopLevelVolumes(
  *
  * The wal-g backup loop is production-only (dev runs zero backups), so it is
  * spread in conditionally; WAL archiving itself rides on the server's
- * archive_command (see `buildPostgresSidecar`).
+ * archive_command (see `buildPostgresSidecar`). The pg_dump backup sidecar
+ * runs IN PARALLEL with wal-g (logical/GFS long-horizon snapshots beside
+ * wal-g's PITR window) and is likewise production-only.
  */
 function buildPostgresServiceGroup(
 	config: PostgresServiceConfig,
@@ -148,6 +154,11 @@ function buildPostgresServiceGroup(
 	const sidecar = buildPostgresSidecar(config, projectName, environment)
 	if (sidecar === null) return null
 	const walgBackup = buildPostgresWalgSidecar(
+		config,
+		projectName,
+		environment,
+	)
+	const dumpBackup = buildPostgresBackupSidecar(
 		config,
 		projectName,
 		environment,
@@ -166,6 +177,7 @@ function buildPostgresServiceGroup(
 	return {
 		[POSTGRES_SIDECAR_SERVICE_NAME]: instrumentedSidecar,
 		...(walgBackup ? { [POSTGRES_WALG_SERVICE_NAME]: walgBackup } : {}),
+		...(dumpBackup ? { [POSTGRES_BACKUP_SERVICE_NAME]: dumpBackup } : {}),
 		...(hasSupabase
 			? {}
 			: {

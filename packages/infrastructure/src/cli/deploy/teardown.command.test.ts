@@ -322,7 +322,7 @@ describe('teardownCommand - postgres backup wipe', () => {
 
 		expect(mockWipePostgresBackups).not.toHaveBeenCalled()
 		expect(mockLoggerInfo).toHaveBeenCalledWith(
-			'Preserving backup bucket "nn-backups-my-app" (use --wipe-backups to remove).',
+			'Preserving backup bucket "my-app-backups-dump" (use --wipe-backups to remove).',
 		)
 	})
 
@@ -333,9 +333,9 @@ describe('teardownCommand - postgres backup wipe', () => {
 
 		expect(mockWipePostgresBackups).toHaveBeenCalledTimes(1)
 		const [, bucketArg] = mockWipePostgresBackups.mock.calls[0] ?? []
-		expect(bucketArg).toBe('nn-backups-my-app')
+		expect(bucketArg).toBe('my-app-backups-dump')
 		expect(mockLoggerInfo).toHaveBeenCalledWith(
-			'Wiping backup bucket "nn-backups-my-app" (irreversible)...',
+			'Wiping backup bucket "my-app-backups-dump" (irreversible)...',
 		)
 	})
 

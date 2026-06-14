@@ -89,10 +89,10 @@ describe('renderVmalertMetricRulesYaml', () => {
 		}
 	})
 
-	it('fires BackupStale after 3 hours without a successful backup', () => {
+	it('fires BackupStale after two missed daily dumps (50h) without a successful backup', () => {
 		const stale = alerts.find(rule => rule.alert === 'BackupStale')
 		expect(stale?.expr).toBe(
-			'time() - nn_backup_last_success_timestamp_seconds > 10800',
+			'time() - nn_backup_last_success_timestamp_seconds > 180000',
 		)
 	})
 
