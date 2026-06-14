@@ -32,6 +32,43 @@ async function pushFileIfChanged(
 	return true
 }
 
+/**
+ * cAdvisor: write the TS_IP env file the golden-image unit reads, then
+ * (re)enable it. `/etc/monitoring` is created defensively (owned by `deploy` so
+ * the sftp write succeeds) for VPSes whose golden image predates that step. The
+ * `enable --now` is tolerated if it fails: a VPS whose image predates the
+ * cadvisor unit must not fail the whole deploy - the agent arrives when the VPS
+ * is recreated from a current golden image. A changed IP (VPS recreation) needs
+ * the restart to re-bind the publish address.
+ */
+async function convergeCadvisor(
+	session: SshSession,
+	monitoringEnv: string,
+): Promise<void> {
+	await session.exec(
+		'sudo mkdir -p /etc/monitoring && sudo chown deploy:deploy /etc/monitoring',
+	)
+	const monitoringEnvChanged = await pushFileIfChanged(
+		session,
+		MONITORING_ENV_PATH,
+		monitoringEnv,
+	)
+	const cadvisorEnabled = await session
+		.exec('sudo systemctl enable --now cadvisor')
+		.then(() => true)
+		.catch(() => false)
+	if (!cadvisorEnabled) {
+		logger.warn(
+			'cadvisor unit unavailable on this VPS (golden image predates the monitoring agents) - skipping; recreate the VPS from a current golden image to enable per-VPS metrics',
+		)
+		return
+	}
+	if (monitoringEnvChanged) {
+		await session.exec('sudo systemctl restart cadvisor')
+		logger.info('Restarted cadvisor')
+	}
+}
+
 export async function converge(
 	session: SshSession,
 	input: ConvergenceInput,
@@ -70,27 +107,7 @@ export async function converge(
 		logger.info('Restarted caddy')
 	}
 
-	// cAdvisor: write the TS_IP env file the golden-image unit reads,
-	// then (re)enable it. `enable --now` is idempotent; a changed IP
-	// (VPS recreation) needs the restart to re-bind the publish address.
-	//
-	// Create /etc/monitoring defensively (owned by `deploy` so the sftp write
-	// below succeeds): the golden image does this, but VPSes provisioned from an
-	// image predating that step lack the directory and the write would fail with
-	// "No such file". Idempotent on a current golden image.
-	await session.exec(
-		'sudo mkdir -p /etc/monitoring && sudo chown deploy:deploy /etc/monitoring',
-	)
-	const monitoringEnvChanged = await pushFileIfChanged(
-		session,
-		MONITORING_ENV_PATH,
-		input.monitoringEnv,
-	)
-	await session.exec('sudo systemctl enable --now cadvisor')
-	if (monitoringEnvChanged) {
-		await session.exec('sudo systemctl restart cadvisor')
-		logger.info('Restarted cadvisor')
-	}
+	await convergeCadvisor(session, input.monitoringEnv)
 
 	// Per-project directories are created on demand by deployContainer when
 	// each project deploys onto this VPS. Convergence is purely VPS-level.
