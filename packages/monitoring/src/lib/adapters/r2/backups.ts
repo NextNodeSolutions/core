@@ -6,9 +6,9 @@ import type { R2StateClient } from '@/lib/adapters/r2/state.ts'
 
 const HTTP_NOT_FOUND = 404
 
-/** pg_dump logical backups live under this prefix in `nn-backups-<project>`. */
+/** pg_dump logical backups live under this prefix in `<project>-backups-dump`. */
 const PG_DUMP_PREFIX = 'postgres/'
-/** wal-g physical base backups live under this prefix in `nn-walg-<project>`. */
+/** wal-g physical base backups live under this prefix in `<project>-backups`. */
 const WALG_BASE_BACKUP_PREFIX = 'basebackups_005/'
 
 export interface BackupObject {
@@ -30,8 +30,15 @@ const parseListXml = (xml: string): ReadonlyArray<BackupObject> => {
 	return objects
 }
 
-const pgDumpBucketName = (project: string): string => `nn-backups-${project}`
-const walgBucketName = (project: string): string => `nn-walg-${project}`
+// Bucket names MUST match the infrastructure package's source of truth
+// (`postgresBackupBucketName` / `postgresWalgBucketName` in
+// `packages/infrastructure/src/domain/services/postgres{,-walg}.ts`), which the
+// deploy pipeline uses to create + write these buckets. They were renamed
+// (commit 0d8a3ec) from the old `nn-walg-<p>` / `nn-backups-<p>` scheme; keep
+// these two derivations in lockstep or backup-health silently reads empty.
+export const pgDumpBucketName = (project: string): string =>
+	`${project}-backups-dump`
+export const walgBucketName = (project: string): string => `${project}-backups`
 
 const fetchBucketObjects = async (args: {
 	client: R2StateClient
