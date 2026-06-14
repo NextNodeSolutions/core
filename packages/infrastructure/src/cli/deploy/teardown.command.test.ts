@@ -317,23 +317,29 @@ describe('teardownCommand - postgres backup wipe', () => {
 		mockLoggerInfo.mockClear()
 	})
 
-	it('preserves the backup bucket when TEARDOWN_WIPE_BACKUPS is unset', async () => {
+	it('preserves both backup buckets when TEARDOWN_WIPE_BACKUPS is unset', async () => {
 		await teardownCommand(APP_WITH_POSTGRES)
 
 		expect(mockWipePostgresBackups).not.toHaveBeenCalled()
 		expect(mockLoggerInfo).toHaveBeenCalledWith(
-			'Preserving backup bucket "my-app-backups-dump" (use --wipe-backups to remove).',
+			'Preserving backup buckets "my-app-backups", "my-app-backups-dump" (use --wipe-backups to remove).',
 		)
 	})
 
-	it('wipes the backup bucket exactly once when TEARDOWN_WIPE_BACKUPS is set', async () => {
+	it('wipes BOTH the wal-g and pg_dump buckets when TEARDOWN_WIPE_BACKUPS is set', async () => {
 		vi.stubEnv('TEARDOWN_WIPE_BACKUPS', '1')
 
 		await teardownCommand(APP_WITH_POSTGRES)
 
-		expect(mockWipePostgresBackups).toHaveBeenCalledTimes(1)
-		const [, bucketArg] = mockWipePostgresBackups.mock.calls[0] ?? []
-		expect(bucketArg).toBe('my-app-backups-dump')
+		expect(mockWipePostgresBackups).toHaveBeenCalledTimes(2)
+		const [walgCall, dumpCall] = mockWipePostgresBackups.mock.calls
+		const [, walgBucket] = walgCall ?? []
+		const [, dumpBucket] = dumpCall ?? []
+		expect(walgBucket).toBe('my-app-backups')
+		expect(dumpBucket).toBe('my-app-backups-dump')
+		expect(mockLoggerInfo).toHaveBeenCalledWith(
+			'Wiping backup bucket "my-app-backups" (irreversible)...',
+		)
 		expect(mockLoggerInfo).toHaveBeenCalledWith(
 			'Wiping backup bucket "my-app-backups-dump" (irreversible)...',
 		)

@@ -10,6 +10,7 @@ import {
 	validateTeardownOptions,
 } from '#/domain/deploy/teardown-target.ts'
 import { resolveEnvironment } from '#/domain/environment.ts'
+import { postgresWalgBucketName } from '#/domain/services/postgres-walg.ts'
 import { postgresBackupBucketName } from '#/domain/services/postgres.ts'
 import { computeR2BucketName } from '#/domain/services/r2.ts'
 import { S3Client } from '@aws-sdk/client-s3'
@@ -73,21 +74,27 @@ async function maybeCaptureFinalBackup(gate: FinalBackupGate): Promise<void> {
 	}
 }
 
-// Either wipe the project's postgres backup bucket (irreversible) or log that
-// it was preserved. Driven by the TEARDOWN_WIPE_BACKUPS opt-in.
+// Either wipe BOTH of the project's postgres backup buckets (the wal-g
+// `<project>-backups` and the pg_dump `<project>-backups-dump`, irreversible) or
+// log that they were preserved. Driven by the TEARDOWN_WIPE_BACKUPS opt-in. Both
+// schemes are wiped so `--wipe-backups` actually purges every backup - the wal-g
+// bucket holds the live base backups + WAL, the dump bucket the logical GFS
+// dumps; leaving either behind would strand real backups.
 async function reconcilePostgresBackups(
 	projectName: string,
 	infraStorage: InfraStorageRuntimeConfig,
 	shouldWipeBackups: boolean,
 ): Promise<void> {
-	const bucket = postgresBackupBucketName(projectName)
+	const buckets = [
+		postgresWalgBucketName(projectName),
+		postgresBackupBucketName(projectName),
+	]
 	if (!shouldWipeBackups) {
 		logger.info(
-			`Preserving backup bucket "${bucket}" (use --wipe-backups to remove).`,
+			`Preserving backup buckets ${buckets.map(b => `"${b}"`).join(', ')} (use --wipe-backups to remove).`,
 		)
 		return
 	}
-	logger.info(`Wiping backup bucket "${bucket}" (irreversible)...`)
 	const s3 = new S3Client({
 		region: 'auto',
 		endpoint: infraStorage.endpoint,
@@ -96,7 +103,12 @@ async function reconcilePostgresBackups(
 			secretAccessKey: infraStorage.secretAccessKey,
 		},
 	})
-	await wipePostgresBackups(s3, bucket)
+	await Promise.all(
+		buckets.map(bucket => {
+			logger.info(`Wiping backup bucket "${bucket}" (irreversible)...`)
+			return wipePostgresBackups(s3, bucket)
+		}),
+	)
 }
 
 /**
