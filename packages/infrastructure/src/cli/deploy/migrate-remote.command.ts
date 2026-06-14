@@ -80,7 +80,11 @@ export async function migrateRemoteCommand(
 	// retention holds even between daily cron runs. Embedded-only: external mode
 	// has no NextNode-owned dump bucket. wal-g manages its own retention.
 	if (postgres.mode === 'embedded' && infraStorage !== null) {
-		await pruneProjectBackups(infraStorage, config.project.name)
+		await pruneProjectBackups(
+			infraStorage,
+			config.project.name,
+			environment,
+		)
 	}
 
 	writeSummary(

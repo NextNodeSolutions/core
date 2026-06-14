@@ -305,6 +305,7 @@ describe('migrateRemoteCommand', () => {
 		expect(mockPruneProjectBackups).toHaveBeenCalledExactlyOnceWith(
 			expect.objectContaining({ stateBucket: 'nextnode-state' }),
 			'my-app',
+			'production',
 		)
 		const [migrateOrder] = mockRunMigrate.mock.invocationCallOrder
 		const [pruneOrder] = mockPruneProjectBackups.mock.invocationCallOrder

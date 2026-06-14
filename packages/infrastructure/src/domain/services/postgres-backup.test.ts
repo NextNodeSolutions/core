@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
 	buildPostgresBackupCredsEnv,
+	parsePostgresBackupStateKey,
 	postgresBackupStateKey,
 	postgresBackupTokenName,
 } from './postgres-backup.ts'
@@ -22,6 +23,28 @@ describe('postgresBackupStateKey', () => {
 		expect(postgresBackupStateKey('acme-web', 'production')).toBe(
 			'services/postgres-backup/acme-web/production.json',
 		)
+	})
+})
+
+describe('parsePostgresBackupStateKey', () => {
+	it('round-trips a key produced by postgresBackupStateKey', () => {
+		expect(
+			parsePostgresBackupStateKey(
+				postgresBackupStateKey('acme-web', 'production'),
+			),
+		).toEqual({ projectName: 'acme-web', environment: 'production' })
+	})
+
+	it('rejects keys outside the prefix, malformed keys, and unknown environments', () => {
+		expect(parsePostgresBackupStateKey('hetzner/nn-prod.json')).toBeNull()
+		expect(
+			parsePostgresBackupStateKey('services/postgres-backup/stray.txt'),
+		).toBeNull()
+		expect(
+			parsePostgresBackupStateKey(
+				'services/postgres-backup/acme-web/staging.json',
+			),
+		).toBeNull()
 	})
 })
 

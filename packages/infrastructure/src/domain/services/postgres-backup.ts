@@ -1,3 +1,5 @@
+import { isAppEnvironment } from '#/domain/environment.ts'
+
 import type { AppEnvironment } from '#/domain/environment.ts'
 import type { ServiceEnv } from './service.ts'
 
@@ -28,12 +30,39 @@ export function postgresBackupTokenName(
 	return `nextnode-postgres-backup-${projectName}-${environment}`
 }
 
+/** State-bucket prefix every project's backup-creds key lives under. */
+export const POSTGRES_BACKUP_STATE_PREFIX = 'services/postgres-backup/'
+
 /** State-bucket key holding the persisted backup R2 credentials. */
 export function postgresBackupStateKey(
 	projectName: string,
 	environment: AppEnvironment,
 ): string {
-	return `services/postgres-backup/${projectName}/${environment}.json`
+	return `${POSTGRES_BACKUP_STATE_PREFIX}${projectName}/${environment}.json`
+}
+
+/**
+ * Inverse of `postgresBackupStateKey`: recover the (project, environment) pair
+ * from a backup-creds state key. Returns null for any key that doesn't match
+ * the `<prefix><project>/<environment>.json` layout, so the fleet prune can
+ * enumerate `POSTGRES_BACKUP_STATE_PREFIX` and silently skip stray objects.
+ */
+export function parsePostgresBackupStateKey(
+	key: string,
+): { projectName: string; environment: AppEnvironment } | null {
+	if (!key.startsWith(POSTGRES_BACKUP_STATE_PREFIX)) return null
+	const rest = key.slice(POSTGRES_BACKUP_STATE_PREFIX.length)
+	const match = /^([^/]+)\/([^/]+)\.json$/.exec(rest)
+	if (match === null) return null
+	const [, projectName, environment] = match
+	if (
+		projectName === undefined ||
+		environment === undefined ||
+		!isAppEnvironment(environment)
+	) {
+		return null
+	}
+	return { projectName, environment }
 }
 
 /**
