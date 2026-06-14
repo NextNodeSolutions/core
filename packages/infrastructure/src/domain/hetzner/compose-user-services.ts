@@ -43,8 +43,12 @@ const HEALTHCHECK_TIMEOUT = '3s'
 const HEALTHCHECK_RETRIES = 6
 
 function buildHealthcheck(port: number): ComposeHealthcheck {
+	// Probe 127.0.0.1, NOT `localhost`: in the app containers `localhost`
+	// resolves to ::1 first, but the node servers bind IPv4 0.0.0.0 only, so a
+	// `localhost` probe gets ECONNREFUSED and flags a serving container
+	// `unhealthy` (which then stalls every `service_healthy` dependent).
 	return {
-		test: ['CMD', 'wget', '-q', '-O-', `http://localhost:${port}/healthz`],
+		test: ['CMD', 'wget', '-q', '-O-', `http://127.0.0.1:${port}/healthz`],
 		interval: HEALTHCHECK_INTERVAL,
 		timeout: HEALTHCHECK_TIMEOUT,
 		retries: HEALTHCHECK_RETRIES,
