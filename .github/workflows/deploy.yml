@@ -125,6 +125,12 @@ jobs:
                   R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
                   R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
                   GH_TOKEN: ${{ steps.app-token.outputs.token }}
+                  # Fleet log shipping, opt-in via repo/org Variables: when
+                  # NN_VL_URL is set, convergence configures Vector to push logs
+                  # to the sink (logs.monitoring.nextnode.fr, publicly-trusted
+                  # ACME cert). Unset renders as "" → Vector stays off.
+                  NN_VL_URL: ${{ vars.NN_VL_URL }}
+                  NN_CLIENT_ID: ${{ vars.NN_CLIENT_ID }}
                   # Lets ensureGeneratedSecrets see already-generated secrets
                   # and skip regeneration (idempotent, non-rotating).
                   ALL_SECRETS: ${{ toJSON(secrets) }}
@@ -286,4 +292,8 @@ jobs:
                   R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
                   IMAGE_REFS: ${{ needs.build-image.outputs.image_refs || needs.plan.outputs.upstream_image_refs }}
                   GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  # Keep the target identical to provision (vector config built
+                  # the same way in both). See provision env for the contract.
+                  NN_VL_URL: ${{ vars.NN_VL_URL }}
+                  NN_CLIENT_ID: ${{ vars.NN_CLIENT_ID }}
                   ALL_SECRETS: ${{ toJSON(secrets) }}
