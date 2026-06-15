@@ -70,6 +70,30 @@ describe('summarizeProject', () => {
 		expect(summary.current?.id).toBe('2026-06-13T12:00:00Z')
 	})
 
+	it('skips a more recent non-success head to the canonical prod success', () => {
+		// Head is a failed preview (newest), so `current` must NOT fall back to
+		// deployments[0]; it must resolve to the older successful production.
+		const withFailingHead = [
+			at('2026-06-13T13:00:00Z', 'preview', 'failure'),
+			at('2026-06-13T12:30:00Z', 'production', 'active'),
+			at('2026-06-13T11:00:00Z', 'production', 'success'),
+			at('2026-06-13T10:00:00Z', 'preview', 'success'),
+		]
+		const skipped = summarizeProject(withFailingHead)
+		expect(skipped.current?.id).toBe('2026-06-13T11:00:00Z')
+		expect(skipped.last?.id).toBe('2026-06-13T13:00:00Z')
+	})
+
+	it('falls back to the head when no production deployment ever succeeded', () => {
+		const noProdSuccess = [
+			at('2026-06-13T13:00:00Z', 'preview', 'failure'),
+			at('2026-06-13T12:00:00Z', 'production', 'failure'),
+		]
+		expect(summarizeProject(noProdSuccess).current?.id).toBe(
+			'2026-06-13T13:00:00Z',
+		)
+	})
+
 	it('computes the success rate over finished deployments only', () => {
 		// 4 finished (2 success, 2 failure) → 50%
 		expect(summary.successRate).toBe(50)
