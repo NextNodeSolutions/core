@@ -165,11 +165,17 @@ const stepLabelClass: Record<StepState, string> = {
 	pending: 'font-medium text-base-500',
 }
 
-const successRateClass = (rate: number): string => {
+const EMPTY_VALUE = '-'
+
+const successRateClass = (rate: number | null): string => {
+	if (rate === null) return 'text-base-400'
 	if (rate >= HIGH_SUCCESS_RATE) return 'text-emerald-600'
 	if (rate >= MID_SUCCESS_RATE) return 'text-amber-600'
 	return 'text-red-600'
 }
+
+const successRateLabel = (rate: number | null): string =>
+	rate === null ? EMPTY_VALUE : `${rate}%`
 
 const commitLabel = (deployment: CloudflarePagesDeployment): string =>
 	deployment.commitHash?.slice(0, COMMIT_LENGTH) ?? deployment.shortId
@@ -317,7 +323,7 @@ const clientFailed = clientState.kind !== 'ok'
 													successRateClass(view.summary.successRate),
 												]}
 											>
-												{view.summary.successRate}%
+												{successRateLabel(view.summary.successRate)}
 											</div>
 										</div>
 										<div class="ml-auto text-right">
@@ -491,7 +497,7 @@ const clientFailed = clientState.kind !== 'ok'
 								<div>
 									<div class="text-[11px] text-base-400">Taux de succès</div>
 									<div class="mt-0.5 font-mono text-[13px] text-base-900">
-										{detailSummary?.successRate ?? 0}%
+										{successRateLabel(detailSummary?.successRate ?? null)}
 									</div>
 								</div>
 								<div>

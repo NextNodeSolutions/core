@@ -10,7 +10,7 @@ import type {
  * real Cloudflare Pages deployments (newest-first, as the API returns them).
  */
 
-const FULL_RATE = 100
+const PERCENT_SCALE = 100
 const LAST_STATUS_COUNT = 5
 
 export type DeployDisplayStatus = 'ready' | 'building' | 'error' | 'idle'
@@ -37,7 +37,9 @@ export interface ProjectSummary {
 	readonly last: CloudflarePagesDeployment | null
 	readonly prodCount: number
 	readonly previewCount: number
-	readonly successRate: number
+	// null = no deployment has finished yet, so a rate would be meaningless
+	// (a 100% on zero samples reads as "all good" and misleads).
+	readonly successRate: number | null
 	readonly lastStatuses: ReadonlyArray<DeployDisplayStatus>
 }
 
@@ -56,8 +58,8 @@ export const summarizeProject = (
 	).length
 	const successRate =
 		finished.length === 0
-			? FULL_RATE
-			: Math.round((succeeded / finished.length) * FULL_RATE)
+			? null
+			: Math.round((succeeded / finished.length) * PERCENT_SCALE)
 	return {
 		current:
 			findCanonicalProductionDeployment(deployments) ??

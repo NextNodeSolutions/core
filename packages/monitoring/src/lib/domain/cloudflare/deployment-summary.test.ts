@@ -82,10 +82,11 @@ describe('summarizeProject', () => {
 		])
 	})
 
-	it('defaults to 100% when nothing has finished', () => {
+	it('reports a null success rate when nothing has finished', () => {
 		expect(
 			summarizeProject([at('t', 'production', 'active')]).successRate,
-		).toBe(100)
+		).toBeNull()
+		expect(summarizeProject([]).successRate).toBeNull()
 	})
 })
 
