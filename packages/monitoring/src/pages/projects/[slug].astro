@@ -161,12 +161,24 @@ if (!slug) {
 </DashboardLayout>
 
 <script>
-	document.querySelectorAll<HTMLFormElement>('form[data-confirm]').forEach((form) => {
-		form.addEventListener('submit', (event) => {
-			const message = form.dataset.confirm
-			if (message && !window.confirm(message)) {
-				event.preventDefault()
-			}
-		})
-	})
+	// `astro:page-load` fires on the initial load and after every View-Transitions
+	// soft swap; the per-form guard keeps the binding idempotent so a form is not
+	// wired twice when a re-bind runs over an unchanged DOM node.
+	const bindConfirmForms = (): void => {
+		document
+			.querySelectorAll<HTMLFormElement>('form[data-confirm]')
+			.forEach((form) => {
+				const el = form
+				if (el.dataset.confirmBound === 'true') return
+				el.dataset.confirmBound = 'true'
+				el.addEventListener('submit', (event) => {
+					const message = el.dataset.confirm
+					if (message && !window.confirm(message)) {
+						event.preventDefault()
+					}
+				})
+			})
+	}
+
+	document.addEventListener('astro:page-load', bindConfirmForms)
 </script>
