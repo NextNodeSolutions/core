@@ -81,6 +81,14 @@ describe('parseLogLines', () => {
 				container: 'stylot-prod-web',
 				level: 'error',
 				service: 'stylot-web',
+				vps: null,
+				status: null,
+				method: null,
+				path: null,
+				durationMs: null,
+				traceId: null,
+				stack: null,
+				meta: {},
 			},
 			{
 				time: '2026-06-13T10:00:01Z',
@@ -88,8 +96,44 @@ describe('parseLogLines', () => {
 				container: null,
 				level: null,
 				service: null,
+				vps: null,
+				status: null,
+				method: null,
+				path: null,
+				durationMs: null,
+				traceId: null,
+				stack: null,
+				meta: {},
 			},
 		])
+	})
+
+	it('lifts request, trace and stack fields and keeps the rest as meta', () => {
+		const body = JSON.stringify({
+			_time: '2026-06-13T10:00:02Z',
+			_msg: 'GET /api failed',
+			nn_project: 'stylot-prod',
+			level: 'error',
+			status: 500,
+			method: 'GET',
+			path: '/api/users',
+			duration_ms: 42,
+			trace_id: 'abc123def456',
+			stack: 'Error: boom\n  at handler',
+			region: 'fsn1',
+			retries: 2,
+		})
+		const [line] = parseLogLines(body)
+		expect(line).toMatchObject({
+			vps: 'stylot-prod',
+			status: 500,
+			method: 'GET',
+			path: '/api/users',
+			durationMs: 42,
+			traceId: 'abc123def456',
+			stack: 'Error: boom\n  at handler',
+			meta: { region: 'fsn1', retries: '2' },
+		})
 	})
 
 	it('skips blank lines and a truncated trailing fragment', () => {

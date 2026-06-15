@@ -1,4 +1,6 @@
 import { isRecord } from '@/lib/domain/is-record.ts'
+import { parseFiniteNumber } from '@/lib/domain/parse-number.ts'
+import { parseStringOrNull } from '@/lib/domain/parse-string.ts'
 
 export const LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const
 export type LogLevel = (typeof LOG_LEVELS)[number]
@@ -17,6 +19,14 @@ export interface LogLine {
 	readonly container: string | null
 	readonly level: LogLevel | null
 	readonly service: string | null
+	readonly vps: string | null
+	readonly status: number | null
+	readonly method: string | null
+	readonly path: string | null
+	readonly durationMs: number | null
+	readonly traceId: string | null
+	readonly stack: string | null
+	readonly meta: Readonly<Record<string, string>>
 }
 
 const LOGSQL_QUERY_LIMIT = 200
@@ -104,6 +114,61 @@ export const parseLogLines = (body: string): ReadonlyArray<LogLine> => {
 	return lines
 }
 
+// Fields lifted into named LogLine properties (so they are not duplicated in
+// the free-form `meta` context table) plus VictoriaLogs internals.
+const META_EXCLUDE = new Set([
+	'container_name',
+	'nn_project',
+	'nn_service',
+	'service',
+	'level',
+	'severity',
+	'status',
+	'http_status',
+	'method',
+	'http_method',
+	'path',
+	'url',
+	'http_path',
+	'duration_ms',
+	'durationMs',
+	'trace_id',
+	'traceId',
+	'stack',
+	'stacktrace',
+	'exception',
+])
+
+const extractMeta = (
+	parsed: Readonly<Record<string, unknown>>,
+): Record<string, string> => {
+	const meta: Record<string, string> = {}
+	for (const [key, fieldValue] of Object.entries(parsed)) {
+		if (key.startsWith('_') || META_EXCLUDE.has(key)) continue
+		if (
+			typeof fieldValue === 'string' ||
+			typeof fieldValue === 'number' ||
+			typeof fieldValue === 'boolean'
+		) {
+			meta[key] = String(fieldValue)
+		}
+	}
+	return meta
+}
+
+// First present (non-null) value among a list of candidate field names -
+// emitters disagree on spelling (status vs http_status, trace_id vs traceId).
+const firstField = (
+	parsed: Readonly<Record<string, unknown>>,
+	keys: ReadonlyArray<string>,
+): unknown => {
+	for (const key of keys) {
+		const candidate = parsed[key]
+		if (candidate !== undefined && candidate !== null) return candidate
+	}
+	return undefined
+}
+
 const safeParse = (raw: string): LogLine | null => {
 	let parsed: unknown
 	try {
@@ -112,18 +177,39 @@ const safeParse = (raw: string): LogLine | null => {
 		return null
 	}
 	if (!isRecord(parsed)) return null
-	// `_time` / `_msg` are VictoriaLogs' built-in field names; bracket
-	// access keeps the underscore-prefixed external contract out of dot
-	// notation.
+	// `_time` / `_msg` are VictoriaLogs' built-in field names; bracket access
+	// keeps the underscore-prefixed contract out of dot notation. Empty `_msg`
+	// is a valid line, so accept any string here (not parseStringOrNull).
 	const timeField = parsed['_time']
 	const msgField = parsed['_msg']
 	const time = typeof timeField === 'string' ? timeField : null
 	const message = typeof msgField === 'string' ? msgField : null
 	if (time === null || message === null) return null
-	const container =
-		typeof parsed.container_name === 'string' ? parsed.container_name : null
-	const level = parseLogLevel(parsed.level ?? parsed.severity)
-	const serviceField = parsed['nn_service'] ?? parsed.service
-	const service = typeof serviceField === 'string' ? serviceField : null
-	return { time, message, container, level, service }
+	return {
+		time,
+		message,
+		container: parseStringOrNull(parsed.container_name),
+		level: parseLogLevel(firstField(parsed, ['level', 'severity'])),
+		service: parseStringOrNull(
+			firstField(parsed, ['nn_service', 'service']),
+		),
+		vps: parseStringOrNull(parsed['nn_project']),
+		status: parseFiniteNumber(
+			firstField(parsed, ['status', 'http_status']),
+		),
+		method: parseStringOrNull(
+			firstField(parsed, ['method', 'http_method']),
+		),
+		path: parseStringOrNull(
+			firstField(parsed, ['path', 'url', 'http_path']),
+		),
+		durationMs: parseFiniteNumber(
+			firstField(parsed, ['duration_ms', 'durationMs']),
+		),
+		traceId: parseStringOrNull(firstField(parsed, ['trace_id', 'traceId'])),
+		stack: parseStringOrNull(
+			firstField(parsed, ['stack', 'stacktrace', 'exception']),
+		),
+		meta: extractMeta(parsed),
+	}
 }
