@@ -1,8 +1,6 @@
+import { escapeRegex } from '@/lib/domain/escape-regex.ts'
 import { isRecord } from '@/lib/domain/is-record.ts'
-import {
-	escapeLogsqlRegex,
-	logsqlQuoted,
-} from '@/lib/domain/monitoring/logsql.ts'
+import { logsqlQuoted } from '@/lib/domain/monitoring/logsql.ts'
 import { parseFiniteNumber } from '@/lib/domain/parse-number.ts'
 import { parseStringOrNull } from '@/lib/domain/parse-string.ts'
 
@@ -84,7 +82,7 @@ export const buildVpsLogsQuery = (vpsName: string): string =>
  * container_name is not a stream field.
  */
 export const buildContainerLogsQuery = (project: string): string =>
-	`_time:${CONTAINER_SCAN_WINDOW} container_name:~${logsqlQuoted(`^${escapeLogsqlRegex(project)}-`)} | sort by (_time desc) | limit ${String(LOGSQL_QUERY_LIMIT)}`
+	`_time:${CONTAINER_SCAN_WINDOW} container_name:~${logsqlQuoted(`^${escapeRegex(project)}-`)} | sort by (_time desc) | limit ${String(LOGSQL_QUERY_LIMIT)}`
 
 /**
  * Build a LogsQL query for the most recent lines across the WHOLE fleet

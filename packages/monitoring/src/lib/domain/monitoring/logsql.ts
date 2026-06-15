@@ -10,11 +10,3 @@
  * filter needs - so a slug carrying `"` or `\` cannot break out of the token.
  */
 export const logsqlQuoted = (token: string): string => JSON.stringify(token)
-
-/**
- * Escape a slug for safe embedding inside a LogsQL regex filter (`field:~...`).
- * Project names are kebab identifiers today, but a deploy could in principle
- * carry a regex metachar - escape defensively.
- */
-export const escapeLogsqlRegex = (slug: string): string =>
-	slug.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)

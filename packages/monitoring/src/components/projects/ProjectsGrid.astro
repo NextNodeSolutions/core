@@ -5,6 +5,7 @@ import { ENV_KEYS, requireEnv } from '@/lib/adapters/env.ts'
 import { loadGithubProjects } from '@/lib/adapters/github/projects.ts'
 import { listServers } from '@/lib/adapters/hetzner/servers.ts'
 import { loadPageState } from '@/lib/adapters/load-page-state.ts'
+import { escapeRegex } from '@/lib/domain/escape-regex.ts'
 import {
 	canApprove,
 	canDeploy,
@@ -47,11 +48,6 @@ const statusStyles: Record<ProjectDeployStatus, StatusStyle> = {
 		label: 'unknown',
 	},
 }
-
-// Escape every regex metacharacter so the VPS name is matched literally by the
-// HTML5 `pattern` attribute - the teardown gate must require that exact string.
-const escapeForPattern = (raw: string): string =>
-	raw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 const serversState = await loadPageState('projects.servers', () =>
 	listServers(requireEnv(ENV_KEYS.HETZNER_API_TOKEN)),
@@ -291,7 +287,7 @@ const nowMs = Date.now()
 												<input
 													name="confirm"
 													required
-													pattern={escapeForPattern(project.vps)}
+													pattern={escapeRegex(project.vps)}
 													placeholder={`Tapez ${project.vps}`}
 													autocomplete="off"
 													class="rounded-lg border border-red-200 bg-white px-3 py-1.5 font-mono text-xs text-red-900 placeholder:text-red-300 focus:border-red-400 focus:outline-none"
