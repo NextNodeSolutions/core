@@ -13,3 +13,23 @@ jobs:
             config_file: packages/monitoring/nextnode.toml
             environment: production
         secrets: inherit
+
+    # After the observability stack is up, ensure the tailnet ACL grants the
+    # monitoring scrape (exporters) + Vector log push over the default-deny
+    # tailnet. Idempotent + non-fatal: it warns and exits 0 if the OAuth client
+    # lacks the `acl` scope, so it never blocks a deploy.
+    reconcile-acl:
+        name: Reconcile tailnet ACL
+        needs: pipeline
+        runs-on: ubuntu-latest
+        steps:
+            - uses: NextNodeSolutions/core/.github/actions/setup@main
+              with:
+                  infra: 'true'
+                  deps: 'false'
+
+            - name: Reconcile tailnet ACL
+              run: node src/index.ts reconcile-tailnet-acl
+              working-directory: .infra/packages/infrastructure
+              env:
+                  TAILSCALE_AUTH_KEY: ${{ secrets.TS_OAUTH_SECRET }}
