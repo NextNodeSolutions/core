@@ -58,6 +58,26 @@ export const NODE_EXPORTER_VERSION = '1.9.1'
 const NODE_EXPORTER_TARBALL = `node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64`
 const NODE_EXPORTER_DOWNLOAD_URL = `https://github.com/prometheus/node_exporter/releases/download/v${NODE_EXPORTER_VERSION}/${NODE_EXPORTER_TARBALL}.tar.gz`
 
+// Pinned Vector release. The old install piped `https://sh.vector.dev` into
+// bash: unpinned (silent version drift) AND failure-masking (a curl/network
+// error in the pipe still exited 0, so the snapshot could ship WITHOUT the
+// binary while the build reported success - exactly what stranded vector.service
+// with "No such file or directory"). Mirror the node_exporter pattern: a pinned
+// GitHub-release tarball, fail-loud (`curl -f` + `install` propagate errors).
+// The tarball's top dir is NOT version-prefixed (vector-<arch>/bin/vector).
+export const VECTOR_VERSION = '0.56.0'
+const VECTOR_DIR = 'vector-x86_64-unknown-linux-gnu'
+const VECTOR_DOWNLOAD_URL = `https://github.com/vectordotdev/vector/releases/download/v${VECTOR_VERSION}/vector-${VECTOR_VERSION}-x86_64-unknown-linux-gnu.tar.gz`
+
+// Shell commands that install the pinned Vector binary to /usr/bin/vector.
+// Shared by the golden-image build (baked in) and the convergence self-heal
+// (installs on demand for VPS whose snapshot predates / lost the binary).
+export const VECTOR_INSTALL_CMDS: ReadonlyArray<string> = [
+	`curl -fsSL "${VECTOR_DOWNLOAD_URL}" | tar -xz -C /tmp`,
+	`install -m 0755 /tmp/${VECTOR_DIR}/bin/vector /usr/bin/vector`,
+	`rm -rf /tmp/${VECTOR_DIR}`,
+]
+
 const NODE_EXPORTER_UNIT_PATH = '/etc/systemd/system/node_exporter.service'
 const NODE_EXPORTER_UNIT_CONTENT = `[Unit]
 Description=Prometheus node_exporter
@@ -178,8 +198,8 @@ const RUNCMD: ReadonlyArray<string> = [
 	'chmod +x /usr/bin/caddy',
 	'mkdir -p /etc/caddy',
 
-	// Vector
-	'curl -fsSL https://sh.vector.dev | bash -s -- -y --prefix /usr',
+	// Vector (pinned tarball, fail-loud - see VECTOR_INSTALL_CMDS)
+	...VECTOR_INSTALL_CMDS,
 	'mkdir -p /etc/vector',
 
 	// node_exporter (pinned static binary, unit written above)

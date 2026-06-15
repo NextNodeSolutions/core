@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 
 import {
+	VECTOR_VERSION,
 	goldenImageFingerprint,
 	renderGoldenImageCloudInit,
 } from './golden-image.ts'
@@ -117,8 +118,17 @@ describe('renderGoldenImageCloudInit', () => {
 		const joined = parseGoldenImage().runcmd.join('\n')
 		expect(joined).toContain('https://get.docker.com')
 		expect(joined).toContain('caddyserver.com/api/download')
-		expect(joined).toContain('sh.vector.dev')
 		expect(joined).toContain('tailscale.com/install.sh')
+	})
+
+	it('installs Vector from a pinned, fail-loud release tarball (not the unpinned bash pipe)', () => {
+		const joined = parseGoldenImage().runcmd.join('\n')
+		expect(joined).not.toContain('sh.vector.dev')
+		expect(joined).toContain(
+			`releases/download/v${VECTOR_VERSION}/vector-${VECTOR_VERSION}-`,
+		)
+		expect(joined).toContain('install -m 0755 /tmp/')
+		expect(joined).toContain('/bin/vector /usr/bin/vector')
 	})
 
 	it('does NOT run `tailscale up` (auth key is per-project)', () => {
