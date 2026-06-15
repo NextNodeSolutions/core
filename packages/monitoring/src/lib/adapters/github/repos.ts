@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+
 import { keyedMemoizeAsync } from '@/lib/adapters/cache.ts'
 import {
 	GITHUB_ORG_LOGIN,
@@ -57,9 +59,18 @@ const fetchOrgRepos = async (
 		.filter((repo): repo is GithubRepo => repo !== null)
 }
 
+/**
+ * Cache key for a token: the sha256 digest, never the raw secret. The
+ * cached value is keyed per credential, but the credential itself must not
+ * sit in the LRU as a plain-text index (where a heap dump or cache
+ * inspection would leak it).
+ */
+export const cacheKeyForToken = (token: string): string =>
+	createHash('sha256').update(token).digest('hex')
+
 const memoizedListOrgRepos = keyedMemoizeAsync(
 	REPOS_TTL_MS,
-	(token: string) => token,
+	cacheKeyForToken,
 	fetchOrgRepos,
 )
 
