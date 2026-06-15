@@ -2,6 +2,8 @@
 /**
  * Time-range segmented control. Each option is a link that sets `?range=`
  * on the current path so the server re-renders with the selected window.
+ * Other query params already on the URL (e.g. `cmp`, `q`, `service`) are
+ * carried over so switching range never drops the active filters.
  * `live` is the streaming mode (client enhances it; the link is the baseline).
  */
 interface Props {
@@ -24,6 +26,12 @@ const labels: Record<string, string> = {
 	'7d': '7j',
 	'30d': '30j',
 }
+
+const hrefForRange = (range: string): string => {
+	const params = new URLSearchParams(Astro.url.searchParams)
+	params.set('range', range)
+	return `${path}?${params.toString()}`
+}
 ---
 
 <div
@@ -36,7 +44,7 @@ const labels: Record<string, string> = {
 			const active = range === value
 			return (
 				<a
-					href={`${path}?range=${range}`}
+					href={hrefForRange(range)}
 					role="tab"
 					aria-selected={active ? 'true' : 'false'}
 					class:list={[
