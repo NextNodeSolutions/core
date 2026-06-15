@@ -10,6 +10,8 @@ import { loadPageState } from '@/lib/adapters/load-page-state.ts'
 import {
 	loadFleetLogs,
 	loadHostMetrics,
+	loadVpsGauges,
+	loadVpsSeries,
 } from '@/lib/adapters/victoria/observability.ts'
 import {
 	computeServerHealth,
@@ -21,11 +23,18 @@ import type { HostMetrics } from '@/lib/domain/monitoring/host-metrics.ts'
 import type { LogLevel } from '@/lib/domain/monitoring/log-query.ts'
 
 const LOG_STREAM_COUNT = 7
+const SPARK_HOURS = 1
 const NULL_METRICS: HostMetrics = {
 	cpuPercent: null,
 	memoryPercent: null,
 	diskPercent: null,
 	uptimeSeconds: null,
+}
+
+interface FleetExtra {
+	cpuTrend: ReadonlyArray<number>
+	loadAvg: number | null
+	netOutMbps: number | null
 }
 
 const serversState = await loadPageState('overview.servers', () => {
@@ -46,6 +55,35 @@ servers.forEach((server, index) => {
 	const state = metricsStates[index]
 	metricsByName[server.name] =
 		state !== undefined && state.kind === 'ok' ? state.data : NULL_METRICS
+})
+
+const gaugesStates = await Promise.all(
+	servers.map((server) =>
+		loadPageState(`overview.gauges.${server.name}`, () =>
+			loadVpsGauges(server.name),
+		),
+	),
+)
+const sparkStates = await Promise.all(
+	servers.map((server) =>
+		loadPageState(`overview.spark.${server.name}`, () =>
+			loadVpsSeries(server.name, 'cpu', SPARK_HOURS),
+		),
+	),
+)
+const fleetExtras: Record<string, FleetExtra> = {}
+servers.forEach((server, index) => {
+	const gaugeState = gaugesStates[index]
+	const sparkState = sparkStates[index]
+	const gauges =
+		gaugeState !== undefined && gaugeState.kind === 'ok' ? gaugeState.data : null
+	const points =
+		sparkState !== undefined && sparkState.kind === 'ok' ? sparkState.data : []
+	fleetExtras[server.name] = {
+		cpuTrend: points.map((point) => point.v),
+		loadAvg: gauges?.load1 ?? null,
+		netOutMbps: gauges?.netOutMbps ?? null,
+	}
 })
 
 const logsState = await loadPageState('overview.logs', loadFleetLogs)
@@ -178,6 +216,9 @@ const stream = logs.slice(0, LOG_STREAM_COUNT).map((line) => ({
 								server.status,
 								metricsByName[server.name] ?? NULL_METRICS,
 							)}
+							cpuTrend={fleetExtras[server.name]?.cpuTrend ?? []}
+							loadAvg={fleetExtras[server.name]?.loadAvg ?? null}
+							netOutMbps={fleetExtras[server.name]?.netOutMbps ?? null}
 						/>
 					))}
 				</div>

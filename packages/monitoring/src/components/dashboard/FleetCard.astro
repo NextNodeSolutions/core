@@ -1,8 +1,11 @@
 ---
+import Sparkline from '@/components/charts/Sparkline.astro'
 import Icon from '@/components/foundations/Icon.astro'
+import { formatUptime } from '@/lib/domain/monitoring/format.ts'
+
+import type { ChartColor } from '@/components/charts/chart-color.ts'
 import type { IconName } from '@/components/foundations/Icon.astro'
 import type { HetznerVps } from '@/lib/domain/hetzner/vps.ts'
-import { formatUptime } from '@/lib/domain/monitoring/format.ts'
 import type { FleetHealth } from '@/lib/domain/monitoring/fleet-overview.ts'
 import type { HostMetrics } from '@/lib/domain/monitoring/host-metrics.ts'
 
@@ -10,12 +13,31 @@ interface Props {
 	server: HetznerVps
 	metrics: HostMetrics
 	health: FleetHealth
+	cpuTrend?: ReadonlyArray<number>
+	loadAvg?: number | null
+	netOutMbps?: number | null
 }
 
-const { server, metrics, health } = Astro.props
+const {
+	server,
+	metrics,
+	health,
+	cpuTrend = [],
+	loadAvg = null,
+	netOutMbps = null,
+} = Astro.props
 
 const WARNING_PERCENT = 75
 const CRITICAL_PERCENT = 90
+const LOAD_DECIMALS = 2
+const NET_DECIMALS = 1
+
+const healthChartColor: Record<FleetHealth, ChartColor> = {
+	running: 'accent',
+	warning: 'warning',
+	critical: 'danger',
+	down: 'slate',
+}
 
 const healthPresentation: Record<
 	FleetHealth,
@@ -67,6 +89,10 @@ function barColor(percent: number | null): string {
 const role = server.labels['role'] ?? server.serverType.description
 const uptime =
 	metrics.uptimeSeconds === null ? '-' : formatUptime(metrics.uptimeSeconds)
+const loadText = loadAvg === null ? '-' : loadAvg.toFixed(LOAD_DECIMALS)
+const netText =
+	netOutMbps === null ? '-' : `${netOutMbps.toFixed(NET_DECIMALS)} Mb/s`
+const sparkColor = healthChartColor[health]
 ---
 
 <a
@@ -127,17 +153,22 @@ const uptime =
 	</div>
 
 	<div
-		class="flex items-center justify-between border-t border-base-100 bg-base-50 px-4 py-2.5"
+		class="flex items-center justify-between gap-3 border-t border-base-100 bg-base-50 px-4 py-2.5"
 	>
-		<div>
-			<p class="text-[10px] text-base-500">Uptime</p>
-			<p class="font-mono text-xs font-semibold text-base-900">{uptime}</p>
+		<div class="flex gap-4">
+			<div>
+				<p class="text-[10px] text-base-500">Load</p>
+				<p class="font-mono text-xs font-semibold text-base-900">{loadText}</p>
+			</div>
+			<div>
+				<p class="text-[10px] text-base-500">Uptime</p>
+				<p class="font-mono text-xs font-semibold text-base-900">{uptime}</p>
+			</div>
+			<div>
+				<p class="text-[10px] text-base-500">Net out</p>
+				<p class="font-mono text-xs font-semibold text-base-900">{netText}</p>
+			</div>
 		</div>
-		<div class="text-right">
-			<p class="text-[10px] text-base-500">Type</p>
-			<p class="font-mono text-xs font-semibold text-base-900">
-				{server.serverType.name}
-			</p>
-		</div>
+		{cpuTrend.length > 0 && <Sparkline values={cpuTrend} color={sparkColor} width={70} height={28} />}
 	</div>
 </a>
