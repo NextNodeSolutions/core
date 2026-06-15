@@ -4,7 +4,6 @@ import {
 	buildVpsGaugeExprs,
 	buildVpsSeriesExpr,
 	rangeToHours,
-	summarizeSeries,
 	VPS_SERIES_METRICS,
 } from './vps-metrics.ts'
 
@@ -61,22 +60,6 @@ describe('buildVpsGaugeExprs', () => {
 		expect(exprs.swapPercent).toContain('node_memory_SwapFree')
 		expect(exprs.netInMbps).toContain('node_network_receive_bytes')
 		expect(exprs.netOutMbps).toContain('node_network_transmit_bytes')
-	})
-})
-
-describe('summarizeSeries', () => {
-	it('returns the mean and peak of the sampled values', () => {
-		expect(
-			summarizeSeries([
-				{ t: 1, v: 10 },
-				{ t: 2, v: 20 },
-				{ t: 3, v: 30 },
-			]),
-		).toEqual({ average: 20, peak: 30 })
-	})
-
-	it('returns nulls for an empty series', () => {
-		expect(summarizeSeries([])).toEqual({ average: null, peak: null })
 	})
 })
 

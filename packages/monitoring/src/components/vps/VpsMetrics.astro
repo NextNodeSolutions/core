@@ -23,10 +23,8 @@ import {
 	FLEET_CRITICAL_PERCENT,
 	FLEET_WARN_PERCENT,
 } from '@/lib/domain/monitoring/monitoring-thresholds.ts'
-import {
-	rangeToHours,
-	summarizeSeries,
-} from '@/lib/domain/monitoring/vps-metrics.ts'
+import { summarizeSeries } from '@/lib/domain/monitoring/series-summary.ts'
+import { rangeToHours } from '@/lib/domain/monitoring/vps-metrics.ts'
 
 import type { ChartColor } from '@/components/charts/chart-color.ts'
 import type { VpsGauges } from '@/lib/adapters/victoria/observability.ts'

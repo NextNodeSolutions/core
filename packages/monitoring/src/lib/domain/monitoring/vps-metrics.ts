@@ -1,14 +1,12 @@
 import { NODE_EXPORTER_EXPR } from '@/lib/domain/monitoring/node-exporter-exprs.ts'
 
-import type { RangePoint } from '@/lib/domain/monitoring/promql-response.ts'
-
 /**
- * PromQL builders + summaries for the VPS detail screen, all scoped to a
- * single `vps_name`. The expression strings come from the shared
- * `node-exporter-exprs` table (single source); this module only selects the
- * subset the detail screen renders and summarises the sampled values. A
- * metric that node_exporter does not expose simply returns an empty series
- * upstream - the panel renders blank, never a fabricated value.
+ * PromQL builders for the VPS detail screen, all scoped to a single
+ * `vps_name`. The expression strings come from the shared `node-exporter-exprs`
+ * table (single source); this module only selects the subset the detail screen
+ * renders and maps its range control to a query window. A metric that
+ * node_exporter does not expose simply returns an empty series upstream - the
+ * panel renders blank, never a fabricated value.
  */
 
 export const VPS_SERIES_METRICS = [
@@ -63,17 +61,3 @@ export const buildVpsGaugeExprs = (vpsName: string): VpsGaugeExprs => ({
 	netInMbps: NODE_EXPORTER_EXPR.netIn(vpsName),
 	netOutMbps: NODE_EXPORTER_EXPR.netOut(vpsName),
 })
-
-export interface SeriesSummary {
-	readonly average: number | null
-	readonly peak: number | null
-}
-
-export const summarizeSeries = (
-	points: ReadonlyArray<RangePoint>,
-): SeriesSummary => {
-	if (points.length === 0) return { average: null, peak: null }
-	const values = points.map(point => point.v)
-	const total = values.reduce((sum, sample) => sum + sample, 0)
-	return { average: total / values.length, peak: Math.max(...values) }
-}
