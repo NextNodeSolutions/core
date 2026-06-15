@@ -9,6 +9,7 @@ import {
 import { buildHostMetricExprs } from '@/lib/domain/monitoring/host-metrics.ts'
 import {
 	buildContainerLogsQuery,
+	buildFleetLogsQuery,
 	buildVpsLogsQuery,
 	parseLogLines,
 } from '@/lib/domain/monitoring/log-query.ts'
@@ -47,6 +48,12 @@ export const loadVpsLogs = async (
 	vpsName: string,
 ): Promise<ReadonlyArray<LogLine>> => {
 	const body = await queryVictoriaLogs(buildVpsLogsQuery(vpsName))
+	return parseLogLines(body)
+}
+
+/** Most-recent log lines across the whole fleet, newest first. */
+export const loadFleetLogs = async (): Promise<ReadonlyArray<LogLine>> => {
+	const body = await queryVictoriaLogs(buildFleetLogsQuery())
 	return parseLogLines(body)
 }
 
