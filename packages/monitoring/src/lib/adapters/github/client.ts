@@ -133,16 +133,10 @@ const fetchWithTimeout = async (
 	}
 }
 
-export const githubGet = async (
-	path: string,
-	token: string,
+const assertSuccessful = async (
+	response: Response,
 	context: string,
-): Promise<unknown> => {
-	const response = await fetchWithTimeout(
-		`${GITHUB_API_BASE}${path}`,
-		token,
-		context,
-	)
+): Promise<void> => {
 	if (isRateLimited(response)) {
 		throw new GithubRateLimitError(
 			context,
@@ -155,5 +149,66 @@ export const githubGet = async (
 		const body = await response.text()
 		throw new GithubApiFailure(context, response.status, body)
 	}
+}
+
+export const githubGet = async (
+	path: string,
+	token: string,
+	context: string,
+): Promise<unknown> => {
+	const response = await fetchWithTimeout(
+		`${GITHUB_API_BASE}${path}`,
+		token,
+		context,
+	)
+	await assertSuccessful(response, context)
 	return response.json()
+}
+
+/** Match the `<url>; rel="next"` member of a GitHub `Link` header. */
+const NEXT_LINK_PATTERN = /<([^>]+)>;\s*rel="next"/
+
+/**
+ * Extract the next-page path from a GitHub `Link` header. GitHub paginates
+ * list endpoints and advertises the next page via `Link: <url>; rel="next"`;
+ * we return the path (everything after the API base) so the caller can feed
+ * it straight back to githubGetPaged, and null once the header drops `next`
+ * (the last page).
+ */
+const parseNextPath = (linkHeader: string | null): string | null => {
+	if (linkHeader === null) return null
+	const match = NEXT_LINK_PATTERN.exec(linkHeader)
+	if (match === null) return null
+	const nextUrl = match[1]
+	if (nextUrl === undefined) return null
+	return nextUrl.startsWith(GITHUB_API_BASE)
+		? nextUrl.slice(GITHUB_API_BASE.length)
+		: nextUrl
+}
+
+export interface GithubPage {
+	readonly payload: unknown
+	readonly nextPath: string | null
+}
+
+/**
+ * Like githubGet but also surfaces the `Link: rel="next"` path so a caller
+ * can walk every page of a paginated list endpoint to completion instead of
+ * silently truncating at the first page.
+ */
+export const githubGetPaged = async (
+	path: string,
+	token: string,
+	context: string,
+): Promise<GithubPage> => {
+	const response = await fetchWithTimeout(
+		`${GITHUB_API_BASE}${path}`,
+		token,
+		context,
+	)
+	await assertSuccessful(response, context)
+	return {
+		payload: await response.json(),
+		nextPath: parseNextPath(response.headers.get('link')),
+	}
 }

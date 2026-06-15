@@ -71,3 +71,24 @@ describe('listOrgRepos caching', () => {
 		expect(fetchSpy).toHaveBeenCalledTimes(1)
 	})
 })
+
+describe('listOrgRepos pagination', () => {
+	it('follows the Link rel="next" header until exhaustion and concatenates', async () => {
+		const page1 = jsonResponse([{ name: 'a', full_name: 'org/a' }], {
+			link: '<https://api.github.com/orgs/NextNodeSolutions/repos?per_page=100&sort=pushed&page=2>; rel="next"',
+		})
+		const page2 = jsonResponse([{ name: 'b', full_name: 'org/b' }])
+		const fetchSpy = vi
+			.fn<(url: string) => Promise<Response>>()
+			.mockResolvedValueOnce(page1)
+			.mockResolvedValueOnce(page2)
+		vi.stubGlobal('fetch', fetchSpy)
+
+		const repos = await listOrgRepos('token-paginate')
+
+		expect(repos.map(repo => repo.fullName)).toEqual(['org/a', 'org/b'])
+		expect(fetchSpy).toHaveBeenCalledTimes(2)
+		const secondUrl = fetchSpy.mock.calls[1]?.[0]
+		expect(secondUrl).toContain('page=2')
+	})
+})
