@@ -1,5 +1,8 @@
 ---
 import { radialGaugeGeometry } from '@/lib/domain/monitoring/chart-geometry.ts'
+import { severityForPercent } from '@/lib/domain/monitoring/monitoring-thresholds.ts'
+
+import type { MetricSeverity } from '@/lib/domain/monitoring/monitoring-thresholds.ts'
 
 interface Props {
 	value: number
@@ -11,9 +14,13 @@ interface Props {
 
 const DEFAULT_SIZE = 96
 const DEFAULT_STROKE = 9
-const WARNING_PERCENT = 75
-const CRITICAL_PERCENT = 90
 const PCT_MAX = 100
+
+const ARC_STROKE: Record<MetricSeverity, string> = {
+	ok: 'stroke-accent-600',
+	warning: 'stroke-amber-500',
+	critical: 'stroke-red-600',
+}
 
 const {
 	value,
@@ -24,12 +31,7 @@ const {
 } = Astro.props
 
 const geometry = radialGaugeGeometry(value, size, stroke)
-const arcStroke =
-	value >= CRITICAL_PERCENT
-		? 'stroke-red-600'
-		: value >= WARNING_PERCENT
-			? 'stroke-amber-500'
-			: 'stroke-accent-600'
+const arcStroke = ARC_STROKE[severityForPercent(value)]
 const rounded = Math.round(Math.min(PCT_MAX, Math.max(0, value)))
 ---
 

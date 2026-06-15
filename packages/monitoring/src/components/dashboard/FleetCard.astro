@@ -2,12 +2,14 @@
 import Sparkline from '@/components/charts/Sparkline.astro'
 import Icon from '@/components/foundations/Icon.astro'
 import { formatUptime } from '@/lib/domain/monitoring/format.ts'
+import { severityForPercent } from '@/lib/domain/monitoring/monitoring-thresholds.ts'
 
 import type { ChartColor } from '@/components/charts/chart-color.ts'
 import type { IconName } from '@/components/foundations/Icon.astro'
 import type { HetznerVps } from '@/lib/domain/hetzner/vps.ts'
 import type { FleetHealth } from '@/lib/domain/monitoring/fleet-overview.ts'
 import type { HostMetrics } from '@/lib/domain/monitoring/host-metrics.ts'
+import type { MetricSeverity } from '@/lib/domain/monitoring/monitoring-thresholds.ts'
 
 interface Props {
 	server: HetznerVps
@@ -27,10 +29,14 @@ const {
 	netOutMbps = null,
 } = Astro.props
 
-const WARNING_PERCENT = 75
-const CRITICAL_PERCENT = 90
 const LOAD_DECIMALS = 2
 const NET_DECIMALS = 1
+
+const BAR_COLOR: Record<MetricSeverity, string> = {
+	ok: 'bg-accent-600',
+	warning: 'bg-amber-500',
+	critical: 'bg-red-600',
+}
 
 const healthChartColor: Record<FleetHealth, ChartColor> = {
 	running: 'accent',
@@ -86,10 +92,9 @@ const rows: MetricRow[] = [
 ]
 
 function barColor(percent: number | null): string {
-	if (percent === null) return 'bg-base-300'
-	if (percent >= CRITICAL_PERCENT) return 'bg-red-600'
-	if (percent >= WARNING_PERCENT) return 'bg-amber-500'
-	return 'bg-accent-600'
+	return percent === null
+		? 'bg-base-300'
+		: BAR_COLOR[severityForPercent(percent)]
 }
 
 const role = server.labels['role'] ?? server.serverType.description

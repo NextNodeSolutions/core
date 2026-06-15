@@ -3,6 +3,11 @@ import {
 	formatPercent,
 	formatTrafficGb,
 } from '@/lib/domain/monitoring/format.ts'
+import {
+	FLEET_CRITICAL_PERCENT,
+	FLEET_WARN_PERCENT,
+	severityForPercent,
+} from '@/lib/domain/monitoring/monitoring-thresholds.ts'
 
 import type { Tone } from '@/lib/domain/badge-status.ts'
 import type { HetznerVps, VpsStatus } from '@/lib/domain/hetzner/vps.ts'
@@ -15,8 +20,6 @@ import type { HetznerVps, VpsStatus } from '@/lib/domain/hetzner/vps.ts'
  * derived from the live metric thresholds, not from a synthetic source.
  */
 
-const WARNING_PERCENT = 75
-const CRITICAL_PERCENT = 90
 const BYTES_PER_GB = 1_000_000_000
 const EMPTY_VALUE = '-'
 
@@ -98,9 +101,9 @@ export function computeServerHealth(
 	// A running VPS with no metric at all is a missing scrape, not a healthy
 	// idle host - treating absent metrics as 0 would mask the gap.
 	if (!hasAnyMetric(metrics)) return 'unknown'
-	const worst = worstLoad(metrics)
-	if (worst >= CRITICAL_PERCENT) return 'critical'
-	if (worst >= WARNING_PERCENT) return 'warning'
+	const severity = severityForPercent(worstLoad(metrics))
+	if (severity === 'critical') return 'critical'
+	if (severity === 'warning') return 'warning'
 	return 'running'
 }
 
@@ -110,14 +113,18 @@ function evaluateMetricAlert(
 	metric: AlertMetric,
 ): DerivedAlert | null {
 	const percent = metricValue(metrics, metric)
-	if (percent === null || percent < WARNING_PERCENT) return null
-	const critical = percent >= CRITICAL_PERCENT
+	if (percent === null) return null
+	const severity = severityForPercent(percent)
+	if (severity === 'ok') return null
+	const critical = severity === 'critical'
 	return {
 		vpsName,
 		metric,
 		severity: critical ? 'critical' : 'warning',
 		valuePercent: percent,
-		thresholdPercent: critical ? CRITICAL_PERCENT : WARNING_PERCENT,
+		thresholdPercent: critical
+			? FLEET_CRITICAL_PERCENT
+			: FLEET_WARN_PERCENT,
 		label: `${METRIC_LABELS[metric]} à ${formatPercent(percent)}`,
 	}
 }
@@ -167,10 +174,11 @@ function cpuStat(input: FleetSummaryInput): FleetStat {
 	}
 	const average =
 		samples.reduce((sum, percent) => sum + percent, 0) / samples.length
+	const severity = severityForPercent(average)
 	const tone: Tone =
-		average >= CRITICAL_PERCENT
+		severity === 'critical'
 			? 'danger'
-			: average >= WARNING_PERCENT
+			: severity === 'warning'
 				? 'warning'
 				: 'neutral'
 	return {

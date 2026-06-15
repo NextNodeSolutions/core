@@ -11,10 +11,12 @@ import {
 	loadVpsGauges,
 	loadVpsSeries,
 } from '@/lib/adapters/victoria/observability.ts'
-import {
-	deriveFleetAlerts,
-} from '@/lib/domain/monitoring/fleet-overview.ts'
+import { deriveFleetAlerts } from '@/lib/domain/monitoring/fleet-overview.ts'
 import { formatTrafficGb } from '@/lib/domain/monitoring/format.ts'
+import {
+	FLEET_CRITICAL_PERCENT,
+	FLEET_WARN_PERCENT,
+} from '@/lib/domain/monitoring/monitoring-thresholds.ts'
 import {
 	rangeToHours,
 	summarizeSeries,
@@ -44,8 +46,6 @@ interface Threshold {
 	severity: 'warning' | 'critical'
 }
 
-const CPU_WARNING = 75
-const CPU_CRITICAL = 90
 const DISK_LATENCY_WARNING = 10
 const SWAP_AMBER = 15
 const PCT_FULL = 100
@@ -67,8 +67,8 @@ const DOT_CLASS: Record<ChartColor, string> = {
 	danger: 'bg-red-600',
 }
 const PERCENT_THRESHOLDS: ReadonlyArray<Threshold> = [
-	{ value: CPU_WARNING, label: 'warning', severity: 'warning' },
-	{ value: CPU_CRITICAL, label: 'critical', severity: 'critical' },
+	{ value: FLEET_WARN_PERCENT, label: 'warning', severity: 'warning' },
+	{ value: FLEET_CRITICAL_PERCENT, label: 'critical', severity: 'critical' },
 ]
 const CMP_METRICS: ReadonlyArray<{ key: CmpMetric; label: string }> = [
 	{ key: 'cpu', label: 'CPU' },

@@ -1,3 +1,5 @@
+import { HOST_WARN_PERCENT } from '@/lib/domain/monitoring/monitoring-thresholds.ts'
+
 import type { Tone } from '@/lib/domain/badge-status.ts'
 import type { HostMetrics } from '@/lib/domain/monitoring/host-metrics.ts'
 
@@ -14,11 +16,6 @@ const SECONDS_PER_DAY = 86_400
 
 const PLACEHOLDER = '-'
 
-// Tone thresholds mirror the alert catalogue's warning levels so the
-// dashboard colour matches what would page.
-const CPU_WARN_PERCENT = 90
-const MEMORY_WARN_PERCENT = 90
-const DISK_WARN_PERCENT = 85
 const PERCENT_FRACTION_DIGITS = 1
 
 const formatPercent = (percent: number | null): string =>
@@ -55,19 +52,19 @@ export const formatHostMetrics = (
 		label: 'CPU load',
 		value: formatPercent(metrics.cpuPercent),
 		hint: '5 min avg',
-		tone: percentTone(metrics.cpuPercent, CPU_WARN_PERCENT),
+		tone: percentTone(metrics.cpuPercent, HOST_WARN_PERCENT.cpu),
 	},
 	{
 		label: 'Memory',
 		value: formatPercent(metrics.memoryPercent),
 		hint: 'Used',
-		tone: percentTone(metrics.memoryPercent, MEMORY_WARN_PERCENT),
+		tone: percentTone(metrics.memoryPercent, HOST_WARN_PERCENT.memory),
 	},
 	{
 		label: 'Disk',
 		value: formatPercent(metrics.diskPercent),
 		hint: 'Root volume',
-		tone: percentTone(metrics.diskPercent, DISK_WARN_PERCENT),
+		tone: percentTone(metrics.diskPercent, HOST_WARN_PERCENT.disk),
 	},
 	{
 		label: 'Uptime',
