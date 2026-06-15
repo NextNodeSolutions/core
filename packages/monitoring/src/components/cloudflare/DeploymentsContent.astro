@@ -1,4 +1,8 @@
 ---
+import {
+	DEPLOY_STATUS_COLOR,
+	DEPLOY_STATUS_ICON,
+} from '@/components/cloudflare/deploy-display.ts'
 import DeploymentTail from '@/components/cloudflare/DeploymentTail.astro'
 import Icon from '@/components/foundations/Icon.astro'
 import type { IconName } from '@/components/foundations/Icon.astro'
@@ -124,18 +128,6 @@ const linkTo = (overrides: Record<string, string | null>): string => {
 	return qs ? `/deployments?${qs}` : '/deployments'
 }
 
-const statusIcon: Record<DeployDisplayStatus, IconName> = {
-	ready: 'check',
-	building: 'refresh',
-	error: 'x',
-	idle: 'dot',
-}
-const statusColor: Record<DeployDisplayStatus, string> = {
-	ready: 'text-emerald-600',
-	building: 'text-sky-600',
-	error: 'text-red-600',
-	idle: 'text-base-400',
-}
 const statusBadgeClass: Record<DeployDisplayStatus, string> = {
 	ready: 'border-emerald-200 bg-emerald-50 text-emerald-700',
 	building: 'border-sky-200 bg-sky-50 text-sky-700',
@@ -290,8 +282,8 @@ const clientFailed = clientState.kind !== 'ok'
 									<div class="flex items-start justify-between gap-2.5 px-4.5 pt-4">
 										<div class="min-w-0">
 											<div class="flex items-center gap-2">
-												<span class={statusColor[view.currentDisplay]}>
-													<Icon name={statusIcon[view.currentDisplay]} size={15} />
+												<span class={DEPLOY_STATUS_COLOR[view.currentDisplay]}>
+													<Icon name={DEPLOY_STATUS_ICON[view.currentDisplay]} size={15} />
 												</span>
 												<span class="text-[15px] font-semibold text-base-900">
 													{view.project.name}
@@ -385,8 +377,8 @@ const clientFailed = clientState.kind !== 'ok'
 											})}
 											class="flex items-center gap-3.5 border-b border-base-100 px-4 py-2.5 last:border-b-0 hover:bg-base-50"
 										>
-											<span class={`flex-none ${statusColor[display]}`}>
-												<Icon name={statusIcon[display]} size={15} />
+											<span class={`flex-none ${DEPLOY_STATUS_COLOR[display]}`}>
+												<Icon name={DEPLOY_STATUS_ICON[display]} size={15} />
 											</span>
 											<div class="min-w-0 flex-1">
 												<div class="truncate text-[13.5px] font-medium text-base-900">
@@ -439,8 +431,8 @@ const clientFailed = clientState.kind !== 'ok'
 							<div class="flex flex-wrap items-center gap-4 px-5 py-4">
 								<div class="min-w-[220px] flex-1">
 									<div class="flex flex-wrap items-center gap-2.5">
-										<span class={statusColor[detailDisplay]}>
-											<Icon name={statusIcon[detailDisplay]} size={16} />
+										<span class={DEPLOY_STATUS_COLOR[detailDisplay]}>
+											<Icon name={DEPLOY_STATUS_ICON[detailDisplay]} size={16} />
 										</span>
 										<span class="text-lg font-bold text-base-900">
 											{selectedProject.name}
@@ -574,10 +566,10 @@ const clientFailed = clientState.kind !== 'ok'
 														<td class="px-4 py-2.5">
 															<a
 																href={linkTo({ sel: deployment.id })}
-																class={`block ${statusColor[display]}`}
+																class={`block ${DEPLOY_STATUS_COLOR[display]}`}
 															>
 																<Icon
-																	name={statusIcon[display]}
+																	name={DEPLOY_STATUS_ICON[display]}
 																	size={15}
 																/>
 															</a>
@@ -644,8 +636,8 @@ const clientFailed = clientState.kind !== 'ok'
 				<div class="flex w-[440px] flex-none flex-col overflow-auto border-l border-base-200 bg-white">
 					<div class="sticky top-0 z-2 flex items-center justify-between border-b border-base-200 bg-white px-4.5 py-3.5">
 						<div class="flex min-w-0 items-center gap-2.5">
-							<span class={`flex-none ${statusColor[drawerDisplay]}`}>
-								<Icon name={statusIcon[drawerDisplay]} size={16} />
+							<span class={`flex-none ${DEPLOY_STATUS_COLOR[drawerDisplay]}`}>
+								<Icon name={DEPLOY_STATUS_ICON[drawerDisplay]} size={16} />
 							</span>
 							<span class="truncate font-mono text-sm font-bold text-base-900">
 								{selectedDeployment.shortId}

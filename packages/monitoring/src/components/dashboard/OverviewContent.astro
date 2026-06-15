@@ -14,6 +14,10 @@ import {
 	loadVpsSeries,
 } from '@/lib/adapters/victoria/observability.ts'
 import { loadRecentDeployments } from '@/lib/adapters/cloudflare/recent-deployments.ts'
+import {
+	DEPLOY_STATUS_COLOR,
+	DEPLOY_STATUS_ICON,
+} from '@/components/cloudflare/deploy-display.ts'
 import { deploymentDisplayStatus } from '@/lib/domain/cloudflare/deployment-summary.ts'
 import {
 	computeServerHealth,
@@ -22,7 +26,6 @@ import {
 } from '@/lib/domain/monitoring/fleet-overview.ts'
 import { formatRelative, formatTime } from '@/lib/domain/monitoring/format.ts'
 
-import type { DeployDisplayStatus } from '@/lib/domain/cloudflare/deployment-summary.ts'
 import type { HostMetrics } from '@/lib/domain/monitoring/host-metrics.ts'
 import type { LogLevel } from '@/lib/domain/monitoring/log-query.ts'
 
@@ -31,18 +34,6 @@ const SPARK_HOURS = 1
 const DEPLOY_COUNT = 4
 const COMMIT_LENGTH = 7
 
-const deployIconName: Record<DeployDisplayStatus, IconName> = {
-	ready: 'check',
-	building: 'refresh',
-	error: 'x',
-	idle: 'dot',
-}
-const deployColorClass: Record<DeployDisplayStatus, string> = {
-	ready: 'text-emerald-600',
-	building: 'text-sky-600',
-	error: 'text-red-600',
-	idle: 'text-base-400',
-}
 const NULL_METRICS: HostMetrics = {
 	cpuPercent: null,
 	memoryPercent: null,
@@ -279,8 +270,8 @@ const recentDeploys = (recentState.kind === 'ok' ? recentState.data : []).map(
 								href={deploy.href}
 								class="flex items-center gap-3 border-b border-base-100 px-4 py-3 last:border-b-0 hover:bg-base-50"
 							>
-								<span class:list={['shrink-0', deployColorClass[deploy.display]]}>
-									<Icon name={deployIconName[deploy.display]} size={15} />
+								<span class:list={['shrink-0', DEPLOY_STATUS_COLOR[deploy.display]]}>
+									<Icon name={DEPLOY_STATUS_ICON[deploy.display]} size={15} />
 								</span>
 								<div class="min-w-0 flex-1">
 									<div class="truncate text-[13px] font-medium text-base-900">
