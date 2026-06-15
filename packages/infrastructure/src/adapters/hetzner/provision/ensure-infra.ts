@@ -96,7 +96,6 @@ async function provisionFreshServer(
 		hetzner: config.hetzner,
 		internal: config.internal,
 		goldenImageId,
-		hasObservability: config.observability !== undefined,
 	})
 
 	const createdEtag = await writeState(r2, vpsName, {

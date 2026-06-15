@@ -39,10 +39,6 @@ export interface CreateVpsInput {
 	readonly hetzner: HetznerVpsDeploySection['hetzner']
 	readonly internal: boolean
 	readonly goldenImageId: number
-	// True when the project declares [services.observability]: the VPS is
-	// the monitoring host and joins the tailnet as tag:monitoring instead
-	// of tag:client-vps (see computeTailscaleTags).
-	readonly hasObservability: boolean
 }
 
 export interface CreateVpsResult {
@@ -122,7 +118,7 @@ async function renderCloudInitWithFreshAuthkey(
 		)
 	}
 
-	const tags = computeTailscaleTags(input.hasObservability)
+	const tags = computeTailscaleTags()
 	const minted = await credentials.tailnet.mintAuthkey(
 		tags,
 		TAILSCALE_AUTHKEY_TTL_SECONDS,
