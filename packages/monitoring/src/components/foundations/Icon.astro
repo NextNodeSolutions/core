@@ -3,41 +3,15 @@
  * Stroke icon set ported from the design handoff (1.7 stroke, currentColor).
  * `name` selects the glyph; `size` sets width/height in px.
  */
-export type IconName =
-	| 'grid'
-	| 'server'
-	| 'logs'
-	| 'rocket'
-	| 'github'
-	| 'branch'
-	| 'search'
-	| 'bell'
-	| 'cpu'
-	| 'ram'
-	| 'disk'
-	| 'net'
-	| 'clock'
-	| 'gauge'
-	| 'activity'
-	| 'arrowUp'
-	| 'arrowDown'
-	| 'chevron'
-	| 'chevronDown'
-	| 'x'
-	| 'check'
-	| 'play'
-	| 'pause'
-	| 'refresh'
-	| 'trash'
-	| 'external'
-	| 'copy'
-	| 'alert'
-	| 'shield'
-	| 'location'
-	| 'filter'
-	| 'dot'
-	| 'flame'
-	| 'layers'
+const ICON_NAMES = [
+	'grid', 'server', 'logs', 'rocket', 'github', 'branch', 'search', 'bell',
+	'cpu', 'ram', 'disk', 'net', 'clock', 'gauge', 'activity', 'arrowUp',
+	'arrowDown', 'chevron', 'chevronDown', 'x', 'check', 'play', 'pause',
+	'refresh', 'trash', 'external', 'copy', 'alert', 'shield', 'location',
+	'filter', 'dot', 'flame', 'layers',
+] as const
+
+export type IconName = (typeof ICON_NAMES)[number]
 
 interface Props {
 	name: IconName
