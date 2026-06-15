@@ -38,4 +38,9 @@ export const envSchema = {
 		access: 'secret',
 		optional: true,
 	}),
+	GITHUB_TOKEN: envField.string({
+		context: 'server',
+		access: 'secret',
+		optional: true,
+	}),
 } as const

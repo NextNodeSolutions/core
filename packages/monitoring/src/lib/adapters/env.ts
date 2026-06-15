@@ -8,6 +8,7 @@ export const ENV_KEYS = {
 	R2_ACCESS_KEY_ID: 'R2_ACCESS_KEY_ID',
 	R2_SECRET_ACCESS_KEY: 'R2_SECRET_ACCESS_KEY',
 	NN_CLIENT_ID: 'NN_CLIENT_ID',
+	GITHUB_TOKEN: 'GITHUB_TOKEN',
 } as const
 
 export class MissingEnvError extends Error {
