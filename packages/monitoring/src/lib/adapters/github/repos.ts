@@ -65,11 +65,21 @@ const fetchOrgRepos = async (
 	let nextPath: string | null =
 		`/orgs/${GITHUB_ORG_LOGIN}/repos?per_page=${String(REPOS_PER_PAGE)}&sort=pushed`
 	// Follow the Link rel="next" chain so an org with >100 repos is not
-	// silently truncated at the first page.
-	for (let page = 0; nextPath !== null && page < MAX_REPO_PAGES; page++) {
-		const result = await githubGetPaged(nextPath, token, context)
-		repos.push(...parseRepoPage(result.payload, context))
-		nextPath = result.nextPath
+	// silently truncated at the first page. Sequential by necessity: each
+	// page's `nextPath` is only known once the previous page has resolved.
+	for (
+		let pageNumber = 0;
+		nextPath !== null && pageNumber < MAX_REPO_PAGES;
+		pageNumber++
+	) {
+		// oxlint-disable-next-line eslint/no-await-in-loop -- each page reveals the next one
+		const { payload, nextPath: followingPath } = await githubGetPaged(
+			nextPath,
+			token,
+			context,
+		)
+		repos.push(...parseRepoPage(payload, context))
+		nextPath = followingPath
 	}
 	return repos
 }

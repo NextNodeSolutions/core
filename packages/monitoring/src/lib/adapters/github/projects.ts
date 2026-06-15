@@ -1,9 +1,14 @@
+import { mapWithConcurrency } from '@/lib/adapters/concurrency.ts'
 import { ENV_KEYS, requireEnv } from '@/lib/adapters/env.ts'
 import { listOrgRepos } from '@/lib/adapters/github/repos.ts'
 import { getLatestWorkflowRun } from '@/lib/adapters/github/workflow-runs.ts'
 import { summarizeGithubProject } from '@/lib/domain/github/github-project.ts'
 
 import type { GithubProjectSummary } from '@/lib/domain/github/github-project.ts'
+
+// Cap the per-repo run-query fan-out so a large org does not burst N parallel
+// GitHub calls at once (and hit the rate limit).
+const MAX_CONCURRENCY = 6
 
 /**
  * The org's GitHub projects, each enriched with its latest workflow run and
@@ -16,10 +21,8 @@ export const loadGithubProjects = async (
 ): Promise<ReadonlyArray<GithubProjectSummary>> => {
 	const token = requireEnv(ENV_KEYS.GITHUB_TOKEN)
 	const repos = await listOrgRepos(token)
-	return Promise.all(
-		repos.map(async repo => {
-			const run = await getLatestWorkflowRun(token, repo.fullName)
-			return summarizeGithubProject(repo, run, serverNames)
-		}),
-	)
+	return mapWithConcurrency(repos, MAX_CONCURRENCY, async repo => {
+		const run = await getLatestWorkflowRun(token, repo.fullName)
+		return summarizeGithubProject(repo, run, serverNames)
+	})
 }
