@@ -78,8 +78,19 @@ describe('formatCount', () => {
 describe('formatTime / formatClock', () => {
 	const stamp = Date.UTC(2026, 5, 15, 12, 32, 18, 423)
 
-	it('formats wall-clock time in the given timezone', () => {
+	it('formats summer wall-clock time in Europe/Paris (DST, UTC+2)', () => {
 		expect(formatTime(stamp, 'Europe/Paris')).toBe('14:32:18')
+	})
+
+	it('formats winter wall-clock time in Europe/Paris (no DST, UTC+1)', () => {
+		// December 15, 12:00 UTC → 13:00 in Paris (CET = UTC+1)
+		const winter = Date.UTC(2026, 11, 15, 12, 0, 0)
+		expect(formatTime(winter, 'Europe/Paris')).toBe('13:00:00')
+	})
+
+	it('formats wall-clock time in UTC unchanged', () => {
+		const winter = Date.UTC(2026, 11, 15, 12, 0, 0)
+		expect(formatTime(winter, 'UTC')).toBe('12:00:00')
 	})
 
 	it('appends milliseconds for the live clock', () => {
