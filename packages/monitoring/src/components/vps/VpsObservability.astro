@@ -5,10 +5,10 @@ import VpsContainerLogs from '@/components/vps/VpsContainerLogs.astro'
 import VpsHostMetrics from '@/components/vps/VpsHostMetrics.astro'
 import { loadPageState } from '@/lib/adapters/load-page-state.ts'
 import {
-	loadHostMetrics,
 	loadVpsCaddyStats,
 	loadVpsLogs,
-} from '@/lib/adapters/victoria/observability.ts'
+} from '@/lib/adapters/victoria/logs.ts'
+import { loadHostMetrics } from '@/lib/adapters/victoria/metrics.ts'
 import type { HostMetrics } from '@/lib/domain/monitoring/host-metrics.ts'
 
 interface Props {

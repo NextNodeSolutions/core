@@ -3,7 +3,7 @@ import LogHistogram from '@/components/charts/LogHistogram.astro'
 import Icon from '@/components/foundations/Icon.astro'
 import LoadStateBanner from '@/components/dashboard/LoadStateBanner.astro'
 import { loadPageState } from '@/lib/adapters/load-page-state.ts'
-import { loadFleetLogs } from '@/lib/adapters/victoria/observability.ts'
+import { loadFleetLogs } from '@/lib/adapters/victoria/logs.ts'
 import { formatClock, formatTime } from '@/lib/domain/monitoring/format.ts'
 import { httpStatusTone } from '@/lib/domain/monitoring/http-status-tone.ts'
 import {

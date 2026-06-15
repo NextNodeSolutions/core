@@ -2,7 +2,7 @@
 import LoadStateBanner from '@/components/dashboard/LoadStateBanner.astro'
 import VpsContainerLogs from '@/components/vps/VpsContainerLogs.astro'
 import { loadPageState } from '@/lib/adapters/load-page-state.ts'
-import { loadProjectLogs } from '@/lib/adapters/victoria/observability.ts'
+import { loadProjectLogs } from '@/lib/adapters/victoria/logs.ts'
 
 interface Props {
 	project: string

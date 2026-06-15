@@ -10,7 +10,7 @@ import {
 	loadHostMetrics,
 	loadVpsGauges,
 	loadVpsSeries,
-} from '@/lib/adapters/victoria/observability.ts'
+} from '@/lib/adapters/victoria/metrics.ts'
 import { deriveFleetAlerts } from '@/lib/domain/monitoring/fleet-overview.ts'
 import {
 	EMPTY_LABEL,
@@ -27,7 +27,7 @@ import { summarizeSeries } from '@/lib/domain/monitoring/series-summary.ts'
 import { rangeToHours } from '@/lib/domain/monitoring/vps-metrics.ts'
 
 import type { ChartColor } from '@/components/charts/chart-color.ts'
-import type { VpsGauges } from '@/lib/adapters/victoria/observability.ts'
+import type { VpsGauges } from '@/lib/adapters/victoria/metrics.ts'
 import type { HetznerVps } from '@/lib/domain/hetzner/vps.ts'
 import type { ServerMetrics } from '@/lib/domain/monitoring/fleet-overview.ts'
 import type { HostMetrics } from '@/lib/domain/monitoring/host-metrics.ts'

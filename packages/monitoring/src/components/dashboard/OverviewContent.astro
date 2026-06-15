@@ -8,11 +8,11 @@ import { ENV_KEYS, requireEnv } from '@/lib/adapters/env.ts'
 import { listServers } from '@/lib/adapters/hetzner/servers.ts'
 import { loadPageState } from '@/lib/adapters/load-page-state.ts'
 import {
-	loadFleetLogs,
 	loadHostMetrics,
 	loadVpsGauges,
 	loadVpsSeries,
-} from '@/lib/adapters/victoria/observability.ts'
+} from '@/lib/adapters/victoria/metrics.ts'
+import { loadFleetLogs } from '@/lib/adapters/victoria/logs.ts'
 import { loadRecentDeployments } from '@/lib/adapters/cloudflare/recent-deployments.ts'
 import {
 	DEPLOY_STATUS_COLOR,
