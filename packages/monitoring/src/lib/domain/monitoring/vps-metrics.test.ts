@@ -17,10 +17,28 @@ describe('buildVpsSeriesExpr', () => {
 		}
 	})
 
-	it('selects the right node_exporter series per metric', () => {
-		expect(buildVpsSeriesExpr('nn-prod', 'cpu')).toContain(
-			'node_cpu_seconds',
+	it('builds the full PromQL expression per metric', () => {
+		expect(buildVpsSeriesExpr('nn-prod', 'cpu')).toBe(
+			'100 - (avg(rate(node_cpu_seconds_total{vps_name="nn-prod",mode="idle"}[5m])) * 100)',
 		)
+		expect(buildVpsSeriesExpr('nn-prod', 'mem')).toBe(
+			'100 * (1 - node_memory_MemAvailable_bytes{vps_name="nn-prod"} / node_memory_MemTotal_bytes{vps_name="nn-prod"})',
+		)
+		expect(buildVpsSeriesExpr('nn-prod', 'disk')).toBe(
+			'100 * (1 - node_filesystem_avail_bytes{vps_name="nn-prod",mountpoint="/",fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{vps_name="nn-prod",mountpoint="/",fstype!~"tmpfs|overlay"})',
+		)
+	})
+
+	it('escapes quotes and backslashes in the vps_name label matcher', () => {
+		expect(buildVpsSeriesExpr('a"b', 'load')).toBe(
+			String.raw`node_load1{vps_name="a\"b"}`,
+		)
+		expect(buildVpsSeriesExpr('a\\b', 'load')).toBe(
+			String.raw`node_load1{vps_name="a\\b"}`,
+		)
+	})
+
+	it('selects the right node_exporter series per metric', () => {
 		expect(buildVpsSeriesExpr('nn-prod', 'load')).toContain('node_load1')
 		expect(buildVpsSeriesExpr('nn-prod', 'netOut')).toContain(
 			'node_network_transmit_bytes',

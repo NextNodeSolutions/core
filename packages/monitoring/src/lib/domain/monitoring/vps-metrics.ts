@@ -23,7 +23,11 @@ export type VpsSeriesMetric = (typeof VPS_SERIES_METRICS)[number]
 
 const RATE_WINDOW = '5m'
 
-const selector = (vpsName: string): string => `vps_name="${vpsName}"`
+// JSON.stringify yields a double-quoted, backslash/quote-escaped string -
+// exactly the escaping a PromQL label matcher needs - so a vps_name carrying
+// `"` or `\` cannot break out of the selector.
+const selector = (vpsName: string): string =>
+	`vps_name=${JSON.stringify(vpsName)}`
 
 const SERIES_EXPR: Record<VpsSeriesMetric, (vpsName: string) => string> = {
 	cpu: vps =>
