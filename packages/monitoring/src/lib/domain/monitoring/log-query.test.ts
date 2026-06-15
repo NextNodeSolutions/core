@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import {
 	buildContainerLogsQuery,
+	buildFleetLogsQuery,
 	buildVpsLogsQuery,
+	parseLogLevel,
 	parseLogLines,
 } from './log-query.ts'
 
@@ -33,13 +35,45 @@ describe('buildContainerLogsQuery', () => {
 	})
 })
 
+describe('buildFleetLogsQuery', () => {
+	it('streams the whole fleet newest-first within the time window', () => {
+		const query = buildFleetLogsQuery()
+		expect(query).toContain('_time:6h')
+		expect(query).not.toContain('nn_project')
+		expect(query).toContain('sort by (_time desc)')
+		expect(query).toContain('limit 200')
+	})
+
+	it('honours an explicit window in hours', () => {
+		expect(buildFleetLogsQuery(24)).toContain('_time:24h')
+	})
+})
+
+describe('parseLogLevel', () => {
+	it('normalises severity spellings to the four UI levels', () => {
+		expect(parseLogLevel('WARNING')).toBe('warn')
+		expect(parseLogLevel('err')).toBe('error')
+		expect(parseLogLevel('fatal')).toBe('error')
+		expect(parseLogLevel('trace')).toBe('debug')
+		expect(parseLogLevel('Information')).toBe('info')
+	})
+
+	it('returns null for unknown or non-string levels (never guesses)', () => {
+		expect(parseLogLevel('verbose')).toBeNull()
+		expect(parseLogLevel(3)).toBeNull()
+		expect(parseLogLevel(undefined)).toBeNull()
+	})
+})
+
 describe('parseLogLines', () => {
-	it('parses newline-delimited JSON with time, message and container', () => {
+	it('parses time, message, container, level and service from structured fields', () => {
 		const body = [
 			JSON.stringify({
 				_time: '2026-06-13T10:00:00Z',
 				_msg: 'hello',
 				container_name: 'stylot-prod-web',
+				severity: 'ERROR',
+				nn_service: 'stylot-web',
 			}),
 			JSON.stringify({ _time: '2026-06-13T10:00:01Z', _msg: 'world' }),
 		].join('\n')
@@ -49,13 +83,61 @@ describe('parseLogLines', () => {
 				time: '2026-06-13T10:00:00Z',
 				message: 'hello',
 				container: 'stylot-prod-web',
+				level: 'error',
+				service: 'stylot-web',
+				vps: null,
+				status: null,
+				method: null,
+				path: null,
+				durationMs: null,
+				traceId: null,
+				stack: null,
+				meta: {},
 			},
 			{
 				time: '2026-06-13T10:00:01Z',
 				message: 'world',
 				container: null,
+				level: null,
+				service: null,
+				vps: null,
+				status: null,
+				method: null,
+				path: null,
+				durationMs: null,
+				traceId: null,
+				stack: null,
+				meta: {},
 			},
 		])
+	})
+
+	it('lifts request, trace and stack fields and keeps the rest as meta', () => {
+		const body = JSON.stringify({
+			_time: '2026-06-13T10:00:02Z',
+			_msg: 'GET /api failed',
+			nn_project: 'stylot-prod',
+			level: 'error',
+			status: 500,
+			method: 'GET',
+			path: '/api/users',
+			duration_ms: 42,
+			trace_id: 'abc123def456',
+			stack: 'Error: boom\n  at handler',
+			region: 'fsn1',
+			retries: 2,
+		})
+		const [line] = parseLogLines(body)
+		expect(line).toMatchObject({
+			vps: 'stylot-prod',
+			status: 500,
+			method: 'GET',
+			path: '/api/users',
+			durationMs: 42,
+			traceId: 'abc123def456',
+			stack: 'Error: boom\n  at handler',
+			meta: { region: 'fsn1', retries: '2' },
+		})
 	})
 
 	it('skips blank lines and a truncated trailing fragment', () => {

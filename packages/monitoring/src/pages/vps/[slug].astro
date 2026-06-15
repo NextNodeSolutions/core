@@ -1,79 +1,211 @@
 ---
+import Icon from '@/components/foundations/Icon.astro'
 import LoadStateBanner from '@/components/dashboard/LoadStateBanner.astro'
+import RangeControl from '@/components/layout/RangeControl.astro'
 import Skeleton from '@/components/dashboard/Skeleton.astro'
-import VpsActions from '@/components/vps/VpsActions.astro'
-import VpsHeader from '@/components/vps/VpsHeader.astro'
-import VpsHostedProjectsDeferred from '@/components/vps/VpsHostedProjectsDeferred.astro'
-import VpsLabels from '@/components/vps/VpsLabels.astro'
-import VpsNetworkInfo from '@/components/vps/VpsNetworkInfo.astro'
-import VpsObservability from '@/components/vps/VpsObservability.astro'
-import VpsStatsGrid from '@/components/vps/VpsStatsGrid.astro'
+import VpsMetrics from '@/components/vps/VpsMetrics.astro'
+import {
+	VPS_STATUS_BADGE,
+	VPS_STATUS_DOT,
+} from '@/components/vps/vps-status-display.ts'
 import DashboardLayout from '@/layouts/DashboardLayout.astro'
 import { ENV_KEYS, requireEnv } from '@/lib/adapters/env.ts'
 import { getServerByName } from '@/lib/adapters/hetzner/servers.ts'
 import { loadPageState } from '@/lib/adapters/load-page-state.ts'
-import { computeVpsHealth } from '@/lib/domain/hetzner/vps-health.ts'
+import { resolveEntityState } from '@/lib/domain/load-state.ts'
 
 // oxlint-disable-next-line nextnode/boolean-naming -- prerender is Astro's required route export name
 export const prerender = false
 
-const { slug } = Astro.params
+const FALLBACK_ROWS = 5
 
+const { slug } = Astro.params
 if (!slug) {
 	return Astro.redirect('/vps')
 }
 
-const state = await loadPageState(`hetzner.servers.${slug}.page`, () => {
+const range = Astro.url.searchParams.get('range') ?? 'live'
+const cmp = Astro.url.searchParams.get('cmp') ?? 'cpu'
+
+const headerState = await loadPageState(`vps.${slug}.header`, () => {
 	const token = requireEnv(ENV_KEYS.HETZNER_API_TOKEN)
 	return getServerByName(token, slug)
 })
+// Classify the lookup once: a found server, a clean not-found (unknown slug),
+// or a genuine load failure. The island reuses this resolved `server` so the
+// VPS is fetched a single time per render, not twice.
+const outcome = resolveEntityState(headerState)
+const server = outcome.status === 'present' ? outcome.data : null
 
-const server = state.kind === 'ok' ? state.data : null
-const health = server ? computeVpsHealth(server.status) : null
-const nowMs = Date.now()
+const role = server
+	? (server.labels['role'] ?? server.serverType.description)
+	: ''
+const cpuType = server?.serverType.cpuType ?? ''
+const hetznerUrl = server
+	? `https://console.hetzner.cloud/servers/${server.id}`
+	: ''
 ---
 
 <DashboardLayout
-	title={`VPS · ${slug}`}
-	breadcrumbs={[
-		{ label: 'Infrastructure' },
-		{ label: 'VPS fleet', href: '/vps' },
-		{ label: slug },
-	]}
+	title={slug}
+	bare
+	breadcrumbs={[{ label: 'VPS', href: '/vps' }, { label: slug }]}
 >
-	{
-		server && health && (
-			<>
-				<VpsHeader server={server} health={health} />
-				<VpsStatsGrid server={server} health={health} nowMs={nowMs} />
-				<VpsNetworkInfo server={server} />
-				<VpsHostedProjectsDeferred
-					server:defer
-					slug={slug}
-					publicIpv4={server.ipv4}
-					publicIpv6={server.ipv6}
-				>
-					<Skeleton slot="fallback" rows={3} class="mt-10" />
-				</VpsHostedProjectsDeferred>
-				<VpsLabels labels={server.labels} />
-				<VpsActions serverName={server.name} />
-				<VpsObservability server:defer slug={slug}>
-					<Skeleton slot="fallback" rows={4} class="mt-10" />
-				</VpsObservability>
-			</>
-		)
-	}
+	<RangeControl slot="actions" path={`/vps/${slug}`} value={range} />
 
 	{
-		state.kind === 'ok' && server === null && (
-			<div class="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-6 text-amber-900">
-				<p class="font-display text-base font-semibold">Server not found</p>
-				<p class="mt-1 font-mono text-xs">
-					No Hetzner server matches the name <code>{slug}</code>.
-				</p>
+		server && (
+			<div class="mx-auto flex max-w-[1320px] flex-col gap-[18px] p-6">
+				<div class="overflow-hidden rounded-xl border border-base-200 bg-white shadow-subtle">
+					<div class="flex flex-wrap items-start justify-between gap-4 px-5 py-4.5">
+						<div class="min-w-0">
+							<div class="flex flex-wrap items-center gap-2.5">
+								<span
+									class:list={[
+										'inline-block size-2.5 rounded-full',
+										VPS_STATUS_DOT[server.status] ?? 'bg-amber-500',
+									]}
+								/>
+								<h2 class="font-mono text-[22px] font-bold tracking-[-0.02em] whitespace-nowrap text-base-900">
+									{server.name}
+								</h2>
+								<span
+									class:list={[
+										'rounded-full border px-2 py-0.5 text-[11px] font-medium',
+										VPS_STATUS_BADGE[server.status] ??
+											'border-amber-200 bg-amber-50 text-amber-700',
+									]}
+								>
+									{server.status}
+								</span>
+								{server.locked && (
+									<span class="inline-flex items-center gap-1 rounded-full border border-base-200 bg-base-100 px-2 py-0.5 text-[11px] font-medium text-base-700">
+										<Icon name="shield" size={12} />
+										locked
+									</span>
+								)}
+								{server.backupsEnabled && (
+									<span class="inline-flex items-center gap-1 rounded-full border border-accent-200 bg-accent-50 px-2 py-0.5 text-[11px] font-medium text-accent-800">
+										<span class="size-1.5 rounded-full bg-accent-600" />
+										backups
+									</span>
+								)}
+							</div>
+							<p class="mt-1.5 text-[13px] text-base-500">{role}</p>
+						</div>
+						<div class="flex gap-2">
+							<a
+								href="/logs"
+								class="inline-flex items-center gap-1.5 rounded-full bg-base-50 px-3.5 py-1.5 text-xs font-medium text-base-800 hover:bg-base-100"
+							>
+								<Icon name="logs" size={14} />
+								Logs
+							</a>
+							<a
+								href={hetznerUrl}
+								target="_blank"
+								rel="noreferrer"
+								class="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-b from-base-900 to-base-800 px-3.5 py-1.5 text-xs font-medium text-white hover:from-base-800"
+							>
+								<Icon name="external" size={14} />
+								Hetzner
+							</a>
+						</div>
+					</div>
+					<div class="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-4 border-t border-base-100 bg-base-50 px-5 py-3.5">
+						<div>
+							<div class="text-[10.5px] tracking-[0.04em] text-base-500 uppercase">
+								Type
+							</div>
+							<div class="mt-0.5 font-mono text-[13px] font-semibold text-base-900">
+								{server.serverType.name} · {cpuType}
+							</div>
+						</div>
+						<div>
+							<div class="text-[10.5px] tracking-[0.04em] text-base-500 uppercase">
+								vCPU
+							</div>
+							<div class="mt-0.5 font-mono text-[13px] font-semibold text-base-900">
+								{server.serverType.cores} cores {server.serverType.architecture}
+							</div>
+						</div>
+						<div>
+							<div class="text-[10.5px] tracking-[0.04em] text-base-500 uppercase">
+								RAM
+							</div>
+							<div class="mt-0.5 font-mono text-[13px] font-semibold text-base-900">
+								{server.serverType.memoryGb} GB
+							</div>
+						</div>
+						<div>
+							<div class="text-[10.5px] tracking-[0.04em] text-base-500 uppercase">
+								Disque
+							</div>
+							<div class="mt-0.5 font-mono text-[13px] font-semibold text-base-900">
+								{server.serverType.diskGb} GB
+							</div>
+						</div>
+						<div>
+							<div class="text-[10.5px] tracking-[0.04em] text-base-500 uppercase">
+								IPv4
+							</div>
+							<div class="mt-0.5 font-mono text-[13px] font-semibold text-base-900">
+								{server.ipv4 ?? '-'}
+							</div>
+						</div>
+						<div>
+							<div class="text-[10.5px] tracking-[0.04em] text-base-500 uppercase">
+								Région
+							</div>
+							<div class="mt-0.5 font-mono text-[13px] font-semibold text-base-900">
+								{server.location.datacenter ?? server.location.name}
+							</div>
+						</div>
+						<div>
+							<div class="text-[10.5px] tracking-[0.04em] text-base-500 uppercase">
+								Image
+							</div>
+							<div class="mt-0.5 text-[13px] font-semibold text-base-900">
+								{server.image ?? '-'}
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<VpsMetrics
+					server:defer
+					slug={slug}
+					server={server}
+					range={range}
+					cmp={cmp}
+				>
+					<Skeleton slot="fallback" rows={FALLBACK_ROWS} />
+				</VpsMetrics>
 			</div>
 		)
 	}
 
-	<LoadStateBanner state={state} upstreamLabel="Hetzner API error" />
+	{
+		outcome.status === 'not_found' && (
+			<div class="mx-auto max-w-[1320px] p-6">
+				<div class="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-amber-900">
+					<p class="font-display text-base font-semibold">VPS introuvable</p>
+					<p class="mt-1 font-mono text-xs">
+						Aucun serveur Hetzner ne correspond au nom <code>{slug}</code>.
+					</p>
+				</div>
+			</div>
+		)
+	}
+
+	{
+		outcome.status === 'failed' && (
+			<div class="mx-auto max-w-[1320px] px-6">
+				<LoadStateBanner
+					state={outcome.state}
+					upstreamLabel="Hetzner API error"
+				/>
+			</div>
+		)
+	}
 </DashboardLayout>

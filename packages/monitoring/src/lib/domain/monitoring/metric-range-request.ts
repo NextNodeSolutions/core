@@ -24,6 +24,24 @@ export interface MetricRangeRequest {
 	readonly stepSeconds: number
 }
 
+/**
+ * Window + step for a range query over the last `hours`, ending now. Shared
+ * by the validated metric proxy and the VPS series loader so both bucket the
+ * window identically (STEP_BUCKETS points). `nowSeconds` is injected to stay
+ * pure.
+ */
+export const buildMetricRangeWindow = (
+	hours: number,
+	nowSeconds: number,
+): Omit<MetricRangeRequest, 'expr'> => {
+	const windowSeconds = Math.round(hours * SECONDS_PER_HOUR)
+	return {
+		startSeconds: nowSeconds - windowSeconds,
+		endSeconds: nowSeconds,
+		stepSeconds: Math.max(1, Math.round(windowSeconds / STEP_BUCKETS)),
+	}
+}
+
 const isMetricKey = (candidate: string | null): candidate is MetricKey =>
 	candidate !== null && METRIC_KEYS.some(key => key === candidate)
 
@@ -62,14 +80,11 @@ export const parseMetricRangeRequest = (
 	}
 	const exprs: Readonly<Record<keyof HostMetrics, string>> =
 		buildHostMetricExprs(args.vpsName)
-	const windowSeconds = Math.round(hours * SECONDS_PER_HOUR)
 	return {
 		ok: true,
 		request: {
 			expr: exprs[args.metric],
-			startSeconds: nowSeconds - windowSeconds,
-			endSeconds: nowSeconds,
-			stepSeconds: Math.max(1, Math.round(windowSeconds / STEP_BUCKETS)),
+			...buildMetricRangeWindow(hours, nowSeconds),
 		},
 	}
 }

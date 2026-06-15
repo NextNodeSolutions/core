@@ -5,7 +5,10 @@ import { runExpositionEndpoint } from './exposition-response.ts'
 describe('runExpositionEndpoint', () => {
 	it('serves the rendered exposition as text/plain;version=0.0.4 with status 200', async () => {
 		const exposition = '# TYPE nn_up gauge\nnn_up 1\n'
-		const response = await runExpositionEndpoint('test', async () => exposition)
+		const response = await runExpositionEndpoint(
+			'test',
+			async () => exposition,
+		)
 
 		expect(response.status).toBe(200)
 		// vmagent negotiates this exact format version; a different content-type

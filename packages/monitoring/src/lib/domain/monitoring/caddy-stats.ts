@@ -1,4 +1,5 @@
 import { isRecord } from '@/lib/domain/is-record.ts'
+import { logsqlQuoted } from '@/lib/domain/monitoring/logsql.ts'
 
 /**
  * Per-host HTTP summary derived from Caddy JSON access logs in
@@ -29,7 +30,7 @@ const STATS_WINDOW = '1h'
 export const buildCaddyStatsQuery = (vpsName: string): string =>
 	[
 		`_time:${STATS_WINDOW}`,
-		`nn_project:${JSON.stringify(vpsName)}`,
+		`nn_project:${logsqlQuoted(vpsName)}`,
 		'| unpack_json',
 		String.raw`| filter logger:~"^http\.log\.access"`,
 		'| stats by (request.host)',

@@ -1,15 +1,34 @@
+import { escapeRegex } from '@/lib/domain/escape-regex.ts'
 import { isRecord } from '@/lib/domain/is-record.ts'
+import { logsqlQuoted } from '@/lib/domain/monitoring/logsql.ts'
+import { parseFiniteNumber } from '@/lib/domain/parse-number.ts'
+import { parseStringOrNull } from '@/lib/domain/parse-string.ts'
+
+export const LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const
+export type LogLevel = (typeof LOG_LEVELS)[number]
 
 /**
  * One log line as VictoriaLogs returns it from `/select/logsql/query`:
  * the streaming endpoint emits newline-delimited JSON objects, each
  * carrying at least `_time` and `_msg` plus whatever stream fields the
- * ingest preserved (`nn_project`, `container_name`, …).
+ * ingest preserved (`nn_project`, `container_name`, `level`, `nn_service`…).
+ * `level` and `service` are read straight from the structured fields when
+ * present and left null otherwise - never inferred from the message text.
  */
 export interface LogLine {
 	readonly time: string
 	readonly message: string
 	readonly container: string | null
+	readonly level: LogLevel | null
+	readonly service: string | null
+	readonly vps: string | null
+	readonly status: number | null
+	readonly method: string | null
+	readonly path: string | null
+	readonly durationMs: number | null
+	readonly traceId: string | null
+	readonly stack: string | null
+	readonly meta: Readonly<Record<string, string>>
 }
 
 const LOGSQL_QUERY_LIMIT = 200
@@ -17,6 +36,31 @@ const LOGSQL_QUERY_LIMIT = 200
 // Bound the container-name scan (container_name is a regular field, not a
 // stream field, so an unbounded scan would read the whole retention).
 const CONTAINER_SCAN_WINDOW = '6h'
+
+// Default fleet-wide log stream window (hours) when a caller does not pick one.
+const DEFAULT_FLEET_LOG_HOURS = 6
+
+// Normalise the many level/severity spellings emitters use down to the four
+// levels the UI renders. Anything unrecognised stays null (not "info").
+const LEVEL_ALIASES: Readonly<Record<string, LogLevel>> = {
+	trace: 'debug',
+	debug: 'debug',
+	info: 'info',
+	information: 'info',
+	notice: 'info',
+	warn: 'warn',
+	warning: 'warn',
+	error: 'error',
+	err: 'error',
+	fatal: 'error',
+	critical: 'error',
+	crit: 'error',
+}
+
+export const parseLogLevel = (candidate: unknown): LogLevel | null => {
+	if (typeof candidate !== 'string') return null
+	return LEVEL_ALIASES[candidate.trim().toLowerCase()] ?? null
+}
 
 /**
  * Build a LogsQL query for the most recent lines of one VPS. `nn_project`
@@ -26,7 +70,7 @@ const CONTAINER_SCAN_WINDOW = '6h'
  * the stream field, so no time bound is needed for correctness.
  */
 export const buildVpsLogsQuery = (vpsName: string): string =>
-	`nn_project:${JSON.stringify(vpsName)} | sort by (_time desc) | limit ${String(LOGSQL_QUERY_LIMIT)}`
+	`nn_project:${logsqlQuoted(vpsName)} | sort by (_time desc) | limit ${String(LOGSQL_QUERY_LIMIT)}`
 
 /**
  * Build a LogsQL query for the most recent lines of one PROJECT, across
@@ -38,13 +82,18 @@ export const buildVpsLogsQuery = (vpsName: string): string =>
  * container_name is not a stream field.
  */
 export const buildContainerLogsQuery = (project: string): string =>
-	`_time:${CONTAINER_SCAN_WINDOW} container_name:~${JSON.stringify(`^${escapeRegex(project)}-`)} | sort by (_time desc) | limit ${String(LOGSQL_QUERY_LIMIT)}`
+	`_time:${CONTAINER_SCAN_WINDOW} container_name:~${logsqlQuoted(`^${escapeRegex(project)}-`)} | sort by (_time desc) | limit ${String(LOGSQL_QUERY_LIMIT)}`
 
-// Escape the project slug for safe embedding in a LogsQL regex. Project
-// names are kebab identifiers (no regex metachars today), but a deploy
-// could in principle carry one - escape defensively.
-const escapeRegex = (slug: string): string =>
-	slug.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)
+/**
+ * Build a LogsQL query for the most recent lines across the WHOLE fleet
+ * (every VPS, every container + journald), newest first. Used by the
+ * overview log stream and its error tally. Time-bounded since there is no
+ * stream filter to ride.
+ */
+export const buildFleetLogsQuery = (
+	windowHours: number = DEFAULT_FLEET_LOG_HOURS,
+): string =>
+	`_time:${String(windowHours)}h | sort by (_time desc) | limit ${String(LOGSQL_QUERY_LIMIT)}`
 
 /**
  * Parse the newline-delimited JSON VictoriaLogs streams back. Tolerant:
@@ -63,6 +112,61 @@ export const parseLogLines = (body: string): ReadonlyArray<LogLine> => {
 	return lines
 }
 
+// Fields lifted into named LogLine properties (so they are not duplicated in
+// the free-form `meta` context table) plus VictoriaLogs internals.
+const META_EXCLUDE = new Set([
+	'container_name',
+	'nn_project',
+	'nn_service',
+	'service',
+	'level',
+	'severity',
+	'status',
+	'http_status',
+	'method',
+	'http_method',
+	'path',
+	'url',
+	'http_path',
+	'duration_ms',
+	'durationMs',
+	'trace_id',
+	'traceId',
+	'stack',
+	'stacktrace',
+	'exception',
+])
+
+const extractMeta = (
+	parsed: Readonly<Record<string, unknown>>,
+): Record<string, string> => {
+	const meta: Record<string, string> = {}
+	for (const [key, fieldValue] of Object.entries(parsed)) {
+		if (key.startsWith('_') || META_EXCLUDE.has(key)) continue
+		if (
+			typeof fieldValue === 'string' ||
+			typeof fieldValue === 'number' ||
+			typeof fieldValue === 'boolean'
+		) {
+			meta[key] = String(fieldValue)
+		}
+	}
+	return meta
+}
+
+// First present (non-null) value among a list of candidate field names -
+// emitters disagree on spelling (status vs http_status, trace_id vs traceId).
+const firstField = (
+	parsed: Readonly<Record<string, unknown>>,
+	keys: ReadonlyArray<string>,
+): unknown => {
+	for (const key of keys) {
+		const candidate = parsed[key]
+		if (candidate !== undefined && candidate !== null) return candidate
+	}
+	return undefined
+}
+
 const safeParse = (raw: string): LogLine | null => {
 	let parsed: unknown
 	try {
@@ -71,15 +175,39 @@ const safeParse = (raw: string): LogLine | null => {
 		return null
 	}
 	if (!isRecord(parsed)) return null
-	// `_time` / `_msg` are VictoriaLogs' built-in field names; bracket
-	// access keeps the underscore-prefixed external contract out of dot
-	// notation.
+	// `_time` / `_msg` are VictoriaLogs' built-in field names; bracket access
+	// keeps the underscore-prefixed contract out of dot notation. Empty `_msg`
+	// is a valid line, so accept any string here (not parseStringOrNull).
 	const timeField = parsed['_time']
 	const msgField = parsed['_msg']
 	const time = typeof timeField === 'string' ? timeField : null
 	const message = typeof msgField === 'string' ? msgField : null
 	if (time === null || message === null) return null
-	const container =
-		typeof parsed.container_name === 'string' ? parsed.container_name : null
-	return { time, message, container }
+	return {
+		time,
+		message,
+		container: parseStringOrNull(parsed.container_name),
+		level: parseLogLevel(firstField(parsed, ['level', 'severity'])),
+		service: parseStringOrNull(
+			firstField(parsed, ['nn_service', 'service']),
+		),
+		vps: parseStringOrNull(parsed['nn_project']),
+		status: parseFiniteNumber(
+			firstField(parsed, ['status', 'http_status']),
+		),
+		method: parseStringOrNull(
+			firstField(parsed, ['method', 'http_method']),
+		),
+		path: parseStringOrNull(
+			firstField(parsed, ['path', 'url', 'http_path']),
+		),
+		durationMs: parseFiniteNumber(
+			firstField(parsed, ['duration_ms', 'durationMs']),
+		),
+		traceId: parseStringOrNull(firstField(parsed, ['trace_id', 'traceId'])),
+		stack: parseStringOrNull(
+			firstField(parsed, ['stack', 'stacktrace', 'exception']),
+		),
+		meta: extractMeta(parsed),
+	}
 }

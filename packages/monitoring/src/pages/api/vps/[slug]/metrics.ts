@@ -52,8 +52,9 @@ export const GET: APIRoute = async ({ params, url }) => {
 		)
 	}
 
-	const serverState = await loadPageState(`hetzner.servers.${slug}.metrics`, () =>
-		getServerByName(requireEnv(ENV_KEYS.HETZNER_API_TOKEN), slug),
+	const serverState = await loadPageState(
+		`hetzner.servers.${slug}.metrics`,
+		() => getServerByName(requireEnv(ENV_KEYS.HETZNER_API_TOKEN), slug),
 	)
 	if (serverState.kind !== 'ok') {
 		return loadStateErrorResponse(serverState)

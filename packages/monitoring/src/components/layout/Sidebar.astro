@@ -1,81 +1,118 @@
 ---
+import Icon from '@/components/foundations/Icon.astro'
+import type { IconName } from '@/components/foundations/Icon.astro'
 import Logo from '@/components/foundations/Logo.astro'
 
-type NavItem =
-	| { kind: 'section'; label: string }
-	| { kind: 'link'; label: string; href: string }
+interface NavItem {
+	label: string
+	href: string
+	icon: IconName
+	count?: number
+}
 
 interface Props {
 	current?: string
+	vpsCount?: number
+	alertCount?: number
 }
 
-const { current = '/' } = Astro.props
+const { current = '/', vpsCount, alertCount = 0 } = Astro.props
 
 const items: NavItem[] = [
-	{ kind: 'section', label: 'Overview' },
-	{ kind: 'link', label: 'Dashboard', href: '/' },
-	{ kind: 'link', label: 'Projects', href: '/projects' },
-	{ kind: 'section', label: 'Infrastructure' },
-	{ kind: 'link', label: 'VPS fleet', href: '/vps' },
-	{ kind: 'link', label: 'Cloudflare', href: '/cloudflare' },
-	{ kind: 'section', label: 'System' },
-	{ kind: 'link', label: 'Logs', href: '/system/logs' },
-	{ kind: 'link', label: 'Settings', href: '/system/settings' },
+	{ label: "Vue d'ensemble", href: '/', icon: 'grid' },
+	{ label: 'VPS', href: '/vps', icon: 'server', count: vpsCount },
+	{ label: 'Logs', href: '/logs', icon: 'logs' },
+	{ label: 'Déploiements', href: '/deployments', icon: 'rocket' },
+	{ label: 'Projets', href: '/projects', icon: 'github' },
 ]
 
 function isActive(href: string): boolean {
 	if (href === '/') return current === '/'
-	return current.startsWith(href)
+	return current === href || current.startsWith(`${href}/`)
 }
+
+const hasAlerts = alertCount > 0
+const alertLabel = hasAlerts
+	? `${alertCount} alerte${alertCount > 1 ? 's' : ''} active${alertCount > 1 ? 's' : ''}`
+	: 'Aucune alerte'
+const alertHint = hasAlerts ? 'Action requise' : 'Tout est nominal'
 ---
 
 <aside
-	class="sticky top-0 flex h-svh w-64 shrink-0 flex-col border-r border-base-100 bg-white"
+	class="sticky top-0 flex h-svh w-60 shrink-0 flex-col border-r border-base-200 bg-white"
 >
-	<div class="flex h-16 items-center border-b border-base-100 px-6">
+	<div class="flex h-16 items-center border-b border-base-100 px-5">
 		<a href="/" class="flex items-center gap-2">
-			<span class="sr-only">NextNode Monitoring home</span>
-			<Logo />
+			<span class="sr-only">NextNode Monitoring</span>
+			<Logo class="h-6" />
 		</a>
 	</div>
 
-	<nav class="flex-1 overflow-y-auto px-3 py-6" aria-label="Primary">
-		<ul class="space-y-1">
+	<nav class="flex-1 overflow-y-auto px-3 py-3" aria-label="Navigation">
+		<p
+			class="px-3 pt-2 pb-1 font-mono text-[10px] uppercase tracking-[0.1em] text-base-500"
+		>
+			Monitoring
+		</p>
+		<ul class="space-y-0.5">
 			{
-				items.map((item) =>
-					item.kind === 'section' ? (
-						<li class="px-3 pt-4 pb-1 first:pt-0">
-							<p class="font-mono text-[10px] uppercase tracking-wider text-base-500">
-								{item.label}
-							</p>
-						</li>
-					) : (
+				items.map((item) => {
+					const active = isActive(item.href)
+					return (
 						<li>
 							<a
 								href={item.href}
+								aria-current={active ? 'page' : undefined}
 								class:list={[
-									'flex items-center rounded-md px-3 py-2 text-sm transition-colors',
-									isActive(item.href)
-										? 'bg-base-50 text-base-950 font-medium'
+									'relative flex items-center gap-3 rounded-lg px-3 py-2 text-[13.5px] transition-colors',
+									active
+										? 'bg-base-100 font-semibold text-base-900'
 										: 'text-base-600 hover:bg-base-50 hover:text-base-900',
 								]}
 							>
-								{item.label}
+								{active && (
+									<span class="absolute inset-y-1.5 left-0 w-[3px] rounded-full bg-accent-600" />
+								)}
+								<Icon name={item.icon} size={17} />
+								<span class="flex-1">{item.label}</span>
+								{item.count != null && (
+									<span class="font-mono text-[11px] text-base-500">
+										{item.count}
+									</span>
+								)}
 							</a>
 						</li>
-					),
-				)
+					)
+				})
 			}
 		</ul>
 	</nav>
 
-	<div class="border-t border-base-100 px-6 py-4 text-[11px] text-base-500">
-		<div class="flex items-center gap-2">
-			<span class="inline-block size-1.5 rounded-full bg-accent-700"></span>
-			<span>Tailscale-only</span>
+	<div class="border-t border-base-100 p-3">
+		<a
+			href="/"
+			class:list={[
+				'flex items-center gap-2.5 rounded-xl border px-3 py-2.5 shadow-subtle transition-colors',
+				hasAlerts
+					? 'border-red-200 bg-red-50 hover:bg-red-100'
+					: 'border-base-200 bg-white hover:bg-base-50',
+			]}
+		>
+			<span class:list={[hasAlerts ? 'text-red-600' : 'text-base-400']}>
+				<Icon name="bell" size={16} />
+			</span>
+			<span class="min-w-0 flex-1 leading-tight">
+				<span class="block text-[12.5px] font-semibold text-base-900">
+					{alertLabel}
+				</span>
+				<span class="block text-[10.5px] text-base-500">{alertHint}</span>
+			</span>
+		</a>
+		<div
+			class="flex items-center gap-2 px-1 pt-2.5 text-[11px] text-base-500"
+		>
+			<span class="inline-block size-1.5 rounded-full bg-accent-600"></span>
+			<code class="font-mono">tailnet · monitoring.nextnode.fr</code>
 		</div>
-		<code class="mt-1 block font-mono text-[10px] text-base-500">
-			monitoring.nextnode.fr
-		</code>
 	</div>
 </aside>

@@ -1,0 +1,127 @@
+---
+import { CHART_COLORS } from '@/components/charts/chart-color.ts'
+import type { ChartColor } from '@/components/charts/chart-color.ts'
+import { areaChartGeometry } from '@/lib/domain/monitoring/area-chart.ts'
+
+interface ThresholdProp {
+	value: number
+	label: string
+	severity: 'warning' | 'critical'
+}
+
+interface Props {
+	values: ReadonlyArray<number>
+	color?: ChartColor
+	height?: number
+	min?: number
+	max?: number
+	unit?: string
+	thresholds?: ReadonlyArray<ThresholdProp>
+}
+
+const VIEW_WIDTH = 600
+const DEFAULT_HEIGHT = 180
+const GRID_LEFT = 40
+const GRID_PAD_RIGHT = 12
+const GRID_RIGHT = VIEW_WIDTH - GRID_PAD_RIGHT
+const LABEL_RIGHT = 34
+const PERCENT_UNIT = '%'
+
+const {
+	values,
+	color = 'accent',
+	height = DEFAULT_HEIGHT,
+	min,
+	max,
+	unit = '',
+	thresholds = [],
+} = Astro.props
+
+const geometry = areaChartGeometry({
+	values,
+	width: VIEW_WIDTH,
+	height,
+	min,
+	max,
+	thresholds: thresholds.map((threshold) => ({
+		value: threshold.value,
+		label: threshold.label,
+		color: threshold.severity,
+	})),
+})
+const scheme = CHART_COLORS[color]
+const formatTick = (sample: number): string =>
+	unit === PERCENT_UNIT ? String(Math.round(sample)) : sample.toFixed(1)
+const tickRows = geometry.ticks.map((tick) => ({
+	y: tick.y,
+	label: formatTick(tick.value),
+}))
+---
+
+<svg
+	viewBox={`0 0 ${VIEW_WIDTH} ${height}`}
+	width="100%"
+	class="block"
+	role="img"
+	aria-label="Série temporelle"
+>
+	{
+		tickRows.map((tick) => (
+			<g>
+				<line
+					x1={GRID_LEFT}
+					x2={GRID_RIGHT}
+					y1={tick.y}
+					y2={tick.y}
+					class="stroke-base-100"
+					stroke-width="1"
+				/>
+				<text
+					x={LABEL_RIGHT}
+					y={tick.y + 3}
+					text-anchor="end"
+					class="fill-base-400 font-mono text-[10px]"
+				>
+					{tick.label}
+				</text>
+			</g>
+		))
+	}
+	{
+		geometry.thresholds.map((threshold) => {
+			const strokeClass =
+				threshold.color === 'critical' ? 'stroke-red-600' : 'stroke-amber-500'
+			const textClass =
+				threshold.color === 'critical' ? 'fill-red-600' : 'fill-amber-600'
+			return (
+				<g>
+					<line
+						x1={GRID_LEFT}
+						x2={GRID_RIGHT}
+						y1={threshold.y}
+						y2={threshold.y}
+						class:list={[strokeClass]}
+						stroke-width="1"
+						stroke-dasharray="4 3"
+						opacity="0.75"
+					/>
+					<text
+						x={GRID_RIGHT}
+						y={threshold.y - 4}
+						text-anchor="end"
+						class:list={[textClass, 'font-mono text-[9.5px] font-semibold']}
+					>
+						{threshold.label}
+					</text>
+				</g>
+			)
+		})
+	}
+	<path d={geometry.areaPath} class:list={[scheme.fill, 'opacity-[0.16]']}></path>
+	<path
+		d={geometry.linePath}
+		fill="none"
+		stroke-width="2"
+		vector-effect="non-scaling-stroke"
+		class:list={[scheme.stroke]}></path>
+</svg>

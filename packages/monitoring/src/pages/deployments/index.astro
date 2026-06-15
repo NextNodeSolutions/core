@@ -1,0 +1,25 @@
+---
+import DeploymentsContent from '@/components/cloudflare/DeploymentsContent.astro'
+import Skeleton from '@/components/dashboard/Skeleton.astro'
+import DashboardLayout from '@/layouts/DashboardLayout.astro'
+
+// oxlint-disable-next-line nextnode/boolean-naming -- prerender is Astro's required route export name
+export const prerender = false
+
+const SKELETON_ROWS = 5
+
+const params = Astro.url.searchParams
+const project = params.get('project') ?? ''
+const env = params.get('env') ?? 'all'
+const sel = params.get('sel') ?? ''
+---
+
+<DashboardLayout
+	title="Déploiements"
+	bare
+	breadcrumbs={[{ label: 'Cloudflare' }, { label: 'Pages' }]}
+>
+	<DeploymentsContent server:defer project={project} env={env} sel={sel}>
+		<Skeleton slot="fallback" rows={SKELETON_ROWS} />
+	</DeploymentsContent>
+</DashboardLayout>

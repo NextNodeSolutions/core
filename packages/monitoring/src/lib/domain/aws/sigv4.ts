@@ -50,7 +50,8 @@ const encodeCanonicalUri = (path: string): string =>
 		.map(segment =>
 			encodeURIComponent(segment).replaceAll(
 				/[!*'()]/g,
-				char => `%${char.charCodeAt(0).toString(HEX_RADIX).toUpperCase()}`,
+				char =>
+					`%${char.charCodeAt(0).toString(HEX_RADIX).toUpperCase()}`,
 			),
 		)
 		.join('/')
