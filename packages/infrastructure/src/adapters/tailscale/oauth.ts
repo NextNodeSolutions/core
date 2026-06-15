@@ -1,8 +1,11 @@
 import { setTimeout as sleep } from 'node:timers/promises'
 
+import { TailnetAclScopeError } from '#/domain/tailnet/client.ts'
 import { isRecord } from '#/kernel/guards.ts'
 
 import type { MintedAuthkey, TailnetClient } from '#/domain/tailnet/client.ts'
+
+const HTTP_FORBIDDEN = 403
 
 const TAILSCALE_API_BASE = 'https://api.tailscale.com/api/v2'
 const DEVICE_POLL_INTERVAL_MS = 2_000
@@ -206,6 +209,58 @@ export async function getTailnetIpByHostname(
 	)
 }
 
+export async function getAclPolicy(
+	clientSecret: string,
+): Promise<Record<string, unknown>> {
+	const accessToken = await exchangeClientSecret(clientSecret)
+	const response = await fetch(`${TAILSCALE_API_BASE}/tailnet/-/acl`, {
+		headers: {
+			Authorization: `Bearer ${accessToken}`,
+			Accept: 'application/json',
+		},
+	})
+	if (response.status === HTTP_FORBIDDEN) {
+		throw new TailnetAclScopeError(
+			`Tailscale get ACL: 403 - the OAuth client lacks the "acl" scope`,
+		)
+	}
+	if (!response.ok) {
+		throw new Error(
+			`Tailscale get ACL: ${response.status} - ${await response.text()}`,
+		)
+	}
+	const body: unknown = await response.json()
+	if (!isRecord(body)) {
+		throw new Error('Tailscale get ACL: response was not a JSON object')
+	}
+	return body
+}
+
+export async function setAclPolicy(
+	clientSecret: string,
+	policy: Record<string, unknown>,
+): Promise<void> {
+	const accessToken = await exchangeClientSecret(clientSecret)
+	const response = await fetch(`${TAILSCALE_API_BASE}/tailnet/-/acl`, {
+		method: 'POST',
+		headers: {
+			Authorization: `Bearer ${accessToken}`,
+			'Content-Type': 'application/json',
+		},
+		body: JSON.stringify(policy),
+	})
+	if (response.status === HTTP_FORBIDDEN) {
+		throw new TailnetAclScopeError(
+			`Tailscale set ACL: 403 - the OAuth client lacks the "acl" scope`,
+		)
+	}
+	if (!response.ok) {
+		throw new Error(
+			`Tailscale set ACL: ${response.status} - ${await response.text()}`,
+		)
+	}
+}
+
 export function createTailnetClient(clientSecret: string): TailnetClient {
 	return {
 		mintAuthkey: (tags, ttlSeconds, description) =>
@@ -214,5 +269,7 @@ export function createTailnetClient(clientSecret: string): TailnetClient {
 			getTailnetIpByHostname(clientSecret, hostname),
 		deleteByHostname: hostname =>
 			deleteTailnetDevicesByHostname(clientSecret, hostname),
+		getAclPolicy: () => getAclPolicy(clientSecret),
+		setAclPolicy: policy => setAclPolicy(clientSecret, policy),
 	}
 }

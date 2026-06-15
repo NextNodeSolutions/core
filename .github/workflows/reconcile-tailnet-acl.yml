@@ -1,0 +1,30 @@
+name: Reconcile Tailnet ACL
+
+# Ensures the one tailnet ACL grant the monitoring stack needs is present in the
+# live Tailscale policy: the monitoring host (every NextNode VPS is tag:server)
+# scrapes client exporters (9100/9101/9187) and receives Vector log pushes (443)
+# over an otherwise default-deny tailnet. Code-driven so the behaviour is
+# reproducible on any tailnet instead of a manual console edit. Idempotent and
+# non-fatal: a missing "acl" OAuth scope is logged, not failed.
+
+on:
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+jobs:
+    reconcile:
+        name: Reconcile tailnet ACL
+        runs-on: ubuntu-latest
+        steps:
+            - uses: NextNodeSolutions/core/.github/actions/setup@main
+              with:
+                  infra: 'true'
+                  deps: 'false'
+
+            - name: Reconcile tailnet ACL
+              run: node src/index.ts reconcile-tailnet-acl
+              working-directory: .infra/packages/infrastructure
+              env:
+                  TAILSCALE_AUTH_KEY: ${{ secrets.TS_OAUTH_SECRET }}

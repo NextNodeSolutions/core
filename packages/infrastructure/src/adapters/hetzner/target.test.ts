@@ -131,6 +131,8 @@ const mockTailnet = {
 	mintAuthkey: mockTailnetMintAuthkey,
 	getIpByHostname: mockTailnetGetIp,
 	deleteByHostname: mockTailnetDeleteByHostname,
+	getAclPolicy: vi.fn(async () => ({})),
+	setAclPolicy: vi.fn(),
 }
 
 // Mock node:timers/promises (sleep resolves instantly in tests)
