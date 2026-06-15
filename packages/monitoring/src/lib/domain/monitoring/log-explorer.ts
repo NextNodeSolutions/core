@@ -37,7 +37,8 @@ export interface BucketOptions {
 	readonly nowMs: number
 }
 
-const ALL = 'all'
+/** Sentinel for the "no scope filter" choice on the service / vps facets. */
+export const ALL = 'all'
 const FNV_OFFSET_BASIS = 2_166_136_261
 const FNV_PRIME = 16_777_619
 const HASH_RADIX = 36
@@ -59,6 +60,23 @@ const inScope = (line: LogLine, scope: LogScope): boolean => {
 	if (scope.service !== ALL && line.service !== scope.service) return false
 	if (scope.vps !== ALL && line.vps !== scope.vps) return false
 	return true
+}
+
+/**
+ * Distinct, alphabetically sorted, non-empty values of one field across the
+ * logs - used to build the service / vps facet option lists. Pure projection
+ * over the log list.
+ */
+export const collectDistinct = (
+	logs: ReadonlyArray<LogLine>,
+	pick: (line: LogLine) => string | null,
+): ReadonlyArray<string> => {
+	const seen = new Set<string>()
+	for (const line of logs) {
+		const field = pick(line)
+		if (field !== null && field.length > 0) seen.add(field)
+	}
+	return [...seen].toSorted((left, right) => left.localeCompare(right))
 }
 
 export const filterLogs = (

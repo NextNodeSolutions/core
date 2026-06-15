@@ -4,20 +4,28 @@ import Icon from '@/components/foundations/Icon.astro'
 import LoadStateBanner from '@/components/dashboard/LoadStateBanner.astro'
 import { loadPageState } from '@/lib/adapters/load-page-state.ts'
 import { loadFleetLogs } from '@/lib/adapters/victoria/observability.ts'
+import { formatClock, formatTime } from '@/lib/domain/monitoring/format.ts'
+import { httpStatusTone } from '@/lib/domain/monitoring/http-status-tone.ts'
 import {
+	ALL,
 	bucketLogs,
+	collectDistinct,
 	countByLevel,
 	filterLogs,
 	logLineKey,
 	selectLogByKey,
 } from '@/lib/domain/monitoring/log-explorer.ts'
-import { formatClock, formatTime } from '@/lib/domain/monitoring/format.ts'
-import { httpStatusTone } from '@/lib/domain/monitoring/http-status-tone.ts'
+import {
+	buildLogsHref,
+	parseLogLevels,
+	toggleLevelHref,
+} from '@/lib/domain/monitoring/log-query-params.ts'
 import { LOG_LEVELS } from '@/lib/domain/monitoring/log-query.ts'
 import { rangeToHours } from '@/lib/domain/monitoring/vps-metrics.ts'
 
 import type { HttpStatusTone } from '@/lib/domain/monitoring/http-status-tone.ts'
 import type { LogFilter } from '@/lib/domain/monitoring/log-explorer.ts'
+import type { LogsQuery } from '@/lib/domain/monitoring/log-query-params.ts'
 import type { LogLevel, LogLine } from '@/lib/domain/monitoring/log-query.ts'
 
 interface Props {
@@ -34,28 +42,16 @@ const MS_PER_HOUR = 3_600_000
 const MAX_ROWS = 250
 const LIVE_HOURS = 1
 const TRACE_PREFIX_LENGTH = 6
-const ALL = 'all'
-const DEFAULT_RANGE = '6h'
 
 const { q, service, vps, levelsParam, range, sel } = Astro.props
+const query: LogsQuery = { q, service, vps, levelsParam, range }
 
 const hours = range === 'live' ? LIVE_HOURS : rangeToHours(range)
 
 const logsState = await loadPageState('logs.fleet', () => loadFleetLogs(hours))
 const logs: ReadonlyArray<LogLine> = logsState.kind === 'ok' ? logsState.data : []
 
-const levelNames: ReadonlySet<string> = new Set(LOG_LEVELS)
-const isLogLevel = (candidate: string): candidate is LogLevel =>
-	levelNames.has(candidate)
-
-const parseLevels = (raw: string): ReadonlyArray<LogLevel> => {
-	const requested = raw
-		.split(',')
-		.map(part => part.trim())
-		.filter(isLogLevel)
-	return requested.length > 0 ? requested : LOG_LEVELS
-}
-const activeLevels = parseLevels(levelsParam)
+const activeLevels = parseLogLevels(levelsParam)
 
 const filter: LogFilter = { query: q, levels: activeLevels, service, vps }
 const filtered = filterLogs(logs, filter)
@@ -69,44 +65,10 @@ const buckets = bucketLogs(filtered, {
 })
 const [firstBucket] = buckets
 
-const uniqueSorted = (
-	picker: (line: LogLine) => string | null,
-): ReadonlyArray<string> => {
-	const seen = new Set<string>()
-	for (const line of logs) {
-		const field = picker(line)
-		if (field !== null && field.length > 0) seen.add(field)
-	}
-	return [...seen].toSorted((left, right) => left.localeCompare(right))
-}
-const serviceOptions = [ALL, ...uniqueSorted(line => line.service)]
-const vpsOptions = [ALL, ...uniqueSorted(line => line.vps)]
+const serviceOptions = [ALL, ...collectDistinct(logs, line => line.service)]
+const vpsOptions = [ALL, ...collectDistinct(logs, line => line.vps)]
 
 const selectedLog: LogLine | null = selectLogByKey(filtered, sel)
-
-const linkTo = (overrides: Record<string, string | null>): string => {
-	const params = new URLSearchParams()
-	if (q) params.set('q', q)
-	if (service !== ALL) params.set('service', service)
-	if (vps !== ALL) params.set('vps', vps)
-	if (levelsParam) params.set('levels', levelsParam)
-	if (range !== DEFAULT_RANGE) params.set('range', range)
-	for (const [key, override] of Object.entries(overrides)) {
-		if (override === null) params.delete(key)
-		else params.set(key, override)
-	}
-	const qs = params.toString()
-	return qs ? `/logs?${qs}` : '/logs'
-}
-
-const levelToggleUrl = (level: LogLevel): string => {
-	const next = activeLevels.includes(level)
-		? activeLevels.filter(active => active !== level)
-		: [...activeLevels, level]
-	const ordered = LOG_LEVELS.filter(candidate => next.includes(candidate))
-	const allOn = ordered.length === LOG_LEVELS.length
-	return linkTo({ levels: allOn ? '' : ordered.join(','), sel: null })
-}
 
 const levelTextClass: Record<LogLevel, string> = {
 	debug: 'text-base-400',
@@ -214,7 +176,7 @@ const metaEntries = selectedLog ? Object.entries(selectedLog.meta) : []
 					const active = activeLevels.includes(level)
 					return (
 						<a
-							href={levelToggleUrl(level)}
+							href={toggleLevelHref(query, activeLevels, level)}
 							class:list={[
 								'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors',
 								active
@@ -289,7 +251,7 @@ const metaEntries = selectedLog ? Object.entries(selectedLog.meta) : []
 						const active = key === sel
 						return (
 							<a
-								href={linkTo({ sel: key })}
+								href={buildLogsHref(query, { sel: key })}
 								class:list={[
 									'flex items-baseline gap-2.5 border-l-2 px-3.5 py-1 font-mono text-xs whitespace-nowrap',
 									active && line.level !== null
@@ -363,7 +325,7 @@ const metaEntries = selectedLog ? Object.entries(selectedLog.meta) : []
 							{selectedLog.level ?? 'log'}
 						</span>
 						<a
-							href={linkTo({ sel: null })}
+							href={buildLogsHref(query, { sel: null })}
 							class="rounded-full p-1 text-base-500 hover:bg-base-50 hover:text-base-900"
 							aria-label="Fermer le détail"
 						>
