@@ -4,7 +4,7 @@ import {
 	listBackupObjects,
 	listWalgBaseBackupObjects,
 } from '@/lib/adapters/r2/backups.ts'
-import { getVpsState } from '@/lib/adapters/r2/state.ts'
+import { getPostgresBackupCreds, getVpsState } from '@/lib/adapters/r2/state.ts'
 import { listTaggedDevices } from '@/lib/adapters/tailscale/devices.ts'
 import {
 	renderBackupMetrics,
@@ -18,11 +18,34 @@ import type { R2StateClient } from '@/lib/adapters/r2/state.ts'
 // oxlint-disable-next-line nextnode/boolean-naming -- prerender is Astro's required route export name
 export const prerender = false
 
+// Backups are listed against the production environment's per-project token.
+const BACKUP_ENVIRONMENT = 'production'
+
 const resolveStateClient = (): R2StateClient => ({
 	accountId: requireEnv(ENV_KEYS.CLOUDFLARE_ACCOUNT_ID),
 	accessKeyId: requireEnv(ENV_KEYS.R2_ACCESS_KEY_ID),
 	secretAccessKey: requireEnv(ENV_KEYS.R2_SECRET_ACCESS_KEY),
 })
+
+// The state token cannot read the backup buckets; swap in the project's
+// dedicated backup token (persisted in the state bucket). Returns null when the
+// project never provisioned postgres backups - it then has nothing to list.
+const resolveBackupClient = async (
+	stateClient: R2StateClient,
+	project: string,
+): Promise<R2StateClient | null> => {
+	const creds = await getPostgresBackupCreds(
+		stateClient,
+		project,
+		BACKUP_ENVIRONMENT,
+	)
+	if (creds === null) return null
+	return {
+		accountId: stateClient.accountId,
+		accessKeyId: creds.accessKeyId,
+		secretAccessKey: creds.secretAccessKey,
+	}
+}
 
 const listClientProjects = async (
 	client: R2StateClient,
@@ -54,18 +77,48 @@ export const GET: APIRoute = () =>
 	runExpositionEndpoint('metrics.backups', async () => {
 		const client = resolveStateClient()
 		const projects = await listClientProjects(client)
+		// One backup-scoped client per project (null when no backups exist).
+		const backupClients = new Map(
+			await Promise.all(
+				projects.map(
+					async project =>
+						[
+							project,
+							await resolveBackupClient(client, project),
+						] as const,
+				),
+			),
+		)
 		const [dumpEntries, walgEntries] = await Promise.all([
 			Promise.all(
-				projects.map(async project => ({
-					project,
-					objects: await listBackupObjects(client, project),
-				})),
+				projects.map(async project => {
+					const backupClient = backupClients.get(project) ?? null
+					return {
+						project,
+						objects:
+							backupClient === null
+								? null
+								: await listBackupObjects(
+										backupClient,
+										project,
+									),
+					}
+				}),
 			),
 			Promise.all(
-				projects.map(async project => ({
-					project,
-					objects: await listWalgBaseBackupObjects(client, project),
-				})),
+				projects.map(async project => {
+					const backupClient = backupClients.get(project) ?? null
+					return {
+						project,
+						objects:
+							backupClient === null
+								? null
+								: await listWalgBaseBackupObjects(
+										backupClient,
+										project,
+									),
+					}
+				}),
 			),
 		])
 		return `${renderBackupMetrics(dumpEntries)}${renderWalgBackupMetrics(walgEntries)}`
