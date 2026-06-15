@@ -1,3 +1,4 @@
+import { EMPTY_LABEL } from '@/lib/domain/monitoring/format.ts'
 import { HOST_WARN_PERCENT } from '@/lib/domain/monitoring/monitoring-thresholds.ts'
 
 import type { Tone } from '@/lib/domain/badge-status.ts'
@@ -14,13 +15,11 @@ const SECONDS_PER_MINUTE = 60
 const SECONDS_PER_HOUR = 3600
 const SECONDS_PER_DAY = 86_400
 
-const PLACEHOLDER = '-'
-
 const PERCENT_FRACTION_DIGITS = 1
 
 const formatPercent = (percent: number | null): string =>
 	percent === null
-		? PLACEHOLDER
+		? EMPTY_LABEL
 		: `${percent.toFixed(PERCENT_FRACTION_DIGITS)}%`
 
 const percentTone = (percent: number | null, warnAt: number): Tone => {
@@ -30,7 +29,7 @@ const percentTone = (percent: number | null, warnAt: number): Tone => {
 }
 
 const formatUptime = (seconds: number | null): string => {
-	if (seconds === null || seconds < 0) return PLACEHOLDER
+	if (seconds === null || seconds < 0) return EMPTY_LABEL
 	if (seconds >= SECONDS_PER_DAY) {
 		return `${String(Math.floor(seconds / SECONDS_PER_DAY))}d`
 	}

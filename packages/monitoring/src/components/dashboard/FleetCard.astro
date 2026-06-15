@@ -1,7 +1,12 @@
 ---
 import Sparkline from '@/components/charts/Sparkline.astro'
 import Icon from '@/components/foundations/Icon.astro'
-import { formatUptime } from '@/lib/domain/monitoring/format.ts'
+import {
+	EMPTY_LABEL,
+	formatFixedOrDash,
+	formatPercentOrDash,
+	formatUptime,
+} from '@/lib/domain/monitoring/format.ts'
 import { severityForPercent } from '@/lib/domain/monitoring/monitoring-thresholds.ts'
 
 import type { ChartColor } from '@/components/charts/chart-color.ts'
@@ -99,10 +104,14 @@ function barColor(percent: number | null): string {
 
 const role = server.labels['role'] ?? server.serverType.description
 const uptime =
-	metrics.uptimeSeconds === null ? '-' : formatUptime(metrics.uptimeSeconds)
-const loadText = loadAvg === null ? '-' : loadAvg.toFixed(LOAD_DECIMALS)
+	metrics.uptimeSeconds === null
+		? EMPTY_LABEL
+		: formatUptime(metrics.uptimeSeconds)
+const loadText = formatFixedOrDash(loadAvg, LOAD_DECIMALS)
 const netText =
-	netOutMbps === null ? '-' : `${netOutMbps.toFixed(NET_DECIMALS)} Mb/s`
+	netOutMbps === null
+		? EMPTY_LABEL
+		: `${netOutMbps.toFixed(NET_DECIMALS)} Mb/s`
 const sparkColor = healthChartColor[health]
 ---
 
@@ -156,7 +165,7 @@ const sparkColor = healthChartColor[health]
 						/>
 					</span>
 					<span class="w-9 text-right font-mono text-[12.5px] font-semibold tabular-nums">
-						{row.percent === null ? '-' : `${Math.round(row.percent)}%`}
+						{formatPercentOrDash(row.percent)}
 					</span>
 				</div>
 			))

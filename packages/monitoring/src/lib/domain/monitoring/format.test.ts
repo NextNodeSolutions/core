@@ -1,15 +1,34 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+	EMPTY_LABEL,
 	formatClock,
 	formatCount,
 	formatDurationSeconds,
+	formatFixedOrDash,
 	formatPercent,
+	formatPercentOrDash,
 	formatRelative,
+	formatRoundedOrDash,
 	formatTime,
 	formatTrafficGb,
 	formatUptime,
 } from './format.ts'
+
+describe('formatPercentOrDash / formatRoundedOrDash / formatFixedOrDash', () => {
+	it('renders the empty label for null', () => {
+		expect(formatPercentOrDash(null)).toBe(EMPTY_LABEL)
+		expect(formatRoundedOrDash(null)).toBe(EMPTY_LABEL)
+		expect(formatFixedOrDash(null)).toBe(EMPTY_LABEL)
+	})
+
+	it('formats finite values like their non-dash counterparts', () => {
+		expect(formatPercentOrDash(12.6)).toBe('13%')
+		expect(formatRoundedOrDash(12.6)).toBe('13')
+		expect(formatFixedOrDash(1.234)).toBe('1.2')
+		expect(formatFixedOrDash(1.234, 2)).toBe('1.23')
+	})
+})
 
 describe('formatUptime', () => {
 	it('shows days and hours past one day', () => {

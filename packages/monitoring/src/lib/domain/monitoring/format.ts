@@ -59,6 +59,21 @@ export function formatPercent(percent: number): string {
 	return `${Math.round(percent)}%`
 }
 
+/** Whole-percent label, or the empty label when absent → `13%` / `-`. */
+export function formatPercentOrDash(percent: number | null): string {
+	return percent === null ? EMPTY_LABEL : formatPercent(percent)
+}
+
+/** Rounded-integer label, or the empty label when absent → `42` / `-`. */
+export function formatRoundedOrDash(sample: number | null): string {
+	return sample === null ? EMPTY_LABEL : String(Math.round(sample))
+}
+
+/** Fixed-decimal label, or the empty label when absent → `1.5` / `-`. */
+export function formatFixedOrDash(sample: number | null, digits = 1): string {
+	return sample === null ? EMPTY_LABEL : sample.toFixed(digits)
+}
+
 /** Locale-grouped integer count → `1 000 000`. */
 export function formatCount(count: number): string {
 	return count.toLocaleString('fr-FR')

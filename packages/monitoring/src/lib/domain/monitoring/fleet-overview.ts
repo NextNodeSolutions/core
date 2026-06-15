@@ -1,4 +1,5 @@
 import {
+	EMPTY_LABEL,
 	formatCount,
 	formatPercent,
 	formatTrafficGb,
@@ -21,7 +22,6 @@ import type { HetznerVps, VpsStatus } from '@/lib/domain/hetzner/vps.ts'
  */
 
 const BYTES_PER_GB = 1_000_000_000
-const EMPTY_VALUE = '-'
 
 export interface ServerMetrics {
 	readonly cpuPercent: number | null
@@ -167,7 +167,7 @@ function cpuStat(input: FleetSummaryInput): FleetStat {
 	if (samples.length === 0) {
 		return {
 			label: 'CPU moyen fleet',
-			value: EMPTY_VALUE,
+			value: EMPTY_LABEL,
 			hint: 'aucune métrique',
 			tone: 'neutral',
 		}
