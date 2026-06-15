@@ -12,9 +12,11 @@ import {
 	selectLogByKey,
 } from '@/lib/domain/monitoring/log-explorer.ts'
 import { formatClock, formatTime } from '@/lib/domain/monitoring/format.ts'
+import { httpStatusTone } from '@/lib/domain/monitoring/http-status-tone.ts'
 import { LOG_LEVELS } from '@/lib/domain/monitoring/log-query.ts'
 import { rangeToHours } from '@/lib/domain/monitoring/vps-metrics.ts'
 
+import type { HttpStatusTone } from '@/lib/domain/monitoring/http-status-tone.ts'
 import type { LogFilter } from '@/lib/domain/monitoring/log-explorer.ts'
 import type { LogLevel, LogLine } from '@/lib/domain/monitoring/log-query.ts'
 
@@ -31,8 +33,6 @@ const BUCKET_COUNT = 72
 const MS_PER_HOUR = 3_600_000
 const MAX_ROWS = 250
 const LIVE_HOURS = 1
-const STATUS_SERVER_ERROR = 500
-const STATUS_CLIENT_ERROR = 400
 const TRACE_PREFIX_LENGTH = 6
 const ALL = 'all'
 const DEFAULT_RANGE = '6h'
@@ -127,17 +127,20 @@ const levelBadgeClass: Record<LogLevel, string> = {
 	error: 'border-red-200 bg-red-50 text-red-700',
 }
 
-const statusTextClass = (status: number): string => {
-	if (status >= STATUS_SERVER_ERROR) return 'text-red-600'
-	if (status >= STATUS_CLIENT_ERROR) return 'text-amber-600'
-	return 'text-emerald-600'
+const STATUS_TEXT_CLASS: Record<HttpStatusTone, string> = {
+	ok: 'text-emerald-600',
+	clientError: 'text-amber-600',
+	serverError: 'text-red-600',
 }
-const statusBadgeClass = (status: number): string => {
-	if (status >= STATUS_SERVER_ERROR) return 'border-red-200 bg-red-50 text-red-700'
-	if (status >= STATUS_CLIENT_ERROR)
-		return 'border-amber-200 bg-amber-50 text-amber-700'
-	return 'border-emerald-200 bg-emerald-50 text-emerald-700'
+const STATUS_BADGE_CLASS: Record<HttpStatusTone, string> = {
+	ok: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+	clientError: 'border-amber-200 bg-amber-50 text-amber-700',
+	serverError: 'border-red-200 bg-red-50 text-red-700',
 }
+const statusTextClass = (status: number): string =>
+	STATUS_TEXT_CLASS[httpStatusTone(status)]
+const statusBadgeClass = (status: number): string =>
+	STATUS_BADGE_CLASS[httpStatusTone(status)]
 
 const visibleRows = filtered.slice(0, MAX_ROWS)
 const overflowCount = filtered.length - MAX_ROWS
