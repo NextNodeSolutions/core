@@ -22,6 +22,7 @@ function makeInput(overrides?: Partial<ConvergenceInput>): ConvergenceInput {
 
 function createFakeSession(
 	files: Map<string, string>,
+	{ vectorPresent = true }: { vectorPresent?: boolean } = {},
 ): SshSession & { execCalls: string[] } {
 	const execCalls: string[] = []
 
@@ -29,6 +30,10 @@ function createFakeSession(
 		execCalls,
 		exec: vi.fn(async (cmd: string) => {
 			execCalls.push(cmd)
+			// Answer the `command -v vector` self-heal probe.
+			if (cmd.includes('command -v vector')) {
+				return vectorPresent ? 'yes\n' : 'no\n'
+			}
 			return ''
 		}),
 		execWithStdin: vi.fn(async (cmd: string) => {
@@ -101,6 +106,40 @@ describe('converge', () => {
 		await converge(session, makeInput())
 
 		expect(session.execCalls).toContain('sudo systemctl restart vector')
+	})
+
+	it('installs the Vector binary when missing and restarts even if config is unchanged', async () => {
+		// Config already on disk (unchanged), but the binary is absent - the
+		// self-heal must install it and force a restart anyway.
+		const files = new Map<string, string>([
+			['/etc/vector/vector.toml', VECTOR_TOML],
+			['/etc/vector/vector.env', VECTOR_ENV],
+			['/etc/caddy/config.json', CADDY_CONFIG],
+			['/etc/monitoring/env', 'TS_IP=100.64.0.9\n'],
+		])
+		const session = createFakeSession(files, { vectorPresent: false })
+
+		await converge(session, makeInput())
+
+		expect(
+			session.execCalls.some(
+				c =>
+					c.includes('install -m 0755') &&
+					c.includes('/usr/bin/vector'),
+			),
+		).toBe(true)
+		expect(session.execCalls).toContain('sudo systemctl restart vector')
+	})
+
+	it('does not install Vector when the binary is already present', async () => {
+		const files = new Map<string, string>()
+		const session = createFakeSession(files, { vectorPresent: true })
+
+		await converge(session, makeInput())
+
+		expect(session.execCalls.some(c => c.includes('install -m 0755'))).toBe(
+			false,
+		)
 	})
 
 	it('restarts caddy when config changes', async () => {

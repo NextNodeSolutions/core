@@ -1,4 +1,5 @@
 import { CADDY_CONFIG_PATH } from '#/adapters/hetzner/constants.ts'
+import { VECTOR_INSTALL_CMDS } from '#/domain/hetzner/golden-image.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
 import type { SshSession } from '#/adapters/hetzner/ssh/session.types.ts'
@@ -69,6 +70,30 @@ async function convergeCadvisor(
 	}
 }
 
+// Self-heal the Vector binary: a VPS whose golden image snapshot predates (or
+// silently lost) the Vector install has the unit + config but no
+// /usr/bin/vector, so vector.service crash-loops with "No such file or
+// directory". Install the pinned binary on demand. Returns whether it was just
+// installed (so the caller restarts even when the config is unchanged).
+// Non-fatal: a failed install is warned, not deploy-breaking (cadvisor stance).
+async function ensureVectorBinary(session: SshSession): Promise<boolean> {
+	const probe = await session.exec(
+		'command -v vector >/dev/null 2>&1 && echo yes || echo no',
+	)
+	if (probe.trim() === 'yes') return false
+
+	const installed = await session
+		.exec(VECTOR_INSTALL_CMDS.join(' && '))
+		.then(() => true)
+		.catch(() => false)
+	logger[installed ? 'info' : 'warn'](
+		installed
+			? 'Installed missing Vector binary (snapshot predates/lost it)'
+			: 'Vector binary missing and install failed - log shipping stays down until the golden image ships it',
+	)
+	return installed
+}
+
 export async function converge(
 	session: SshSession,
 	input: ConvergenceInput,
@@ -76,6 +101,7 @@ export async function converge(
 	// Vector config - skipped when log sink (NN_VL_URL) is unknown at provision time.
 	// Re-run convergence once VL is reachable; this is the hot-update path.
 	if (input.vectorToml !== undefined && input.vectorEnv !== undefined) {
+		const vectorInstalled = await ensureVectorBinary(session)
 		const vectorTomlChanged = await pushFileIfChanged(
 			session,
 			VECTOR_TOML_PATH,
@@ -87,7 +113,7 @@ export async function converge(
 			input.vectorEnv,
 		)
 
-		if (vectorTomlChanged || vectorEnvChanged) {
+		if (vectorInstalled || vectorTomlChanged || vectorEnvChanged) {
 			await session.exec('sudo systemctl restart vector')
 			logger.info('Restarted vector')
 		}
