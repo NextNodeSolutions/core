@@ -1,0 +1,54 @@
+---
+import { CHART_COLORS } from '@/components/charts/chart-color.ts'
+import type { ChartColor } from '@/components/charts/chart-color.ts'
+import { sparklineGeometry } from '@/lib/domain/monitoring/chart-geometry.ts'
+
+interface Props {
+	values: ReadonlyArray<number>
+	color?: ChartColor
+	width?: number
+	height?: number
+	class?: string
+}
+
+const DEFAULT_WIDTH = 110
+const DEFAULT_HEIGHT = 34
+
+const {
+	values,
+	color = 'accent',
+	width = DEFAULT_WIDTH,
+	height = DEFAULT_HEIGHT,
+	class: className,
+} = Astro.props
+
+const geometry = sparklineGeometry(values, width, height)
+const scheme = CHART_COLORS[color]
+---
+
+{
+	values.length > 0 && (
+		<svg
+			width={width}
+			height={height}
+			viewBox={`0 0 ${width} ${height}`}
+			class:list={['block overflow-visible', className]}
+			aria-hidden="true"
+		>
+			<path d={geometry.areaPath} class:list={[scheme.fill, 'opacity-[0.16]']} />
+			<path
+				d={geometry.linePath}
+				fill="none"
+				stroke-width="1.6"
+				vector-effect="non-scaling-stroke"
+				class:list={[scheme.stroke]}
+			/>
+			<circle
+				cx={geometry.lastX}
+				cy={geometry.lastY}
+				r="2.4"
+				class:list={[scheme.fill]}
+			/>
+		</svg>
+	)
+}

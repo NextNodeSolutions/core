@@ -1,0 +1,85 @@
+---
+import { CHART_COLORS } from '@/components/charts/chart-color.ts'
+import type { ChartColor } from '@/components/charts/chart-color.ts'
+import { multiLineGeometry } from '@/lib/domain/monitoring/chart-geometry.ts'
+
+interface SeriesProp {
+	name: string
+	color: ChartColor
+	values: ReadonlyArray<number>
+}
+
+interface Props {
+	series: ReadonlyArray<SeriesProp>
+	height?: number
+	max?: number
+	unit?: string
+}
+
+const VIEW_WIDTH = 600
+const DEFAULT_HEIGHT = 220
+const DEFAULT_MAX = 100
+const LABEL_RIGHT = 34
+
+const {
+	series,
+	height = DEFAULT_HEIGHT,
+	max = DEFAULT_MAX,
+	unit = '%',
+} = Astro.props
+
+const geometry = multiLineGeometry(
+	series.map((line) => line.values),
+	{ width: VIEW_WIDTH, height, max },
+)
+const tickRows = geometry.ticks.map((tick) => ({
+	y: tick.y,
+	label: `${Math.round(tick.value)}${unit}`,
+}))
+const lineRows = series.map((line, index) => ({
+	path: geometry.lines[index] ?? '',
+	stroke: CHART_COLORS[line.color].stroke,
+}))
+---
+
+<svg
+	viewBox={`0 0 ${VIEW_WIDTH} ${height}`}
+	width="100%"
+	class="block"
+	role="img"
+	aria-label="Comparaison de séries"
+>
+	{
+		tickRows.map((tick) => (
+			<g>
+				<line
+					x1={LABEL_RIGHT + 6}
+					x2={VIEW_WIDTH - 12}
+					y1={tick.y}
+					y2={tick.y}
+					class="stroke-base-100"
+					stroke-width="1"
+				/>
+				<text
+					x={LABEL_RIGHT}
+					y={tick.y + 3}
+					text-anchor="end"
+					class="fill-base-400 font-mono text-[10px]"
+				>
+					{tick.label}
+				</text>
+			</g>
+		))
+	}
+	{
+		lineRows.map((line) => (
+			<path
+				d={line.path}
+				fill="none"
+				stroke-width="2"
+				vector-effect="non-scaling-stroke"
+				class:list={[line.stroke]}
+			/>
+		))
+	}
+</svg>

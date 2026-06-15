@@ -1,0 +1,75 @@
+---
+import { radialGaugeGeometry } from '@/lib/domain/monitoring/chart-geometry.ts'
+
+interface Props {
+	value: number
+	size?: number
+	stroke?: number
+	label?: string
+	sub?: string
+}
+
+const DEFAULT_SIZE = 96
+const DEFAULT_STROKE = 9
+const WARNING_PERCENT = 75
+const CRITICAL_PERCENT = 90
+const PCT_MAX = 100
+
+const {
+	value,
+	size = DEFAULT_SIZE,
+	stroke = DEFAULT_STROKE,
+	label,
+	sub,
+} = Astro.props
+
+const geometry = radialGaugeGeometry(value, size, stroke)
+const arcStroke =
+	value >= CRITICAL_PERCENT
+		? 'stroke-red-600'
+		: value >= WARNING_PERCENT
+			? 'stroke-amber-500'
+			: 'stroke-accent-600'
+const rounded = Math.round(Math.min(PCT_MAX, Math.max(0, value)))
+---
+
+<div class="flex flex-col items-center gap-1.5">
+	<div class="relative" style={`width:${size}px;height:${size}px`}>
+		<svg width={size} height={size} aria-hidden="true">
+			<g transform={`rotate(-90 ${geometry.center} ${geometry.center})`}>
+				<circle
+					cx={geometry.center}
+					cy={geometry.center}
+					r={geometry.radius}
+					fill="none"
+					stroke-width={stroke}
+					class="stroke-base-100"
+				></circle>
+				<circle
+					cx={geometry.center}
+					cy={geometry.center}
+					r={geometry.radius}
+					fill="none"
+					stroke-width={stroke}
+					stroke-linecap="round"
+					stroke-dasharray={geometry.circumference}
+					stroke-dashoffset={geometry.dashOffset}
+					class:list={[arcStroke]}
+				></circle>
+			</g>
+		</svg>
+		<div class="absolute inset-0 flex items-center justify-center">
+			<span class="font-mono text-xl font-bold tracking-[-0.02em] tabular-nums">
+				{rounded}<span class="text-xs text-base-500">%</span>
+			</span>
+		</div>
+	</div>
+	{
+		label && (
+			<div class="text-center">
+				<div class="text-[12.5px] font-semibold text-base-900">{label}</div>
+				{sub && <div class="font-mono text-[10.5px] text-base-500">{sub}</div>}
+			</div>
+		)
+	}
+</div>
