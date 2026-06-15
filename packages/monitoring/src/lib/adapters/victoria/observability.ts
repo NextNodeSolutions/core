@@ -105,9 +105,11 @@ export const loadVpsLogs = async (
 	return parseLogLines(body)
 }
 
-/** Most-recent log lines across the whole fleet, newest first. */
-export const loadFleetLogs = async (): Promise<ReadonlyArray<LogLine>> => {
-	const body = await queryVictoriaLogs(buildFleetLogsQuery())
+/** Most-recent log lines across the whole fleet over `windowHours`, newest first. */
+export const loadFleetLogs = async (
+	windowHours?: number,
+): Promise<ReadonlyArray<LogLine>> => {
+	const body = await queryVictoriaLogs(buildFleetLogsQuery(windowHours))
 	return parseLogLines(body)
 }
 

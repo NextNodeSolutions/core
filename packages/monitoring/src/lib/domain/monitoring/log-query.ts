@@ -35,8 +35,8 @@ const LOGSQL_QUERY_LIMIT = 200
 // stream field, so an unbounded scan would read the whole retention).
 const CONTAINER_SCAN_WINDOW = '6h'
 
-// Fleet-wide log stream window for the overview screen.
-const FLEET_LOG_WINDOW = '6h'
+// Default fleet-wide log stream window (hours) when a caller does not pick one.
+const DEFAULT_FLEET_LOG_HOURS = 6
 
 // Normalise the many level/severity spellings emitters use down to the four
 // levels the UI renders. Anything unrecognised stays null (not "info").
@@ -88,8 +88,10 @@ export const buildContainerLogsQuery = (project: string): string =>
  * overview log stream and its error tally. Time-bounded since there is no
  * stream filter to ride.
  */
-export const buildFleetLogsQuery = (): string =>
-	`_time:${FLEET_LOG_WINDOW} | sort by (_time desc) | limit ${String(LOGSQL_QUERY_LIMIT)}`
+export const buildFleetLogsQuery = (
+	windowHours: number = DEFAULT_FLEET_LOG_HOURS,
+): string =>
+	`_time:${String(windowHours)}h | sort by (_time desc) | limit ${String(LOGSQL_QUERY_LIMIT)}`
 
 // Escape the project slug for safe embedding in a LogsQL regex. Project
 // names are kebab identifiers (no regex metachars today), but a deploy

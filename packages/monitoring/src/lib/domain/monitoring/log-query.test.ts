@@ -43,6 +43,10 @@ describe('buildFleetLogsQuery', () => {
 		expect(query).toContain('sort by (_time desc)')
 		expect(query).toContain('limit 200')
 	})
+
+	it('honours an explicit window in hours', () => {
+		expect(buildFleetLogsQuery(24)).toContain('_time:24h')
+	})
 })
 
 describe('parseLogLevel', () => {
