@@ -49,6 +49,11 @@ describe('deploymentDisplayStatus', () => {
 		expect(deploymentDisplayStatus('canceled')).toBe('idle')
 		expect(deploymentDisplayStatus('idle')).toBe('idle')
 	})
+
+	it('treats skipped and unknown statuses as idle', () => {
+		expect(deploymentDisplayStatus('skipped')).toBe('idle')
+		expect(deploymentDisplayStatus('unknown')).toBe('idle')
+	})
 })
 
 describe('summarizeProject', () => {

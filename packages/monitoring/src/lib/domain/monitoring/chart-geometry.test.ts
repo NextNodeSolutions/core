@@ -66,6 +66,47 @@ describe('areaChartGeometry', () => {
 		// 90% of the way up sits near the top (small y)
 		expect(withThreshold.thresholds[0]!.y).toBeLessThan(20)
 	})
+
+	it('returns empty paths and no points for an empty series', () => {
+		const empty = areaChartGeometry({
+			values: [],
+			width: 200,
+			height: 100,
+			min: 0,
+			max: 100,
+		})
+		expect(empty.points).toHaveLength(0)
+		expect(empty.linePath).toBe('')
+		expect(empty.areaPath).toBe('')
+	})
+
+	it('pins a single point to the left edge', () => {
+		const single = areaChartGeometry({
+			values: [50],
+			width: 200,
+			height: 100,
+			min: 0,
+			max: 100,
+		})
+		expect(single.points).toHaveLength(1)
+		// PAD_LEFT = 40
+		expect(single.points[0]?.x).toBeCloseTo(40, 5)
+	})
+
+	it('auto-scales the axis with headroom when no max is supplied', () => {
+		const auto = areaChartGeometry({
+			values: [0, 80],
+			width: 200,
+			height: 100,
+			min: 0,
+		})
+		// domainMax = 80 * 1.15 = 92, so the peak (80) sits below the top band
+		const topY = 12
+		const baselineY = 78
+		expect(auto.points[1]?.y).toBeGreaterThan(topY)
+		expect(auto.points[1]?.y).toBeLessThan(baselineY)
+		expect(auto.ticks.at(-1)?.value).toBeCloseTo(92, 5)
+	})
 })
 
 describe('sparklineGeometry', () => {
@@ -80,6 +121,20 @@ describe('sparklineGeometry', () => {
 	it('does not divide by zero on a flat series', () => {
 		const geo = sparklineGeometry([5, 5, 5], 100, 34)
 		expect(Number.isFinite(geo.lastY)).toBe(true)
+	})
+
+	it('returns empty paths for an empty series without crashing', () => {
+		const geo = sparklineGeometry([], 100, 34)
+		expect(geo.linePath).toBe('')
+		expect(geo.areaPath).toBe('')
+		expect(Number.isFinite(geo.lastX)).toBe(true)
+		expect(Number.isFinite(geo.lastY)).toBe(true)
+	})
+
+	it('pins a single point to the left edge', () => {
+		const geo = sparklineGeometry([7], 100, 34)
+		expect(geo.lastX).toBeCloseTo(0, 5)
+		expect(geo.linePath.startsWith('M0.0')).toBe(true)
 	})
 })
 

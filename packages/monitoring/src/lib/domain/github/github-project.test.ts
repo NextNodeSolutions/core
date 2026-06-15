@@ -45,6 +45,23 @@ describe('summarizeGithubProject deploy status', () => {
 		).toBe('error')
 	})
 
+	it('is error for a timed-out run', () => {
+		expect(
+			summarizeGithubProject(
+				repo({}),
+				run({ conclusion: 'timed_out' }),
+				[],
+			).deployStatus,
+		).toBe('error')
+	})
+
+	it('is unknown for a neutral completed run', () => {
+		expect(
+			summarizeGithubProject(repo({}), run({ conclusion: 'neutral' }), [])
+				.deployStatus,
+		).toBe('unknown')
+	})
+
 	it('is building while in progress and queued while waiting', () => {
 		expect(
 			summarizeGithubProject(repo({}), run({ status: 'in_progress' }), [])
