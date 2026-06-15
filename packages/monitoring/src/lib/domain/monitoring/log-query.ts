@@ -37,6 +37,20 @@ const LOGSQL_QUERY_LIMIT = 200
 // stream field, so an unbounded scan would read the whole retention).
 const CONTAINER_SCAN_WINDOW = '6h'
 
+// @nextnode-solutions/logger and Caddy emit each line as a JSON object;
+// Vector's docker_logs/journald source captures that whole line into
+// `_msg` (the sink maps `message -> _msg`), so the structured fields
+// (`level`, `message`, `status`, `method`, …) stay TRAPPED inside the
+// `_msg` string instead of being queryable top-level fields. `unpack_json`
+// lifts those fields to the top level so `safeParse` can read them; it
+// defaults to the `_msg` field and leaves `_msg` itself in place (verified
+// against the VictoriaLogs LogsQL docs and the in-repo precedent in
+// packages/infrastructure alert-rules-self.ts / this package's
+// caddy-stats.ts). Placed after `limit` so the unpack only runs over the
+// 200 returned lines, not the whole scanned stream. Plain (non-JSON)
+// journald lines are left untouched - `safeParse` then falls back to `_msg`.
+const UNPACK_PIPE = '| unpack_json'
+
 // Default fleet-wide log stream window (hours) when a caller does not pick one.
 const DEFAULT_FLEET_LOG_HOURS = 6
 
@@ -70,7 +84,7 @@ export const parseLogLevel = (candidate: unknown): LogLevel | null => {
  * the stream field, so no time bound is needed for correctness.
  */
 export const buildVpsLogsQuery = (vpsName: string): string =>
-	`nn_project:${logsqlQuoted(vpsName)} | sort by (_time desc) | limit ${String(LOGSQL_QUERY_LIMIT)}`
+	`nn_project:${logsqlQuoted(vpsName)} | sort by (_time desc) | limit ${String(LOGSQL_QUERY_LIMIT)} ${UNPACK_PIPE}`
 
 /**
  * Build a LogsQL query for the most recent lines of one PROJECT, across
@@ -82,7 +96,7 @@ export const buildVpsLogsQuery = (vpsName: string): string =>
  * container_name is not a stream field.
  */
 export const buildContainerLogsQuery = (project: string): string =>
-	`_time:${CONTAINER_SCAN_WINDOW} container_name:~${logsqlQuoted(`^${escapeRegex(project)}-`)} | sort by (_time desc) | limit ${String(LOGSQL_QUERY_LIMIT)}`
+	`_time:${CONTAINER_SCAN_WINDOW} container_name:~${logsqlQuoted(`^${escapeRegex(project)}-`)} | sort by (_time desc) | limit ${String(LOGSQL_QUERY_LIMIT)} ${UNPACK_PIPE}`
 
 /**
  * Build a LogsQL query for the most recent lines across the WHOLE fleet
@@ -93,7 +107,7 @@ export const buildContainerLogsQuery = (project: string): string =>
 export const buildFleetLogsQuery = (
 	windowHours: number = DEFAULT_FLEET_LOG_HOURS,
 ): string =>
-	`_time:${String(windowHours)}h | sort by (_time desc) | limit ${String(LOGSQL_QUERY_LIMIT)}`
+	`_time:${String(windowHours)}h | sort by (_time desc) | limit ${String(LOGSQL_QUERY_LIMIT)} ${UNPACK_PIPE}`
 
 /**
  * Parse the newline-delimited JSON VictoriaLogs streams back. Tolerant:
@@ -119,6 +133,15 @@ const META_EXCLUDE = new Set([
 	'nn_project',
 	'nn_service',
 	'service',
+	// `message`/`msg` become the LogLine message and `timestamp`/`time`
+	// duplicate `_time` once `unpack_json` lifts them top-level - drop them
+	// so they do not also surface in the free-form meta table. Genuinely
+	// useful context the logger emits (requestId, location, scope, logger)
+	// is intentionally NOT excluded and still flows into meta.
+	'message',
+	'msg',
+	'timestamp',
+	'time',
 	'level',
 	'severity',
 	'status',
@@ -126,10 +149,12 @@ const META_EXCLUDE = new Set([
 	'method',
 	'http_method',
 	'path',
+	'uri',
 	'url',
 	'http_path',
 	'duration_ms',
 	'durationMs',
+	'duration',
 	'trace_id',
 	'traceId',
 	'stack',
@@ -181,8 +206,16 @@ const safeParse = (raw: string): LogLine | null => {
 	const timeField = parsed['_time']
 	const msgField = parsed['_msg']
 	const time = typeof timeField === 'string' ? timeField : null
-	const message = typeof msgField === 'string' ? msgField : null
-	if (time === null || message === null) return null
+	const rawMsg = typeof msgField === 'string' ? msgField : null
+	if (time === null || rawMsg === null) return null
+	// After `| unpack_json` the human message is the structured `message`
+	// (logger) / `msg` (Caddy) field; `_msg` still holds the raw JSON blob.
+	// Prefer the unpacked field so the UI shows "server started", not the
+	// `{"level":…}` string. Plain journald lines have no such field, so we
+	// fall back to `_msg`. Empty string is a valid message (keep the
+	// "empty `_msg` is a valid line" rule), so accept any string here.
+	const unpackedMsg = firstField(parsed, ['message', 'msg'])
+	const message = typeof unpackedMsg === 'string' ? unpackedMsg : rawMsg
 	return {
 		time,
 		message,
@@ -199,10 +232,10 @@ const safeParse = (raw: string): LogLine | null => {
 			firstField(parsed, ['method', 'http_method']),
 		),
 		path: parseStringOrNull(
-			firstField(parsed, ['path', 'url', 'http_path']),
+			firstField(parsed, ['path', 'uri', 'url', 'http_path']),
 		),
 		durationMs: parseFiniteNumber(
-			firstField(parsed, ['duration_ms', 'durationMs']),
+			firstField(parsed, ['duration_ms', 'durationMs', 'duration']),
 		),
 		traceId: parseStringOrNull(firstField(parsed, ['trace_id', 'traceId'])),
 		stack: parseStringOrNull(
