@@ -1,0 +1,461 @@
+---
+import LogHistogram from '@/components/charts/LogHistogram.astro'
+import Icon from '@/components/foundations/Icon.astro'
+import LoadStateBanner from '@/components/dashboard/LoadStateBanner.astro'
+import { loadPageState } from '@/lib/adapters/load-page-state.ts'
+import { loadFleetLogs } from '@/lib/adapters/victoria/observability.ts'
+import {
+	bucketLogs,
+	countByLevel,
+	filterLogs,
+} from '@/lib/domain/monitoring/log-explorer.ts'
+import { formatClock, formatTime } from '@/lib/domain/monitoring/format.ts'
+import { LOG_LEVELS } from '@/lib/domain/monitoring/log-query.ts'
+import { rangeToHours } from '@/lib/domain/monitoring/vps-metrics.ts'
+
+import type { LogFilter } from '@/lib/domain/monitoring/log-explorer.ts'
+import type { LogLevel, LogLine } from '@/lib/domain/monitoring/log-query.ts'
+
+interface Props {
+	q: string
+	service: string
+	vps: string
+	levelsParam: string
+	range: string
+	sel: string
+}
+
+const BUCKET_COUNT = 72
+const MS_PER_HOUR = 3_600_000
+const MAX_ROWS = 250
+const LIVE_HOURS = 1
+const STATUS_SERVER_ERROR = 500
+const STATUS_CLIENT_ERROR = 400
+const TRACE_PREFIX_LENGTH = 6
+const ALL = 'all'
+const DEFAULT_RANGE = '6h'
+
+const { q, service, vps, levelsParam, range, sel } = Astro.props
+
+const hours = range === 'live' ? LIVE_HOURS : rangeToHours(range)
+
+const logsState = await loadPageState('logs.fleet', () => loadFleetLogs(hours))
+const logs: ReadonlyArray<LogLine> = logsState.kind === 'ok' ? logsState.data : []
+
+const levelNames: ReadonlySet<string> = new Set(LOG_LEVELS)
+const isLogLevel = (candidate: string): candidate is LogLevel =>
+	levelNames.has(candidate)
+
+const parseLevels = (raw: string): ReadonlyArray<LogLevel> => {
+	const requested = raw
+		.split(',')
+		.map(part => part.trim())
+		.filter(isLogLevel)
+	return requested.length > 0 ? requested : LOG_LEVELS
+}
+const activeLevels = parseLevels(levelsParam)
+
+const filter: LogFilter = { query: q, levels: activeLevels, service, vps }
+const filtered = filterLogs(logs, filter)
+const counts = countByLevel(logs, { service, vps })
+
+const nowMs = Date.now()
+const buckets = bucketLogs(filtered, {
+	bucketCount: BUCKET_COUNT,
+	windowMs: hours * MS_PER_HOUR,
+	nowMs,
+})
+const [firstBucket] = buckets
+
+const uniqueSorted = (
+	picker: (line: LogLine) => string | null,
+): ReadonlyArray<string> => {
+	const seen = new Set<string>()
+	for (const line of logs) {
+		const field = picker(line)
+		if (field !== null && field.length > 0) seen.add(field)
+	}
+	return [...seen].toSorted((left, right) => left.localeCompare(right))
+}
+const serviceOptions = [ALL, ...uniqueSorted(line => line.service)]
+const vpsOptions = [ALL, ...uniqueSorted(line => line.vps)]
+
+const selIndex = Number.parseInt(sel, 10)
+const selectedLog: LogLine | null =
+	Number.isInteger(selIndex) && selIndex >= 0 && selIndex < filtered.length
+		? (filtered[selIndex] ?? null)
+		: null
+
+const linkTo = (overrides: Record<string, string | null>): string => {
+	const params = new URLSearchParams()
+	if (q) params.set('q', q)
+	if (service !== ALL) params.set('service', service)
+	if (vps !== ALL) params.set('vps', vps)
+	if (levelsParam) params.set('levels', levelsParam)
+	if (range !== DEFAULT_RANGE) params.set('range', range)
+	for (const [key, override] of Object.entries(overrides)) {
+		if (override === null) params.delete(key)
+		else params.set(key, override)
+	}
+	const qs = params.toString()
+	return qs ? `/logs?${qs}` : '/logs'
+}
+
+const levelToggleUrl = (level: LogLevel): string => {
+	const next = activeLevels.includes(level)
+		? activeLevels.filter(active => active !== level)
+		: [...activeLevels, level]
+	const ordered = LOG_LEVELS.filter(candidate => next.includes(candidate))
+	const allOn = ordered.length === LOG_LEVELS.length
+	return linkTo({ levels: allOn ? '' : ordered.join(','), sel: null })
+}
+
+const levelTextClass: Record<LogLevel, string> = {
+	debug: 'text-base-400',
+	info: 'text-sky-600',
+	warn: 'text-amber-600',
+	error: 'text-red-600',
+}
+const levelBorderClass: Record<LogLevel, string> = {
+	debug: 'border-l-base-400',
+	info: 'border-l-sky-600',
+	warn: 'border-l-amber-600',
+	error: 'border-l-red-600',
+}
+const levelBadgeClass: Record<LogLevel, string> = {
+	debug: 'border-base-200 bg-base-100 text-base-600',
+	info: 'border-sky-200 bg-sky-50 text-sky-700',
+	warn: 'border-amber-200 bg-amber-50 text-amber-700',
+	error: 'border-red-200 bg-red-50 text-red-700',
+}
+
+const statusTextClass = (status: number): string => {
+	if (status >= STATUS_SERVER_ERROR) return 'text-red-600'
+	if (status >= STATUS_CLIENT_ERROR) return 'text-amber-600'
+	return 'text-emerald-600'
+}
+const statusBadgeClass = (status: number): string => {
+	if (status >= STATUS_SERVER_ERROR) return 'border-red-200 bg-red-50 text-red-700'
+	if (status >= STATUS_CLIENT_ERROR)
+		return 'border-amber-200 bg-amber-50 text-amber-700'
+	return 'border-emerald-200 bg-emerald-50 text-emerald-700'
+}
+
+const visibleRows = filtered.slice(0, MAX_ROWS)
+const overflowCount = filtered.length - MAX_ROWS
+const failedToLoad = logsState.kind !== 'ok' && logs.length === 0
+const metaEntries = selectedLog ? Object.entries(selectedLog.meta) : []
+---
+
+<div class="flex h-full min-h-0 flex-col">
+	{
+		failedToLoad && (
+			<div class="px-6">
+				<LoadStateBanner state={logsState} upstreamLabel="VictoriaLogs error" />
+			</div>
+		)
+	}
+
+	<div class="flex flex-none flex-col gap-3 border-b border-base-200 px-6 py-3.5">
+		<form method="get" action="/logs" class="flex flex-wrap items-center gap-2.5">
+			<div class="relative min-w-[240px] flex-1">
+				<span
+					class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-base-400"
+				>
+					<Icon name="search" size={15} />
+				</span>
+				<input
+					type="text"
+					name="q"
+					value={q}
+					placeholder="Rechercher message, path, service, trace_id…"
+					class="w-full rounded-full border border-base-200 bg-white py-2 pr-3 pl-9 font-mono text-[12.5px] text-base-900 placeholder:text-base-400 focus:border-accent-500 focus:outline-none"
+				/>
+			</div>
+			<select
+				name="service"
+				class="rounded-full border border-base-200 bg-white px-3 py-2 text-xs text-base-800 focus:border-accent-500 focus:outline-none"
+			>
+				{
+					serviceOptions.map((option) => (
+						<option value={option} selected={option === service}>
+							{option === ALL ? 'service: tous' : option}
+						</option>
+					))
+				}
+			</select>
+			<select
+				name="vps"
+				class="rounded-full border border-base-200 bg-white px-3 py-2 text-xs text-base-800 focus:border-accent-500 focus:outline-none"
+			>
+				{
+					vpsOptions.map((option) => (
+						<option value={option} selected={option === vps}>
+							{option === ALL ? 'vps: tous' : option}
+						</option>
+					))
+				}
+			</select>
+			<input type="hidden" name="levels" value={levelsParam} />
+			<input type="hidden" name="range" value={range} />
+			<button
+				type="submit"
+				class="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-b from-base-900 to-base-800 px-4 py-2 text-xs font-medium text-white hover:from-base-800 hover:to-base-700"
+			>
+				<Icon name="filter" size={14} />
+				Filtrer
+			</button>
+		</form>
+
+		<div class="flex flex-wrap items-center gap-2">
+			{
+				LOG_LEVELS.map((level) => {
+					const active = activeLevels.includes(level)
+					return (
+						<a
+							href={levelToggleUrl(level)}
+							class:list={[
+								'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors',
+								active
+									? levelBadgeClass[level]
+									: 'border-base-200 bg-white text-base-500 hover:bg-base-50',
+							]}
+						>
+							<span
+								class:list={[
+									'size-1.5 rounded-full',
+									active ? 'bg-current' : 'bg-base-300',
+								]}
+							/>
+							<span class="uppercase">{level}</span>
+							<span class="font-mono opacity-70">{counts[level]}</span>
+						</a>
+					)
+				})
+			}
+			<div class="flex-1"></div>
+			<span class="font-mono text-xs text-base-500">{filtered.length} lignes</span>
+			{
+				range === 'live' && (
+					<span class="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
+						<span class="size-1.5 rounded-full bg-emerald-600" />
+						live tail
+					</span>
+				)
+			}
+		</div>
+	</div>
+
+	<div class="flex-none border-b border-base-200 px-6 pt-3 pb-1">
+		<div class="mb-1.5 flex items-center justify-between">
+			<span
+				class="font-mono text-[10.5px] font-semibold tracking-[0.06em] text-base-500 uppercase"
+			>
+				Volume · {range}
+			</span>
+			<span class="font-mono text-[10.5px] text-base-500">
+				{filtered.length} évènements
+			</span>
+		</div>
+		<LogHistogram buckets={buckets} height={56} />
+		<div class="mt-0.5 flex items-center justify-between">
+			<span class="font-mono text-[10px] text-base-400">
+				{firstBucket ? formatTime(firstBucket.t) : ''}
+			</span>
+			<span class="font-mono text-[10px] text-base-400">maintenant</span>
+		</div>
+	</div>
+
+	<div class="flex min-h-0 flex-1">
+		<div class="min-w-0 flex-1 overflow-auto">
+			<div
+				class="sticky top-0 z-2 flex gap-2.5 border-b border-base-100 bg-white/90 px-3.5 py-1.5 font-mono text-[10px] tracking-[0.04em] text-base-400 uppercase backdrop-blur"
+			>
+				<span class="flex-none">time</span>
+				<span class="w-12 flex-none">level</span>
+				<span class="w-28 flex-none">service</span>
+				<span class="flex-1">message</span>
+			</div>
+
+			{
+				filtered.length === 0 ? (
+					<div class="px-3.5 py-16 text-center text-sm text-base-400">
+						Aucun log ne correspond aux filtres.
+					</div>
+				) : (
+					visibleRows.map((line, index) => {
+						const active = index === selIndex
+						return (
+							<a
+								href={linkTo({ sel: String(index) })}
+								class:list={[
+									'flex items-baseline gap-2.5 border-l-2 px-3.5 py-1 font-mono text-xs whitespace-nowrap',
+									active && line.level !== null
+										? `${levelBorderClass[line.level]} bg-base-100`
+										: active
+											? 'border-l-base-300 bg-base-100'
+											: 'border-l-transparent hover:bg-base-50',
+								]}
+							>
+								<span class="flex-none text-base-400">
+									{formatTime(Date.parse(line.time))}
+								</span>
+								<span
+									class:list={[
+										'w-12 flex-none text-[10.5px] font-bold uppercase',
+										line.level === null
+											? 'text-base-400'
+											: levelTextClass[line.level],
+									]}
+								>
+									{line.level ?? '·'}
+								</span>
+								<span class="w-28 flex-none overflow-hidden text-ellipsis text-base-500">
+									{line.service ?? ''}
+								</span>
+								{line.status !== null && (
+									<span
+										class:list={[
+											'flex-none font-bold',
+											statusTextClass(line.status),
+										]}
+									>
+										{line.status}
+									</span>
+								)}
+								<span class="flex-1 overflow-hidden text-ellipsis text-base-800">
+									{line.message}
+								</span>
+								{line.durationMs !== null && (
+									<span class="flex-none text-base-400">
+										{line.durationMs}ms
+									</span>
+								)}
+							</a>
+						)
+					})
+				)
+			}
+
+			{
+				overflowCount > 0 && (
+					<div class="px-3.5 py-4 text-center text-xs text-base-400">
+						+ {overflowCount} lignes plus anciennes - affinez les filtres
+					</div>
+				)
+			}
+		</div>
+
+		{
+			selectedLog && (
+				<div class="flex w-[380px] flex-none flex-col overflow-auto border-l border-base-200 bg-white">
+					<div class="sticky top-0 z-2 flex items-center justify-between border-b border-base-200 bg-white px-4 py-3">
+						<span
+							class:list={[
+								'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold uppercase',
+								selectedLog.level === null
+									? 'border-base-200 bg-base-100 text-base-600'
+									: levelBadgeClass[selectedLog.level],
+							]}
+						>
+							{selectedLog.level ?? 'log'}
+						</span>
+						<a
+							href={linkTo({ sel: null })}
+							class="rounded-full p-1 text-base-500 hover:bg-base-50 hover:text-base-900"
+							aria-label="Fermer le détail"
+						>
+							<Icon name="x" size={16} />
+						</a>
+					</div>
+
+					<div class="flex flex-col gap-4 p-4">
+						<div>
+							<div class="mb-1 flex justify-between text-[11px] text-base-400">
+								<span>Message</span>
+								<span class="font-mono">
+									{formatClock(Date.parse(selectedLog.time))}
+								</span>
+							</div>
+							<div class="rounded-lg border border-base-200 bg-base-50 px-3 py-2.5 font-mono text-[12.5px] leading-relaxed text-base-800">
+								{selectedLog.message}
+							</div>
+						</div>
+
+						<div class="flex flex-wrap gap-2">
+							{selectedLog.service !== null && (
+								<span class="inline-flex items-center rounded-full border border-base-200 bg-base-100 px-2.5 py-0.5 font-mono text-[11px] text-base-700">
+									{selectedLog.service}
+								</span>
+							)}
+							{selectedLog.vps !== null && (
+								<span class="inline-flex items-center gap-1.5 rounded-full border border-base-200 bg-base-100 px-2.5 py-0.5 font-mono text-[11px] text-base-700">
+									<Icon name="server" size={11} />
+									{selectedLog.vps}
+								</span>
+							)}
+							{selectedLog.method !== null && (
+								<span class="inline-flex items-center rounded-full border border-accent-200 bg-accent-50 px-2.5 py-0.5 font-mono text-[11px] text-accent-700">
+									{selectedLog.method}
+								</span>
+							)}
+							{selectedLog.status !== null && (
+								<span
+									class:list={[
+										'inline-flex items-center rounded-full border px-2.5 py-0.5 font-mono text-[11px]',
+										statusBadgeClass(selectedLog.status),
+									]}
+								>
+									{selectedLog.status}
+								</span>
+							)}
+						</div>
+
+						{selectedLog.path !== null && (
+							<div>
+								<div class="mb-1 text-[11px] text-base-400">Requête</div>
+								<div class="rounded-lg bg-base-950 px-3 py-2.5 font-mono text-xs text-accent-200">
+									{selectedLog.method !== null && `${selectedLog.method} `}
+									{selectedLog.path}
+								</div>
+							</div>
+						)}
+
+						{selectedLog.stack !== null && (
+							<div>
+								<div class="mb-1 flex items-center gap-1.5 text-[11px] text-red-600">
+									<Icon name="flame" size={12} />
+									Stack trace
+								</div>
+								<pre class="overflow-auto rounded-lg bg-base-950 p-3 font-mono text-[11.5px] leading-relaxed text-red-100">{selectedLog.stack}</pre>
+							</div>
+						)}
+
+						{metaEntries.length > 0 && (
+							<div>
+								<div class="mb-1.5 text-[11px] text-base-400">Contexte</div>
+								<div class="grid grid-cols-[auto_1fr] gap-x-3.5 gap-y-1.5 text-xs">
+									{metaEntries.map(([key, entry]) => (
+										<>
+											<span class="font-mono text-base-400">{key}</span>
+											<span class="font-mono break-all text-base-800">
+												{entry}
+											</span>
+										</>
+									))}
+								</div>
+							</div>
+						)}
+
+						{selectedLog.traceId !== null && (
+							<div class="flex items-center gap-1.5 font-mono text-[11px] text-base-500">
+								<Icon name="search" size={12} />
+								trace {selectedLog.traceId.slice(0, TRACE_PREFIX_LENGTH)}
+							</div>
+						)}
+					</div>
+				</div>
+			)
+		}
+	</div>
+</div>

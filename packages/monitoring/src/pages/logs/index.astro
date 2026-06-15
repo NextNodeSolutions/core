@@ -1,0 +1,40 @@
+---
+import Skeleton from '@/components/dashboard/Skeleton.astro'
+import LogsExplorer from '@/components/logs/LogsExplorer.astro'
+import RangeControl from '@/components/layout/RangeControl.astro'
+import DashboardLayout from '@/layouts/DashboardLayout.astro'
+
+// oxlint-disable-next-line nextnode/boolean-naming -- prerender is Astro's required route export name
+export const prerender = false
+
+const SKELETON_ROWS = 6
+
+const params = Astro.url.searchParams
+const q = params.get('q') ?? ''
+const service = params.get('service') ?? 'all'
+const vps = params.get('vps') ?? 'all'
+const levels = params.get('levels') ?? ''
+const range = params.get('range') ?? '6h'
+const sel = params.get('sel') ?? ''
+---
+
+<DashboardLayout title="Explorateur de logs" bare breadcrumbs={[{ label: 'Logs' }]}>
+	<RangeControl
+		slot="actions"
+		path="/logs"
+		value={range}
+		ranges={['live', '1h', '6h', '24h']}
+	/>
+
+	<LogsExplorer
+		server:defer
+		q={q}
+		service={service}
+		vps={vps}
+		levelsParam={levels}
+		range={range}
+		sel={sel}
+	>
+		<Skeleton slot="fallback" rows={SKELETON_ROWS} />
+	</LogsExplorer>
+</DashboardLayout>
