@@ -70,28 +70,46 @@ async function convergeCadvisor(
 	}
 }
 
-// Self-heal the Vector binary: a VPS whose golden image snapshot predates (or
-// silently lost) the Vector install has the unit + config but no
-// /usr/bin/vector, so vector.service crash-loops with "No such file or
-// directory". Install the pinned binary on demand. Returns whether it was just
-// installed (so the caller restarts even when the config is unchanged).
-// Non-fatal: a failed install is warned, not deploy-breaking (cadvisor stance).
-async function ensureVectorBinary(session: SshSession): Promise<boolean> {
-	const probe = await session.exec(
-		'command -v vector >/dev/null 2>&1 && echo yes || echo no',
-	)
-	if (probe.trim() === 'yes') return false
+async function probeExists(
+	session: SshSession,
+	test: string,
+): Promise<boolean> {
+	const out = await session.exec(`${test} && echo yes || echo no`)
+	return out.trim() === 'yes'
+}
 
-	const installed = await session
-		.exec(vectorInstallCommands('sudo').join(' && '))
-		.then(() => true)
-		.catch(() => false)
-	logger[installed ? 'info' : 'warn'](
-		installed
-			? 'Installed missing Vector binary (snapshot predates/lost it)'
-			: 'Vector binary missing and install failed - log shipping stays down until the golden image ships it',
-	)
-	return installed
+// Self-heal Vector's runtime prerequisites for VPS whose golden image snapshot
+// predates (or silently lost) them:
+//   - data_dir /var/lib/vector: the journald source checkpoints here; absent, it
+//     fails config validation and vector.service crash-loops.
+//   - /usr/bin/vector: snapshots have shipped without the binary ("No such file
+//     or directory").
+// Ensure both before the (re)start; return whether anything changed so the
+// caller restarts even when the config is unchanged. The binary install is
+// non-fatal (warned, not deploy-breaking - the cadvisor stance).
+async function ensureVectorRuntime(session: SshSession): Promise<boolean> {
+	let didChange = false
+
+	if (!(await probeExists(session, 'test -d /var/lib/vector'))) {
+		await session.exec('sudo mkdir -p /var/lib/vector')
+		logger.info('Created Vector data_dir /var/lib/vector')
+		didChange = true
+	}
+
+	if (!(await probeExists(session, 'command -v vector >/dev/null 2>&1'))) {
+		const installed = await session
+			.exec(vectorInstallCommands('sudo').join(' && '))
+			.then(() => true)
+			.catch(() => false)
+		logger[installed ? 'info' : 'warn'](
+			installed
+				? 'Installed missing Vector binary (snapshot predates/lost it)'
+				: 'Vector binary missing and install failed - log shipping stays down until the golden image ships it',
+		)
+		didChange = didChange || installed
+	}
+
+	return didChange
 }
 
 export async function converge(
@@ -101,7 +119,7 @@ export async function converge(
 	// Vector config - skipped when log sink (NN_VL_URL) is unknown at provision time.
 	// Re-run convergence once VL is reachable; this is the hot-update path.
 	if (input.vectorToml !== undefined && input.vectorEnv !== undefined) {
-		const vectorInstalled = await ensureVectorBinary(session)
+		const vectorChanged = await ensureVectorRuntime(session)
 		const vectorTomlChanged = await pushFileIfChanged(
 			session,
 			VECTOR_TOML_PATH,
@@ -113,7 +131,7 @@ export async function converge(
 			input.vectorEnv,
 		)
 
-		if (vectorInstalled || vectorTomlChanged || vectorEnvChanged) {
+		if (vectorChanged || vectorTomlChanged || vectorEnvChanged) {
 			await session.exec('sudo systemctl restart vector')
 			logger.info('Restarted vector')
 		}
