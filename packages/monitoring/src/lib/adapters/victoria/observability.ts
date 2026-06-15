@@ -1,6 +1,7 @@
 import {
 	queryVictoriaLogs,
 	queryVictoriaMetricsInstant,
+	queryVictoriaMetricsRange,
 } from '@/lib/adapters/victoria/client.ts'
 import {
 	buildCaddyStatsQuery,
@@ -13,11 +14,21 @@ import {
 	buildVpsLogsQuery,
 	parseLogLines,
 } from '@/lib/domain/monitoring/log-query.ts'
-import { parseInstantScalar } from '@/lib/domain/monitoring/promql-response.ts'
+import { buildMetricRangeWindow } from '@/lib/domain/monitoring/metric-range-request.ts'
+import {
+	parseInstantScalar,
+	parseRangeQuery,
+} from '@/lib/domain/monitoring/promql-response.ts'
+import {
+	buildVpsGaugeExprs,
+	buildVpsSeriesExpr,
+} from '@/lib/domain/monitoring/vps-metrics.ts'
 
 import type { CaddyHostStat } from '@/lib/domain/monitoring/caddy-stats.ts'
 import type { HostMetrics } from '@/lib/domain/monitoring/host-metrics.ts'
 import type { LogLine } from '@/lib/domain/monitoring/log-query.ts'
+import type { RangePoint } from '@/lib/domain/monitoring/promql-response.ts'
+import type { VpsSeriesMetric } from '@/lib/domain/monitoring/vps-metrics.ts'
 
 /**
  * Run the four host-metric instant queries for a VPS in parallel and
@@ -41,6 +52,49 @@ export const loadHostMetrics = async (
 const scalarOrNull = async (expr: string): Promise<number | null> => {
 	const payload = await queryVictoriaMetricsInstant(expr)
 	return parseInstantScalar(payload)
+}
+
+const MS_PER_SECOND = 1000
+
+export interface VpsGauges {
+	readonly load1: number | null
+	readonly load5: number | null
+	readonly load15: number | null
+	readonly swapPercent: number | null
+	readonly netInMbps: number | null
+	readonly netOutMbps: number | null
+}
+
+/** Instant load-average, swap and network-rate gauges for the VPS header. */
+export const loadVpsGauges = async (vpsName: string): Promise<VpsGauges> => {
+	const exprs = buildVpsGaugeExprs(vpsName)
+	const [load1, load5, load15, swapPercent, netInMbps, netOutMbps] =
+		await Promise.all([
+			scalarOrNull(exprs.load1),
+			scalarOrNull(exprs.load5),
+			scalarOrNull(exprs.load15),
+			scalarOrNull(exprs.swapPercent),
+			scalarOrNull(exprs.netInMbps),
+			scalarOrNull(exprs.netOutMbps),
+		])
+	return { load1, load5, load15, swapPercent, netInMbps, netOutMbps }
+}
+
+/** Range series for one VPS metric over the last `hours`, as chart points. */
+export const loadVpsSeries = async (
+	vpsName: string,
+	metric: VpsSeriesMetric,
+	hours: number,
+): Promise<ReadonlyArray<RangePoint>> => {
+	const rangeWindow = buildMetricRangeWindow(
+		hours,
+		Math.floor(Date.now() / MS_PER_SECOND),
+	)
+	const payload = await queryVictoriaMetricsRange({
+		expr: buildVpsSeriesExpr(vpsName, metric),
+		...rangeWindow,
+	})
+	return parseRangeQuery(payload)
 }
 
 /** Most-recent log lines from a whole VPS (container + journald), newest first. */
