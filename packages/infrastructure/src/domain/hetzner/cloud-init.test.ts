@@ -8,7 +8,7 @@ const PROJECT_INPUT = {
 	tailscaleHostname: 'my-project',
 	deployPublicKey: 'ssh-ed25519 AAAAC3Nz... deploy@ci',
 	isInternal: false,
-	tailscaleTags: ['tag:server', 'tag:client-vps'],
+	tailscaleTags: ['tag:server'],
 } as const
 
 const INTERNAL_PROJECT_INPUT = { ...PROJECT_INPUT, isInternal: true } as const
@@ -114,7 +114,7 @@ describe('renderProjectCloudInit', () => {
 	it('runs tailscale up reading the auth key from the write_files path, advertising the tags', () => {
 		const config = parseProjectCloudInit()
 		expect(config.runcmd).toContain(
-			'tailscale up --authkey="$(cat /root/.tailscale-authkey)" --hostname=my-project --advertise-tags=tag:server,tag:client-vps',
+			'tailscale up --authkey="$(cat /root/.tailscale-authkey)" --hostname=my-project --advertise-tags=tag:server',
 		)
 	})
 

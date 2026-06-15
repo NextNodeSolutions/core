@@ -3,14 +3,14 @@ import { parse } from 'yaml'
 
 import {
 	CLIENT_VPS_LABEL_WHITELIST,
-	CLIENT_VPS_TAG,
+	SCRAPE_TARGET_TAG,
 	buildClientVpsRelabelRules,
 	renderClientVpsRelabelYaml,
 } from './client-vps-relabel.ts'
 
-describe('CLIENT_VPS_TAG', () => {
-	it('is the Tailscale tag the monitoring scrape job filters on', () => {
-		expect(CLIENT_VPS_TAG).toBe('client-vps')
+describe('SCRAPE_TARGET_TAG', () => {
+	it('is the Tailscale tag (tag:server) the monitoring scrape job filters on', () => {
+		expect(SCRAPE_TARGET_TAG).toBe('server')
 	})
 })
 
@@ -29,24 +29,24 @@ describe('CLIENT_VPS_LABEL_WHITELIST', () => {
 })
 
 describe('buildClientVpsRelabelRules', () => {
-	it('opens with a keep rule scoped to the client-vps Tailscale tag', () => {
+	it('opens with a keep rule scoped to the tag:server Tailscale tag', () => {
 		const [first] = buildClientVpsRelabelRules()
 
 		expect(first).toEqual({
 			action: 'keep',
 			source_labels: ['__meta_tailscale_device_tags'],
-			regex: '^(.+,)?tag:client-vps(,.+)?$',
+			regex: '^(.+,)?tag:server(,.+)?$',
 		})
 	})
 
-	it('keep regex accepts the client-vps tag whether it stands alone or shares the comma-joined list', () => {
+	it('keep regex accepts tag:server whether it stands alone or shares the comma-joined list', () => {
 		const [first] = buildClientVpsRelabelRules()
 		const regex = new RegExp(first?.regex ?? '')
 
-		expect(regex.test('tag:client-vps')).toBe(true)
-		expect(regex.test('tag:nextnode-prod,tag:client-vps')).toBe(true)
-		expect(regex.test('tag:client-vps,tag:monitoring')).toBe(true)
-		expect(regex.test('tag:monitoring')).toBe(false)
+		expect(regex.test('tag:server')).toBe(true)
+		expect(regex.test('tag:ci,tag:server')).toBe(true)
+		expect(regex.test('tag:server,tag:client')).toBe(true)
+		expect(regex.test('tag:ci')).toBe(false)
 		expect(regex.test('')).toBe(false)
 	})
 

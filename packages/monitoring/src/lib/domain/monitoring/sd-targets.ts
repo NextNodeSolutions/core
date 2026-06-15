@@ -14,8 +14,16 @@ export interface SdTargetGroup {
 	readonly labels: Readonly<Record<string, string>>
 }
 
-/** Tailscale tag marking a workload VPS the monitoring stack scrapes. */
-export const CLIENT_VPS_TAG = 'tag:client-vps'
+/**
+ * Tailscale tag the monitoring stack scrapes. Every NextNode VPS joins the
+ * tailnet as `tag:server` (the only tag the provisioning OAuth client can mint
+ * without a manual tailnet-policy change - see infra `computeTailscaleTags`), so
+ * the scrape set is "every NextNode server". Admin laptops (untagged) and CI
+ * runners (`tag:ci`) are excluded; the observability host is also a `tag:server`
+ * and is scraped too (its own node/cAdvisor metrics - harmless, and its absent
+ * postgres-exporter just shows up=0, which no alert keys on).
+ */
+export const CLIENT_VPS_TAG = 'tag:server'
 
 /**
  * Exporter ports on every client VPS: node_exporter on 9100 and cAdvisor

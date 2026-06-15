@@ -7,7 +7,7 @@ import type { TaggedDevice } from '@/lib/domain/tailscale/tagged-device.ts'
 const STYLOT_VPS: TaggedDevice = {
 	hostname: 'stylot',
 	ipv4: '100.64.0.21',
-	tags: ['tag:server', 'tag:client-vps'],
+	tags: ['tag:server'],
 }
 
 describe('buildSdTargets', () => {
@@ -24,7 +24,7 @@ describe('buildSdTargets', () => {
 			{
 				targets: ['100.64.0.21:9100'],
 				labels: {
-					__meta_tailscale_device_tags: 'tag:server,tag:client-vps',
+					__meta_tailscale_device_tags: 'tag:server',
 					__meta_tailscale_device_hostname: 'stylot',
 					__meta_nextnode_exporter: 'node',
 					__meta_nextnode_client_id: 'nextnode',
@@ -34,7 +34,7 @@ describe('buildSdTargets', () => {
 			{
 				targets: ['100.64.0.21:9101'],
 				labels: {
-					__meta_tailscale_device_tags: 'tag:server,tag:client-vps',
+					__meta_tailscale_device_tags: 'tag:server',
 					__meta_tailscale_device_hostname: 'stylot',
 					__meta_nextnode_exporter: 'cadvisor',
 					__meta_nextnode_client_id: 'nextnode',
@@ -44,7 +44,7 @@ describe('buildSdTargets', () => {
 			{
 				targets: ['100.64.0.21:9187'],
 				labels: {
-					__meta_tailscale_device_tags: 'tag:server,tag:client-vps',
+					__meta_tailscale_device_tags: 'tag:server',
 					__meta_tailscale_device_hostname: 'stylot',
 					__meta_nextnode_exporter: 'postgres',
 					__meta_nextnode_client_id: 'nextnode',
@@ -54,14 +54,14 @@ describe('buildSdTargets', () => {
 		])
 	})
 
-	it('drops devices without the client-vps tag', () => {
-		const monitoring: TaggedDevice = {
-			hostname: 'nn-internals',
+	it('drops devices that are not NextNode servers (admin laptop / CI runner)', () => {
+		const ciRunner: TaggedDevice = {
+			hostname: 'ci-runner',
 			ipv4: '100.64.0.7',
-			tags: ['tag:server', 'tag:monitoring'],
+			tags: ['tag:ci'],
 		}
 		const groups = buildSdTargets({
-			devices: [monitoring],
+			devices: [ciRunner],
 			statesByHostname: {},
 			clientId: undefined,
 		})
@@ -75,7 +75,7 @@ describe('buildSdTargets', () => {
 			clientId: undefined,
 		})
 		expect(groups[0]?.labels).toEqual({
-			__meta_tailscale_device_tags: 'tag:server,tag:client-vps',
+			__meta_tailscale_device_tags: 'tag:server',
 			__meta_tailscale_device_hostname: 'stylot',
 			__meta_nextnode_exporter: 'node',
 		})
@@ -85,7 +85,7 @@ describe('buildSdTargets', () => {
 		const sharedVps: TaggedDevice = {
 			hostname: 'nn-prod',
 			ipv4: '100.64.0.30',
-			tags: ['tag:client-vps'],
+			tags: ['tag:server'],
 		}
 		const groups = buildSdTargets({
 			devices: [sharedVps],
