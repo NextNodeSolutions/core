@@ -75,10 +75,7 @@ describe('renderVmagentConfig', () => {
 		for (const name of ['node', 'cadvisor', 'postgres']) {
 			const job = jobs.find(candidate => candidate.job_name === name)
 			expect(job?.http_sd_configs).toEqual([
-				{
-					url: 'http://127.0.0.1:8080/api/sd/targets',
-					refresh_interval: '60s',
-				},
+				{ url: 'http://127.0.0.1:8080/api/sd/targets' },
 			])
 		}
 	})

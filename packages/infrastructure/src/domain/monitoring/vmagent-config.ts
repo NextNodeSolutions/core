@@ -14,9 +14,6 @@ import type { RelabelRule } from './client-vps-relabel.ts'
  */
 const SCRAPE_INTERVAL = '15s'
 
-/** How often vmagent re-polls the SD endpoint for fresh targets. */
-const SD_REFRESH_INTERVAL = '60s'
-
 /**
  * Well-known exporter ports on a client VPS, mirrored by the SD endpoint
  * when it emits one target per (VPS, exporter).
@@ -57,9 +54,12 @@ interface ScrapeJob {
 	readonly metrics_path?: string
 	readonly honor_labels?: boolean
 	readonly params?: Readonly<Record<string, ReadonlyArray<string>>>
+	// vmagent's http SD does NOT accept a per-config `refresh_interval` (strict
+	// parse rejects it: "field refresh_interval not found in type http.SDConfig").
+	// The poll cadence is the global `-promscrape.httpSDCheckInterval` flag
+	// (default 1m) instead.
 	readonly http_sd_configs?: ReadonlyArray<{
 		readonly url: string
-		readonly refresh_interval: string
 	}>
 	readonly static_configs?: ReadonlyArray<{
 		readonly targets: ReadonlyArray<string>
@@ -96,9 +96,7 @@ function buildClientVpsJob(
 ): ScrapeJob {
 	return {
 		job_name: exporter,
-		http_sd_configs: [
-			{ url: sdTargetsUrl, refresh_interval: SD_REFRESH_INTERVAL },
-		],
+		http_sd_configs: [{ url: sdTargetsUrl }],
 		relabel_configs: buildClientVpsRelabelRules(exporter),
 		...(exporter === 'cadvisor' && {
 			metric_relabel_configs: buildCadvisorMetricRelabel(),
@@ -156,9 +154,7 @@ function buildBlackboxJob(input: VmagentConfigInput): ScrapeJob {
 		job_name: 'blackbox',
 		metrics_path: '/probe',
 		params: { module: ['http_2xx'] },
-		http_sd_configs: [
-			{ url: input.sdProbesUrl, refresh_interval: SD_REFRESH_INTERVAL },
-		],
+		http_sd_configs: [{ url: input.sdProbesUrl }],
 		relabel_configs: [
 			{
 				action: 'replace',
