@@ -1,9 +1,14 @@
 ---
 import Icon from '@/components/foundations/Icon.astro'
 
+export interface Breadcrumb {
+	label: string
+	href?: string
+}
+
 interface Props {
 	title: string
-	crumbs?: string[]
+	crumbs?: Breadcrumb[]
 }
 
 const { title, crumbs = [] } = Astro.props
@@ -19,7 +24,13 @@ const { title, crumbs = [] } = Astro.props
 					{crumbs.map((crumb, index) => (
 						<>
 							{index > 0 && <Icon name="chevron" size={11} />}
-							<span>{crumb}</span>
+							{crumb.href ? (
+								<a href={crumb.href} class="hover:text-base-900">
+									{crumb.label}
+								</a>
+							) : (
+								<span>{crumb.label}</span>
+							)}
 						</>
 					))}
 				</div>
