@@ -1,4 +1,8 @@
 import { isRecord } from '@/lib/domain/is-record.ts'
+import {
+	escapeLogsqlRegex,
+	logsqlQuoted,
+} from '@/lib/domain/monitoring/logsql.ts'
 import { parseFiniteNumber } from '@/lib/domain/parse-number.ts'
 import { parseStringOrNull } from '@/lib/domain/parse-string.ts'
 
@@ -68,7 +72,7 @@ export const parseLogLevel = (candidate: unknown): LogLevel | null => {
  * the stream field, so no time bound is needed for correctness.
  */
 export const buildVpsLogsQuery = (vpsName: string): string =>
-	`nn_project:${JSON.stringify(vpsName)} | sort by (_time desc) | limit ${String(LOGSQL_QUERY_LIMIT)}`
+	`nn_project:${logsqlQuoted(vpsName)} | sort by (_time desc) | limit ${String(LOGSQL_QUERY_LIMIT)}`
 
 /**
  * Build a LogsQL query for the most recent lines of one PROJECT, across
@@ -80,7 +84,7 @@ export const buildVpsLogsQuery = (vpsName: string): string =>
  * container_name is not a stream field.
  */
 export const buildContainerLogsQuery = (project: string): string =>
-	`_time:${CONTAINER_SCAN_WINDOW} container_name:~${JSON.stringify(`^${escapeRegex(project)}-`)} | sort by (_time desc) | limit ${String(LOGSQL_QUERY_LIMIT)}`
+	`_time:${CONTAINER_SCAN_WINDOW} container_name:~${logsqlQuoted(`^${escapeLogsqlRegex(project)}-`)} | sort by (_time desc) | limit ${String(LOGSQL_QUERY_LIMIT)}`
 
 /**
  * Build a LogsQL query for the most recent lines across the WHOLE fleet
@@ -92,12 +96,6 @@ export const buildFleetLogsQuery = (
 	windowHours: number = DEFAULT_FLEET_LOG_HOURS,
 ): string =>
 	`_time:${String(windowHours)}h | sort by (_time desc) | limit ${String(LOGSQL_QUERY_LIMIT)}`
-
-// Escape the project slug for safe embedding in a LogsQL regex. Project
-// names are kebab identifiers (no regex metachars today), but a deploy
-// could in principle carry one - escape defensively.
-const escapeRegex = (slug: string): string =>
-	slug.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)
 
 /**
  * Parse the newline-delimited JSON VictoriaLogs streams back. Tolerant:
