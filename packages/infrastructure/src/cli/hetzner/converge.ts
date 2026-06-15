@@ -1,5 +1,5 @@
 import { CADDY_CONFIG_PATH } from '#/adapters/hetzner/constants.ts'
-import { VECTOR_INSTALL_CMDS } from '#/domain/hetzner/golden-image.ts'
+import { vectorInstallCommands } from '#/domain/hetzner/golden-image.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
 import type { SshSession } from '#/adapters/hetzner/ssh/session.types.ts'
@@ -83,7 +83,7 @@ async function ensureVectorBinary(session: SshSession): Promise<boolean> {
 	if (probe.trim() === 'yes') return false
 
 	const installed = await session
-		.exec(VECTOR_INSTALL_CMDS.join(' && '))
+		.exec(vectorInstallCommands('sudo').join(' && '))
 		.then(() => true)
 		.catch(() => false)
 	logger[installed ? 'info' : 'warn'](
