@@ -6,6 +6,10 @@ export const GITHUB_ORG_LOGIN = 'NextNodeSolutions'
 /** Bound every request so a hung GitHub API cannot wedge a page render. */
 const GITHUB_TIMEOUT_MS = 5000
 
+/** GitHub returns 403 (primary limit) or 429 (secondary limit) when throttled. */
+const HTTP_FORBIDDEN = 403
+const HTTP_TOO_MANY_REQUESTS = 429
+
 export class GithubApiFailure extends UpstreamApiFailure {
 	constructor(
 		context: string,
@@ -22,6 +26,59 @@ export class GithubApiFailure extends UpstreamApiFailure {
 	logContext(): Record<string, unknown> {
 		return { body: this.body }
 	}
+}
+
+/**
+ * A throttled GitHub response (primary or secondary rate limit), kept
+ * distinct from auth/shape failures so the caller never confuses "slow
+ * down" with "wrong token". `resetSeconds` is the unix epoch the primary
+ * limit refills at (from `x-ratelimit-reset`), null for a secondary limit
+ * that only carries `retry-after`.
+ */
+export class GithubRateLimitError extends UpstreamApiFailure {
+	constructor(
+		context: string,
+		httpStatus: number,
+		public readonly resetSeconds: number | null,
+		public readonly retryAfterSeconds: number | null,
+	) {
+		super(
+			context,
+			httpStatus,
+			`${context} hit GitHub rate limit (HTTP ${String(httpStatus)})`,
+		)
+	}
+
+	logContext(): Record<string, unknown> {
+		return {
+			resetSeconds: this.resetSeconds,
+			retryAfterSeconds: this.retryAfterSeconds,
+		}
+	}
+}
+
+const parseHeaderInt = (raw: string | null): number | null => {
+	if (raw === null) return null
+	const value = Number(raw)
+	return Number.isInteger(value) ? value : null
+}
+
+/**
+ * A throttled response is a 403/429 that either reports zero remaining
+ * primary budget or carries a `retry-after` (secondary limit). A 403 with
+ * budget left is a real authorization failure, not a rate limit.
+ */
+const isRateLimited = (response: Response): boolean => {
+	if (
+		response.status !== HTTP_FORBIDDEN &&
+		response.status !== HTTP_TOO_MANY_REQUESTS
+	) {
+		return false
+	}
+	const remaining = parseHeaderInt(
+		response.headers.get('x-ratelimit-remaining'),
+	)
+	return remaining === 0 || response.headers.has('retry-after')
 }
 
 const authHeaders = (token: string): Record<string, string> => ({
@@ -63,6 +120,14 @@ export const githubGet = async (
 		token,
 		context,
 	)
+	if (isRateLimited(response)) {
+		throw new GithubRateLimitError(
+			context,
+			response.status,
+			parseHeaderInt(response.headers.get('x-ratelimit-reset')),
+			parseHeaderInt(response.headers.get('retry-after')),
+		)
+	}
 	if (!response.ok) {
 		const body = await response.text()
 		throw new GithubApiFailure(context, response.status, body)
