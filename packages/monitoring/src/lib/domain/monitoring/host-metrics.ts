@@ -1,3 +1,5 @@
+import { NODE_EXPORTER_EXPR } from '@/lib/domain/monitoring/node-exporter-exprs.ts'
+
 /**
  * The four host-level gauges the VPS observability panel renders, each
  * derived from node_exporter series filtered to one `vps_name`. All are
@@ -12,21 +14,15 @@ export interface HostMetrics {
 }
 
 /**
- * Instant PromQL for each gauge, scoped to a single VPS. The vps_name is
- * injected as a label matcher; values are percentages (0-100) except
- * uptime (seconds). Quoting: JSON.stringify yields a double-quoted,
- * backslash/quote-escaped string - exactly what a PromQL label matcher
- * needs - so a vps_name carrying `"` or `\` cannot break out of the
- * selector.
+ * Instant PromQL for each gauge, scoped to a single VPS. Cpu/memory/disk
+ * reuse the canonical expressions from the shared `node-exporter-exprs`
+ * table so a query tweak lands in one place; uptime is gauge-only.
  */
 export const buildHostMetricExprs = (
 	vpsName: string,
-): Readonly<Record<keyof HostMetrics, string>> => {
-	const vps = `vps_name=${JSON.stringify(vpsName)}`
-	return {
-		cpuPercent: `100 - (avg(rate(node_cpu_seconds_total{${vps},mode="idle"}[5m])) * 100)`,
-		memoryPercent: `100 * (1 - node_memory_MemAvailable_bytes{${vps}} / node_memory_MemTotal_bytes{${vps}})`,
-		diskPercent: `100 * (1 - node_filesystem_avail_bytes{${vps},mountpoint="/",fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{${vps},mountpoint="/",fstype!~"tmpfs|overlay"})`,
-		uptimeSeconds: `time() - node_boot_time_seconds{${vps}}`,
-	}
-}
+): Readonly<Record<keyof HostMetrics, string>> => ({
+	cpuPercent: NODE_EXPORTER_EXPR.cpu(vpsName),
+	memoryPercent: NODE_EXPORTER_EXPR.mem(vpsName),
+	diskPercent: NODE_EXPORTER_EXPR.disk(vpsName),
+	uptimeSeconds: NODE_EXPORTER_EXPR.uptime(vpsName),
+})

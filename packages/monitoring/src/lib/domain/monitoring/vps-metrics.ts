@@ -1,10 +1,13 @@
+import { NODE_EXPORTER_EXPR } from '@/lib/domain/monitoring/node-exporter-exprs.ts'
+
 import type { RangePoint } from '@/lib/domain/monitoring/promql-response.ts'
 
 /**
  * PromQL builders + summaries for the VPS detail screen, all scoped to a
- * single `vps_name` and derived from node_exporter series. Pure: the adapter
- * runs the queries, this only shapes the expressions and the value summary.
- * A metric that node_exporter does not expose simply returns an empty series
+ * single `vps_name`. The expression strings come from the shared
+ * `node-exporter-exprs` table (single source); this module only selects the
+ * subset the detail screen renders and summarises the sampled values. A
+ * metric that node_exporter does not expose simply returns an empty series
  * upstream - the panel renders blank, never a fabricated value.
  */
 
@@ -21,36 +24,10 @@ export const VPS_SERIES_METRICS = [
 
 export type VpsSeriesMetric = (typeof VPS_SERIES_METRICS)[number]
 
-const RATE_WINDOW = '5m'
-
-// JSON.stringify yields a double-quoted, backslash/quote-escaped string -
-// exactly the escaping a PromQL label matcher needs - so a vps_name carrying
-// `"` or `\` cannot break out of the selector.
-const selector = (vpsName: string): string =>
-	`vps_name=${JSON.stringify(vpsName)}`
-
-const SERIES_EXPR: Record<VpsSeriesMetric, (vpsName: string) => string> = {
-	cpu: vps =>
-		`100 - (avg(rate(node_cpu_seconds_total{${selector(vps)},mode="idle"}[${RATE_WINDOW}])) * 100)`,
-	mem: vps =>
-		`100 * (1 - node_memory_MemAvailable_bytes{${selector(vps)}} / node_memory_MemTotal_bytes{${selector(vps)}})`,
-	disk: vps =>
-		`100 * (1 - node_filesystem_avail_bytes{${selector(vps)},mountpoint="/",fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{${selector(vps)},mountpoint="/",fstype!~"tmpfs|overlay"})`,
-	netIn: vps =>
-		`sum(rate(node_network_receive_bytes_total{${selector(vps)},device!~"lo"}[${RATE_WINDOW}])) * 8 / 1e6`,
-	netOut: vps =>
-		`sum(rate(node_network_transmit_bytes_total{${selector(vps)},device!~"lo"}[${RATE_WINDOW}])) * 8 / 1e6`,
-	diskIo: vps =>
-		`sum(rate(node_disk_written_bytes_total{${selector(vps)}}[${RATE_WINDOW}])) / 1e6`,
-	diskLatency: vps =>
-		`sum(rate(node_disk_io_time_seconds_total{${selector(vps)}}[${RATE_WINDOW}])) * 1000`,
-	load: vps => `node_load1{${selector(vps)}}`,
-}
-
 export const buildVpsSeriesExpr = (
 	vpsName: string,
 	metric: VpsSeriesMetric,
-): string => SERIES_EXPR[metric](vpsName)
+): string => NODE_EXPORTER_EXPR[metric](vpsName)
 
 const HOURS_PER_DAY = 24
 const HOURS_PER_WEEK = 168
@@ -79,12 +56,12 @@ export interface VpsGaugeExprs {
 }
 
 export const buildVpsGaugeExprs = (vpsName: string): VpsGaugeExprs => ({
-	load1: `node_load1{${selector(vpsName)}}`,
-	load5: `node_load5{${selector(vpsName)}}`,
-	load15: `node_load15{${selector(vpsName)}}`,
-	swapPercent: `100 * (1 - node_memory_SwapFree_bytes{${selector(vpsName)}} / node_memory_SwapTotal_bytes{${selector(vpsName)}})`,
-	netInMbps: SERIES_EXPR.netIn(vpsName),
-	netOutMbps: SERIES_EXPR.netOut(vpsName),
+	load1: NODE_EXPORTER_EXPR.load1(vpsName),
+	load5: NODE_EXPORTER_EXPR.load5(vpsName),
+	load15: NODE_EXPORTER_EXPR.load15(vpsName),
+	swapPercent: NODE_EXPORTER_EXPR.swap(vpsName),
+	netInMbps: NODE_EXPORTER_EXPR.netIn(vpsName),
+	netOutMbps: NODE_EXPORTER_EXPR.netOut(vpsName),
 })
 
 export interface SeriesSummary {
