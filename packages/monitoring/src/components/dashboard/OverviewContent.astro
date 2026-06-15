@@ -62,48 +62,41 @@ const serversState = await loadPageState('overview.servers', () => {
 })
 const servers = serversState.kind === 'ok' ? serversState.data : []
 
-const metricsStates = await Promise.all(
-	servers.map((server) =>
-		loadPageState(`overview.metrics.${server.name}`, () =>
-			loadHostMetrics(server.name),
-		),
-	),
+// Load host metrics, gauges and the cpu spark for every server in one flat
+// parallel pass: all three queries per server fire together, and every server
+// fires together, so the fleet resolves in a single wave instead of three
+// serialized ones.
+const fleetLoads = await Promise.all(
+	servers.map(async (server) => {
+		const [metricsState, gaugesState, sparkState] = await Promise.all([
+			loadPageState(`overview.metrics.${server.name}`, () =>
+				loadHostMetrics(server.name),
+			),
+			loadPageState(`overview.gauges.${server.name}`, () =>
+				loadVpsGauges(server.name),
+			),
+			loadPageState(`overview.spark.${server.name}`, () =>
+				loadVpsSeries(server.name, 'cpu', SPARK_HOURS),
+			),
+		])
+		return { name: server.name, metricsState, gaugesState, sparkState }
+	}),
 )
-const metricsByName: Record<string, HostMetrics> = {}
-servers.forEach((server, index) => {
-	const state = metricsStates[index]
-	metricsByName[server.name] =
-		state !== undefined && state.kind === 'ok' ? state.data : NULL_METRICS
-})
 
-const gaugesStates = await Promise.all(
-	servers.map((server) =>
-		loadPageState(`overview.gauges.${server.name}`, () =>
-			loadVpsGauges(server.name),
-		),
-	),
-)
-const sparkStates = await Promise.all(
-	servers.map((server) =>
-		loadPageState(`overview.spark.${server.name}`, () =>
-			loadVpsSeries(server.name, 'cpu', SPARK_HOURS),
-		),
-	),
-)
+const metricsByName: Record<string, HostMetrics> = {}
 const fleetExtras: Record<string, FleetExtra> = {}
-servers.forEach((server, index) => {
-	const gaugeState = gaugesStates[index]
-	const sparkState = sparkStates[index]
+for (const load of fleetLoads) {
+	metricsByName[load.name] =
+		load.metricsState.kind === 'ok' ? load.metricsState.data : NULL_METRICS
 	const gauges =
-		gaugeState !== undefined && gaugeState.kind === 'ok' ? gaugeState.data : null
-	const points =
-		sparkState !== undefined && sparkState.kind === 'ok' ? sparkState.data : []
-	fleetExtras[server.name] = {
+		load.gaugesState.kind === 'ok' ? load.gaugesState.data : null
+	const points = load.sparkState.kind === 'ok' ? load.sparkState.data : []
+	fleetExtras[load.name] = {
 		cpuTrend: points.map((point) => point.v),
 		loadAvg: gauges?.load1 ?? null,
 		netOutMbps: gauges?.netOutMbps ?? null,
 	}
-})
+}
 
 const logsState = await loadPageState('overview.logs', loadFleetLogs)
 const logs = logsState.kind === 'ok' ? logsState.data : []
