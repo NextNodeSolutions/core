@@ -6,6 +6,7 @@ import VpsMetricPanel from '@/components/vps/VpsMetricPanel.astro'
 import { ENV_KEYS, requireEnv } from '@/lib/adapters/env.ts'
 import { listServers } from '@/lib/adapters/hetzner/servers.ts'
 import { loadPageState } from '@/lib/adapters/load-page-state.ts'
+import { mapWithConcurrency } from '@/lib/domain/concurrency.ts'
 import {
 	loadHostMetrics,
 	loadVpsGauges,
@@ -55,6 +56,7 @@ const SWAP_AMBER = 15
 const PCT_FULL = 100
 const BYTES_PER_GB = 1_000_000_000
 const LOAD_DECIMALS = 2
+const CMP_CONCURRENCY = 6
 const EMPTY_FLEET: ReadonlyArray<HetznerVps> = []
 const FLEET_COLORS: ReadonlyArray<ChartColor> = [
 	'accent',
@@ -111,15 +113,6 @@ const unwrap = <T,>(state: LoadState<T>, fallback: T): T =>
 const seriesOf = (state: LoadState<ReadonlyArray<RangePoint>>): ReadonlyArray<RangePoint> =>
 	state.kind === 'ok' ? state.data : []
 
-const hostState = await loadPageState(`vps.${slug}.host`, () =>
-	loadHostMetrics(slug),
-)
-const gaugesState = await loadPageState(`vps.${slug}.gauges`, () =>
-	loadVpsGauges(slug),
-)
-const host = unwrap(hostState, NULL_HOST)
-const gauges = unwrap(gaugesState, NULL_GAUGES)
-
 const seriesMetrics: ReadonlyArray<VpsSeriesMetric> = [
 	'cpu',
 	'mem',
@@ -129,46 +122,52 @@ const seriesMetrics: ReadonlyArray<VpsSeriesMetric> = [
 	'load',
 	'netIn',
 ]
-const seriesStates = await Promise.all(
-	seriesMetrics.map((metric) =>
-		loadPageState(`vps.${slug}.series.${metric}`, () =>
-			loadVpsSeries(slug, metric, hours),
+
+// Host gauges, the Hetzner fleet list and every series share no data, so they
+// fire in one parallel wave instead of three serialized awaits.
+const [hostState, gaugesState, fleetState, seriesStates] = await Promise.all([
+	loadPageState(`vps.${slug}.host`, () => loadHostMetrics(slug)),
+	loadPageState(`vps.${slug}.gauges`, () => loadVpsGauges(slug)),
+	loadPageState(`vps.${slug}.fleet`, () => {
+		const token = requireEnv(ENV_KEYS.HETZNER_API_TOKEN)
+		return listServers(token)
+	}),
+	Promise.all(
+		seriesMetrics.map((metric) =>
+			loadPageState(`vps.${slug}.series.${metric}`, () =>
+				loadVpsSeries(slug, metric, hours),
+			),
 		),
 	),
-)
-const seriesByMetric: Partial<Record<VpsSeriesMetric, ReadonlyArray<RangePoint>>> =
-	{}
-seriesMetrics.forEach((metric, index) => {
-	const state = seriesStates[index]
-	seriesByMetric[metric] = state === undefined ? [] : seriesOf(state)
-})
-const cpuSeries = seriesByMetric.cpu ?? []
-const memSeries = seriesByMetric.mem ?? []
-const netOutSeries = seriesByMetric.netOut ?? []
-const diskIoSeries = seriesByMetric.diskIo ?? []
-const diskLatencySeries = seriesByMetric.diskLatency ?? []
-const loadSeries = seriesByMetric.load ?? []
-const netInSeries = seriesByMetric.netIn ?? []
-
-const fleetState = await loadPageState(`vps.${slug}.fleet`, () => {
-	const token = requireEnv(ENV_KEYS.HETZNER_API_TOKEN)
-	return listServers(token)
-})
+])
+const host = unwrap(hostState, NULL_HOST)
+const gauges = unwrap(gaugesState, NULL_GAUGES)
 const fleet = unwrap(fleetState, EMPTY_FLEET)
 
-const cmpStates = await Promise.all(
-	fleet.map((peer) =>
-		loadPageState(`vps.${slug}.cmp.${peer.name}`, () =>
-			loadVpsSeries(peer.name, cmpMetric, hours),
-		),
-	),
-)
-const cmpSeries = fleet.map((peer, index) => {
-	const state = cmpStates[index]
-	return {
-		name: peer.name,
-		points: state === undefined ? [] : seriesOf(state),
+const seriesAt = (metric: VpsSeriesMetric): ReadonlyArray<RangePoint> => {
+	const index = seriesMetrics.indexOf(metric)
+	const state = index === -1 ? undefined : seriesStates[index]
+	return state === undefined ? [] : seriesOf(state)
+}
+const cpuSeries = seriesAt('cpu')
+const memSeries = seriesAt('mem')
+const netOutSeries = seriesAt('netOut')
+const diskIoSeries = seriesAt('diskIo')
+const diskLatencySeries = seriesAt('diskLatency')
+const loadSeries = seriesAt('load')
+const netInSeries = seriesAt('netIn')
+
+// The fleet comparison overlays each peer's series for the chosen metric.
+// Bound the fan-out (one range query per peer) and reuse the current host's
+// already-loaded series instead of querying the identical range twice.
+const cmpSeries = await mapWithConcurrency(fleet, CMP_CONCURRENCY, async (peer) => {
+	if (peer.name === slug) {
+		return { name: peer.name, points: seriesAt(cmpMetric) }
 	}
+	const state = await loadPageState(`vps.${slug}.cmp.${peer.name}`, () =>
+		loadVpsSeries(peer.name, cmpMetric, hours),
+	)
+	return { name: peer.name, points: seriesOf(state) }
 })
 
 const metricsByName: Record<string, ServerMetrics> =
@@ -187,20 +186,19 @@ const cores = server?.serverType.cores ?? 0
 const memoryGb = server?.serverType.memoryGb ?? 0
 const diskGb = server?.serverType.diskGb ?? 0
 
-const round1 = (sample: number): string => sample.toFixed(1)
 const summaryOf = (
 	points: ReadonlyArray<RangePoint>,
 ): { avg: string | null; peak: string | null } => {
 	const summary = summarizeSeries(points)
 	return {
-		avg: summary.average === null ? null : round1(summary.average),
-		peak: summary.peak === null ? null : round1(summary.peak),
+		avg: summary.average === null ? null : summary.average.toFixed(1),
+		peak: summary.peak === null ? null : summary.peak.toFixed(1),
 	}
 }
 const valuesOf = (points: ReadonlyArray<RangePoint>): ReadonlyArray<number> =>
 	points.map((point) => point.v)
 const lastValue = (points: ReadonlyArray<RangePoint>): number | null =>
-	points.length > 0 ? (points[points.length - 1]?.v ?? null) : null
+	points.at(-1)?.v ?? null
 
 const cpuSummary = summaryOf(cpuSeries)
 const memSummary = summaryOf(memSeries)

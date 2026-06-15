@@ -24,6 +24,7 @@ import type {
 	RecentDeployment,
 	StepState,
 } from '@/lib/domain/cloudflare/deployment-summary.ts'
+import { mapWithConcurrency } from '@/lib/domain/concurrency.ts'
 import { cloudflareApiPath } from '@/lib/domain/cloudflare/pages-routes.ts'
 import {
 	formatDurationSeconds,
@@ -47,8 +48,8 @@ const HIGH_SUCCESS_RATE = 90
 const MID_SUCCESS_RATE = 70
 const STRIP_BASE_OPACITY = 0.35
 const STRIP_GRADED_RANGE = 0.65
+const FAN_OUT_CONCURRENCY = 6
 const ALL_ENV = 'all'
-const DEFAULT_ENV = 'all'
 
 const { project, env, sel } = Astro.props
 
@@ -73,8 +74,10 @@ const projects: ReadonlyArray<CloudflarePagesProject> =
 const loadProjectDeployments = async (
 	resolved: CloudflareClient,
 ): Promise<Record<string, ReadonlyArray<CloudflarePagesDeployment>>> => {
-	const states = await Promise.all(
-		projects.map(currentProject =>
+	const states = await mapWithConcurrency(
+		projects,
+		FAN_OUT_CONCURRENCY,
+		currentProject =>
 			loadPageState(`deployments.deps.${currentProject.name}`, () =>
 				listPagesDeployments({
 					client: resolved,
@@ -82,7 +85,6 @@ const loadProjectDeployments = async (
 					limit: PER_PROJECT_LIMIT,
 				}),
 			),
-		),
 	)
 	const grouped: Record<string, ReadonlyArray<CloudflarePagesDeployment>> = {}
 	projects.forEach((currentProject, index) => {
@@ -118,7 +120,7 @@ const nowMs = Date.now()
 const linkTo = (overrides: Record<string, string | null>): string => {
 	const params = new URLSearchParams()
 	if (project) params.set('project', project)
-	if (env !== DEFAULT_ENV) params.set('env', env)
+	if (env !== ALL_ENV) params.set('env', env)
 	if (sel) params.set('sel', sel)
 	for (const [key, override] of Object.entries(overrides)) {
 		if (override === null) params.delete(key)
@@ -229,6 +231,11 @@ const drawerDisplay = selectedDeployment
 const drawerSteps: ReadonlyArray<PipelineStep> = selectedDeployment
 	? deploymentPipelineSteps(selectedDeployment.status)
 	: []
+const drawerStepViews = drawerSteps.map(step => ({
+	state: step.state,
+	label: step.label,
+	dotIcon: stepDotIcon(step.state),
+}))
 const drawerProjectName = selectedEntry?.projectName ?? ''
 const drawerSpecs: ReadonlyArray<{ label: string; text: string }> =
 	selectedDeployment
@@ -712,7 +719,7 @@ const clientFailed = clientState.kind !== 'ok'
 						<div>
 							<div class="mb-2 text-[11px] text-base-400">Pipeline</div>
 							<div class="flex flex-col">
-								{drawerSteps.map(step => (
+								{drawerStepViews.map(step => (
 									<div class="flex items-center gap-3 py-1.5">
 										<span
 											class:list={[
@@ -720,10 +727,10 @@ const clientFailed = clientState.kind !== 'ok'
 												stepDotClass[step.state],
 											]}
 										>
-											{stepDotIcon(step.state) === null ? (
+											{step.dotIcon === null ? (
 												<span class="size-[5px] rounded-full bg-current" />
 											) : (
-												<Icon name={stepDotIcon(step.state) ?? 'dot'} size={11} />
+												<Icon name={step.dotIcon} size={11} />
 											)}
 										</span>
 										<span class={`text-[13px] ${stepLabelClass[step.state]}`}>

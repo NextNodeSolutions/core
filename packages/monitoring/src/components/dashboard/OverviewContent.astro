@@ -53,11 +53,11 @@ const serversState = await loadPageState('overview.servers', () => {
 })
 const servers = serversState.kind === 'ok' ? serversState.data : []
 
-// Load host metrics, gauges and the cpu spark for every server in one flat
-// parallel pass: all three queries per server fire together, and every server
-// fires together, so the fleet resolves in a single wave instead of three
-// serialized ones.
-const fleetLoads = await Promise.all(
+// The fleet metric pass, the logs query and the recent-deployments fan-out hit
+// three independent upstreams, so kick them all off together and await once
+// rather than serializing three round-trip waves. Within the fleet pass, all
+// three queries per server fire together and every server fires together.
+const fleetLoadsPromise = Promise.all(
 	servers.map(async (server) => {
 		const [metricsState, gaugesState, sparkState] = await Promise.all([
 			loadPageState(`overview.metrics.${server.name}`, () =>
@@ -73,6 +73,15 @@ const fleetLoads = await Promise.all(
 		return { name: server.name, metricsState, gaugesState, sparkState }
 	}),
 )
+const logsStatePromise = loadPageState('overview.logs', loadFleetLogs)
+const recentStatePromise = loadPageState('overview.deployments', () =>
+	loadRecentDeployments(DEPLOY_COUNT),
+)
+const [fleetLoads, logsState, recentState] = await Promise.all([
+	fleetLoadsPromise,
+	logsStatePromise,
+	recentStatePromise,
+])
 
 const metricsByName: Record<string, HostMetrics> = {}
 const fleetExtras: Record<string, FleetExtra> = {}
@@ -89,7 +98,6 @@ for (const load of fleetLoads) {
 	}
 }
 
-const logsState = await loadPageState('overview.logs', loadFleetLogs)
 const logs = logsState.kind === 'ok' ? logsState.data : []
 const errorCount = logs.filter((line) => line.level === 'error').length
 
@@ -112,9 +120,6 @@ const stream = logs.slice(0, LOG_STREAM_COUNT).map((line) => ({
 }))
 
 const nowMs = Date.now()
-const recentState = await loadPageState('overview.deployments', () =>
-	loadRecentDeployments(DEPLOY_COUNT),
-)
 const recentDeploys = (recentState.kind === 'ok' ? recentState.data : []).map(
 	(entry) => ({
 		href: `/deployments?project=${encodeURIComponent(entry.projectName)}&sel=${encodeURIComponent(entry.deployment.id)}`,
