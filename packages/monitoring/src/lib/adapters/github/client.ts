@@ -6,6 +6,9 @@ export const GITHUB_ORG_LOGIN = 'NextNodeSolutions'
 /** Bound every request so a hung GitHub API cannot wedge a page render. */
 const GITHUB_TIMEOUT_MS = 5000
 
+/** A malformed body still arrives with a 200 status. */
+const HTTP_OK = 200
+
 /** GitHub returns 403 (primary limit) or 429 (secondary limit) when throttled. */
 const HTTP_FORBIDDEN = 403
 const HTTP_TOO_MANY_REQUESTS = 429
@@ -25,6 +28,26 @@ export class GithubApiFailure extends UpstreamApiFailure {
 
 	logContext(): Record<string, unknown> {
 		return { body: this.body }
+	}
+}
+
+/**
+ * A 200 from GitHub whose body is not the shape the endpoint contracts -
+ * a non-array repo list, a missing `workflow_runs`, etc. GitHub returns
+ * this during incidents (200 + an error/status JSON object). Swallowing it
+ * as an empty result would silently hide an outage, so we surface it as an
+ * explicit shape failure to be logged and propagated.
+ */
+export class GithubMalformedResponseError extends UpstreamApiFailure {
+	constructor(
+		context: string,
+		public readonly detail: string,
+	) {
+		super(context, HTTP_OK, `${context}: ${detail}`)
+	}
+
+	logContext(): Record<string, unknown> {
+		return { detail: this.detail }
 	}
 }
 
@@ -59,8 +82,8 @@ export class GithubRateLimitError extends UpstreamApiFailure {
 
 const parseHeaderInt = (raw: string | null): number | null => {
 	if (raw === null) return null
-	const value = Number(raw)
-	return Number.isInteger(value) ? value : null
+	const parsed = Number(raw)
+	return Number.isInteger(parsed) ? parsed : null
 }
 
 /**

@@ -1,5 +1,9 @@
 import { keyedMemoizeAsync } from '@/lib/adapters/cache.ts'
-import { GITHUB_ORG_LOGIN, githubGet } from '@/lib/adapters/github/client.ts'
+import {
+	GITHUB_ORG_LOGIN,
+	GithubMalformedResponseError,
+	githubGet,
+} from '@/lib/adapters/github/client.ts'
 import { isRecord } from '@/lib/domain/is-record.ts'
 import { parseStringOrNull } from '@/lib/domain/parse-string.ts'
 
@@ -40,7 +44,14 @@ const fetchOrgRepos = async (
 		token,
 		context,
 	)
-	if (!Array.isArray(payload)) return []
+	if (!Array.isArray(payload)) {
+		// A non-array 200 is a malformed response (incident / error JSON),
+		// not an empty repo set - surface it rather than reporting zero repos.
+		throw new GithubMalformedResponseError(
+			context,
+			'expected a JSON array of repos',
+		)
+	}
 	return payload
 		.map(parseRepo)
 		.filter((repo): repo is GithubRepo => repo !== null)

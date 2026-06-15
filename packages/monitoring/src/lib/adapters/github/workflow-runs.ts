@@ -1,5 +1,8 @@
 import { keyedMemoizeAsync } from '@/lib/adapters/cache.ts'
-import { githubGet } from '@/lib/adapters/github/client.ts'
+import {
+	GithubMalformedResponseError,
+	githubGet,
+} from '@/lib/adapters/github/client.ts'
 import { isRecord } from '@/lib/domain/is-record.ts'
 import { parseStringOrNull } from '@/lib/domain/parse-string.ts'
 
@@ -31,7 +34,15 @@ const fetchLatestRun = async (input: {
 		input.token,
 		context,
 	)
-	if (!isRecord(payload) || !Array.isArray(payload.workflow_runs)) return null
+	if (!isRecord(payload) || !Array.isArray(payload.workflow_runs)) {
+		// A 200 without the contracted `workflow_runs` array is malformed
+		// (incident / error JSON), not "no runs" - surface it. An empty
+		// `workflow_runs: []` is a legitimate "no runs yet" and stays null.
+		throw new GithubMalformedResponseError(
+			context,
+			'expected a `workflow_runs` array',
+		)
+	}
 	const [first] = payload.workflow_runs
 	return parseRun(first)
 }
