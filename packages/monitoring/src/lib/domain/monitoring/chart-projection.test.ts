@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-	areaChartGeometry,
-	buildLinePath,
-	multiLineGeometry,
-	radialGaugeGeometry,
-	sparklineGeometry,
-} from './chart-geometry.ts'
+import { areaChartGeometry } from './area-chart.ts'
+import { buildLinePath } from './chart-projection.ts'
+import { multiLineGeometry } from './multi-line.ts'
+import { radialGaugeGeometry } from './radial-gauge.ts'
+import { sparklineGeometry } from './sparkline.ts'
 
 describe('buildLinePath', () => {
 	it('moves to the first point then lines to the rest', () => {
