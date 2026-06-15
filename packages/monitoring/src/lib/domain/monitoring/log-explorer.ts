@@ -38,6 +38,9 @@ export interface BucketOptions {
 }
 
 const ALL = 'all'
+const FNV_OFFSET_BASIS = 2_166_136_261
+const FNV_PRIME = 16_777_619
+const HASH_RADIX = 36
 const HIST_BAR_GAP = 1.5
 const HIST_TOP_PAD = 4
 const HIST_SEGMENT_GAP = 0.5
@@ -70,6 +73,42 @@ export const filterLogs = (
 		if (!inScope(line, filter)) return false
 		return matchesQuery(line, filter.query)
 	})
+
+// FNV-1a over the code units: a tiny, dependency-free hash to fold a line's
+// (time, message) into a compact, URL-safe token. Unsigned via `>>> 0`.
+const fnv1a = (input: string): number => {
+	let hash = FNV_OFFSET_BASIS
+	for (let index = 0; index < input.length; index += 1) {
+		hash ^= input.charCodeAt(index)
+		hash = Math.imul(hash, FNV_PRIME)
+	}
+	return hash >>> 0
+}
+
+/**
+ * Stable identity for a log line, used to mark the selected row in the URL.
+ * Prefer the upstream `traceId` when present; otherwise fold (time, message)
+ * - the only fields guaranteed on every line - into a compact hash. A NUL
+ * separator keeps the two fields unambiguous so distinct lines cannot collide
+ * by shifting the boundary. The key is position-independent, so the selection
+ * survives filter changes and the visible-row slice.
+ */
+export const logLineKey = (line: LogLine): string => {
+	if (line.traceId !== null && line.traceId.length > 0) {
+		return `t:${line.traceId}`
+	}
+	const hash = fnv1a(`${line.time}\0${line.message}`)
+	return `h:${hash.toString(HASH_RADIX)}`
+}
+
+/** Resolve the selected line from the full list by its stable key. */
+export const selectLogByKey = (
+	logs: ReadonlyArray<LogLine>,
+	key: string,
+): LogLine | null => {
+	if (key.length === 0) return null
+	return logs.find(line => logLineKey(line) === key) ?? null
+}
 
 export const countByLevel = (
 	logs: ReadonlyArray<LogLine>,

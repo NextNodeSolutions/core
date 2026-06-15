@@ -5,6 +5,8 @@ import {
 	countByLevel,
 	filterLogs,
 	histogramBars,
+	logLineKey,
+	selectLogByKey,
 } from './log-explorer.ts'
 
 import type { LogBucket } from './log-explorer.ts'
@@ -130,6 +132,59 @@ describe('bucketLogs', () => {
 			nowMs: now,
 		})
 		expect(buckets.reduce((sum, bucket) => sum + bucket.total, 0)).toBe(0)
+	})
+})
+
+describe('logLineKey', () => {
+	it('uses the traceId when present', () => {
+		expect(logLineKey(line({ traceId: 'abc123' }))).toBe('t:abc123')
+	})
+
+	it('derives a stable key from time and message when no traceId', () => {
+		const sample = line({
+			traceId: null,
+			time: '2026-06-13T10:00:00Z',
+			message: 'request done',
+		})
+		expect(logLineKey(sample)).toBe(logLineKey(sample))
+	})
+
+	it('gives distinct keys to two lines differing only in message', () => {
+		const base = { traceId: null, time: '2026-06-13T10:00:00Z' }
+		expect(logLineKey(line({ ...base, message: 'first' }))).not.toBe(
+			logLineKey(line({ ...base, message: 'second' })),
+		)
+	})
+
+	it('gives distinct keys to two lines differing only in time', () => {
+		const base = { traceId: null, message: 'same' }
+		expect(
+			logLineKey(line({ ...base, time: '2026-06-13T10:00:00Z' })),
+		).not.toBe(logLineKey(line({ ...base, time: '2026-06-13T10:00:01Z' })))
+	})
+})
+
+describe('selectLogByKey', () => {
+	const first = line({ traceId: 'a', message: 'first' })
+	const second = line({ traceId: 'b', message: 'second' })
+	const third = line({ traceId: 'c', message: 'third' })
+	const logs = [first, second, third]
+
+	it('finds the matching line by its stable key', () => {
+		expect(selectLogByKey(logs, logLineKey(second))?.message).toBe('second')
+	})
+
+	it('finds the line even after the list is sliced past its position', () => {
+		const sliced = [first, second]
+		// `third` sits beyond the visible slice, yet the key still resolves it
+		// from the full list - position-independent selection.
+		expect(selectLogByKey(logs, logLineKey(third))?.message).toBe('third')
+		expect(selectLogByKey(sliced, logLineKey(third))).toBeNull()
+	})
+
+	it('returns null for an unknown or empty key', () => {
+		expect(selectLogByKey(logs, 'nope')).toBeNull()
+		expect(selectLogByKey(logs, '')).toBeNull()
 	})
 })
 

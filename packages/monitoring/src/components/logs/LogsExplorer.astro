@@ -8,6 +8,8 @@ import {
 	bucketLogs,
 	countByLevel,
 	filterLogs,
+	logLineKey,
+	selectLogByKey,
 } from '@/lib/domain/monitoring/log-explorer.ts'
 import { formatClock, formatTime } from '@/lib/domain/monitoring/format.ts'
 import { LOG_LEVELS } from '@/lib/domain/monitoring/log-query.ts'
@@ -80,11 +82,7 @@ const uniqueSorted = (
 const serviceOptions = [ALL, ...uniqueSorted(line => line.service)]
 const vpsOptions = [ALL, ...uniqueSorted(line => line.vps)]
 
-const selIndex = Number.parseInt(sel, 10)
-const selectedLog: LogLine | null =
-	Number.isInteger(selIndex) && selIndex >= 0 && selIndex < filtered.length
-		? (filtered[selIndex] ?? null)
-		: null
+const selectedLog: LogLine | null = selectLogByKey(filtered, sel)
 
 const linkTo = (overrides: Record<string, string | null>): string => {
 	const params = new URLSearchParams()
@@ -283,11 +281,12 @@ const metaEntries = selectedLog ? Object.entries(selectedLog.meta) : []
 						Aucun log ne correspond aux filtres.
 					</div>
 				) : (
-					visibleRows.map((line, index) => {
-						const active = index === selIndex
+					visibleRows.map((line) => {
+						const key = logLineKey(line)
+						const active = key === sel
 						return (
 							<a
-								href={linkTo({ sel: String(index) })}
+								href={linkTo({ sel: key })}
 								class:list={[
 									'flex items-baseline gap-2.5 border-l-2 px-3.5 py-1 font-mono text-xs whitespace-nowrap',
 									active && line.level !== null
