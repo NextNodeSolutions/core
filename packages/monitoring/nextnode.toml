@@ -8,9 +8,12 @@ filter = "@nextnode-solutions/monitoring"
 [deploy]
 vps = "nn-internals"
 # Global secret pool: consumed at deploy time by the observability config
-# renderers (Alertmanager email routing + dead man's switch) - never by
-# the app runtime.
-secrets = ["RESEND_API_KEY", "HEALTHCHECKS_PING_URL"]
+# renderers (Alertmanager email routing) - never by the app runtime.
+# HEALTHCHECKS_PING_URL (the external dead man's switch heartbeat) is
+# deliberately NOT listed: it is optional (the renderer omits the DMS route when
+# absent, email alerting still works). Re-add it here + set the GitHub secret
+# once a healthchecks.io check exists to turn the dead man's switch back on.
+secrets = ["RESEND_API_KEY"]
 
 [deploy.hetzner]
 server_type = "cx33"
