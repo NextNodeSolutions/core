@@ -55,6 +55,8 @@ vi.mock('#/adapters/tailscale/oauth.ts', () => ({
 		mintAuthkey: vi.fn(),
 		getIpByHostname: vi.fn(),
 		deleteByHostname: vi.fn(async () => 0),
+		getAclPolicy: vi.fn(async () => ({})),
+		setAclPolicy: vi.fn(),
 	})),
 }))
 

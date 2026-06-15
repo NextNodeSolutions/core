@@ -22,4 +22,19 @@ export interface TailnetClient {
 	): Promise<MintedAuthkey>
 	getIpByHostname(hostname: string): Promise<string>
 	deleteByHostname(hostname: string): Promise<number>
+	/**
+	 * Read the tailnet ACL policy as a parsed JSON object. Throws
+	 * `TailnetAclScopeError` when the OAuth client lacks the `acl` scope so the
+	 * caller can degrade gracefully (the policy is operator-owned).
+	 */
+	getAclPolicy(): Promise<Record<string, unknown>>
+	/** Replace the tailnet ACL policy. Same scope contract as `getAclPolicy`. */
+	setAclPolicy(policy: Record<string, unknown>): Promise<void>
 }
+
+/**
+ * Raised when an ACL read/write is rejected for lack of the `acl` OAuth scope
+ * (HTTP 403). Distinct from generic failures so callers treat a missing scope
+ * as "skip, operator grants it once" rather than a hard error.
+ */
+export class TailnetAclScopeError extends Error {}
