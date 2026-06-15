@@ -1,0 +1,40 @@
+---
+import Icon from '@/components/foundations/Icon.astro'
+import type { IconName } from '@/components/foundations/Icon.astro'
+import type { Tone } from '@/lib/domain/badge-status.ts'
+
+interface Props {
+	icon: IconName
+	label: string
+	value: string
+	hint: string
+	tone?: Tone
+}
+
+const { icon, label, value, hint, tone = 'neutral' } = Astro.props
+
+const toneValueClass: Record<Tone, string> = {
+	neutral: 'text-base-900',
+	positive: 'text-accent-800',
+	warning: 'text-amber-600',
+	danger: 'text-red-600',
+}
+---
+
+<article
+	class="rounded-xl border border-base-200 bg-white px-4 py-4 shadow-subtle transition-shadow hover:shadow-navy"
+>
+	<div class="mb-3 flex items-center gap-2 text-base-500">
+		<Icon name={icon} size={16} />
+		<span class="text-[12.5px] font-medium text-base-600">{label}</span>
+	</div>
+	<p
+		class:list={[
+			'font-mono text-[26px] font-bold tracking-[-0.02em] tabular-nums',
+			toneValueClass[tone],
+		]}
+	>
+		{value}
+	</p>
+	<p class="mt-2 text-xs text-base-500">{hint}</p>
+</article>

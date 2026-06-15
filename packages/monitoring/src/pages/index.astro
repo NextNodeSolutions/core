@@ -1,32 +1,19 @@
 ---
-import HomeCloudflareSection from '@/components/dashboard/HomeCloudflareSection.astro'
-import HomeHetznerSection from '@/components/dashboard/HomeHetznerSection.astro'
-import SectionHeader from '@/components/dashboard/SectionHeader.astro'
+import OverviewContent from '@/components/dashboard/OverviewContent.astro'
 import Skeleton from '@/components/dashboard/Skeleton.astro'
+import RangeControl from '@/components/layout/RangeControl.astro'
 import DashboardLayout from '@/layouts/DashboardLayout.astro'
 
 // oxlint-disable-next-line nextnode/boolean-naming -- prerender is Astro's required route export name
 export const prerender = false
+
+const range = Astro.url.searchParams.get('range') ?? 'live'
 ---
 
-<DashboardLayout title="Dashboard" breadcrumbs={[{ label: 'Overview' }]}>
-	<section class="space-y-8">
-		<SectionHeader
-			kicker="Control plane"
-			title="NextNode control plane"
-			description="Live view of the Hetzner fleet and Cloudflare Pages projects managed by this account."
-		/>
-	</section>
+<DashboardLayout title="Vue d'ensemble" bare>
+	<RangeControl slot="actions" path="/" value={range} />
 
-	<div class="mt-14">
-		<HomeHetznerSection server:defer>
-			<Skeleton slot="fallback" rows={3} withStats />
-		</HomeHetznerSection>
-	</div>
-
-	<div class="mt-14">
-		<HomeCloudflareSection server:defer>
-			<Skeleton slot="fallback" rows={4} />
-		</HomeCloudflareSection>
-	</div>
+	<OverviewContent server:defer>
+		<Skeleton slot="fallback" rows={4} withStats />
+	</OverviewContent>
 </DashboardLayout>
