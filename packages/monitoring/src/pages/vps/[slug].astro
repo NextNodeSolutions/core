@@ -8,6 +8,7 @@ import DashboardLayout from '@/layouts/DashboardLayout.astro'
 import { ENV_KEYS, requireEnv } from '@/lib/adapters/env.ts'
 import { getServerByName } from '@/lib/adapters/hetzner/servers.ts'
 import { loadPageState } from '@/lib/adapters/load-page-state.ts'
+import { resolveEntityState } from '@/lib/domain/load-state.ts'
 
 // oxlint-disable-next-line nextnode/boolean-naming -- prerender is Astro's required route export name
 export const prerender = false
@@ -26,7 +27,11 @@ const headerState = await loadPageState(`vps.${slug}.header`, () => {
 	const token = requireEnv(ENV_KEYS.HETZNER_API_TOKEN)
 	return getServerByName(token, slug)
 })
-const server = headerState.kind === 'ok' ? headerState.data : null
+// Classify the lookup once: a found server, a clean not-found (unknown slug),
+// or a genuine load failure. The island reuses this resolved `server` so the
+// VPS is fetched a single time per render, not twice.
+const outcome = resolveEntityState(headerState)
+const server = outcome.status === 'present' ? outcome.data : null
 
 const statusBadge: Record<string, string> = {
 	running: 'border-accent-200 bg-accent-50 text-accent-800',
@@ -172,7 +177,13 @@ const hetznerUrl = server
 					</div>
 				</div>
 
-				<VpsMetrics server:defer slug={slug} range={range} cmp={cmp}>
+				<VpsMetrics
+					server:defer
+					slug={slug}
+					server={server}
+					range={range}
+					cmp={cmp}
+				>
 					<Skeleton slot="fallback" rows={FALLBACK_ROWS} />
 				</VpsMetrics>
 			</div>
@@ -180,7 +191,7 @@ const hetznerUrl = server
 	}
 
 	{
-		headerState.kind === 'ok' && server === null && (
+		outcome.status === 'not_found' && (
 			<div class="mx-auto max-w-[1320px] p-6">
 				<div class="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-amber-900">
 					<p class="font-display text-base font-semibold">VPS introuvable</p>
@@ -192,7 +203,14 @@ const hetznerUrl = server
 		)
 	}
 
-	<div class="mx-auto max-w-[1320px] px-6">
-		<LoadStateBanner state={headerState} upstreamLabel="Hetzner API error" />
-	</div>
+	{
+		outcome.status === 'failed' && (
+			<div class="mx-auto max-w-[1320px] px-6">
+				<LoadStateBanner
+					state={outcome.state}
+					upstreamLabel="Hetzner API error"
+				/>
+			</div>
+		)
+	}
 </DashboardLayout>

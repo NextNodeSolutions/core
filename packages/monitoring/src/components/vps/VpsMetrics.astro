@@ -1,11 +1,10 @@
 ---
 import MultiLine from '@/components/charts/MultiLine.astro'
 import Icon from '@/components/foundations/Icon.astro'
-import LoadStateBanner from '@/components/dashboard/LoadStateBanner.astro'
 import RadialGauge from '@/components/charts/RadialGauge.astro'
 import VpsMetricPanel from '@/components/vps/VpsMetricPanel.astro'
 import { ENV_KEYS, requireEnv } from '@/lib/adapters/env.ts'
-import { getServerByName, listServers } from '@/lib/adapters/hetzner/servers.ts'
+import { listServers } from '@/lib/adapters/hetzner/servers.ts'
 import { loadPageState } from '@/lib/adapters/load-page-state.ts'
 import {
 	loadHostMetrics,
@@ -32,6 +31,7 @@ import type { VpsSeriesMetric } from '@/lib/domain/monitoring/vps-metrics.ts'
 
 interface Props {
 	slug: string
+	server: HetznerVps | null
 	range: string
 	cmp: string
 }
@@ -92,7 +92,7 @@ const NULL_GAUGES: VpsGauges = {
 	netOutMbps: null,
 }
 
-const { slug, range, cmp } = Astro.props
+const { slug, server, range, cmp } = Astro.props
 
 const hours = rangeToHours(range)
 const isCmpMetric = (candidate: string): candidate is CmpMetric =>
@@ -106,12 +106,6 @@ const unwrap = <T,>(state: LoadState<T>, fallback: T): T =>
 	state.kind === 'ok' ? state.data : fallback
 const seriesOf = (state: LoadState<ReadonlyArray<RangePoint>>): ReadonlyArray<RangePoint> =>
 	state.kind === 'ok' ? state.data : []
-
-const serverState = await loadPageState(`vps.${slug}.server`, () => {
-	const token = requireEnv(ENV_KEYS.HETZNER_API_TOKEN)
-	return getServerByName(token, slug)
-})
-const server = unwrap(serverState, null)
 
 const hostState = await loadPageState(`vps.${slug}.host`, () =>
 	loadHostMetrics(slug),
@@ -266,9 +260,11 @@ const basePath = `/vps/${slug}`
 
 {
 	server === null ? (
-		<div class="mx-auto max-w-[1320px] p-6">
-			<LoadStateBanner state={serverState} upstreamLabel="Hetzner API error" />
-		</div>
+		// The page only mounts this island for a resolved server, so a null prop
+		// here means the header lookup raced to empty - the page already owns the
+		// not-found / error banner, so the island stays silent rather than
+		// repeating a (here unknowable) cause.
+		<div class="mx-auto max-w-[1320px] p-6" />
 	) : (
 		<div class="mx-auto flex max-w-[1320px] flex-col gap-[18px] p-6">
 			{alerts.length > 0 && (
