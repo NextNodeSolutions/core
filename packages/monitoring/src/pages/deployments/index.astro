@@ -1,17 +1,84 @@
 ---
-import DeploymentsContent from '@/components/cloudflare/DeploymentsContent.astro'
-import Skeleton from '@/components/dashboard/Skeleton.astro'
+import LoadStateBanner from '@/components/dashboard/LoadStateBanner.astro'
+import { Deployments } from '@/islands/deployments/Deployments.tsx'
 import DashboardLayout from '@/layouts/DashboardLayout.astro'
+import { resolveCloudflareClient } from '@/lib/adapters/cloudflare/accounts.ts'
+import { listPagesDeployments } from '@/lib/adapters/cloudflare/pages-deployments.ts'
+import { listPagesProjects } from '@/lib/adapters/cloudflare/pages-projects.ts'
+import { loadPageState } from '@/lib/adapters/load-page-state.ts'
+import { mapWithConcurrency } from '@/lib/domain/concurrency.ts'
+
+import type { DeploymentsSeed } from '@/islands/deployments/atoms.ts'
+import type { CloudflareClient } from '@/lib/adapters/cloudflare/client.ts'
+import type { CloudflarePagesDeployment } from '@/lib/domain/cloudflare/pages-deployment.ts'
+import type { CloudflarePagesProject } from '@/lib/domain/cloudflare/pages-project.ts'
 
 // oxlint-disable-next-line nextnode/boolean-naming -- prerender is Astro's required route export name
 export const prerender = false
 
-const SKELETON_ROWS = 5
+const PER_PROJECT_LIMIT = 20
+const FAN_OUT_CONCURRENCY = 6
+const DEFAULT_ENV = 'all'
 
 const params = Astro.url.searchParams
 const project = params.get('project') ?? ''
-const env = params.get('env') ?? 'all'
+const env = params.get('env') ?? DEFAULT_ENV
 const sel = params.get('sel') ?? ''
+
+// Server fan-out: load every project + its deployments once, then hand the
+// assembled set to the island as a seed. The island does ALL selection /
+// filtering client-side from it - no refetch on an interaction. `nowMs` is
+// computed server-side so relative times stay deterministic in render.
+const clientState = await loadPageState(
+	'deployments.client',
+	resolveCloudflareClient,
+)
+const client = clientState.kind === 'ok' ? clientState.data : null
+
+const loadProjects = async (
+	resolved: CloudflareClient,
+): Promise<ReadonlyArray<CloudflarePagesProject>> => {
+	const state = await loadPageState('deployments.projects', () =>
+		listPagesProjects({ client: resolved }),
+	)
+	return state.kind === 'ok' ? state.data : []
+}
+
+const projects: ReadonlyArray<CloudflarePagesProject> =
+	client === null ? [] : await loadProjects(client)
+
+const loadProjectDeployments = async (
+	resolved: CloudflareClient,
+): Promise<Record<string, ReadonlyArray<CloudflarePagesDeployment>>> => {
+	const states = await mapWithConcurrency(
+		projects,
+		FAN_OUT_CONCURRENCY,
+		currentProject =>
+			loadPageState(`deployments.deps.${currentProject.name}`, () =>
+				listPagesDeployments({
+					client: resolved,
+					projectName: currentProject.name,
+					limit: PER_PROJECT_LIMIT,
+				}),
+			),
+	)
+	const grouped: Record<string, ReadonlyArray<CloudflarePagesDeployment>> = {}
+	projects.forEach((currentProject, index) => {
+		const state = states[index]
+		grouped[currentProject.name] =
+			state !== undefined && state.kind === 'ok' ? state.data : []
+	})
+	return grouped
+}
+
+const deploymentsByProject: Record<
+	string,
+	ReadonlyArray<CloudflarePagesDeployment>
+> = client === null ? {} : await loadProjectDeployments(client)
+
+const seed: DeploymentsSeed = { projects, deploymentsByProject }
+const clientFailed = clientState.kind !== 'ok'
+const nowMs = Date.now()
 ---
 
 <DashboardLayout
@@ -19,7 +86,23 @@ const sel = params.get('sel') ?? ''
 	bare
 	breadcrumbs={[{ label: 'Cloudflare' }, { label: 'Pages' }]}
 >
-	<DeploymentsContent server:defer project={project} env={env} sel={sel}>
-		<Skeleton slot="fallback" rows={SKELETON_ROWS} />
-	</DeploymentsContent>
+	{
+		clientFailed ? (
+			<div class="px-6">
+				<LoadStateBanner
+					state={clientState}
+					upstreamLabel="Cloudflare API error"
+				/>
+			</div>
+		) : (
+			<Deployments
+				client:load
+				data={seed}
+				initialProject={project}
+				initialEnv={env}
+				initialSel={sel}
+				nowMs={nowMs}
+			/>
+		)
+	}
 </DashboardLayout>
