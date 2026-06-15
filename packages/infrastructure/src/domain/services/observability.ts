@@ -7,7 +7,10 @@ import type { ObservabilityServiceConfig } from '#/config/types.ts'
  * Bumping a constant rolls the new version out to every project declaring
  * `[services.observability]` on the next pipeline run.
  */
-export const VICTORIALOGS_IMAGE = 'victoriametrics/victoria-logs:v1.17.0'
+// VictoriaLogs publishes its images under the `-victorialogs` tag suffix
+// (the bare `vX.Y.Z` tag does not exist and `docker pull` 404s on it).
+export const VICTORIALOGS_IMAGE =
+	'victoriametrics/victoria-logs:v1.17.0-victorialogs'
 export const VICTORIAMETRICS_IMAGE = 'victoriametrics/victoria-metrics:v1.115.0'
 export const VMAGENT_IMAGE = 'victoriametrics/vmagent:v1.115.0'
 export const VMALERT_IMAGE = 'victoriametrics/vmalert:v1.115.0'
