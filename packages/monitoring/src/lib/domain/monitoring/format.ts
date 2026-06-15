@@ -17,6 +17,9 @@ const TB_DECIMALS = 2
 const MILLIS_DIGITS = 3
 const DEFAULT_TIME_ZONE = 'Europe/Paris'
 
+/** Shown wherever a value is absent or could not be parsed. */
+export const EMPTY_LABEL = '-'
+
 /** Uptime / age of a duration in seconds → `1j 1h`, `2h 30m`, `5m`. */
 export function formatUptime(totalSeconds: number): string {
 	const days = Math.floor(totalSeconds / SECONDS_PER_DAY)
@@ -61,11 +64,16 @@ export function formatCount(count: number): string {
 	return count.toLocaleString('fr-FR')
 }
 
-/** Wall-clock `HH:MM:SS` in the given timezone. */
+/**
+ * Wall-clock `HH:MM:SS` in the given timezone. A non-finite `ms` (e.g. from
+ * `Date.parse` on an unparsable timestamp) renders the empty label rather than
+ * `Intl`'s "Invalid Date".
+ */
 export function formatTime(
 	ms: number,
 	timeZone: string = DEFAULT_TIME_ZONE,
 ): string {
+	if (!Number.isFinite(ms)) return EMPTY_LABEL
 	return new Intl.DateTimeFormat('fr-FR', {
 		timeZone,
 		hour: '2-digit',
@@ -80,8 +88,21 @@ export function formatClock(
 	ms: number,
 	timeZone: string = DEFAULT_TIME_ZONE,
 ): string {
+	if (!Number.isFinite(ms)) return EMPTY_LABEL
 	const millis = String(
 		((ms % MS_PER_SECOND) + MS_PER_SECOND) % MS_PER_SECOND,
 	).padStart(MILLIS_DIGITS, '0')
 	return `${formatTime(ms, timeZone)}.${millis}`
+}
+
+/**
+ * Elapsed-duration label `Ns` from a span in milliseconds (e.g.
+ * `modifiedAt - createdAt`). A non-finite span renders the empty label; a
+ * negative span (a build still running, where `modifiedAt` precedes the start)
+ * clamps to `0s` rather than showing a nonsensical negative duration.
+ */
+export function formatDurationSeconds(elapsedMs: number): string {
+	if (!Number.isFinite(elapsedMs)) return EMPTY_LABEL
+	const seconds = Math.round(Math.max(0, elapsedMs) / MS_PER_SECOND)
+	return `${seconds}s`
 }

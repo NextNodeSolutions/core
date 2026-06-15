@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
 	formatClock,
 	formatCount,
+	formatDurationSeconds,
 	formatPercent,
 	formatRelative,
 	formatTime,
@@ -95,5 +96,29 @@ describe('formatTime / formatClock', () => {
 
 	it('appends milliseconds for the live clock', () => {
 		expect(formatClock(stamp, 'Europe/Paris')).toBe('14:32:18.423')
+	})
+
+	it('renders a dash instead of a clock for an unparsable timestamp', () => {
+		expect(formatTime(Number.NaN)).toBe('-')
+		expect(formatClock(Number.NaN)).toBe('-')
+	})
+
+	it('renders a dash for a non-finite timestamp', () => {
+		expect(formatTime(Number.POSITIVE_INFINITY)).toBe('-')
+	})
+})
+
+describe('formatDurationSeconds', () => {
+	it('rounds a positive elapsed duration to whole seconds', () => {
+		expect(formatDurationSeconds(12_400)).toBe('12s')
+		expect(formatDurationSeconds(12_600)).toBe('13s')
+	})
+
+	it('clamps a negative elapsed duration to zero (build still running)', () => {
+		expect(formatDurationSeconds(-5_000)).toBe('0s')
+	})
+
+	it('renders a dash when the elapsed duration is not a number', () => {
+		expect(formatDurationSeconds(Number.NaN)).toBe('-')
 	})
 })

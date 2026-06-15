@@ -21,7 +21,10 @@ import type {
 	StepState,
 } from '@/lib/domain/cloudflare/deployment-summary.ts'
 import { cloudflareApiPath } from '@/lib/domain/cloudflare/pages-routes.ts'
-import { formatRelative } from '@/lib/domain/monitoring/format.ts'
+import {
+	formatDurationSeconds,
+	formatRelative,
+} from '@/lib/domain/monitoring/format.ts'
 
 import type { CloudflareClient } from '@/lib/adapters/cloudflare/client.ts'
 import type { CloudflarePagesDeployment } from '@/lib/domain/cloudflare/pages-deployment.ts'
@@ -36,7 +39,6 @@ interface Props {
 const PER_PROJECT_LIMIT = 20
 const ACTIVITY_LIMIT = 8
 const COMMIT_LENGTH = 7
-const MS_PER_SECOND = 1_000
 const HIGH_SUCCESS_RATE = 90
 const MID_SUCCESS_RATE = 70
 const STRIP_BASE_OPACITY = 0.35
@@ -180,10 +182,9 @@ const successRateLabel = (rate: number | null): string =>
 const commitLabel = (deployment: CloudflarePagesDeployment): string =>
 	deployment.commitHash?.slice(0, COMMIT_LENGTH) ?? deployment.shortId
 
-const durationSeconds = (deployment: CloudflarePagesDeployment): number =>
-	Math.round(
-		(Date.parse(deployment.modifiedAt) - Date.parse(deployment.createdAt)) /
-			MS_PER_SECOND,
+const durationLabel = (deployment: CloudflarePagesDeployment): string =>
+	formatDurationSeconds(
+		Date.parse(deployment.modifiedAt) - Date.parse(deployment.createdAt),
 	)
 
 const stripOpacity = (index: number, count: number): number =>
@@ -242,7 +243,7 @@ const drawerSpecs: ReadonlyArray<{ label: string; text: string }> =
 		? [
 				{ label: 'Projet', text: drawerProjectName },
 				{ label: 'Auteur', text: selectedDeployment.author ?? '-' },
-				{ label: 'Durée', text: `${durationSeconds(selectedDeployment)}s` },
+				{ label: 'Durée', text: durationLabel(selectedDeployment) },
 				{
 					label: 'Démarré',
 					text: formatRelative(
@@ -619,7 +620,7 @@ const clientFailed = clientState.kind !== 'ok'
 															</span>
 														</td>
 														<td class="px-2 py-2.5 font-mono text-[12.5px] text-base-500">
-															{durationSeconds(deployment)}s
+															{durationLabel(deployment)}
 														</td>
 														<td class="px-4 py-2.5 text-right font-mono text-xs whitespace-nowrap text-base-500">
 															{formatRelative(
