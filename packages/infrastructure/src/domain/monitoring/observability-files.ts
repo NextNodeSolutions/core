@@ -34,7 +34,8 @@ export interface ObservabilityDeployFilesInput {
 	 * brings VictoriaLogs itself up) - the label is then omitted.
 	 */
 	readonly clientId: string | undefined
-	readonly resendApiKey: string
+	/** Resend SMTP password; `undefined` omits the email channel (see renderer). */
+	readonly resendApiKey: string | undefined
 	readonly healthchecksPingUrl: string | undefined
 }
 

@@ -47,22 +47,21 @@ function selectSdAppHostPort(input: ObservabilityRolloutInput): number {
 /**
  * Write the rendered observability configs (vmagent scrape config, rule
  * files, alertmanager routing, blackbox modules) next to compose.yaml.
- * RESEND_API_KEY must exist in the secret pool - alerting without a
- * notification channel is the silent failure this stack exists to
- * prevent. HEALTHCHECKS_PING_URL is optional until the operator creates
- * the external check.
+ * RESEND_API_KEY and HEALTHCHECKS_PING_URL are both optional: the stack
+ * deploys (dashboards + scraping work) before any notification channel is
+ * wired, and the Alertmanager renderer omits the email / dead-man routes when
+ * their secret is absent. Set the secret + redeploy to turn each channel on.
  */
 export async function writeObservabilityFiles(
 	session: SshSession,
 	envDir: string,
 	input: ObservabilityRolloutInput,
 ): Promise<void> {
-	const resendApiKey = input.secrets[RESEND_API_KEY_SECRET]
-	if (resendApiKey === undefined || resendApiKey === '') {
-		throw new Error(
-			`observability: "${RESEND_API_KEY_SECRET}" must be defined in the [deploy].secrets pool - Alertmanager cannot route email without it`,
-		)
-	}
+	const resendApiKeyRaw = input.secrets[RESEND_API_KEY_SECRET]
+	const resendApiKey =
+		resendApiKeyRaw === undefined || resendApiKeyRaw === ''
+			? undefined
+			: resendApiKeyRaw
 	const healthchecksPingUrl = input.secrets[HEALTHCHECKS_PING_URL_SECRET]
 
 	const files = buildObservabilityDeployFiles({
