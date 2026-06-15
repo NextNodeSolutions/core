@@ -13,17 +13,36 @@ import {
 	loadVpsGauges,
 	loadVpsSeries,
 } from '@/lib/adapters/victoria/observability.ts'
+import { loadRecentDeployments } from '@/lib/adapters/cloudflare/recent-deployments.ts'
+import { deploymentDisplayStatus } from '@/lib/domain/cloudflare/deployment-summary.ts'
 import {
 	computeServerHealth,
 	deriveFleetAlerts,
 	summarizeFleet,
 } from '@/lib/domain/monitoring/fleet-overview.ts'
-import { formatTime } from '@/lib/domain/monitoring/format.ts'
+import { formatRelative, formatTime } from '@/lib/domain/monitoring/format.ts'
+
+import type { DeployDisplayStatus } from '@/lib/domain/cloudflare/deployment-summary.ts'
 import type { HostMetrics } from '@/lib/domain/monitoring/host-metrics.ts'
 import type { LogLevel } from '@/lib/domain/monitoring/log-query.ts'
 
 const LOG_STREAM_COUNT = 7
 const SPARK_HOURS = 1
+const DEPLOY_COUNT = 4
+const COMMIT_LENGTH = 7
+
+const deployIconName: Record<DeployDisplayStatus, IconName> = {
+	ready: 'check',
+	building: 'refresh',
+	error: 'x',
+	idle: 'dot',
+}
+const deployColorClass: Record<DeployDisplayStatus, string> = {
+	ready: 'text-emerald-600',
+	building: 'text-sky-600',
+	error: 'text-red-600',
+	idle: 'text-base-400',
+}
 const NULL_METRICS: HostMetrics = {
 	cpuPercent: null,
 	memoryPercent: null,
@@ -107,6 +126,24 @@ const stream = logs.slice(0, LOG_STREAM_COUNT).map((line) => ({
 	service: line.service,
 	message: line.message,
 }))
+
+const nowMs = Date.now()
+const recentState = await loadPageState('overview.deployments', () =>
+	loadRecentDeployments(DEPLOY_COUNT),
+)
+const recentDeploys = (recentState.kind === 'ok' ? recentState.data : []).map(
+	(entry) => ({
+		href: `/deployments?project=${encodeURIComponent(entry.projectName)}&sel=${encodeURIComponent(entry.deployment.id)}`,
+		display: deploymentDisplayStatus(entry.deployment.status),
+		message: entry.deployment.commitMessage ?? '(sans message)',
+		branch: entry.deployment.branch ?? '-',
+		commit:
+			entry.deployment.commitHash?.slice(0, COMMIT_LENGTH) ??
+			entry.deployment.shortId,
+		isProd: entry.deployment.environment === 'production',
+		ago: formatRelative(Date.parse(entry.deployment.createdAt), nowMs),
+	}),
+)
 ---
 
 <div class="mx-auto flex max-w-[1320px] flex-col gap-5 p-6">
@@ -229,6 +266,65 @@ const stream = logs.slice(0, LOG_STREAM_COUNT).map((line) => ({
 	</section>
 
 	<section class="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-4">
+		<div class="flex min-w-0 flex-col rounded-xl border border-base-200 bg-white shadow-subtle">
+			<header class="flex items-center justify-between border-b border-base-200 px-4 py-3.5">
+				<span class="text-sm font-semibold text-base-900">
+					Déploiements récents
+				</span>
+				<a
+					href="/deployments"
+					class="rounded-full px-3 py-1 text-xs font-medium text-base-700 hover:bg-base-50"
+				>
+					Voir tout
+				</a>
+			</header>
+			{
+				recentDeploys.length > 0 ? (
+					<div class="flex flex-col">
+						{recentDeploys.map((deploy) => (
+							<a
+								href={deploy.href}
+								class="flex items-center gap-3 border-b border-base-100 px-4 py-3 last:border-b-0 hover:bg-base-50"
+							>
+								<span class:list={['shrink-0', deployColorClass[deploy.display]]}>
+									<Icon name={deployIconName[deploy.display]} size={15} />
+								</span>
+								<div class="min-w-0 flex-1">
+									<div class="truncate text-[13px] font-medium text-base-900">
+										{deploy.message}
+									</div>
+									<div class="flex items-center gap-1.5 font-mono text-[11px] text-base-500">
+										<Icon name="branch" size={11} />
+										{deploy.branch} · {deploy.commit}
+									</div>
+								</div>
+								<span
+									class:list={[
+										'shrink-0 rounded-full border px-2 py-0.5 text-[10.5px] font-medium',
+										deploy.isProd
+											? 'border-accent-200 bg-accent-50 text-accent-800'
+											: 'border-base-200 bg-base-100 text-base-600',
+									]}
+								>
+									{deploy.isProd ? 'prod' : 'preview'}
+								</span>
+								<span class="shrink-0 font-mono text-[11px] text-base-500">
+									{deploy.ago}
+								</span>
+							</a>
+						))}
+					</div>
+				) : (
+					<div class="p-4">
+						<LoadStateBanner
+							state={recentState}
+							upstreamLabel="Cloudflare API error"
+						/>
+					</div>
+				)
+			}
+		</div>
+
 		<div class="flex min-w-0 flex-col rounded-xl border border-base-200 bg-white shadow-subtle">
 			<header class="flex items-center justify-between border-b border-base-200 px-4 py-3.5">
 				<span class="text-sm font-semibold text-base-900">Flux de logs</span>
