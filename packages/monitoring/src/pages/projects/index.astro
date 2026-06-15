@@ -1,0 +1,20 @@
+---
+import ProjectsGrid from '@/components/projects/ProjectsGrid.astro'
+import Skeleton from '@/components/dashboard/Skeleton.astro'
+import DashboardLayout from '@/layouts/DashboardLayout.astro'
+
+// oxlint-disable-next-line nextnode/boolean-naming -- prerender is Astro's required route export name
+export const prerender = false
+
+const PROJECT_SKELETON_ROWS = 4
+---
+
+<DashboardLayout
+	title="Projets"
+	bare
+	breadcrumbs={[{ label: 'GitHub' }, { label: 'NextNodeSolutions' }]}
+>
+	<ProjectsGrid server:defer>
+		<Skeleton slot="fallback" rows={PROJECT_SKELETON_ROWS} />
+	</ProjectsGrid>
+</DashboardLayout>
