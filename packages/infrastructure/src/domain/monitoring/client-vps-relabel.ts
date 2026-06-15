@@ -1,12 +1,14 @@
 import { stringify } from 'yaml'
 
 /**
- * Tailscale tag the central monitoring VM uses to filter scrape targets.
- * Only tailnet devices tagged `tag:client-vps` are scraped; every other
- * tailnet member (admin laptops, the monitoring VPS itself, CI runners)
- * is dropped by the first relabel rule.
+ * Tailscale tag the central monitoring VM uses to filter scrape targets. Every
+ * NextNode VPS joins as `tag:server` (the only tag the provisioning OAuth client
+ * can mint without a manual tailnet-policy change - see `computeTailscaleTags`),
+ * so the keep rule admits every NextNode server and drops the rest (admin
+ * laptops untagged, CI runners `tag:ci`). The observability host is itself a
+ * `tag:server` and is scraped too - harmless self-monitoring.
  */
-export const CLIENT_VPS_TAG = 'client-vps'
+export const SCRAPE_TARGET_TAG = 'server'
 
 /**
  * Closed set of labels VictoriaMetrics keeps on every series scraped from
@@ -101,7 +103,7 @@ const SOURCE_BY_LABEL: Readonly<Record<ClientVpsLabel, string | null>> = {
  * VictoriaMetrics issues the scrape:
  *
  *   1. `keep` - drop every target whose Tailscale tag list does not
- *      contain `tag:client-vps`. The regex tolerates the tag appearing
+ *      contain `tag:server`. The regex tolerates the tag appearing
  *      anywhere in the comma-joined list.
  *   2. `replace` × N - map each SD meta label to its whitelist target.
  *      Order matches `CLIENT_VPS_LABEL_WHITELIST` for diff stability.
@@ -125,7 +127,7 @@ export function buildClientVpsRelabelRules(
 	const keepClientVps: RelabelRule = {
 		action: 'keep',
 		source_labels: [SD_TAGS],
-		regex: `^(.+,)?tag:${CLIENT_VPS_TAG}(,.+)?$`,
+		regex: `^(.+,)?tag:${SCRAPE_TARGET_TAG}(,.+)?$`,
 	}
 
 	// One scrape job per exporter: when the caller names one, drop every
