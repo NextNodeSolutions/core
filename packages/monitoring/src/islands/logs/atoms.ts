@@ -8,6 +8,7 @@ import {
 	collectDistinct,
 	countByLevel,
 	filterLogs,
+	nextActiveLevels,
 	selectLogByKey,
 } from '@/lib/domain/monitoring/log-explorer.ts'
 import { LOG_LEVELS } from '@/lib/domain/monitoring/log-query.ts'
@@ -45,16 +46,15 @@ export const levelsAtom = atom<ReadonlySet<LogLevel>>(ALL_LEVELS)
 export const selAtom = atom<string | null>(null)
 
 /**
- * Toggle one level in/out of the active (inclusive) set. Removing the last
- * active level would hide everything, which reads as a dead screen; instead an
- * empty set snaps back to "all levels", the same canonical default the URL used
- * to encode as an empty `levels` param. Always immutable - a fresh Set.
+ * Toggle one level using the "isolate-then-additive" semantics: from the
+ * all-active default a click isolates to that level (click ERROR -> see
+ * errors, not "everything except errors"); thereafter it is an additive
+ * multi-select, and removing the last active level snaps back to all so the
+ * screen never goes blank. The transition itself is the pure, unit-tested
+ * `nextActiveLevels`; this write-atom only wires state to it.
  */
 export const toggleLevelAtom = atom(null, (get, set, level: LogLevel) => {
-	const next = new Set(get(levelsAtom))
-	if (next.has(level)) next.delete(level)
-	else next.add(level)
-	set(levelsAtom, next.size === 0 ? ALL_LEVELS : next)
+	set(levelsAtom, nextActiveLevels(get(levelsAtom), LOG_LEVELS, level))
 })
 
 /**

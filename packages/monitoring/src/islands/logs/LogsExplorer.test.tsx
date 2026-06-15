@@ -115,24 +115,45 @@ describe('LogsExplorer island', () => {
 		expect(fetchSpy).not.toHaveBeenCalled()
 	})
 
-	it('toggles a level chip to hide that level and updates its count', async () => {
+	it('isolates to a level from the default, then adds a second level (isolate-then-additive)', async () => {
 		const user = userEvent.setup()
 		await renderExplorer()
 		await findRow('user signed in')
 
-		const infoChip = screen.getByRole('button', { name: 'niveau info' })
-		// The chip shows the per-level count for `info` (one info line seeded).
-		expect(infoChip.textContent).toContain('1')
+		const errorChip = screen.getByRole('button', { name: 'niveau error' })
+		// The chip shows the per-level count for `error` (one error line seeded).
+		expect(errorChip.textContent).toContain('1')
 
-		await user.click(infoChip)
-
-		// Info rows vanish; the error row stays visible.
+		// From the all-active default, clicking ERROR ISOLATES to errors: the
+		// error row stays, the info/warn rows vanish - clicking a level SHOWS it
+		// rather than hiding it. The null-level row always passes the chip filter.
+		await user.click(errorChip)
 		await waitFor(() => expect(queryRow('user signed in')).toBeNull())
+		expect(queryRow('disk almost full')).toBeNull()
 		expect(queryRow('unhandled exception in handler')).not.toBeNull()
+		expect(queryRow('cron tick')).not.toBeNull()
 
-		// Re-enabling info brings its rows back.
-		await user.click(infoChip)
+		// Clicking WARN is additive: now ERROR + WARN rows are both visible.
+		await user.click(screen.getByRole('button', { name: 'niveau warn' }))
+		expect(await findRow('disk almost full')).toBeDefined()
+		expect(queryRow('unhandled exception in handler')).not.toBeNull()
+		expect(queryRow('user signed in')).toBeNull()
+	})
+
+	it('resets to all levels when the last active level is removed (never blanks)', async () => {
+		const user = userEvent.setup()
+		await renderExplorer()
+		await findRow('user signed in')
+
+		// Isolate to error, then remove it: the empty set snaps back to "all", so
+		// every level is shown again instead of leaving a dead screen.
+		await user.click(screen.getByRole('button', { name: 'niveau error' }))
+		await waitFor(() => expect(queryRow('user signed in')).toBeNull())
+
+		await user.click(screen.getByRole('button', { name: 'niveau error' }))
 		expect(await findRow('user signed in')).toBeDefined()
+		expect(queryRow('disk almost full')).not.toBeNull()
+		expect(queryRow('unhandled exception in handler')).not.toBeNull()
 	})
 
 	it('filters rows by the search query (message / path / service / trace)', async () => {

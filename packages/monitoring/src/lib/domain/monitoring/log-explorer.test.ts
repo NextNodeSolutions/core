@@ -6,11 +6,13 @@ import {
 	filterLogs,
 	histogramBars,
 	logLineKey,
+	nextActiveLevels,
 	selectLogByKey,
 } from './log-explorer.ts'
+import { LOG_LEVELS } from './log-query.ts'
 
 import type { LogBucket } from './log-explorer.ts'
-import type { LogLine } from './log-query.ts'
+import type { LogLevel, LogLine } from './log-query.ts'
 
 const line = (over: Partial<LogLine>): LogLine => ({
 	time: '2026-06-13T10:00:00Z',
@@ -77,6 +79,42 @@ describe('filterLogs', () => {
 				vps: 'all',
 			}).map(entry => entry.path),
 		).toEqual(['/api/users'])
+	})
+})
+
+describe('nextActiveLevels', () => {
+	const all = LOG_LEVELS
+	const sorted = (set: ReadonlySet<LogLevel>): ReadonlyArray<LogLevel> =>
+		all.filter(level => set.has(level))
+
+	it('isolates to the clicked level when starting from all (unfiltered)', () => {
+		const next = nextActiveLevels(new Set(all), all, 'error')
+		expect(sorted(next)).toEqual(['error'])
+	})
+
+	it('adds a level that is not yet active (additive multi-select)', () => {
+		const next = nextActiveLevels(new Set<LogLevel>(['error']), all, 'warn')
+		expect(sorted(next)).toEqual(['warn', 'error'])
+	})
+
+	it('removes an active level while others remain active', () => {
+		const next = nextActiveLevels(
+			new Set<LogLevel>(['warn', 'error']),
+			all,
+			'error',
+		)
+		expect(sorted(next)).toEqual(['warn'])
+	})
+
+	it('resets to all when removing the last active level (never empty)', () => {
+		const next = nextActiveLevels(new Set<LogLevel>(['warn']), all, 'warn')
+		expect(sorted(next)).toEqual([...all])
+	})
+
+	it('does not mutate the input set', () => {
+		const current = new Set<LogLevel>(['warn', 'error'])
+		nextActiveLevels(current, all, 'error')
+		expect(sorted(current)).toEqual(['warn', 'error'])
 	})
 })
 

@@ -79,6 +79,35 @@ export const collectDistinct = (
 	return [...seen].toSorted((left, right) => left.localeCompare(right))
 }
 
+/**
+ * Next active-level set for the chips, using the standard log-viewer
+ * "isolate-then-additive" semantics. `all` is the full level set; the set is
+ * "unfiltered" exactly when it holds every level (the canonical default that
+ * shows everything).
+ *
+ * - From unfiltered, a click ISOLATES to the clicked level (`{level}`), so
+ *   clicking ERROR shows errors instead of hiding them.
+ * - An active level is removed; removing the last active level would hide
+ *   everything, so it RESETS to unfiltered (all levels) rather than going dark.
+ * - An inactive level is added (additive multi-select).
+ *
+ * Pure and immutable: always returns a fresh Set, never mutates `current`.
+ */
+export const nextActiveLevels = (
+	current: ReadonlySet<LogLevel>,
+	all: ReadonlyArray<LogLevel>,
+	level: LogLevel,
+): ReadonlySet<LogLevel> => {
+	if (current.size === all.length) return new Set([level])
+	const next = new Set(current)
+	if (next.has(level)) {
+		next.delete(level)
+		return next.size === 0 ? new Set(all) : next
+	}
+	next.add(level)
+	return next
+}
+
 export const filterLogs = (
 	logs: ReadonlyArray<LogLine>,
 	filter: LogFilter,

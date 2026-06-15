@@ -11,11 +11,13 @@ import { levelBadgeClass } from '@/islands/logs/level-styles.ts'
 import { LOG_LEVELS } from '@/lib/domain/monitoring/log-query.ts'
 
 /**
- * The four level chips: an inclusive multi-select. All four active = "show
- * everything" (the default); clicking a chip toggles that level in/out of the
- * active set instantly (no navigation). Removing the last one snaps back to all
- * (handled by toggleLevelAtom) so the screen never goes blank. The trailing
- * filtered-line count and the live badge keep this row's original layout.
+ * The four level chips: a log-viewer "isolate-then-additive" filter. All four
+ * active = "show everything" (the default), and in that unfiltered state the
+ * chips read as NEUTRAL so the operator sees there is no level filter yet -
+ * clicking one then isolates to that level (click ERROR -> see errors) and
+ * highlights it. Once filtered, each chip highlights when its level is active.
+ * The transition lives in `toggleLevelAtom`; this only renders state. The
+ * trailing filtered-line count and the live badge keep this row's layout.
  */
 
 export function LevelChips(): React.ReactElement {
@@ -25,10 +27,14 @@ export function LevelChips(): React.ReactElement {
 	const range = useAtomValue(rangeAtom)
 	const toggleLevel = useSetAtom(toggleLevelAtom)
 
+	// "Unfiltered" = every level active (the default). Then no chip is
+	// highlighted, so "all active" is visually distinct from an isolated level.
+	const isFiltered = activeLevels.size < LOG_LEVELS.length
+
 	return (
 		<div className="flex flex-wrap items-center gap-2">
 			{LOG_LEVELS.map(level => {
-				const active = activeLevels.has(level)
+				const active = isFiltered && activeLevels.has(level)
 				return (
 					<button
 						type="button"
