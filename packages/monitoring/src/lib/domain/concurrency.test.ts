@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { mapWithConcurrency } from '@/lib/adapters/concurrency.ts'
+import { mapWithConcurrency } from '@/lib/domain/concurrency.ts'
 
 const deferred = <Resolved>(): {
 	promise: Promise<Resolved>

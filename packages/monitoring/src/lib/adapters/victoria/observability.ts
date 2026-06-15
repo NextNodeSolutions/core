@@ -1,9 +1,9 @@
-import { clampInteger } from '@/lib/adapters/clamp.ts'
 import {
 	queryVictoriaLogs,
 	queryVictoriaMetricsInstant,
 	queryVictoriaMetricsRange,
 } from '@/lib/adapters/victoria/client.ts'
+import { clampInteger } from '@/lib/domain/clamp.ts'
 import {
 	buildCaddyStatsQuery,
 	parseCaddyStats,

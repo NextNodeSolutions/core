@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { clampInteger } from '@/lib/adapters/clamp.ts'
+import { clampInteger } from '@/lib/domain/clamp.ts'
 
 const BOUNDS = { min: 1, max: 100, fallback: 10 } as const
 

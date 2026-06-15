@@ -1,9 +1,9 @@
-import { clampInteger } from '@/lib/adapters/clamp.ts'
 import { resolveCloudflareClient } from '@/lib/adapters/cloudflare/accounts.ts'
 import { listPagesDeployments } from '@/lib/adapters/cloudflare/pages-deployments.ts'
 import { listPagesProjects } from '@/lib/adapters/cloudflare/pages-projects.ts'
-import { mapWithConcurrency } from '@/lib/adapters/concurrency.ts'
+import { clampInteger } from '@/lib/domain/clamp.ts'
 import { selectRecentDeployments } from '@/lib/domain/cloudflare/deployment-summary.ts'
+import { mapWithConcurrency } from '@/lib/domain/concurrency.ts'
 
 import type { RecentDeployment } from '@/lib/domain/cloudflare/deployment-summary.ts'
 

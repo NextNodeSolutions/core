@@ -1,7 +1,7 @@
-import { mapWithConcurrency } from '@/lib/adapters/concurrency.ts'
 import { ENV_KEYS, requireEnv } from '@/lib/adapters/env.ts'
 import { listOrgRepos } from '@/lib/adapters/github/repos.ts'
 import { getLatestWorkflowRun } from '@/lib/adapters/github/workflow-runs.ts'
+import { mapWithConcurrency } from '@/lib/domain/concurrency.ts'
 import { summarizeGithubProject } from '@/lib/domain/github/github-project.ts'
 
 import type { GithubProjectSummary } from '@/lib/domain/github/github-project.ts'
