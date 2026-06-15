@@ -1,0 +1,574 @@
+---
+import MultiLine from '@/components/charts/MultiLine.astro'
+import Icon from '@/components/foundations/Icon.astro'
+import LoadStateBanner from '@/components/dashboard/LoadStateBanner.astro'
+import RadialGauge from '@/components/charts/RadialGauge.astro'
+import VpsMetricPanel from '@/components/vps/VpsMetricPanel.astro'
+import { ENV_KEYS, requireEnv } from '@/lib/adapters/env.ts'
+import { getServerByName, listServers } from '@/lib/adapters/hetzner/servers.ts'
+import { loadPageState } from '@/lib/adapters/load-page-state.ts'
+import {
+	loadHostMetrics,
+	loadVpsGauges,
+	loadVpsSeries,
+} from '@/lib/adapters/victoria/observability.ts'
+import {
+	deriveFleetAlerts,
+} from '@/lib/domain/monitoring/fleet-overview.ts'
+import { formatTrafficGb } from '@/lib/domain/monitoring/format.ts'
+import {
+	rangeToHours,
+	summarizeSeries,
+} from '@/lib/domain/monitoring/vps-metrics.ts'
+
+import type { ChartColor } from '@/components/charts/chart-color.ts'
+import type { VpsGauges } from '@/lib/adapters/victoria/observability.ts'
+import type { HetznerVps } from '@/lib/domain/hetzner/vps.ts'
+import type { ServerMetrics } from '@/lib/domain/monitoring/fleet-overview.ts'
+import type { HostMetrics } from '@/lib/domain/monitoring/host-metrics.ts'
+import type { LoadState } from '@/lib/domain/load-state.ts'
+import type { RangePoint } from '@/lib/domain/monitoring/promql-response.ts'
+import type { VpsSeriesMetric } from '@/lib/domain/monitoring/vps-metrics.ts'
+
+interface Props {
+	slug: string
+	range: string
+	cmp: string
+}
+
+type CmpMetric = Extract<VpsSeriesMetric, 'cpu' | 'mem' | 'load' | 'netOut'>
+
+interface Threshold {
+	value: number
+	label: string
+	severity: 'warning' | 'critical'
+}
+
+const CPU_WARNING = 75
+const CPU_CRITICAL = 90
+const DISK_LATENCY_WARNING = 10
+const SWAP_AMBER = 15
+const PCT_FULL = 100
+const BYTES_PER_GB = 1_000_000_000
+const LOAD_DECIMALS = 2
+const EMPTY_FLEET: ReadonlyArray<HetznerVps> = []
+const FLEET_COLORS: ReadonlyArray<ChartColor> = [
+	'accent',
+	'info',
+	'warning',
+	'slate',
+	'danger',
+]
+const DOT_CLASS: Record<ChartColor, string> = {
+	accent: 'bg-accent-600',
+	info: 'bg-sky-600',
+	warning: 'bg-amber-500',
+	slate: 'bg-base-600',
+	danger: 'bg-red-600',
+}
+const PERCENT_THRESHOLDS: ReadonlyArray<Threshold> = [
+	{ value: CPU_WARNING, label: 'warning', severity: 'warning' },
+	{ value: CPU_CRITICAL, label: 'critical', severity: 'critical' },
+]
+const CMP_METRICS: ReadonlyArray<{ key: CmpMetric; label: string }> = [
+	{ key: 'cpu', label: 'CPU' },
+	{ key: 'mem', label: 'Mémoire' },
+	{ key: 'load', label: 'Load' },
+	{ key: 'netOut', label: 'Net out' },
+]
+
+const NULL_HOST: HostMetrics = {
+	cpuPercent: null,
+	memoryPercent: null,
+	diskPercent: null,
+	uptimeSeconds: null,
+}
+const NULL_GAUGES: VpsGauges = {
+	load1: null,
+	load5: null,
+	load15: null,
+	swapPercent: null,
+	netInMbps: null,
+	netOutMbps: null,
+}
+
+const { slug, range, cmp } = Astro.props
+
+const hours = rangeToHours(range)
+const isCmpMetric = (candidate: string): candidate is CmpMetric =>
+	candidate === 'cpu' ||
+	candidate === 'mem' ||
+	candidate === 'load' ||
+	candidate === 'netOut'
+const cmpMetric: CmpMetric = isCmpMetric(cmp) ? cmp : 'cpu'
+
+const unwrap = <T,>(state: LoadState<T>, fallback: T): T =>
+	state.kind === 'ok' ? state.data : fallback
+const seriesOf = (state: LoadState<ReadonlyArray<RangePoint>>): ReadonlyArray<RangePoint> =>
+	state.kind === 'ok' ? state.data : []
+
+const serverState = await loadPageState(`vps.${slug}.server`, () => {
+	const token = requireEnv(ENV_KEYS.HETZNER_API_TOKEN)
+	return getServerByName(token, slug)
+})
+const server = unwrap(serverState, null)
+
+const hostState = await loadPageState(`vps.${slug}.host`, () =>
+	loadHostMetrics(slug),
+)
+const gaugesState = await loadPageState(`vps.${slug}.gauges`, () =>
+	loadVpsGauges(slug),
+)
+const host = unwrap(hostState, NULL_HOST)
+const gauges = unwrap(gaugesState, NULL_GAUGES)
+
+const seriesMetrics: ReadonlyArray<VpsSeriesMetric> = [
+	'cpu',
+	'mem',
+	'netOut',
+	'diskIo',
+	'diskLatency',
+	'load',
+	'netIn',
+]
+const seriesStates = await Promise.all(
+	seriesMetrics.map((metric) =>
+		loadPageState(`vps.${slug}.series.${metric}`, () =>
+			loadVpsSeries(slug, metric, hours),
+		),
+	),
+)
+const seriesByMetric: Partial<Record<VpsSeriesMetric, ReadonlyArray<RangePoint>>> =
+	{}
+seriesMetrics.forEach((metric, index) => {
+	const state = seriesStates[index]
+	seriesByMetric[metric] = state === undefined ? [] : seriesOf(state)
+})
+const cpuSeries = seriesByMetric.cpu ?? []
+const memSeries = seriesByMetric.mem ?? []
+const netOutSeries = seriesByMetric.netOut ?? []
+const diskIoSeries = seriesByMetric.diskIo ?? []
+const diskLatencySeries = seriesByMetric.diskLatency ?? []
+const loadSeries = seriesByMetric.load ?? []
+const netInSeries = seriesByMetric.netIn ?? []
+
+const fleetState = await loadPageState(`vps.${slug}.fleet`, () => {
+	const token = requireEnv(ENV_KEYS.HETZNER_API_TOKEN)
+	return listServers(token)
+})
+const fleet = unwrap(fleetState, EMPTY_FLEET)
+
+const cmpStates = await Promise.all(
+	fleet.map((peer) =>
+		loadPageState(`vps.${slug}.cmp.${peer.name}`, () =>
+			loadVpsSeries(peer.name, cmpMetric, hours),
+		),
+	),
+)
+const cmpSeries = fleet.map((peer, index) => {
+	const state = cmpStates[index]
+	return {
+		name: peer.name,
+		points: state === undefined ? [] : seriesOf(state),
+	}
+})
+
+const metricsByName: Record<string, ServerMetrics> =
+	server === null
+		? {}
+		: {
+				[server.name]: {
+					cpuPercent: host.cpuPercent,
+					memoryPercent: host.memoryPercent,
+					diskPercent: host.diskPercent,
+				},
+			}
+const alerts = server === null ? [] : deriveFleetAlerts([server], metricsByName)
+
+const cores = server?.serverType.cores ?? 0
+const memoryGb = server?.serverType.memoryGb ?? 0
+const diskGb = server?.serverType.diskGb ?? 0
+
+const round1 = (sample: number): string => sample.toFixed(1)
+const summaryOf = (
+	points: ReadonlyArray<RangePoint>,
+): { avg: string | null; peak: string | null } => {
+	const summary = summarizeSeries(points)
+	return {
+		avg: summary.average === null ? null : round1(summary.average),
+		peak: summary.peak === null ? null : round1(summary.peak),
+	}
+}
+const valuesOf = (points: ReadonlyArray<RangePoint>): ReadonlyArray<number> =>
+	points.map((point) => point.v)
+const lastValue = (points: ReadonlyArray<RangePoint>): number | null =>
+	points.length > 0 ? (points[points.length - 1]?.v ?? null) : null
+
+const roundOrDash = (sample: number | null): string =>
+	sample === null ? '-' : String(Math.round(sample))
+const fixed1OrDash = (sample: number | null): string =>
+	sample === null ? '-' : sample.toFixed(1)
+const fixed2OrDash = (sample: number | null): string =>
+	sample === null ? '-' : sample.toFixed(LOAD_DECIMALS)
+
+const cpuSummary = summaryOf(cpuSeries)
+const memSummary = summaryOf(memSeries)
+const netOutSummary = summaryOf(netOutSeries)
+const diskIoSummary = summaryOf(diskIoSeries)
+const diskLatencySummary = summaryOf(diskLatencySeries)
+const loadSummary = summaryOf(loadSeries)
+
+const netCurrent = gauges.netOutMbps ?? lastValue(netOutSeries)
+const ioCurrent = lastValue(diskIoSeries)
+const latencyCurrent = lastValue(diskLatencySeries)
+const loadCurrent = gauges.load1 ?? lastValue(loadSeries)
+
+const memSub =
+	host.memoryPercent === null
+		? `${memoryGb} GB`
+		: `${((host.memoryPercent / PCT_FULL) * memoryGb).toFixed(1)} / ${memoryGb} GB`
+const diskSub =
+	host.diskPercent === null
+		? `${diskGb} GB`
+		: `${((host.diskPercent / PCT_FULL) * diskGb).toFixed(0)} / ${diskGb} GB`
+
+const monthIn =
+	server === null ? '-' : formatTrafficGb(server.traffic.ingoingBytes / BYTES_PER_GB)
+const monthOut =
+	server === null ? '-' : formatTrafficGb(server.traffic.outgoingBytes / BYTES_PER_GB)
+
+const latencyThresholds: ReadonlyArray<Threshold> = [
+	{ value: DISK_LATENCY_WARNING, label: 'lent', severity: 'warning' },
+]
+const loadThresholds: ReadonlyArray<Threshold> = [
+	{ value: cores, label: `${cores} cores`, severity: 'critical' },
+]
+
+const cmpUnit =
+	cmpMetric === 'load' ? '' : cmpMetric === 'netOut' ? ' Mb/s' : '%'
+const cmpIsPercent = cmpMetric === 'cpu' || cmpMetric === 'mem'
+const cmpLines = cmpSeries.map((line, index) => ({
+	name: line.name,
+	color: FLEET_COLORS[index % FLEET_COLORS.length] ?? 'accent',
+	values: valuesOf(line.points),
+}))
+
+const netCombinedValues = [...valuesOf(netInSeries), ...valuesOf(netOutSeries)]
+const netCombinedMax =
+	netCombinedValues.length > 0 ? Math.max(...netCombinedValues) : undefined
+
+const swapText =
+	gauges.swapPercent === null ? '-' : `${Math.round(gauges.swapPercent)}%`
+const swapAmber =
+	gauges.swapPercent !== null && gauges.swapPercent > SWAP_AMBER
+const basePath = `/vps/${slug}`
+---
+
+{
+	server === null ? (
+		<div class="mx-auto max-w-[1320px] p-6">
+			<LoadStateBanner state={serverState} upstreamLabel="Hetzner API error" />
+		</div>
+	) : (
+		<div class="mx-auto flex max-w-[1320px] flex-col gap-[18px] p-6">
+			{alerts.length > 0 && (
+				<section class="overflow-hidden rounded-xl border border-red-200 bg-white shadow-subtle">
+					{alerts.map((alert) => (
+						<div class="flex items-center gap-3.5 border-b border-base-100 px-4 py-3 last:border-b-0">
+							<span
+								class:list={[
+									'shrink-0',
+									alert.severity === 'critical'
+										? 'text-red-600'
+										: 'text-amber-500',
+								]}
+							>
+								<Icon name="alert" size={18} />
+							</span>
+							<div class="min-w-0 flex-1">
+								<div class="flex items-center gap-2">
+									<span class="text-[13.5px] font-semibold text-base-900">
+										{alert.label}
+									</span>
+									<span
+										class:list={[
+											'rounded-full border px-2 py-0.5 text-[11px] font-medium',
+											alert.severity === 'critical'
+												? 'border-red-200 bg-red-50 text-red-700'
+												: 'border-amber-200 bg-amber-50 text-amber-700',
+										]}
+									>
+										{alert.severity}
+									</span>
+								</div>
+							</div>
+							<div class="shrink-0 text-right">
+								<div
+									class:list={[
+										'font-mono text-sm font-bold',
+										alert.severity === 'critical'
+											? 'text-red-600'
+											: 'text-amber-600',
+									]}
+								>
+									{alert.valuePercent}%
+								</div>
+								<div class="font-mono text-[10.5px] text-base-500">
+									seuil {alert.thresholdPercent}%
+								</div>
+							</div>
+						</div>
+					))}
+				</section>
+			)}
+
+			<div class="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3.5">
+				<div class="flex justify-center rounded-xl border border-base-200 bg-white p-4 shadow-subtle">
+					<RadialGauge
+						value={host.cpuPercent ?? 0}
+						label="CPU"
+						sub={`${cores} cores`}
+					/>
+				</div>
+				<div class="flex justify-center rounded-xl border border-base-200 bg-white p-4 shadow-subtle">
+					<RadialGauge
+						value={host.memoryPercent ?? 0}
+						label="Mémoire"
+						sub={memSub}
+					/>
+				</div>
+				<div class="flex justify-center rounded-xl border border-base-200 bg-white p-4 shadow-subtle">
+					<RadialGauge
+						value={host.diskPercent ?? 0}
+						label="Disque"
+						sub={diskSub}
+					/>
+				</div>
+
+				<div class="flex flex-col justify-center gap-2 rounded-xl border border-base-200 bg-white p-4 shadow-subtle">
+					<div class="flex justify-between">
+						<span class="text-xs text-base-500">Load 1m</span>
+						<span class="font-mono font-bold text-base-900">
+							{fixed2OrDash(gauges.load1)}
+						</span>
+					</div>
+					<div class="flex justify-between">
+						<span class="text-xs text-base-500">Load 5m</span>
+						<span class="font-mono font-bold text-base-900">
+							{fixed2OrDash(gauges.load5)}
+						</span>
+					</div>
+					<div class="flex justify-between">
+						<span class="text-xs text-base-500">Load 15m</span>
+						<span class="font-mono font-bold text-base-900">
+							{fixed2OrDash(gauges.load15)}
+						</span>
+					</div>
+					<div class="my-0.5 border-t border-base-100" />
+					<div class="flex justify-between">
+						<span class="text-xs text-base-500">Swap</span>
+						<span
+							class:list={[
+								'font-mono font-bold',
+								swapAmber ? 'text-amber-600' : 'text-base-900',
+							]}
+						>
+							{swapText}
+						</span>
+					</div>
+				</div>
+
+				<div class="flex flex-col justify-center gap-2 rounded-xl border border-base-200 bg-white p-4 shadow-subtle">
+					<div class="flex items-center gap-1.5 text-accent-600">
+						<Icon name="arrowDown" size={14} />
+						<span class="text-xs text-base-600">In</span>
+						<span class="ml-auto font-mono font-bold text-base-900">
+							{fixed1OrDash(gauges.netInMbps)}
+							<span class="text-[11px] font-normal text-base-500"> Mb/s</span>
+						</span>
+					</div>
+					<div class="flex items-center gap-1.5 text-sky-600">
+						<Icon name="arrowUp" size={14} />
+						<span class="text-xs text-base-600">Out</span>
+						<span class="ml-auto font-mono font-bold text-base-900">
+							{fixed1OrDash(gauges.netOutMbps)}
+							<span class="text-[11px] font-normal text-base-500"> Mb/s</span>
+						</span>
+					</div>
+					<div class="my-0.5 border-t border-base-100" />
+					<div class="flex justify-between">
+						<span class="text-xs text-base-500">Mois ↓</span>
+						<span class="font-mono font-semibold text-base-900">{monthIn}</span>
+					</div>
+					<div class="flex justify-between">
+						<span class="text-xs text-base-500">Mois ↑</span>
+						<span class="font-mono font-semibold text-base-900">{monthOut}</span>
+					</div>
+				</div>
+			</div>
+
+			<div class="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-3.5">
+				<VpsMetricPanel
+					title="CPU"
+					icon="cpu"
+					color="accent"
+					unit="%"
+					current={roundOrDash(host.cpuPercent)}
+					avg={cpuSummary.avg}
+					peak={cpuSummary.peak}
+					values={valuesOf(cpuSeries)}
+					max={PCT_FULL}
+					thresholds={PERCENT_THRESHOLDS}
+				/>
+				<VpsMetricPanel
+					title="Mémoire"
+					icon="ram"
+					color="info"
+					unit="%"
+					current={roundOrDash(host.memoryPercent)}
+					avg={memSummary.avg}
+					peak={memSummary.peak}
+					values={valuesOf(memSeries)}
+					max={PCT_FULL}
+					thresholds={PERCENT_THRESHOLDS}
+				/>
+				<VpsMetricPanel
+					title="Réseau"
+					icon="net"
+					color="slate"
+					unit=" Mb/s"
+					current={fixed1OrDash(netCurrent)}
+					avg={netOutSummary.avg}
+					peak={netOutSummary.peak}
+					values={valuesOf(netOutSeries)}
+				/>
+				<VpsMetricPanel
+					title="Disque I/O"
+					icon="disk"
+					color="warning"
+					unit=" MB/s"
+					current={fixed1OrDash(ioCurrent)}
+					avg={diskIoSummary.avg}
+					peak={diskIoSummary.peak}
+					values={valuesOf(diskIoSeries)}
+				/>
+				<VpsMetricPanel
+					title="Latence disque"
+					icon="gauge"
+					color="slate"
+					unit=" ms"
+					current={fixed1OrDash(latencyCurrent)}
+					avg={diskLatencySummary.avg}
+					peak={diskLatencySummary.peak}
+					values={valuesOf(diskLatencySeries)}
+					thresholds={latencyThresholds}
+				/>
+				<VpsMetricPanel
+					title="Load average"
+					icon="activity"
+					color="accent"
+					unit=""
+					current={fixed2OrDash(loadCurrent)}
+					avg={loadSummary.avg}
+					peak={loadSummary.peak}
+					values={valuesOf(loadSeries)}
+					thresholds={loadThresholds}
+				/>
+			</div>
+
+			<div class="overflow-hidden rounded-xl border border-base-200 bg-white shadow-subtle">
+				<header class="flex items-center justify-between border-b border-base-200 px-4 py-3.5">
+					<span class="text-sm font-semibold text-base-900">
+						Trafic réseau ↓ in / ↑ out
+					</span>
+					<div class="flex gap-3.5 text-xs">
+						<span class="flex items-center gap-1.5">
+							<span class="size-2.5 rounded-full bg-sky-600" />
+							In
+						</span>
+						<span class="flex items-center gap-1.5">
+							<span class="size-2.5 rounded-full bg-accent-600" />
+							Out
+						</span>
+					</div>
+				</header>
+				<div class="px-2.5 pt-3 pb-1.5">
+					<MultiLine
+						unit=" Mb/s"
+						max={netCombinedMax}
+						series={[
+							{ name: 'In', color: 'info', values: valuesOf(netInSeries) },
+							{ name: 'Out', color: 'accent', values: valuesOf(netOutSeries) },
+						]}
+					/>
+				</div>
+			</div>
+
+			<div class="overflow-hidden rounded-xl border border-base-200 bg-white shadow-subtle">
+				<header class="flex flex-wrap items-center justify-between gap-3 border-b border-base-200 px-4 py-3.5">
+					<span class="text-sm font-semibold text-base-900">
+						Comparaison fleet
+					</span>
+					<div
+						class="inline-flex gap-0.5 rounded-full border border-base-200 bg-base-100 p-0.5"
+						role="tablist"
+						aria-label="Métrique comparée"
+					>
+						{CMP_METRICS.map((option) => {
+							const active = option.key === cmpMetric
+							return (
+								<a
+									href={`${basePath}?range=${range}&cmp=${option.key}`}
+									role="tab"
+									aria-selected={active ? 'true' : 'false'}
+									class:list={[
+										'inline-flex items-center rounded-full px-3 py-1 text-xs font-medium transition-colors',
+										active
+											? 'bg-white text-base-900 shadow-subtle'
+											: 'text-base-600 hover:text-base-900',
+									]}
+								>
+									{option.label}
+								</a>
+							)
+						})}
+					</div>
+				</header>
+				<div class="px-2.5 pt-3 pb-1.5">
+					<MultiLine
+						unit={cmpUnit}
+						max={cmpIsPercent ? PCT_FULL : undefined}
+						series={cmpLines}
+					/>
+				</div>
+				<div class="flex flex-wrap gap-3.5 px-4 pt-1 pb-4">
+					{cmpLines.map((line) => (
+						<span
+							class:list={[
+								'flex items-center gap-1.5 text-xs',
+								line.name === slug
+									? 'font-bold text-base-900'
+									: 'font-medium text-base-700',
+							]}
+						>
+							<span
+								class:list={['size-2.5 rounded-full', DOT_CLASS[line.color]]}
+							/>
+							{line.name}
+							{line.name === slug && <span class="text-base-500">(actuel)</span>}
+						</span>
+					))}
+				</div>
+			</div>
+
+			<div class="overflow-hidden rounded-xl border border-base-200 bg-white shadow-subtle">
+				<header class="border-b border-base-200 px-4 py-3.5">
+					<span class="text-sm font-semibold text-base-900">Processus</span>
+				</header>
+				<p class="px-4 py-6 text-sm text-base-500">
+					Indisponible - process_exporter non déployé
+				</p>
+			</div>
+		</div>
+	)
+}

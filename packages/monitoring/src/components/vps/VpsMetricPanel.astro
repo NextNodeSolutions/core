@@ -1,0 +1,88 @@
+---
+import AreaChart from '@/components/charts/AreaChart.astro'
+import Icon from '@/components/foundations/Icon.astro'
+import type { ChartColor } from '@/components/charts/chart-color.ts'
+import type { IconName } from '@/components/foundations/Icon.astro'
+
+interface ThresholdProp {
+	value: number
+	label: string
+	severity: 'warning' | 'critical'
+}
+
+interface Props {
+	title: string
+	icon: IconName
+	current: string
+	unit: string
+	avg: string | null
+	peak: string | null
+	values: ReadonlyArray<number>
+	color: ChartColor
+	max?: number
+	thresholds?: ReadonlyArray<ThresholdProp>
+}
+
+const {
+	title,
+	icon,
+	current,
+	unit,
+	avg,
+	peak,
+	values,
+	color,
+	max,
+	thresholds = [],
+} = Astro.props
+---
+
+<div
+	class="flex flex-col overflow-hidden rounded-xl border border-base-200 bg-white shadow-subtle"
+>
+	<div class="flex items-center justify-between px-4 pt-3.5 pb-1.5">
+		<div class="flex items-center gap-2.5">
+			<span class="text-base-400">
+				<Icon name={icon} size={16} />
+			</span>
+			<span class="text-[13.5px] font-semibold text-base-900">{title}</span>
+		</div>
+		<div class="flex items-baseline gap-1">
+			<span
+				class="font-mono text-xl font-bold tracking-[-0.02em] tabular-nums text-base-900"
+			>
+				{current}
+			</span>
+			<span class="text-xs text-base-500">{unit}</span>
+		</div>
+	</div>
+
+	<div class="flex gap-4 px-4 pb-2">
+		{
+			avg !== null && (
+				<span class="font-mono text-[11px] text-base-500">
+					moy {avg}
+					{unit}
+				</span>
+			)
+		}
+		{
+			peak !== null && (
+				<span class="font-mono text-[11px] text-base-500">
+					pic {peak}
+					{unit}
+				</span>
+			)
+		}
+	</div>
+
+	<div class="px-1.5 pb-2">
+		<AreaChart
+			values={values}
+			color={color}
+			unit={unit}
+			max={max}
+			thresholds={thresholds}
+		/>
+	</div>
+</div>
