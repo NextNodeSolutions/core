@@ -12,32 +12,44 @@ interface Props {
 	title: string
 	description?: string
 	breadcrumbs?: Breadcrumb[]
+	/** Design screens manage their own padding; set to render edge-to-edge. */
+	bare?: boolean
+	vpsCount?: number
+	alertCount?: number
 }
 
-const { title, description, breadcrumbs = [] } = Astro.props
+const {
+	title,
+	description,
+	breadcrumbs = [],
+	bare = false,
+	vpsCount,
+	alertCount,
+} = Astro.props
 const currentPath = Astro.url.pathname
+const crumbs = breadcrumbs.map((crumb) => crumb.label)
 ---
 
 <BaseLayout title={title} description={description}>
 	<div class="flex min-h-svh">
-		<Sidebar current={currentPath} />
+		<Sidebar current={currentPath} vpsCount={vpsCount} alertCount={alertCount} />
 
 		<div class="flex min-w-0 flex-1 flex-col">
-			<Topbar breadcrumbs={breadcrumbs} />
+			<Topbar title={title} crumbs={crumbs}>
+				<slot name="actions" slot="actions" />
+			</Topbar>
 
-			<main class="flex-1 bg-base-50/40">
-				<div class="mx-auto max-w-6xl px-8 py-10">
-					<slot />
-				</div>
+			<main class="min-h-0 flex-1 bg-base-50">
+				{
+					bare ? (
+						<slot />
+					) : (
+						<div class="mx-auto max-w-6xl px-8 py-10">
+							<slot />
+						</div>
+					)
+				}
 			</main>
-
-			<footer
-				class="flex items-center justify-center gap-3 border-t border-base-100 bg-white px-8 py-4 text-xs text-base-500"
-			>
-				<span>Internal - Tailscale only</span>
-				<span class="text-base-300">·</span>
-				<code class="font-mono">monitoring.nextnode.fr</code>
-			</footer>
 		</div>
 	</div>
 </BaseLayout>

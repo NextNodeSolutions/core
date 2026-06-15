@@ -1,0 +1,62 @@
+---
+/**
+ * Time-range segmented control. Each option is a link that sets `?range=`
+ * on the current path so the server re-renders with the selected window.
+ * `live` is the streaming mode (client enhances it; the link is the baseline).
+ */
+interface Props {
+	path: string
+	value: string
+	ranges?: string[]
+}
+
+const {
+	path,
+	value,
+	ranges = ['live', '1h', '6h', '24h', '7d', '30d'],
+} = Astro.props
+
+const labels: Record<string, string> = {
+	live: 'Live',
+	'1h': '1h',
+	'6h': '6h',
+	'24h': '24h',
+	'7d': '7j',
+	'30d': '30j',
+}
+---
+
+<div
+	class="inline-flex gap-0.5 rounded-full border border-base-200 bg-base-100 p-0.5"
+	role="tablist"
+	aria-label="Plage temporelle"
+>
+	{
+		ranges.map((range) => {
+			const active = range === value
+			return (
+				<a
+					href={`${path}?range=${range}`}
+					role="tab"
+					aria-selected={active ? 'true' : 'false'}
+					class:list={[
+						'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors',
+						active
+							? 'bg-white text-base-900 shadow-subtle'
+							: 'text-base-600 hover:text-base-900',
+					]}
+				>
+					{range === 'live' && (
+						<span
+							class:list={[
+								'inline-block size-1.5 rounded-full',
+								active ? 'bg-accent-600' : 'bg-base-400',
+							]}
+						/>
+					)}
+					{labels[range] ?? range}
+				</a>
+			)
+		})
+	}
+</div>
