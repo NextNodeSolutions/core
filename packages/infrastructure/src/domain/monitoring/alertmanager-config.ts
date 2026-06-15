@@ -18,8 +18,13 @@ const RESEND_SMARTHOST = 'smtp.resend.com:465'
 const RESEND_SMTP_USERNAME = 'resend'
 
 export interface AlertmanagerConfigInput {
-	/** Resend API key, used as the SMTP password. */
-	readonly resendApiKey: string
+	/**
+	 * Resend API key, used as the SMTP password. `undefined` while the operator
+	 * has not set `RESEND_API_KEY` yet - the email receiver is then omitted and
+	 * the default route points at the `devnull` sink, so the stack still deploys
+	 * and the dashboards work; email alerting turns on once the secret is set.
+	 */
+	readonly resendApiKey: string | undefined
 	/**
 	 * healthchecks.io ping URL the Watchdog heartbeat is webhooked to.
 	 * `undefined` while the operator has not provisioned the check yet -
@@ -69,6 +74,24 @@ function buildRoutes(
 function buildReceivers(
 	input: AlertmanagerConfigInput,
 ): ReadonlyArray<Record<string, unknown>> {
+	const emailReceiver =
+		input.resendApiKey === undefined
+			? []
+			: [
+					{
+						name: 'email',
+						email_configs: [
+							{
+								to: ALERT_EMAIL_TO,
+								from: ALERT_EMAIL_FROM,
+								smarthost: RESEND_SMARTHOST,
+								auth_username: RESEND_SMTP_USERNAME,
+								auth_password: input.resendApiKey,
+								require_tls: true,
+							},
+						],
+					},
+				]
 	const deadmansswitchReceiver =
 		input.healthchecksPingUrl === undefined
 			? []
@@ -84,19 +107,7 @@ function buildReceivers(
 					},
 				]
 	return [
-		{
-			name: 'email',
-			email_configs: [
-				{
-					to: ALERT_EMAIL_TO,
-					from: ALERT_EMAIL_FROM,
-					smarthost: RESEND_SMARTHOST,
-					auth_username: RESEND_SMTP_USERNAME,
-					auth_password: input.resendApiKey,
-					require_tls: true,
-				},
-			],
-		},
+		...emailReceiver,
 		...deadmansswitchReceiver,
 		// Sink receiver: alerts routed here are intentionally dropped.
 		{ name: 'devnull' },
@@ -108,7 +119,9 @@ export function renderAlertmanagerConfig(
 ): string {
 	const config = {
 		route: {
-			receiver: 'email',
+			// No email channel yet (RESEND_API_KEY unset) → default to the sink so
+			// the config stays valid; turns into `email` once the key is set.
+			receiver: input.resendApiKey === undefined ? 'devnull' : 'email',
 			group_by: ['alertname', 'vps_name', 'project'],
 			group_wait: '30s',
 			group_interval: '5m',

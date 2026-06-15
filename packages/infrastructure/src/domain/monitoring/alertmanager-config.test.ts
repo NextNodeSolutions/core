@@ -100,4 +100,27 @@ describe('renderAlertmanagerConfig', () => {
 			true,
 		)
 	})
+
+	it('omits the email receiver and points the default route at devnull when RESEND is unset', () => {
+		const noEmail: unknown = parse(
+			renderAlertmanagerConfig({
+				resendApiKey: undefined,
+				healthchecksPingUrl: undefined,
+			}),
+		)
+		if (!isRecord(noEmail) || !isRecord(noEmail.route)) {
+			throw new Error('invalid alertmanager config shape')
+		}
+		const receivers = Array.isArray(noEmail.receivers)
+			? noEmail.receivers.filter(isRecord)
+			: []
+		// Default route falls back to the sink so the rendered config stays valid.
+		expect(noEmail.route.receiver).toBe('devnull')
+		expect(receivers.some(receiver => receiver.name === 'email')).toBe(
+			false,
+		)
+		expect(receivers.some(receiver => receiver.name === 'devnull')).toBe(
+			true,
+		)
+	})
 })
