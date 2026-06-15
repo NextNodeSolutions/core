@@ -92,10 +92,20 @@ describe('computeServerHealth', () => {
 		)
 	})
 
-	it('treats missing metrics as zero load', () => {
+	it('reports unknown when a running server has no metric at all', () => {
 		expect(computeServerHealth('running', metricsByName.gamma!)).toBe(
-			'running',
+			'unknown',
 		)
+	})
+
+	it('stays running when at least one metric is present and healthy', () => {
+		expect(
+			computeServerHealth('running', {
+				cpuPercent: 20,
+				memoryPercent: null,
+				diskPercent: null,
+			}),
+		).toBe('running')
 	})
 })
 
@@ -160,6 +170,37 @@ describe('summarizeFleet', () => {
 			value: '12',
 			hint: '2 alertes',
 			tone: 'danger',
+		})
+	})
+
+	it('shows a neutral placeholder when no server reports any CPU metric', () => {
+		const blind = summarizeFleet({
+			servers,
+			metricsByName: {
+				alpha: {
+					cpuPercent: null,
+					memoryPercent: null,
+					diskPercent: null,
+				},
+				beta: {
+					cpuPercent: null,
+					memoryPercent: null,
+					diskPercent: null,
+				},
+				gamma: {
+					cpuPercent: null,
+					memoryPercent: null,
+					diskPercent: null,
+				},
+			},
+			errorCount: 0,
+		})
+		expect(
+			blind.find(stat => stat.label === 'CPU moyen fleet'),
+		).toMatchObject({
+			value: '-',
+			hint: 'aucune métrique',
+			tone: 'neutral',
 		})
 	})
 })

@@ -26,7 +26,12 @@ export interface ServerMetrics {
 	readonly diskPercent: number | null
 }
 
-export type FleetHealth = 'running' | 'warning' | 'critical' | 'down'
+export type FleetHealth =
+	| 'running'
+	| 'warning'
+	| 'critical'
+	| 'down'
+	| 'unknown'
 
 export type AlertMetric = 'cpu' | 'memory' | 'disk'
 
@@ -77,11 +82,22 @@ function worstLoad(metrics: ServerMetrics): number {
 	)
 }
 
+function hasAnyMetric(metrics: ServerMetrics): boolean {
+	return (
+		metrics.cpuPercent !== null ||
+		metrics.memoryPercent !== null ||
+		metrics.diskPercent !== null
+	)
+}
+
 export function computeServerHealth(
 	status: VpsStatus,
 	metrics: ServerMetrics,
 ): FleetHealth {
 	if (status !== 'running') return 'down'
+	// A running VPS with no metric at all is a missing scrape, not a healthy
+	// idle host - treating absent metrics as 0 would mask the gap.
+	if (!hasAnyMetric(metrics)) return 'unknown'
 	const worst = worstLoad(metrics)
 	if (worst >= CRITICAL_PERCENT) return 'critical'
 	if (worst >= WARNING_PERCENT) return 'warning'
