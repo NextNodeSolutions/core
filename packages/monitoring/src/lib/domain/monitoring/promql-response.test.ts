@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { parseInstantQuery, parseInstantScalar } from './promql-response.ts'
+import {
+	parseInstantQuery,
+	parseInstantScalar,
+	parseRangeQuery,
+} from './promql-response.ts'
 
 const vmResponse = (entries: unknown): unknown => ({
 	status: 'success',
@@ -48,5 +52,45 @@ describe('parseInstantScalar', () => {
 
 	it('returns null when nothing matched', () => {
 		expect(parseInstantScalar(vmResponse([]))).toBeNull()
+	})
+})
+
+const vmRangeResponse = (values: unknown): unknown => ({
+	status: 'success',
+	data: {
+		resultType: 'matrix',
+		result: [{ metric: { vps_name: 'nn-prod' }, values }],
+	},
+})
+
+describe('parseRangeQuery', () => {
+	it('maps matrix value tuples to millisecond-stamped points', () => {
+		const points = parseRangeQuery(
+			vmRangeResponse([
+				[1_700_000_000, '12.5'],
+				[1_700_000_060, '37'],
+			]),
+		)
+		expect(points).toEqual([
+			{ t: 1_700_000_000_000, v: 12.5 },
+			{ t: 1_700_000_060_000, v: 37 },
+		])
+	})
+
+	it('drops non-finite samples (NaN/Inf) but keeps the rest', () => {
+		const points = parseRangeQuery(
+			vmRangeResponse([
+				[1_700_000_000, 'NaN'],
+				[1_700_000_060, '5'],
+			]),
+		)
+		expect(points).toEqual([{ t: 1_700_000_060_000, v: 5 }])
+	})
+
+	it('returns an empty list for a failed or empty response', () => {
+		expect(parseRangeQuery({ status: 'error' })).toEqual([])
+		expect(
+			parseRangeQuery({ status: 'success', data: { result: [] } }),
+		).toEqual([])
 	})
 })

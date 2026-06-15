@@ -33,6 +33,22 @@ const parseValueTuple = (tuple: unknown): number | null => {
 	return Number.isFinite(num) ? num : null
 }
 
+const SECONDS_TO_MS = 1000
+
+/** One time-series sample: a millisecond timestamp and its numeric value. */
+export interface RangePoint {
+	readonly t: number
+	readonly v: number
+}
+
+const parseRangeTuple = (tuple: unknown): RangePoint | null => {
+	if (!Array.isArray(tuple) || tuple.length < VALUE_TUPLE_LENGTH) return null
+	const [seconds, raw] = tuple
+	if (typeof seconds !== 'number' || typeof raw !== 'string') return null
+	const num = Number(raw)
+	return Number.isFinite(num) ? { t: seconds * SECONDS_TO_MS, v: num } : null
+}
+
 /**
  * Parse a VictoriaMetrics `/api/v1/query` (instant) response body into a
  * flat list of samples. Pure - the adapter hands the decoded JSON in.
@@ -69,4 +85,27 @@ export const parseInstantQuery = (
 export const parseInstantScalar = (payload: unknown): number | null => {
 	const [first] = parseInstantQuery(payload)
 	return first?.value ?? null
+}
+
+/**
+ * Parse a VictoriaMetrics `/api/v1/query_range` (matrix) response into the
+ * first series' points, newest order preserved. Aggregate range expressions
+ * (no `by` clause) return a single series, so the first is the gauge over
+ * time. Non-finite samples are dropped; a non-success/empty body yields `[]`.
+ */
+export const parseRangeQuery = (
+	payload: unknown,
+): ReadonlyArray<RangePoint> => {
+	if (!isRecord(payload) || payload.status !== 'success') return []
+	if (!isRecord(payload.data) || !Array.isArray(payload.data.result)) {
+		return []
+	}
+	const [firstSeries] = payload.data.result
+	if (!isRecord(firstSeries) || !Array.isArray(firstSeries.values)) return []
+	const points: Array<RangePoint> = []
+	for (const tuple of firstSeries.values) {
+		const point = parseRangeTuple(tuple)
+		if (point !== null) points.push(point)
+	}
+	return points
 }
