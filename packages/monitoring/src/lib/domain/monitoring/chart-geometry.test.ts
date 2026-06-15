@@ -131,4 +131,65 @@ describe('multiLineGeometry', () => {
 		expect(geo.lines[0]?.startsWith('M')).toBe(true)
 		expect(geo.ticks.map(tick => tick.value)).toEqual([0, 50, 100])
 	})
+
+	it('never emits NaN or Infinity when max is zero', () => {
+		const geo = multiLineGeometry([[0, 0, 0]], {
+			width: 200,
+			height: 120,
+			max: 0,
+		})
+		expect(geo.lines.join(' ')).not.toMatch(/NaN|Infinity/)
+		expect(geo.ticks.every(tick => Number.isFinite(tick.y))).toBe(true)
+	})
+
+	it('drops non-finite samples from the projected path', () => {
+		const geo = multiLineGeometry(
+			[[10, Number.NaN, Number.POSITIVE_INFINITY, 30]],
+			{
+				width: 200,
+				height: 120,
+				max: 100,
+			},
+		)
+		expect(geo.lines.join(' ')).not.toMatch(/NaN|Infinity/)
+	})
+})
+
+describe('non-finite sample hardening', () => {
+	it('areaChartGeometry never emits NaN or Infinity coordinates', () => {
+		const geo = areaChartGeometry({
+			values: [10, Number.NaN, Number.POSITIVE_INFINITY, 30],
+			width: 200,
+			height: 100,
+			min: 0,
+			max: 100,
+		})
+		expect(geo.linePath).not.toMatch(/NaN|Infinity/)
+		expect(geo.areaPath).not.toMatch(/NaN|Infinity/)
+		expect(geo.points.every(point => Number.isFinite(point.y))).toBe(true)
+	})
+
+	it('areaChartGeometry falls back when the supplied max is zero', () => {
+		const geo = areaChartGeometry({
+			values: [0, 0, 0],
+			width: 200,
+			height: 100,
+			min: 0,
+			max: 0,
+		})
+		expect(geo.linePath).not.toMatch(/NaN|Infinity/)
+		expect(geo.points.every(point => Number.isFinite(point.y))).toBe(true)
+	})
+
+	it('sparklineGeometry never emits NaN or Infinity coordinates', () => {
+		const geo = sparklineGeometry(
+			[5, Number.NaN, Number.NEGATIVE_INFINITY, 9],
+			100,
+			34,
+		)
+		expect(geo.linePath).not.toMatch(/NaN|Infinity/)
+		expect(geo.areaPath).not.toMatch(/NaN|Infinity/)
+		expect(Number.isFinite(geo.lastX)).toBe(true)
+		expect(Number.isFinite(geo.lastY)).toBe(true)
+	})
 })

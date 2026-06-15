@@ -85,6 +85,18 @@ export interface MultiLineGeometry {
 
 const coord = (coordinate: number): string => coordinate.toFixed(1)
 
+// A series can carry NaN/Infinity (a dropped scrape, a divide-by-zero
+// upstream). Projecting those straight into SVG coordinates emits
+// "NaN"/"Infinity" into the path, which the renderer cannot parse - so drop
+// them before any projection.
+const finiteSamples = (values: ReadonlyArray<number>): ReadonlyArray<number> =>
+	values.filter(sample => Number.isFinite(sample))
+
+// A zero / non-finite axis maximum makes `sample / max` blow up. Fall back to
+// a unit axis so the projection stays finite (flat at the baseline).
+const safeAxisMax = (max: number): number =>
+	Number.isFinite(max) && max > 0 ? max : FALLBACK_MAX
+
 export function buildLinePath(points: ReadonlyArray<Point>): string {
 	return points
 		.map(
@@ -107,18 +119,19 @@ export function areaChartGeometry(input: AreaChartInput): AreaGeometry {
 	const innerHeight = input.height - PAD_TOP - PAD_BOTTOM
 	const baseline = PAD_TOP + innerHeight
 	const domainMin = input.min ?? 0
-	const headroomMax = Math.max(...input.values, 0) * MAX_HEADROOM
-	const domainMax =
-		input.max ?? (headroomMax > 0 ? headroomMax : FALLBACK_MAX)
+	const samples = finiteSamples(input.values)
+	const headroomMax = Math.max(...samples, 0) * MAX_HEADROOM
+	const autoMax = headroomMax > 0 ? headroomMax : FALLBACK_MAX
+	const domainMax = input.max === undefined ? autoMax : safeAxisMax(input.max)
 	const span = spanned(domainMin, domainMax)
-	const count = input.values.length
+	const count = samples.length
 
 	const projectY = (sample: number): number =>
 		PAD_TOP + innerHeight - ((sample - domainMin) / span) * innerHeight
 	const projectX = (index: number): number =>
 		count <= 1 ? PAD_LEFT : PAD_LEFT + (index / (count - 1)) * innerWidth
 
-	const points: Point[] = input.values.map((sample, index) => ({
+	const points: Point[] = samples.map((sample, index) => ({
 		x: projectX(index),
 		y: projectY(sample),
 	}))
@@ -154,13 +167,14 @@ export function sparklineGeometry(
 	width: number,
 	height: number,
 ): SparklineGeometry {
-	const domainMin = Math.min(...values)
-	const domainMax = Math.max(...values)
+	const samples = finiteSamples(values)
+	const domainMin = Math.min(...samples)
+	const domainMax = Math.max(...samples)
 	const span = spanned(domainMin, domainMax)
 	const usableHeight = height - SPARK_PAD - SPARK_PAD
-	const count = values.length
+	const count = samples.length
 
-	const points: Point[] = values.map((sample, index) => ({
+	const points: Point[] = samples.map((sample, index) => ({
 		x: count <= 1 ? 0 : (index / (count - 1)) * width,
 		y: height - SPARK_PAD - ((sample - domainMin) / span) * usableHeight,
 	}))
@@ -196,16 +210,17 @@ export function multiLineGeometry(
 ): MultiLineGeometry {
 	const innerWidth = input.width - PAD_LEFT - PAD_RIGHT
 	const innerHeight = input.height - PAD_TOP - PAD_BOTTOM
+	const axisMax = safeAxisMax(input.max)
 	const count = seriesValues[0]?.length ?? 1
 
 	const projectX = (index: number): number =>
 		count <= 1 ? PAD_LEFT : PAD_LEFT + (index / (count - 1)) * innerWidth
 	const projectY = (sample: number): number =>
-		PAD_TOP + innerHeight - (sample / input.max) * innerHeight
+		PAD_TOP + innerHeight - (sample / axisMax) * innerHeight
 
 	const lines = seriesValues.map(values =>
 		buildLinePath(
-			values.map((sample, index) => ({
+			finiteSamples(values).map((sample, index) => ({
 				x: projectX(index),
 				y: projectY(sample),
 			})),
@@ -214,7 +229,7 @@ export function multiLineGeometry(
 	const ticks: AxisTick[] = Array.from(
 		{ length: MULTI_TICK_COUNT },
 		(_, i) => {
-			const tickValue = (i / (MULTI_TICK_COUNT - 1)) * input.max
+			const tickValue = (i / (MULTI_TICK_COUNT - 1)) * axisMax
 			return { value: tickValue, y: projectY(tickValue) }
 		},
 	)
