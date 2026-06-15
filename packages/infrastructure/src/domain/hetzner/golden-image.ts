@@ -69,14 +69,25 @@ export const VECTOR_VERSION = '0.56.0'
 const VECTOR_DIR = 'vector-x86_64-unknown-linux-gnu'
 const VECTOR_DOWNLOAD_URL = `https://github.com/vectordotdev/vector/releases/download/v${VECTOR_VERSION}/vector-${VECTOR_VERSION}-x86_64-unknown-linux-gnu.tar.gz`
 
-// Shell commands that install the pinned Vector binary to /usr/bin/vector.
-// Shared by the golden-image build (baked in) and the convergence self-heal
-// (installs on demand for VPS whose snapshot predates / lost the binary).
-export const VECTOR_INSTALL_CMDS: ReadonlyArray<string> = [
-	`curl -fsSL "${VECTOR_DOWNLOAD_URL}" | tar -xz -C /tmp`,
-	`install -m 0755 /tmp/${VECTOR_DIR}/bin/vector /usr/bin/vector`,
-	`rm -rf /tmp/${VECTOR_DIR}`,
-]
+/**
+ * Shell commands that install the pinned Vector binary to /usr/bin/vector.
+ * Shared by the golden-image build (baked in) and the convergence self-heal
+ * (installs on demand for VPS whose snapshot predates / lost the binary).
+ *
+ * Only the `install` into /usr/bin is privileged: the golden-image runcmd runs
+ * as root (`privilege = ''`), the convergence runs as the `deploy` user over SSH
+ * (`privilege = 'sudo'`). The download + cleanup touch /tmp only.
+ */
+export function vectorInstallCommands(
+	privilege: '' | 'sudo' = '',
+): ReadonlyArray<string> {
+	const sudo = privilege === '' ? '' : `${privilege} `
+	return [
+		`curl -fsSL "${VECTOR_DOWNLOAD_URL}" | tar -xz -C /tmp`,
+		`${sudo}install -m 0755 /tmp/${VECTOR_DIR}/bin/vector /usr/bin/vector`,
+		`rm -rf /tmp/${VECTOR_DIR}`,
+	]
+}
 
 const NODE_EXPORTER_UNIT_PATH = '/etc/systemd/system/node_exporter.service'
 const NODE_EXPORTER_UNIT_CONTENT = `[Unit]
@@ -198,8 +209,9 @@ const RUNCMD: ReadonlyArray<string> = [
 	'chmod +x /usr/bin/caddy',
 	'mkdir -p /etc/caddy',
 
-	// Vector (pinned tarball, fail-loud - see VECTOR_INSTALL_CMDS)
-	...VECTOR_INSTALL_CMDS,
+	// Vector (pinned tarball, fail-loud - see vectorInstallCommands). runcmd
+	// runs as root, so no sudo prefix.
+	...vectorInstallCommands(),
 	'mkdir -p /etc/vector',
 
 	// node_exporter (pinned static binary, unit written above)
