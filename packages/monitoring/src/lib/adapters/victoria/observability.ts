@@ -1,3 +1,4 @@
+import { clampInteger } from '@/lib/adapters/clamp.ts'
 import {
 	queryVictoriaLogs,
 	queryVictoriaMetricsInstant,
@@ -56,6 +57,26 @@ const scalarOrNull = async (expr: string): Promise<number | null> => {
 
 const MS_PER_SECOND = 1000
 
+// Window bounds for the range/log queries, mirroring the domain's metric
+// window (0, 720h]. Clamp at the boundary so a NaN/negative/fractional hours
+// value never reaches the LogsQL `_time:` filter or the range `step`.
+const MIN_WINDOW_HOURS = 1
+const MAX_WINDOW_HOURS = 720
+const DEFAULT_SERIES_HOURS = 1
+const DEFAULT_FLEET_LOG_HOURS = 6
+
+const SERIES_WINDOW_BOUNDS = {
+	min: MIN_WINDOW_HOURS,
+	max: MAX_WINDOW_HOURS,
+	fallback: DEFAULT_SERIES_HOURS,
+} as const
+
+const FLEET_LOG_WINDOW_BOUNDS = {
+	min: MIN_WINDOW_HOURS,
+	max: MAX_WINDOW_HOURS,
+	fallback: DEFAULT_FLEET_LOG_HOURS,
+} as const
+
 export interface VpsGauges {
 	readonly load1: number | null
 	readonly load5: number | null
@@ -87,7 +108,7 @@ export const loadVpsSeries = async (
 	hours: number,
 ): Promise<ReadonlyArray<RangePoint>> => {
 	const rangeWindow = buildMetricRangeWindow(
-		hours,
+		clampInteger(hours, SERIES_WINDOW_BOUNDS),
 		Math.floor(Date.now() / MS_PER_SECOND),
 	)
 	const payload = await queryVictoriaMetricsRange({
@@ -109,7 +130,13 @@ export const loadVpsLogs = async (
 export const loadFleetLogs = async (
 	windowHours?: number,
 ): Promise<ReadonlyArray<LogLine>> => {
-	const body = await queryVictoriaLogs(buildFleetLogsQuery(windowHours))
+	// Omitted window keeps the domain default; a provided one is clamped so a
+	// NaN/negative value never reaches the LogsQL `_time:` filter.
+	const safeWindowHours =
+		windowHours === undefined
+			? undefined
+			: clampInteger(windowHours, FLEET_LOG_WINDOW_BOUNDS)
+	const body = await queryVictoriaLogs(buildFleetLogsQuery(safeWindowHours))
 	return parseLogLines(body)
 }
 
