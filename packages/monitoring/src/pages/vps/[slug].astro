@@ -4,6 +4,10 @@ import LoadStateBanner from '@/components/dashboard/LoadStateBanner.astro'
 import RangeControl from '@/components/layout/RangeControl.astro'
 import Skeleton from '@/components/dashboard/Skeleton.astro'
 import VpsMetrics from '@/components/vps/VpsMetrics.astro'
+import {
+	VPS_STATUS_BADGE,
+	VPS_STATUS_DOT,
+} from '@/components/vps/vps-status-display.ts'
 import DashboardLayout from '@/layouts/DashboardLayout.astro'
 import { ENV_KEYS, requireEnv } from '@/lib/adapters/env.ts'
 import { getServerByName } from '@/lib/adapters/hetzner/servers.ts'
@@ -33,15 +37,6 @@ const headerState = await loadPageState(`vps.${slug}.header`, () => {
 const outcome = resolveEntityState(headerState)
 const server = outcome.status === 'present' ? outcome.data : null
 
-const statusBadge: Record<string, string> = {
-	running: 'border-accent-200 bg-accent-50 text-accent-800',
-	off: 'border-base-200 bg-base-100 text-base-600',
-}
-const statusDot: Record<string, string> = {
-	running: 'bg-accent-600',
-	off: 'bg-base-400',
-	deleting: 'bg-base-400',
-}
 const role = server
 	? (server.labels['role'] ?? server.serverType.description)
 	: ''
@@ -68,7 +63,7 @@ const hetznerUrl = server
 								<span
 									class:list={[
 										'inline-block size-2.5 rounded-full',
-										statusDot[server.status] ?? 'bg-amber-500',
+										VPS_STATUS_DOT[server.status] ?? 'bg-amber-500',
 									]}
 								/>
 								<h2 class="font-mono text-[22px] font-bold tracking-[-0.02em] whitespace-nowrap text-base-900">
@@ -77,7 +72,7 @@ const hetznerUrl = server
 								<span
 									class:list={[
 										'rounded-full border px-2 py-0.5 text-[11px] font-medium',
-										statusBadge[server.status] ??
+										VPS_STATUS_BADGE[server.status] ??
 											'border-amber-200 bg-amber-50 text-amber-700',
 									]}
 								>

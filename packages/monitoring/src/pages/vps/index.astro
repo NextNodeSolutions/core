@@ -1,6 +1,7 @@
 ---
 import Icon from '@/components/foundations/Icon.astro'
 import LoadStateBanner from '@/components/dashboard/LoadStateBanner.astro'
+import { VPS_STATUS_DOT } from '@/components/vps/vps-status-display.ts'
 import DashboardLayout from '@/layouts/DashboardLayout.astro'
 import { ENV_KEYS, requireEnv } from '@/lib/adapters/env.ts'
 import { listServers } from '@/lib/adapters/hetzner/servers.ts'
@@ -14,12 +15,6 @@ const fleetState = await loadPageState('vps.fleet', () => {
 	return listServers(token)
 })
 const servers = fleetState.kind === 'ok' ? fleetState.data : []
-
-const statusDot: Record<string, string> = {
-	running: 'bg-accent-600',
-	off: 'bg-base-400',
-	deleting: 'bg-base-400',
-}
 ---
 
 <DashboardLayout title="VPS" bare breadcrumbs={[{ label: 'VPS' }]}>
@@ -38,7 +33,7 @@ const statusDot: Record<string, string> = {
 										<span
 											class:list={[
 												'inline-block size-2 rounded-full',
-												statusDot[server.status] ?? 'bg-amber-500',
+												VPS_STATUS_DOT[server.status] ?? 'bg-amber-500',
 											]}
 										/>
 										<span class="truncate font-mono text-sm font-bold text-base-900">
