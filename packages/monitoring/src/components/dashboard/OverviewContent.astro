@@ -25,14 +25,26 @@ import {
 	summarizeFleet,
 } from '@/lib/domain/monitoring/fleet-overview.ts'
 import { formatRelative, formatTime } from '@/lib/domain/monitoring/format.ts'
+import { rangeToHours } from '@/lib/domain/monitoring/vps-metrics.ts'
 
 import type { HostMetrics } from '@/lib/domain/monitoring/host-metrics.ts'
 import type { LogLevel } from '@/lib/domain/monitoring/log-query.ts'
 
 const LOG_STREAM_COUNT = 7
-const SPARK_HOURS = 1
 const DEPLOY_COUNT = 4
 const COMMIT_LENGTH = 7
+
+interface Props {
+	range: string
+}
+
+const { range } = Astro.props
+
+// The time-windowed parts of the overview (fleet error tally, log stream and
+// the per-server cpu sparkline) follow the RangeControl selection. The snapshot
+// gauges (active VPS, mean CPU, monthly egress) are inherently "now" and ignore
+// it. `rangeToHours` already maps `live` -> 1h, matching the logs page/API.
+const hours = rangeToHours(range)
 
 const NULL_METRICS: HostMetrics = {
 	cpuPercent: null,
@@ -66,14 +78,16 @@ const fleetLoadsPromise = Promise.all(
 			loadPageState(`overview.gauges.${server.name}`, () =>
 				loadVpsGauges(server.name),
 			),
-			loadPageState(`overview.spark.${server.name}`, () =>
-				loadVpsSeries(server.name, 'cpu', SPARK_HOURS),
+			loadPageState(`overview.spark.${server.name}.${hours}`, () =>
+				loadVpsSeries(server.name, 'cpu', hours),
 			),
 		])
 		return { name: server.name, metricsState, gaugesState, sparkState }
 	}),
 )
-const logsStatePromise = loadPageState('overview.logs', loadFleetLogs)
+const logsStatePromise = loadPageState(`overview.logs.${hours}`, () =>
+	loadFleetLogs(hours),
+)
 const recentStatePromise = loadPageState('overview.deployments', () =>
 	loadRecentDeployments(DEPLOY_COUNT),
 )
@@ -233,7 +247,7 @@ const recentDeploys = (recentState.kind === 'ok' ? recentState.data : []).map(
 		</div>
 		{
 			servers.length > 0 ? (
-				<div class="grid grid-cols-[repeat(auto-fill,minmax(290px,1fr))] gap-3.5">
+				<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
 					{servers.map((server) => (
 						<FleetCard
 							server={server}

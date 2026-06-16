@@ -1,4 +1,6 @@
 ---
+import { ClientRouter } from 'astro:transitions'
+
 import '@/styles/global.css'
 
 interface Props {
@@ -30,6 +32,7 @@ const {
 			rel="stylesheet"
 		/>
 		<title>{title} · NextNode Monitoring</title>
+		<ClientRouter />
 	</head>
 	<body class="bg-white text-base-900 antialiased min-h-svh">
 		<slot />

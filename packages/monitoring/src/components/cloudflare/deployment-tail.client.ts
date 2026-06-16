@@ -159,12 +159,24 @@ const createSession = (
 	return { start, stop }
 }
 
+// Active sessions for every bound panel on the current document. With View
+// Transitions a soft navigation swaps the DOM without a `beforeunload`, so we
+// close every open EventSource on `astro:before-swap` to avoid leaking SSE
+// connections across page swaps.
+const activeSessions = new Set<SessionHandle>()
+
 const bindTailPanel = (root: HTMLElement): void => {
-	const { streamUrl } = root.dataset
+	// `astro:page-load` re-binds on every soft navigation; this guard keeps the
+	// binding idempotent so a re-rendered (but identically-marked) panel is not
+	// wired twice.
+	const el = root
+	if (el.dataset.tailBound === 'true') return
+	const { streamUrl } = el.dataset
 	if (!streamUrl) return
-	const output = root.querySelector<HTMLElement>('[data-tail-output]')
-	const controls = resolveControls(root)
+	const output = el.querySelector<HTMLElement>('[data-tail-output]')
+	const controls = resolveControls(el)
 	if (!output || !controls) return
+	el.dataset.tailBound = 'true'
 
 	const sink = createTailOutput(output)
 	const setStatus = (label: string, tone: Tone): void => {
@@ -173,6 +185,7 @@ const bindTailPanel = (root: HTMLElement): void => {
 	}
 
 	const session = createSession(streamUrl, sink, setStatus)
+	activeSessions.add(session)
 
 	controls.startBtn.addEventListener('click', session.start)
 	controls.stopBtn.addEventListener('click', session.stop)
@@ -184,6 +197,20 @@ const bindTailPanel = (root: HTMLElement): void => {
 	window.addEventListener('beforeunload', session.stop)
 }
 
-for (const root of document.querySelectorAll<HTMLElement>('[data-tail-root]')) {
-	bindTailPanel(root)
+const bindAllTailPanels = (): void => {
+	for (const root of document.querySelectorAll<HTMLElement>(
+		'[data-tail-root]',
+	)) {
+		bindTailPanel(root)
+	}
 }
+
+const closeAllSessions = (): void => {
+	for (const session of activeSessions) session.stop()
+	activeSessions.clear()
+}
+
+// Fires on the initial page load AND after every View-Transitions soft swap.
+document.addEventListener('astro:page-load', bindAllTailPanels)
+// Tear down open streams before the DOM is swapped out from under us.
+document.addEventListener('astro:before-swap', closeAllSessions)

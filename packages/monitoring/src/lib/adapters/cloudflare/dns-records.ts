@@ -14,15 +14,13 @@ const DNS_RECORDS_MAX_PER_PAGE = 100
 const parseDnsRecord = (
 	raw: unknown,
 	index: number,
+	zoneId: string,
 	zoneName: string,
 ): CloudflareDnsRecord => {
 	const context = `Cloudflare DNS record[${String(index)}] (zone "${zoneName}")`
 	if (!isRecord(raw)) throw new Error(`${context}: not an object`)
 	if (typeof raw.id !== 'string') {
 		throw new Error(`${context}: missing \`id\``)
-	}
-	if (typeof raw.zone_id !== 'string') {
-		throw new Error(`${context}: missing \`zone_id\``)
 	}
 	if (typeof raw.name !== 'string') {
 		throw new Error(`${context}: missing \`name\``)
@@ -33,7 +31,10 @@ const parseDnsRecord = (
 	const ttl = typeof raw.ttl === 'number' ? raw.ttl : 0
 	return {
 		id: raw.id,
-		zoneId: raw.zone_id,
+		// The record came from /zones/:zoneId/dns_records, so it belongs to the
+		// zone we queried. Cloudflare sometimes omits `zone_id` on the record
+		// itself - fall back to the queried zone rather than rejecting the page.
+		zoneId: typeof raw.zone_id === 'string' ? raw.zone_id : zoneId,
 		zoneName,
 		name: raw.name,
 		type: parseDnsRecordType(raw.type),
@@ -70,7 +71,9 @@ const fetchDnsRecordsByContent = async ({
 		context,
 		DNS_RECORDS_MAX_PER_PAGE,
 	)
-	return raw.map((entry, index) => parseDnsRecord(entry, index, zoneName))
+	return raw.map((entry, index) =>
+		parseDnsRecord(entry, index, zoneId, zoneName),
+	)
 }
 
 const memoizedListDnsRecordsByContent = keyedMemoizeAsync(

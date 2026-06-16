@@ -25,7 +25,6 @@ if (!slug) {
 }
 
 const range = Astro.url.searchParams.get('range') ?? 'live'
-const cmp = Astro.url.searchParams.get('cmp') ?? 'cpu'
 
 const headerState = await loadPageState(`vps.${slug}.header`, () => {
 	const token = requireEnv(ENV_KEYS.HETZNER_API_TOKEN)
@@ -177,7 +176,6 @@ const hetznerUrl = server
 					slug={slug}
 					server={server}
 					range={range}
-					cmp={cmp}
 				>
 					<Skeleton slot="fallback" rows={FALLBACK_ROWS} />
 				</VpsMetrics>

@@ -1,40 +1,45 @@
 ---
-import Skeleton from '@/components/dashboard/Skeleton.astro'
-import LogsExplorer from '@/components/logs/LogsExplorer.astro'
-import RangeControl from '@/components/layout/RangeControl.astro'
+import LoadStateBanner from '@/components/dashboard/LoadStateBanner.astro'
+import { LogsExplorer } from '@/islands/logs/LogsExplorer.tsx'
 import DashboardLayout from '@/layouts/DashboardLayout.astro'
+import { loadPageState } from '@/lib/adapters/load-page-state.ts'
+import { loadFleetLogs } from '@/lib/adapters/victoria/logs.ts'
+import { rangeToHours } from '@/lib/domain/monitoring/vps-metrics.ts'
+
+import type { LogLine } from '@/lib/domain/monitoring/log-query.ts'
 
 // oxlint-disable-next-line nextnode/boolean-naming -- prerender is Astro's required route export name
 export const prerender = false
 
-const SKELETON_ROWS = 6
+const DEFAULT_RANGE = '6h'
 
-const params = Astro.url.searchParams
-const q = params.get('q') ?? ''
-const service = params.get('service') ?? 'all'
-const vps = params.get('vps') ?? 'all'
-const levels = params.get('levels') ?? ''
-const range = params.get('range') ?? '6h'
-const sel = params.get('sel') ?? ''
+const range = Astro.url.searchParams.get('range') ?? DEFAULT_RANGE
+
+// First paint: load the initial range's logs once on the server so the island
+// hydrates with data and never flashes a loading state. `rangeToHours` maps
+// `live` -> 1h. `nowMs` is computed server-side and injected so client-side
+// bucketing is deterministic - the island never calls Date.now() in render.
+const hours = rangeToHours(range)
+const logsState = await loadPageState('logs.fleet', () => loadFleetLogs(hours))
+const initialLogs: ReadonlyArray<LogLine> =
+	logsState.kind === 'ok' ? logsState.data : []
+const failedToLoad = logsState.kind !== 'ok'
+const nowMs = Date.now()
 ---
 
 <DashboardLayout title="Explorateur de logs" bare breadcrumbs={[{ label: 'Logs' }]}>
-	<RangeControl
-		slot="actions"
-		path="/logs"
-		value={range}
-		ranges={['live', '1h', '6h', '24h']}
-	/>
+	{
+		failedToLoad && (
+			<div class="px-6 pt-3">
+				<LoadStateBanner state={logsState} upstreamLabel="VictoriaLogs error" />
+			</div>
+		)
+	}
 
 	<LogsExplorer
-		server:defer
-		q={q}
-		service={service}
-		vps={vps}
-		levelsParam={levels}
-		range={range}
-		sel={sel}
-	>
-		<Skeleton slot="fallback" rows={SKELETON_ROWS} />
-	</LogsExplorer>
+		client:load
+		initialLogs={initialLogs}
+		initialRange={range}
+		nowMs={nowMs}
+	/>
 </DashboardLayout>

@@ -15,6 +15,14 @@ describe('buildVpsLogsQuery', () => {
 		expect(query).toContain('sort by (_time desc)')
 		expect(query).toContain('limit 200')
 	})
+
+	it('unpacks the structured JSON trapped in _msg, after sort+limit', () => {
+		const query = buildVpsLogsQuery('nn-prod')
+		expect(query).toContain('| unpack_json')
+		expect(query.indexOf('limit 200')).toBeLessThan(
+			query.indexOf('| unpack_json'),
+		)
+	})
 })
 
 describe('buildContainerLogsQuery', () => {
@@ -24,6 +32,14 @@ describe('buildContainerLogsQuery', () => {
 		expect(query).toContain('_time:6h')
 		expect(query).toContain('sort by (_time desc)')
 		expect(query).toContain('limit 200')
+	})
+
+	it('unpacks the structured JSON trapped in _msg, after sort+limit', () => {
+		const query = buildContainerLogsQuery('stylot')
+		expect(query).toContain('| unpack_json')
+		expect(query.indexOf('limit 200')).toBeLessThan(
+			query.indexOf('| unpack_json'),
+		)
 	})
 
 	it('escapes regex metacharacters in the project slug', () => {
@@ -46,6 +62,14 @@ describe('buildFleetLogsQuery', () => {
 
 	it('honours an explicit window in hours', () => {
 		expect(buildFleetLogsQuery(24)).toContain('_time:24h')
+	})
+
+	it('unpacks the structured JSON trapped in _msg, after sort+limit', () => {
+		const query = buildFleetLogsQuery()
+		expect(query).toContain('| unpack_json')
+		expect(query.indexOf('limit 200')).toBeLessThan(
+			query.indexOf('| unpack_json'),
+		)
 	})
 })
 
@@ -148,5 +172,96 @@ describe('parseLogLines', () => {
 
 	it('drops objects missing _time or _msg', () => {
 		expect(parseLogLines('{"_msg":"no time"}')).toEqual([])
+	})
+
+	// After `| unpack_json`, an app line carries BOTH the raw inner JSON in
+	// `_msg` AND the @nextnode-solutions/logger fields (level, message,
+	// requestId, location) lifted to the top level. The displayed message
+	// must be the human `message`, never the raw JSON blob still in `_msg`.
+	it('reads the unpacked application message, not the raw _msg JSON blob', () => {
+		const inner = JSON.stringify({
+			level: 'info',
+			message: 'server started',
+			requestId: 'abc',
+		})
+		const body = JSON.stringify({
+			_time: '2026-06-15T12:00:00Z',
+			_msg: inner,
+			level: 'info',
+			message: 'server started',
+			requestId: 'abc',
+			location: 'src/server.ts:12',
+			timestamp: '2026-06-15T12:00:00Z',
+			nn_service: 'app',
+			nn_project: 'vps-1',
+		})
+		const [line] = parseLogLines(body)
+		expect(line).toMatchObject({
+			time: '2026-06-15T12:00:00Z',
+			message: 'server started',
+			level: 'info',
+			service: 'app',
+			vps: 'vps-1',
+		})
+		// `requestId`/`location` are useful context -> meta; the duplicated
+		// `message`/`timestamp` and the raw `_msg` must NOT leak into meta.
+		expect(line?.meta).toEqual({
+			requestId: 'abc',
+			location: 'src/server.ts:12',
+		})
+		expect(line?.message).not.toContain('{')
+	})
+
+	// A Caddy access line after `| unpack_json`: the JSON access record is
+	// lifted top-level (status/method/uri/duration), `_msg` keeps the blob.
+	it('extracts unpacked Caddy access fields (status, method, path, duration)', () => {
+		const inner = JSON.stringify({
+			level: 'info',
+			msg: 'handled request',
+			status: 200,
+			method: 'GET',
+			uri: '/health',
+			duration: 12,
+		})
+		const body = JSON.stringify({
+			_time: '2026-06-15T12:00:01Z',
+			_msg: inner,
+			level: 'info',
+			msg: 'handled request',
+			status: 200,
+			method: 'GET',
+			uri: '/health',
+			duration: 12,
+			logger: 'http.log.access.log0',
+			nn_project: 'vps-1',
+		})
+		const [line] = parseLogLines(body)
+		expect(line).toMatchObject({
+			message: 'handled request',
+			level: 'info',
+			status: 200,
+			method: 'GET',
+			path: '/health',
+			durationMs: 12,
+			vps: 'vps-1',
+		})
+		expect(line?.meta).toMatchObject({ logger: 'http.log.access.log0' })
+	})
+
+	// A journald plain line is NOT JSON: `unpack_json` leaves it untouched,
+	// so there is no `message` field. The display falls back to `_msg` and
+	// the level stays null (never guessed from the text).
+	it('falls back to _msg for plain (non-JSON) journald lines', () => {
+		const body = JSON.stringify({
+			_time: '2026-06-15T12:00:02Z',
+			_msg: 'sshd: accepted login',
+			nn_project: 'vps-1',
+		})
+		const [line] = parseLogLines(body)
+		expect(line).toMatchObject({
+			message: 'sshd: accepted login',
+			level: null,
+			vps: 'vps-1',
+		})
 	})
 })

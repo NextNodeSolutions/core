@@ -13,7 +13,7 @@ const range = Astro.url.searchParams.get('range') ?? 'live'
 <DashboardLayout title="Vue d'ensemble" bare>
 	<RangeControl slot="actions" path="/" value={range} />
 
-	<OverviewContent server:defer>
+	<OverviewContent server:defer range={range}>
 		<Skeleton slot="fallback" rows={4} withStats />
 	</OverviewContent>
 </DashboardLayout>
