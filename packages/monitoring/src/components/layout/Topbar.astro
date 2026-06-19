@@ -17,6 +17,13 @@ const { title, crumbs = [] } = Astro.props
 <header
 	class="sticky top-0 z-20 flex h-[60px] shrink-0 items-center gap-4 overflow-hidden border-b border-base-200 bg-white/85 px-6 backdrop-blur"
 >
+	<label
+		for="nav-drawer"
+		aria-label="Ouvrir la navigation"
+		class="-ml-1 inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-lg text-base-600 hover:bg-base-100 hover:text-base-900 lg:hidden"
+	>
+		<Icon name="menu" size={20} />
+	</label>
 	<div class="min-w-0 flex-1">
 		{
 			crumbs.length > 0 && (

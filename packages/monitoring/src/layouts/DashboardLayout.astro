@@ -28,7 +28,21 @@ const currentPath = Astro.url.pathname
 
 <BaseLayout title={title} description={description}>
 	<div class="flex min-h-svh">
+		{/* CSS-only off-canvas nav: the checkbox drives the sidebar + backdrop
+		via `peer-checked` (no JS, so it survives ClientRouter swaps). A page
+		navigation swaps in a fresh unchecked input, closing the drawer. */}
+		<input
+			id="nav-drawer"
+			type="checkbox"
+			class="peer/nav sr-only"
+			aria-label="Afficher ou masquer la navigation"
+		/>
 		<Sidebar current={currentPath} vpsCount={vpsCount} alertCount={alertCount} />
+		<label
+			for="nav-drawer"
+			aria-hidden="true"
+			class="fixed inset-0 z-30 hidden bg-base-900/40 backdrop-blur-sm peer-checked/nav:block lg:hidden"
+		></label>
 
 		<div class="flex min-w-0 flex-1 flex-col">
 			<Topbar title={title} crumbs={breadcrumbs}>
