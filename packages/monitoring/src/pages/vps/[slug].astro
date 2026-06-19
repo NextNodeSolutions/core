@@ -47,14 +47,13 @@ const hetznerUrl = server
 
 <DashboardLayout
 	title={slug}
-	bare
 	breadcrumbs={[{ label: 'VPS', href: '/vps' }, { label: slug }]}
 >
 	<RangeControl slot="actions" path={`/vps/${slug}`} value={range} />
 
 	{
 		server && (
-			<div class="mx-auto flex max-w-[1320px] flex-col gap-[18px] p-6">
+			<div class="flex flex-col gap-[18px]">
 				<div class="overflow-hidden rounded-xl border border-base-200 bg-white shadow-subtle">
 					<div class="flex flex-wrap items-start justify-between gap-4 px-5 py-4.5">
 						<div class="min-w-0">
@@ -185,7 +184,7 @@ const hetznerUrl = server
 
 	{
 		outcome.status === 'not_found' && (
-			<div class="mx-auto max-w-[1320px] p-6">
+			<div>
 				<div class="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-amber-900">
 					<p class="font-display text-base font-semibold">VPS introuvable</p>
 					<p class="mt-1 font-mono text-xs">
@@ -198,7 +197,7 @@ const hetznerUrl = server
 
 	{
 		outcome.status === 'failed' && (
-			<div class="mx-auto max-w-[1320px] px-6">
+			<div>
 				<LoadStateBanner
 					state={outcome.state}
 					upstreamLabel="Hetzner API error"

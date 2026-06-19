@@ -83,17 +83,14 @@ const nowMs = Date.now()
 
 <DashboardLayout
 	title="Déploiements"
-	bare
 	breadcrumbs={[{ label: 'Cloudflare' }, { label: 'Pages' }]}
 >
 	{
 		clientFailed ? (
-			<div class="px-6">
-				<LoadStateBanner
-					state={clientState}
-					upstreamLabel="Cloudflare API error"
-				/>
-			</div>
+			<LoadStateBanner
+				state={clientState}
+				upstreamLabel="Cloudflare API error"
+			/>
 		) : (
 			<Deployments
 				client:load

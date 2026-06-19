@@ -17,8 +17,8 @@ const fleetState = await loadPageState('vps.fleet', () => {
 const servers = fleetState.kind === 'ok' ? fleetState.data : []
 ---
 
-<DashboardLayout title="VPS" bare breadcrumbs={[{ label: 'VPS' }]}>
-	<div class="mx-auto flex max-w-[1320px] flex-col gap-5 p-6">
+<DashboardLayout title="VPS" breadcrumbs={[{ label: 'VPS' }]}>
+	<div class="flex flex-col gap-5">
 		{
 			servers.length > 0 ? (
 				<div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,320px),1fr))] gap-3.5">
