@@ -1,18 +1,17 @@
 ---
 import OverviewContent from '@/components/dashboard/OverviewContent.astro'
 import Skeleton from '@/components/dashboard/Skeleton.astro'
-import RangeControl from '@/components/layout/RangeControl.astro'
 import DashboardLayout from '@/layouts/DashboardLayout.astro'
 
 // oxlint-disable-next-line nextnode/boolean-naming -- prerender is Astro's required route export name
 export const prerender = false
 
+// Initial window for the island seed (deep-link friendly); the range control
+// itself now lives client-side inside the overview island, not the topbar.
 const range = Astro.url.searchParams.get('range') ?? 'live'
 ---
 
 <DashboardLayout title="Vue d'ensemble" bare>
-	<RangeControl slot="actions" path="/" value={range} />
-
 	<OverviewContent server:defer range={range}>
 		<Skeleton slot="fallback" rows={4} withStats />
 	</OverviewContent>

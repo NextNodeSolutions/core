@@ -58,7 +58,20 @@ export interface FleetSummaryInput {
 	readonly servers: ReadonlyArray<HetznerVps>
 	readonly metricsByName: Readonly<Record<string, ServerMetrics>>
 	readonly errorCount: number
+	/** Selected time window in hours - labels the windowed stats honestly. */
+	readonly windowHours: number
+	/**
+	 * Mean CPU% across the fleet OVER the window (not the instant snapshot), or
+	 * null when no server reported a single sample for the window. Computed from
+	 * the same range series the fleet sparklines use - see `fleetCpuWindowAverage`.
+	 */
+	readonly cpuWindowAverage: number | null
+	/** How many servers contributed at least one CPU sample to the average. */
+	readonly cpuNodeCount: number
 }
+
+/** `6` -> `6 h`. The honest label for a windowed stat: never a fixed "6 h". */
+const windowLabel = (windowHours: number): string => `${windowHours} h`
 
 const ALERT_METRICS: AlertMetric[] = ['cpu', 'memory', 'disk']
 
@@ -160,21 +173,35 @@ function activeStat(servers: ReadonlyArray<HetznerVps>): FleetStat {
 	}
 }
 
+/**
+ * Mean CPU% across the fleet over the window: the mean of each server's own
+ * series mean, so a chatty host with more samples does not outweigh a quiet
+ * one. A server with no samples contributes nothing; all-empty -> null.
+ */
+export function fleetCpuWindowAverage(
+	cpuSeriesByServer: ReadonlyArray<ReadonlyArray<number>>,
+): { average: number | null; nodeCount: number } {
+	const perServerMeans = cpuSeriesByServer
+		.filter(series => series.length > 0)
+		.map(series => series.reduce((sum, v) => sum + v, 0) / series.length)
+	if (perServerMeans.length === 0) return { average: null, nodeCount: 0 }
+	const average =
+		perServerMeans.reduce((sum, mean) => sum + mean, 0) /
+		perServerMeans.length
+	return { average, nodeCount: perServerMeans.length }
+}
+
 function cpuStat(input: FleetSummaryInput): FleetStat {
-	const samples = input.servers
-		.map(server => input.metricsByName[server.name]?.cpuPercent ?? null)
-		.filter((percent): percent is number => percent !== null)
-	if (samples.length === 0) {
+	const label = `CPU moyen (${windowLabel(input.windowHours)})`
+	if (input.cpuWindowAverage === null) {
 		return {
-			label: 'CPU moyen fleet',
+			label,
 			value: EMPTY_LABEL,
 			hint: 'aucune métrique',
 			tone: 'neutral',
 		}
 	}
-	const average =
-		samples.reduce((sum, percent) => sum + percent, 0) / samples.length
-	const severity = severityForPercent(average)
+	const severity = severityForPercent(input.cpuWindowAverage)
 	const tone: Tone =
 		severity === 'critical'
 			? 'danger'
@@ -182,9 +209,9 @@ function cpuStat(input: FleetSummaryInput): FleetStat {
 				? 'warning'
 				: 'neutral'
 	return {
-		label: 'CPU moyen fleet',
-		value: formatPercent(average),
-		hint: `${samples.length} nœud${samples.length > 1 ? 's' : ''}`,
+		label,
+		value: formatPercent(input.cpuWindowAverage),
+		hint: `${input.cpuNodeCount} nœud${input.cpuNodeCount > 1 ? 's' : ''}`,
 		tone,
 	}
 }
@@ -210,7 +237,7 @@ function errorStat(input: FleetSummaryInput): FleetStat {
 		input.metricsByName,
 	).length
 	return {
-		label: 'Erreurs (6 h)',
+		label: `Erreurs (${windowLabel(input.windowHours)})`,
 		value: formatCount(input.errorCount),
 		hint: `${alertCount} alerte${alertCount > 1 ? 's' : ''}`,
 		tone: input.errorCount > 0 ? 'danger' : 'positive',
