@@ -1,6 +1,11 @@
 import { keyedMemoizeAsync } from '@/lib/adapters/cache.ts'
 import { hetznerGet } from '@/lib/adapters/hetzner/client.ts'
 import {
+	MOCK_DATA,
+	mockServerByName,
+	mockServers,
+} from '@/lib/adapters/mock-data.ts'
+import {
 	parseVpsArchitecture,
 	parseVpsCpuType,
 	parseVpsStatus,
@@ -198,7 +203,8 @@ const memoizedListServers = keyedMemoizeAsync(
 
 export const listServers = (
 	token: string,
-): Promise<ReadonlyArray<HetznerVps>> => memoizedListServers(token)
+): Promise<ReadonlyArray<HetznerVps>> =>
+	MOCK_DATA ? Promise.resolve(mockServers()) : memoizedListServers(token)
 
 /**
  * Fetch a single Hetzner server by name.
@@ -230,4 +236,7 @@ const memoizedGetServerByName = keyedMemoizeAsync(
 export const getServerByName = (
 	token: string,
 	name: string,
-): Promise<HetznerVps | null> => memoizedGetServerByName({ token, name })
+): Promise<HetznerVps | null> =>
+	MOCK_DATA
+		? Promise.resolve(mockServerByName(name))
+		: memoizedGetServerByName({ token, name })

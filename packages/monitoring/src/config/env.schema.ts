@@ -43,4 +43,12 @@ export const envSchema = {
 		access: 'secret',
 		optional: true,
 	}),
+	// Local-only switch: `MOCK_DATA=1` makes the upstream adapters serve canned
+	// fixtures instead of hitting Hetzner / VictoriaMetrics / VictoriaLogs, so the
+	// dashboard runs fully populated with no tokens and no tailnet. Off by default.
+	MOCK_DATA: envField.string({
+		context: 'server',
+		access: 'secret',
+		optional: true,
+	}),
 } as const
