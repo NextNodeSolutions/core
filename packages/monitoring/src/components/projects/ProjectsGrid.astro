@@ -65,7 +65,7 @@ const projects = projectsState.kind === 'ok' ? projectsState.data : []
 const nowMs = Date.now()
 ---
 
-<div class="mx-auto flex max-w-[1100px] flex-col gap-4 p-6">
+<div class="mx-auto flex max-w-[1320px] flex-col gap-5 p-6">
 	<div class="flex items-center justify-between">
 		<span
 			class="inline-flex items-center gap-2 font-mono text-[11px] font-semibold tracking-[0.12em] text-base-700 uppercase"
@@ -88,7 +88,7 @@ const nowMs = Date.now()
 		projects.length === 0 ? (
 			<LoadStateBanner state={projectsState} upstreamLabel="GitHub API error" />
 		) : (
-			<div class="grid grid-cols-[repeat(auto-fill,minmax(360px,1fr))] gap-4">
+			<div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,320px),1fr))] gap-4">
 				{projects.map(project => {
 					const status = statusStyles[project.deployStatus]
 					const lastDeploy =
