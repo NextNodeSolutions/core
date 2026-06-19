@@ -25,7 +25,18 @@ export const rangeAtom = atom('live')
 /** Seeded once from server props; read by the loader for the initial range. */
 export const seedAtom = atom<OverviewWindow | null>(null)
 
-const parseWindow = (payload: unknown, range: string): OverviewWindow => {
+/**
+ * Validate the /api/overview JSON before it reaches the atoms: the client trust
+ * boundary. A malformed payload THROWS (a loud failure the data region
+ * surfaces) rather than passing a half-empty window the UI would read as "all
+ * clear". `range`/`windowHours` are derived from the REQUESTED range, not echoed
+ * by the server, so a garbage range still clamps to a known window. Exported so
+ * the boundary is unit-tested directly (see atoms.test.ts).
+ */
+export const parseWindow = (
+	payload: unknown,
+	range: string,
+): OverviewWindow => {
 	if (
 		!isRecord(payload) ||
 		!Array.isArray(payload.stats) ||
