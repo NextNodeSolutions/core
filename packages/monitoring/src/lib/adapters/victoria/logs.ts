@@ -1,3 +1,8 @@
+import {
+	MOCK_DATA,
+	mockFleetLogs,
+	mockVpsLogs,
+} from '@/lib/adapters/mock-data.ts'
 import { queryVictoriaLogs } from '@/lib/adapters/victoria/client.ts'
 import { clampInteger } from '@/lib/domain/clamp.ts'
 import {
@@ -30,6 +35,7 @@ const FLEET_LOG_WINDOW_BOUNDS = { min: 1, max: 720, fallback: 6 } as const
 export const loadVpsLogs = async (
 	vpsName: string,
 ): Promise<ReadonlyArray<LogLine>> => {
+	if (MOCK_DATA) return mockVpsLogs(vpsName)
 	const body = await queryVictoriaLogs(buildVpsLogsQuery(vpsName))
 	return parseLogLines(body)
 }
@@ -38,6 +44,7 @@ export const loadVpsLogs = async (
 export const loadFleetLogs = async (
 	windowHours?: number,
 ): Promise<ReadonlyArray<LogLine>> => {
+	if (MOCK_DATA) return mockFleetLogs()
 	// Omitted window keeps the domain default; a provided one is clamped so a
 	// NaN/negative value never reaches the LogsQL `_time:` filter.
 	const safeWindowHours =

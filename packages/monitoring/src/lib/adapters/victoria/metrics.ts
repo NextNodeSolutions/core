@@ -1,4 +1,10 @@
 import {
+	MOCK_DATA,
+	mockHostMetrics,
+	mockVpsGauges,
+	mockVpsSeries,
+} from '@/lib/adapters/mock-data.ts'
+import {
 	queryVictoriaMetricsInstant,
 	queryVictoriaMetricsRange,
 } from '@/lib/adapters/victoria/client.ts'
@@ -44,6 +50,7 @@ const scalarOrNull = async (expr: string): Promise<number | null> => {
 export const loadHostMetrics = async (
 	vpsName: string,
 ): Promise<HostMetrics> => {
+	if (MOCK_DATA) return mockHostMetrics(vpsName)
 	const exprs = buildHostMetricExprs(vpsName)
 	const [cpuPercent, memoryPercent, diskPercent, uptimeSeconds] =
 		await Promise.all([
@@ -66,6 +73,7 @@ export interface VpsGauges {
 
 /** Instant load-average, swap and network-rate gauges for the VPS header. */
 export const loadVpsGauges = async (vpsName: string): Promise<VpsGauges> => {
+	if (MOCK_DATA) return mockVpsGauges(vpsName)
 	const exprs = buildVpsGaugeExprs(vpsName)
 	const [load1, load5, load15, swapPercent, netInMbps, netOutMbps] =
 		await Promise.all([
@@ -85,6 +93,7 @@ export const loadVpsSeries = async (
 	metric: VpsSeriesMetric,
 	hours: number,
 ): Promise<ReadonlyArray<RangePoint>> => {
+	if (MOCK_DATA) return mockVpsSeries(vpsName, metric, hours)
 	const rangeWindow = buildMetricRangeWindow(
 		clampInteger(hours, SERIES_WINDOW_BOUNDS),
 		Math.floor(Date.now() / MS_PER_SECOND),
