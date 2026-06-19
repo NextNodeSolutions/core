@@ -229,9 +229,13 @@ const swapAmber =
 		// here means the header lookup raced to empty - the page already owns the
 		// not-found / error banner, so the island stays silent rather than
 		// repeating a (here unknowable) cause.
-		<div class="mx-auto max-w-[1320px] p-6" />
+		<div />
 	) : (
-		<div class="mx-auto flex max-w-[1320px] flex-col gap-[18px] p-6">
+		// No own page wrapper: the island is a flex-item of the page's
+		// `flex flex-col max-w-[1320px]` container, so an `mx-auto` here would
+		// cancel the cross-axis stretch and shrink the island to its content
+		// width. Stay a plain flex column and inherit the page's single wrapper.
+		<div class="flex flex-col gap-[18px]">
 			{alerts.length > 0 && (
 				<section class="overflow-hidden rounded-xl border border-red-200 bg-white shadow-subtle">
 					{alerts.map((alert) => (
@@ -283,7 +287,7 @@ const swapAmber =
 				</section>
 			)}
 
-			<div class="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3.5">
+			<div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,150px),1fr))] gap-3.5">
 				<div class="flex justify-center rounded-xl border border-base-200 bg-white p-4 shadow-subtle">
 					<RadialGauge
 						value={host.cpuPercent ?? 0}
@@ -368,7 +372,7 @@ const swapAmber =
 				</div>
 			</div>
 
-			<div class="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-3.5">
+			<div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,300px),1fr))] gap-3.5">
 				<VpsMetricPanel
 					title="CPU"
 					icon="cpu"
