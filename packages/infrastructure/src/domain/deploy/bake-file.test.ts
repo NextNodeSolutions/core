@@ -34,6 +34,28 @@ const upstreamService = (ref: string): UserServiceConfig => ({
 
 const parse = (raw: string): unknown => parseJsonOrThrow(raw, 'bake definition')
 
+// The two layered caches every build target carries: the fast-but-evictable gha
+// scope and the durable GHCR registry buildcache. Encoded once here (the
+// expected contract) so a fixture reads as "this target, with the standard
+// cache block"; the cache string format itself is pinned literally by the
+// dedicated test below.
+const cacheBlock = (
+	name: string,
+	cacheRef: string,
+): {
+	'cache-from': ReadonlyArray<string>
+	'cache-to': ReadonlyArray<string>
+} => ({
+	'cache-from': [
+		`type=gha,scope=${name}`,
+		`type=registry,ref=${cacheRef}:buildcache`,
+	],
+	'cache-to': [
+		`type=gha,scope=${name},mode=max`,
+		`type=registry,ref=${cacheRef}:buildcache,mode=max,ignore-error=true`,
+	],
+})
+
 describe('renderBakeFile', () => {
 	it('renders a build service with monorepo defaults: repo-root context, package Dockerfile, no explicit stage', () => {
 		const bakeFile = renderBakeFile({
@@ -51,8 +73,7 @@ describe('renderBakeFile', () => {
 					context: '.',
 					dockerfile: 'packages/monitoring/Dockerfile',
 					tags: ['ghcr.io/nextnodesolutions/core-app:sha-abc1234'],
-					'cache-from': ['type=gha,scope=app'],
-					'cache-to': ['type=gha,scope=app,mode=max'],
+					...cacheBlock('app', 'ghcr.io/nextnodesolutions/core-app'),
 				},
 			},
 		})
@@ -87,8 +108,7 @@ describe('renderBakeFile', () => {
 					dockerfile: 'apps/web/Dockerfile.prod',
 					target: 'runtime',
 					tags: ['ghcr.io/acme/site-web:sha-deadbee'],
-					'cache-from': ['type=gha,scope=web'],
-					'cache-to': ['type=gha,scope=web,mode=max'],
+					...cacheBlock('web', 'ghcr.io/acme/site-web'),
 				},
 			},
 		})
@@ -110,8 +130,7 @@ describe('renderBakeFile', () => {
 					context: '.',
 					dockerfile: 'Dockerfile',
 					tags: ['ghcr.io/nextnodesolutions/core-app:sha-abc1234'],
-					'cache-from': ['type=gha,scope=app'],
-					'cache-to': ['type=gha,scope=app,mode=max'],
+					...cacheBlock('app', 'ghcr.io/nextnodesolutions/core-app'),
 				},
 			},
 		})
@@ -153,15 +172,13 @@ describe('renderBakeFile', () => {
 						ANALYTICS_ID: 'GA-1',
 					},
 					tags: ['ghcr.io/acme/app-front:sha-1111111'],
-					'cache-from': ['type=gha,scope=front'],
-					'cache-to': ['type=gha,scope=front,mode=max'],
+					...cacheBlock('front', 'ghcr.io/acme/app-front'),
 				},
 				api: {
 					context: '.',
 					dockerfile: 'packages/app/Dockerfile',
 					tags: ['ghcr.io/acme/app-api:sha-2222222'],
-					'cache-from': ['type=gha,scope=api'],
-					'cache-to': ['type=gha,scope=api,mode=max'],
+					...cacheBlock('api', 'ghcr.io/acme/app-api'),
 				},
 			},
 		})
@@ -183,8 +200,7 @@ describe('renderBakeFile', () => {
 					context: '.',
 					dockerfile: 'packages/monitoring/Dockerfile',
 					tags: ['ghcr.io/nextnodesolutions/core-app:sha-abc1234'],
-					'cache-from': ['type=gha,scope=app'],
-					'cache-to': ['type=gha,scope=app,mode=max'],
+					...cacheBlock('app', 'ghcr.io/nextnodesolutions/core-app'),
 				},
 			},
 		})
@@ -226,15 +242,13 @@ describe('renderBakeFile', () => {
 					context: '.',
 					dockerfile: 'packages/app/Dockerfile',
 					tags: ['ghcr.io/acme/app-front:sha-1111111'],
-					'cache-from': ['type=gha,scope=front'],
-					'cache-to': ['type=gha,scope=front,mode=max'],
+					...cacheBlock('front', 'ghcr.io/acme/app-front'),
 				},
 				api: {
 					context: '.',
 					dockerfile: 'packages/app/Dockerfile',
 					tags: ['ghcr.io/acme/app-api:sha-2222222'],
-					'cache-from': ['type=gha,scope=api'],
-					'cache-to': ['type=gha,scope=api,mode=max'],
+					...cacheBlock('api', 'ghcr.io/acme/app-api'),
 				},
 			},
 		})
@@ -274,5 +288,30 @@ describe('renderBakeFile', () => {
 				buildArgs: {},
 			}),
 		).toThrow('bake target "app" is not a declared build service')
+	})
+
+	it('carries a GHCR registry buildcache ref alongside the per-target gha cache', () => {
+		const bakeFile = renderBakeFile({
+			services: { app: buildService() },
+			imageRefs: { app: APP_IMAGE },
+			bakeTargets: ['app'],
+			packageDir: 'packages/monitoring',
+			buildArgs: {},
+		})
+
+		expect(parse(bakeFile)).toMatchObject({
+			target: {
+				app: {
+					'cache-from': [
+						'type=gha,scope=app',
+						'type=registry,ref=ghcr.io/nextnodesolutions/core-app:buildcache',
+					],
+					'cache-to': [
+						'type=gha,scope=app,mode=max',
+						'type=registry,ref=ghcr.io/nextnodesolutions/core-app:buildcache,mode=max,ignore-error=true',
+					],
+				},
+			},
+		})
 	})
 })
