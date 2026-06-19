@@ -22,6 +22,12 @@ export const prerender = false
 
 const DEFAULT_RANGE = 'live'
 
+/**
+ * Success body the island reads: the bare `OverviewWindow`, NOT the `apiErr`
+ * `{ ok, ... }` envelope the error paths use via `jsonResponse`. The island
+ * deserialises this window straight into its atoms, so success stays unwrapped;
+ * only errors carry the envelope. Same split as `okLogsResponse` in api/logs.ts.
+ */
 const okOverviewResponse = (window: OverviewWindow): Response =>
 	new Response(JSON.stringify(window), {
 		status: HTTP_STATUS.OK,
