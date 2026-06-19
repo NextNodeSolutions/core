@@ -15,6 +15,7 @@ import { requireEnv } from './cli/env.ts'
 import { buildGoldenImageCommand } from './cli/hetzner/build-golden-image.command.ts'
 import { reconcileTailnetAclCommand } from './cli/hetzner/reconcile-tailnet-acl.command.ts'
 import { recoverCommand } from './cli/hetzner/recover.command.ts'
+import { detectMigrationChangesCommand } from './cli/pipeline/detect-migration-changes.command.ts'
 import { planCommand } from './cli/pipeline/plan.command.ts'
 import { prodGateCommand } from './cli/pipeline/prod-gate.command.ts'
 import { publishResultCommand } from './cli/pipeline/publish-result.command.ts'
@@ -33,6 +34,7 @@ type StandaloneCommand = () => void | Promise<void>
 
 const PLAN_COMMANDS: Record<string, ConfigCommand> = {
 	plan: planCommand,
+	'detect-migration-changes': detectMigrationChangesCommand,
 	'teardown-guard': teardownGuardCommand,
 }
 
