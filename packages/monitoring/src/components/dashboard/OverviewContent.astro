@@ -3,16 +3,16 @@ import FleetCard from '@/components/dashboard/FleetCard.astro'
 import Icon from '@/components/foundations/Icon.astro'
 import type { IconName } from '@/components/foundations/Icon.astro'
 import LoadStateBanner from '@/components/dashboard/LoadStateBanner.astro'
-import OverviewStatCard from '@/components/dashboard/OverviewStatCard.astro'
+import { Overview } from '@/islands/overview/Overview.tsx'
 import { ENV_KEYS, requireEnv } from '@/lib/adapters/env.ts'
 import { listServers } from '@/lib/adapters/hetzner/servers.ts'
 import { loadPageState } from '@/lib/adapters/load-page-state.ts'
+import { loadOverviewWindow } from '@/lib/adapters/overview.ts'
 import {
 	loadHostMetrics,
 	loadVpsGauges,
 	loadVpsSeries,
 } from '@/lib/adapters/victoria/metrics.ts'
-import { loadFleetLogs } from '@/lib/adapters/victoria/logs.ts'
 import { loadRecentDeployments } from '@/lib/adapters/cloudflare/recent-deployments.ts'
 import {
 	DEPLOY_STATUS_COLOR,
@@ -22,29 +22,22 @@ import { deploymentDisplayStatus } from '@/lib/domain/cloudflare/deployment-summ
 import {
 	computeServerHealth,
 	deriveFleetAlerts,
-	summarizeFleet,
 } from '@/lib/domain/monitoring/fleet-overview.ts'
-import { formatRelative, formatTime } from '@/lib/domain/monitoring/format.ts'
-import { rangeToHours } from '@/lib/domain/monitoring/vps-metrics.ts'
+import { formatRelative } from '@/lib/domain/monitoring/format.ts'
 
 import type { HostMetrics } from '@/lib/domain/monitoring/host-metrics.ts'
-import type { LogLevel } from '@/lib/domain/monitoring/log-query.ts'
 
-const LOG_STREAM_COUNT = 7
 const DEPLOY_COUNT = 4
 const COMMIT_LENGTH = 7
+// The fleet card sparkline is a "now" glance, not a windowed series - it never
+// follows the island's range control, so it loads at a fixed short window.
+const SPARK_HOURS = 1
 
 interface Props {
 	range: string
 }
 
 const { range } = Astro.props
-
-// The time-windowed parts of the overview (fleet error tally, log stream and
-// the per-server cpu sparkline) follow the RangeControl selection. The snapshot
-// gauges (active VPS, mean CPU, monthly egress) are inherently "now" and ignore
-// it. `rangeToHours` already maps `live` -> 1h, matching the logs page/API.
-const hours = rangeToHours(range)
 
 const NULL_METRICS: HostMetrics = {
 	cpuPercent: null,
@@ -65,10 +58,10 @@ const serversState = await loadPageState('overview.servers', () => {
 })
 const servers = serversState.kind === 'ok' ? serversState.data : []
 
-// The fleet metric pass, the logs query and the recent-deployments fan-out hit
-// three independent upstreams, so kick them all off together and await once
-// rather than serializing three round-trip waves. Within the fleet pass, all
-// three queries per server fire together and every server fires together.
+// The range-INDEPENDENT sections (fleet grid + alerts, recent deployments) are
+// "now" snapshots rendered once here; the range-DEPENDENT window (stats + log
+// preview) is loaded as the island seed. They hit independent upstreams, so
+// kick everything off together and await once.
 const fleetLoadsPromise = Promise.all(
 	servers.map(async (server) => {
 		const [metricsState, gaugesState, sparkState] = await Promise.all([
@@ -78,23 +71,21 @@ const fleetLoadsPromise = Promise.all(
 			loadPageState(`overview.gauges.${server.name}`, () =>
 				loadVpsGauges(server.name),
 			),
-			loadPageState(`overview.spark.${server.name}.${hours}`, () =>
-				loadVpsSeries(server.name, 'cpu', hours),
+			loadPageState(`overview.spark.${server.name}`, () =>
+				loadVpsSeries(server.name, 'cpu', SPARK_HOURS),
 			),
 		])
 		return { name: server.name, metricsState, gaugesState, sparkState }
 	}),
 )
-const logsStatePromise = loadPageState(`overview.logs.${hours}`, () =>
-	loadFleetLogs(hours),
-)
 const recentStatePromise = loadPageState('overview.deployments', () =>
 	loadRecentDeployments(DEPLOY_COUNT),
 )
-const [fleetLoads, logsState, recentState] = await Promise.all([
+const seedPromise = loadOverviewWindow(range)
+const [fleetLoads, recentState, seed] = await Promise.all([
 	fleetLoadsPromise,
-	logsStatePromise,
 	recentStatePromise,
+	seedPromise,
 ])
 
 const metricsByName: Record<string, HostMetrics> = {}
@@ -102,8 +93,7 @@ const fleetExtras: Record<string, FleetExtra> = {}
 for (const load of fleetLoads) {
 	metricsByName[load.name] =
 		load.metricsState.kind === 'ok' ? load.metricsState.data : NULL_METRICS
-	const gauges =
-		load.gaugesState.kind === 'ok' ? load.gaugesState.data : null
+	const gauges = load.gaugesState.kind === 'ok' ? load.gaugesState.data : null
 	const points = load.sparkState.kind === 'ok' ? load.sparkState.data : []
 	fleetExtras[load.name] = {
 		cpuTrend: points.map((point) => point.v),
@@ -112,26 +102,7 @@ for (const load of fleetLoads) {
 	}
 }
 
-const logs = logsState.kind === 'ok' ? logsState.data : []
-const errorCount = logs.filter((line) => line.level === 'error').length
-
-const stats = summarizeFleet({ servers, metricsByName, errorCount })
 const alerts = deriveFleetAlerts(servers, metricsByName)
-const statIcons: IconName[] = ['server', 'cpu', 'net', 'alert']
-
-const levelClass: Record<LogLevel, string> = {
-	debug: 'text-base-400',
-	info: 'text-sky-600',
-	warn: 'text-amber-600',
-	error: 'text-red-600',
-}
-
-const stream = logs.slice(0, LOG_STREAM_COUNT).map((line) => ({
-	time: formatTime(new Date(line.time).getTime()),
-	level: line.level,
-	service: line.service,
-	message: line.message,
-}))
 
 const nowMs = Date.now()
 const recentDeploys = (recentState.kind === 'ok' ? recentState.data : []).map(
@@ -150,21 +121,7 @@ const recentDeploys = (recentState.kind === 'ok' ? recentState.data : []).map(
 ---
 
 <div class="mx-auto flex max-w-[1320px] flex-col gap-5 p-6">
-	<div
-		class="grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-3.5"
-	>
-		{
-			stats.map((stat, index) => (
-				<OverviewStatCard
-					icon={statIcons[index] ?? 'activity'}
-					label={stat.label}
-					value={stat.value}
-					hint={stat.hint}
-					tone={stat.tone}
-				/>
-			))
-		}
-	</div>
+	<Overview client:load seed={seed} />
 
 	{
 		alerts.length > 0 && (
@@ -247,7 +204,7 @@ const recentDeploys = (recentState.kind === 'ok' ? recentState.data : []).map(
 		</div>
 		{
 			servers.length > 0 ? (
-				<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
+				<div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,320px),1fr))] gap-3.5">
 					{servers.map((server) => (
 						<FleetCard
 							server={server}
@@ -268,106 +225,62 @@ const recentDeploys = (recentState.kind === 'ok' ? recentState.data : []).map(
 		}
 	</section>
 
-	<section class="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-4">
-		<div class="flex min-w-0 flex-col rounded-xl border border-base-200 bg-white shadow-subtle">
-			<header class="flex items-center justify-between border-b border-base-200 px-4 py-3.5">
-				<span class="text-sm font-semibold text-base-900">
-					Déploiements récents
-				</span>
-				<a
-					href="/deployments"
-					class="rounded-full px-3 py-1 text-xs font-medium text-base-700 hover:bg-base-50"
-				>
-					Voir tout
-				</a>
-			</header>
-			{
-				recentDeploys.length > 0 ? (
-					<div class="flex flex-col">
-						{recentDeploys.map((deploy) => (
-							<a
-								href={deploy.href}
-								class="flex items-center gap-3 border-b border-base-100 px-4 py-3 last:border-b-0 hover:bg-base-50"
-							>
-								<span class:list={['shrink-0', DEPLOY_STATUS_COLOR[deploy.display]]}>
-									<Icon name={DEPLOY_STATUS_ICON[deploy.display]} size={15} />
-								</span>
-								<div class="min-w-0 flex-1">
-									<div class="truncate text-[13px] font-medium text-base-900">
-										{deploy.message}
-									</div>
-									<div class="flex items-center gap-1.5 font-mono text-[11px] text-base-500">
-										<Icon name="branch" size={11} />
-										{deploy.branch} · {deploy.commit}
-									</div>
+	<section class="rounded-xl border border-base-200 bg-white shadow-subtle">
+		<header class="flex items-center justify-between border-b border-base-200 px-4 py-3.5">
+			<span class="text-sm font-semibold text-base-900">
+				Déploiements récents
+			</span>
+			<a
+				href="/deployments"
+				class="rounded-full px-3 py-1 text-xs font-medium text-base-700 hover:bg-base-50"
+			>
+				Voir tout
+			</a>
+		</header>
+		{
+			recentDeploys.length > 0 ? (
+				<div class="flex flex-col">
+					{recentDeploys.map((deploy) => (
+						<a
+							href={deploy.href}
+							class="flex items-center gap-3 border-b border-base-100 px-4 py-3 last:border-b-0 hover:bg-base-50"
+						>
+							<span class:list={['shrink-0', DEPLOY_STATUS_COLOR[deploy.display]]}>
+								<Icon name={DEPLOY_STATUS_ICON[deploy.display]} size={15} />
+							</span>
+							<div class="min-w-0 flex-1">
+								<div class="truncate text-[13px] font-medium text-base-900">
+									{deploy.message}
 								</div>
-								<span
-									class:list={[
-										'shrink-0 rounded-full border px-2 py-0.5 text-[10.5px] font-medium',
-										deploy.isProd
-											? 'border-accent-200 bg-accent-50 text-accent-800'
-											: 'border-base-200 bg-base-100 text-base-600',
-									]}
-								>
-									{deploy.isProd ? 'prod' : 'preview'}
-								</span>
-								<span class="shrink-0 font-mono text-[11px] text-base-500">
-									{deploy.ago}
-								</span>
-							</a>
-						))}
-					</div>
-				) : (
-					<div class="p-4">
-						<LoadStateBanner
-							state={recentState}
-							upstreamLabel="Cloudflare API error"
-						/>
-					</div>
-				)
-			}
-		</div>
-
-		<div class="flex min-w-0 flex-col rounded-xl border border-base-200 bg-white shadow-subtle">
-			<header class="flex items-center justify-between border-b border-base-200 px-4 py-3.5">
-				<span class="text-sm font-semibold text-base-900">Flux de logs</span>
-				<a
-					href="/logs"
-					class="rounded-full px-3 py-1 text-xs font-medium text-base-700 hover:bg-base-50"
-				>
-					Explorer
-				</a>
-			</header>
-			{
-				stream.length > 0 ? (
-					<div class="flex flex-col py-2 font-mono text-[11.5px]">
-						{stream.map((line) => (
-							<a
-								href="/logs"
-								class="flex gap-2 overflow-hidden rounded px-3 py-1 whitespace-nowrap hover:bg-base-50"
+								<div class="flex items-center gap-1.5 font-mono text-[11px] text-base-500">
+									<Icon name="branch" size={11} />
+									{deploy.branch} · {deploy.commit}
+								</div>
+							</div>
+							<span
+								class:list={[
+									'shrink-0 rounded-full border px-2 py-0.5 text-[10.5px] font-medium',
+									deploy.isProd
+										? 'border-accent-200 bg-accent-50 text-accent-800'
+										: 'border-base-200 bg-base-100 text-base-600',
+								]}
 							>
-								<span class="text-base-400">{line.time}</span>
-								<span
-									class:list={[
-										'w-10 shrink-0 text-[10.5px] font-semibold uppercase',
-										line.level === null ? 'text-base-400' : levelClass[line.level],
-									]}
-								>
-									{line.level ?? '·'}
-								</span>
-								<span class="shrink-0 text-base-500">{line.service ?? ''}</span>
-								<span class="overflow-hidden text-ellipsis text-base-800">
-									{line.message}
-								</span>
-							</a>
-						))}
-					</div>
-				) : (
-					<div class="p-4">
-						<LoadStateBanner state={logsState} upstreamLabel="VictoriaLogs error" />
-					</div>
-				)
-			}
-		</div>
+								{deploy.isProd ? 'prod' : 'preview'}
+							</span>
+							<span class="shrink-0 font-mono text-[11px] text-base-500">
+								{deploy.ago}
+							</span>
+						</a>
+					))}
+				</div>
+			) : (
+				<div class="p-4">
+					<LoadStateBanner
+						state={recentState}
+						upstreamLabel="Cloudflare API error"
+					/>
+				</div>
+			)
+		}
 	</section>
 </div>

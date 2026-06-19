@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
 	computeServerHealth,
 	deriveFleetAlerts,
+	fleetCpuWindowAverage,
 	summarizeFleet,
 } from './fleet-overview.ts'
 
@@ -138,7 +139,14 @@ describe('deriveFleetAlerts', () => {
 })
 
 describe('summarizeFleet', () => {
-	const stats = summarizeFleet({ servers, metricsByName, errorCount: 12 })
+	const stats = summarizeFleet({
+		servers,
+		metricsByName,
+		errorCount: 12,
+		windowHours: 6,
+		cpuWindowAverage: 50,
+		cpuNodeCount: 2,
+	})
 	const byLabel = (label: string): FleetStat | undefined =>
 		stats.find(s => s.label === label)
 
@@ -150,11 +158,26 @@ describe('summarizeFleet', () => {
 		})
 	})
 
-	it('averages CPU only over servers that report metrics', () => {
-		expect(byLabel('CPU moyen fleet')).toMatchObject({
+	it('renders the windowed CPU average under a range-labelled title', () => {
+		expect(byLabel('CPU moyen (6 h)')).toMatchObject({
 			value: '50%',
 			hint: '2 nœuds',
 			tone: 'neutral',
+		})
+	})
+
+	it('escalates the CPU stat tone once the average breaches a band', () => {
+		const hot = summarizeFleet({
+			servers,
+			metricsByName,
+			errorCount: 0,
+			windowHours: 1,
+			cpuWindowAverage: 92,
+			cpuNodeCount: 2,
+		})
+		expect(hot.find(s => s.label === 'CPU moyen (1 h)')).toMatchObject({
+			value: '92%',
+			tone: 'danger',
 		})
 	})
 
@@ -165,7 +188,7 @@ describe('summarizeFleet', () => {
 		})
 	})
 
-	it('surfaces the error count and derived alert total', () => {
+	it('surfaces the error count and alert total under a range label', () => {
 		expect(byLabel('Erreurs (6 h)')).toMatchObject({
 			value: '12',
 			hint: '2 alertes',
@@ -173,34 +196,53 @@ describe('summarizeFleet', () => {
 		})
 	})
 
-	it('shows a neutral placeholder when no server reports any CPU metric', () => {
+	it('labels the window honestly for a different range', () => {
+		const day = summarizeFleet({
+			servers,
+			metricsByName,
+			errorCount: 0,
+			windowHours: 24,
+			cpuWindowAverage: 10,
+			cpuNodeCount: 2,
+		})
+		expect(day.some(s => s.label === 'CPU moyen (24 h)')).toBe(true)
+		expect(day.some(s => s.label === 'Erreurs (24 h)')).toBe(true)
+	})
+
+	it('shows a neutral placeholder when the window has no CPU sample', () => {
 		const blind = summarizeFleet({
 			servers,
-			metricsByName: {
-				alpha: {
-					cpuPercent: null,
-					memoryPercent: null,
-					diskPercent: null,
-				},
-				beta: {
-					cpuPercent: null,
-					memoryPercent: null,
-					diskPercent: null,
-				},
-				gamma: {
-					cpuPercent: null,
-					memoryPercent: null,
-					diskPercent: null,
-				},
-			},
+			metricsByName,
 			errorCount: 0,
+			windowHours: 6,
+			cpuWindowAverage: null,
+			cpuNodeCount: 0,
 		})
 		expect(
-			blind.find(stat => stat.label === 'CPU moyen fleet'),
+			blind.find(stat => stat.label === 'CPU moyen (6 h)'),
 		).toMatchObject({
 			value: '-',
 			hint: 'aucune métrique',
 			tone: 'neutral',
+		})
+	})
+})
+
+describe('fleetCpuWindowAverage', () => {
+	it('averages each server mean, ignoring empty series', () => {
+		const { average, nodeCount } = fleetCpuWindowAverage([
+			[10, 30], // mean 20
+			[], // no samples for the window - contributes nothing
+			[60, 80], // mean 70
+		])
+		expect(nodeCount).toBe(2)
+		expect(average).toBe(45)
+	})
+
+	it('returns null when no server reported a single sample', () => {
+		expect(fleetCpuWindowAverage([[], []])).toEqual({
+			average: null,
+			nodeCount: 0,
 		})
 	})
 })
