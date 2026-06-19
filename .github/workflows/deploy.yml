@@ -209,14 +209,45 @@ jobs:
                   files: ${{ steps.compute.outputs.bake_file }}
                   push: true
 
+    detect-migrations:
+        name: Detect migrations
+        needs: plan
+        # The migrate job's postgres roundtrip (compose pull + up --wait +
+        # ephemeral migrate container) is the per-deploy hotspot. Skip it when
+        # the push changed no migration file. The git-diff + fail-safe decision
+        # is a TS command (no decision logic in YAML); it fails safe to
+        # migrations_changed=true on any range it cannot diff (manual dispatch,
+        # first push, shallow clone), so a real migration is never skipped. The
+        # deploy job brings postgres up independently, so skipping migrate never
+        # risks the schema's availability - only its (no-op) migration.
+        if: needs.plan.outputs.has_postgres == 'true'
+        runs-on: ubuntu-latest
+        outputs:
+            migrations_changed: ${{ steps.detect.outputs.migrations_changed }}
+        steps:
+            - uses: NextNodeSolutions/core/.github/actions/setup@main
+              with:
+                  infra: 'true'
+                  deps: 'false'
+                  # Full history so `git diff <before> <sha>` can resolve the base.
+                  fetch-depth: '0'
+
+            - name: Detect migration changes
+              id: detect
+              run: node src/index.ts detect-migration-changes
+              working-directory: .infra/packages/infrastructure
+              env:
+                  PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
+                  PIPELINE_BASE_SHA: ${{ github.event.before }}
+
     migrate:
         name: Migrate
-        needs: [plan, provision, build-image]
-        # Path A: postgres healthy → migrate → app rotation. Skipped when
-        # the project has no `[services.postgres]` so the cost (one
-        # ephemeral container roundtrip on the VPS) is only paid where
-        # a schema actually exists.
-        if: ${{ !cancelled() && !failure() && needs.plan.outputs.has_postgres == 'true' }}
+        needs: [plan, provision, build-image, detect-migrations]
+        # Path A: postgres healthy → migrate → app rotation. Skipped when the
+        # project has no `[services.postgres]`, OR when this push changed no
+        # migration file (see detect-migrations) - so the ephemeral container
+        # roundtrip is only paid where a schema actually changed.
+        if: ${{ !cancelled() && !failure() && needs.plan.outputs.has_postgres == 'true' && needs.detect-migrations.outputs.migrations_changed == 'true' }}
         runs-on: ubuntu-latest
         # migrate-remote renders the SAME per-service `.env` as deploy
         # (resolveDeployContext → pickSecrets over the full `[deploy].secrets`
