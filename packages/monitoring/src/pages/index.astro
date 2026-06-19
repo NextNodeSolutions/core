@@ -11,7 +11,7 @@ export const prerender = false
 const range = Astro.url.searchParams.get('range') ?? 'live'
 ---
 
-<DashboardLayout title="Vue d'ensemble" bare>
+<DashboardLayout title="Vue d'ensemble">
 	<OverviewContent server:defer range={range}>
 		<Skeleton slot="fallback" rows={4} withStats />
 	</OverviewContent>

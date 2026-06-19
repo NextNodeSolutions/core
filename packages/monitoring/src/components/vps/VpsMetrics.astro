@@ -231,10 +231,10 @@ const swapAmber =
 		// repeating a (here unknowable) cause.
 		<div />
 	) : (
-		// No own page wrapper: the island is a flex-item of the page's
-		// `flex flex-col max-w-[1320px]` container, so an `mx-auto` here would
-		// cancel the cross-axis stretch and shrink the island to its content
-		// width. Stay a plain flex column and inherit the page's single wrapper.
+		// No own width wrapper: the layout's content shell already caps and
+		// centres the column. The island is a flex-item of the page's
+		// `flex flex-col` container, so an `mx-auto` here would cancel the
+		// cross-axis stretch and shrink the island to its content width.
 		<div class="flex flex-col gap-[18px]">
 			{alerts.length > 0 && (
 				<section class="overflow-hidden rounded-xl border border-red-200 bg-white shadow-subtle">

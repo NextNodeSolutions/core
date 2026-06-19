@@ -9,7 +9,11 @@ interface Props {
 	title: string
 	description?: string
 	breadcrumbs?: Breadcrumb[]
-	/** Design screens manage their own padding; set to render edge-to-edge. */
+	/**
+	 * Opt OUT of the shared content shell and render the slot edge-to-edge.
+	 * Only for true full-bleed app surfaces (the logs console); every normal
+	 * page leaves this false and inherits the single centred shell below.
+	 */
 	bare?: boolean
 	vpsCount?: number
 	alertCount?: number
@@ -50,11 +54,15 @@ const currentPath = Astro.url.pathname
 			</Topbar>
 
 			<main class="min-h-0 flex-1 bg-base-50">
+				{/* The single content shell every normal page shares: one centred,
+				width-capped column with responsive gutters. Pages add NO
+				mx-auto/max-w/p wrapper of their own (that double-wrap shrank the
+				VPS island). `bare` opts out for the full-bleed logs console. */}
 				{
 					bare ? (
 						<slot />
 					) : (
-						<div class="mx-auto max-w-6xl px-8 py-10">
+						<div class="mx-auto w-full max-w-[1320px] px-4 py-8 sm:px-6 lg:px-8">
 							<slot />
 						</div>
 					)

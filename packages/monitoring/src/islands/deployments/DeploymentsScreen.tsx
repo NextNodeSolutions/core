@@ -17,8 +17,8 @@ export function DeploymentsScreen(): React.ReactElement {
 	const selectedProject = useAtomValue(selectedProjectAtom)
 
 	return (
-		<div className="flex h-full min-h-0">
-			<div className="min-w-0 flex-1 overflow-auto">
+		<div className="flex">
+			<div className="min-w-0 flex-1">
 				{selectedProject === null ? <ProjectGrid /> : <ProjectDetail />}
 			</div>
 			<DeploymentDrawer />

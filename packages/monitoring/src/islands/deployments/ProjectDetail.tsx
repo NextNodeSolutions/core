@@ -10,7 +10,7 @@ import { ProjectDetailHeader } from '@/islands/deployments/ProjectDetailHeader.t
 
 export function ProjectDetail(): React.ReactElement {
 	return (
-		<div className="p-6">
+		<div>
 			<ProjectDetailHeader />
 			<DeploymentHistoryTable />
 		</div>

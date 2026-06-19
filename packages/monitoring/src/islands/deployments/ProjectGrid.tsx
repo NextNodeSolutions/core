@@ -21,7 +21,7 @@ export function ProjectGrid(): React.ReactElement {
 	const nowMs = useAtomValue(nowMsAtom)
 
 	return (
-		<div className="p-6">
+		<div>
 			<div className="mb-4 flex flex-wrap items-center justify-between gap-2.5">
 				<span className="text-base-700 inline-flex items-center gap-2 font-mono text-[11px] font-semibold tracking-[0.12em] uppercase">
 					<span className="bg-base-900 size-2.5 rounded-[2px]" />
