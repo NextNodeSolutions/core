@@ -95,7 +95,16 @@ function buildBakeTarget(name: string, input: RenderBakeFileInput): BakeTarget {
 		)
 	}
 
+	// Two layered caches per target. The gha scope is fast (co-located with the
+	// runner) but capped at ~10GB and evicted under churn - on eviction every
+	// build goes cache-cold. The registry buildcache (a `:buildcache` tag on the
+	// service's own GHCR repo) is slower to fetch but durable, so it survives
+	// gha eviction and keeps layers warm across runs. gha is listed first so a
+	// warm runner hits it before reaching for the registry. The registry export
+	// is best-effort (`ignore-error=true`): a GHCR cache write hiccup must never
+	// fail a deploy that has already built and pushed the image.
 	const ghaCacheScope = `type=gha,scope=${name}`
+	const registryCacheRef = `type=registry,ref=${ref.registry}/${ref.repository}:buildcache`
 	const args = input.buildArgs[name]
 	return {
 		context: service.context ?? DEFAULT_BUILD_CONTEXT,
@@ -103,8 +112,11 @@ function buildBakeTarget(name: string, input: RenderBakeFileInput): BakeTarget {
 		...(service.target === undefined ? {} : { target: service.target }),
 		...(args && Object.keys(args).length > 0 ? { args } : {}),
 		tags: [formatImageRef(ref)],
-		'cache-from': [ghaCacheScope],
-		'cache-to': [`${ghaCacheScope},mode=max`],
+		'cache-from': [ghaCacheScope, registryCacheRef],
+		'cache-to': [
+			`${ghaCacheScope},mode=max`,
+			`${registryCacheRef},mode=max,ignore-error=true`,
+		],
 	}
 }
 

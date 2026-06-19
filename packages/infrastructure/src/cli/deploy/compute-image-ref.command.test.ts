@@ -78,8 +78,14 @@ describe('computeImageRefCommand', () => {
 					target: 'app',
 					args: { SITE_URL: 'https://example.com' },
 					tags: ['ghcr.io/nextnodesolutions/core-app:sha-abc1234'],
-					'cache-from': ['type=gha,scope=app'],
-					'cache-to': ['type=gha,scope=app,mode=max'],
+					'cache-from': [
+						'type=gha,scope=app',
+						'type=registry,ref=ghcr.io/nextnodesolutions/core-app:buildcache',
+					],
+					'cache-to': [
+						'type=gha,scope=app,mode=max',
+						'type=registry,ref=ghcr.io/nextnodesolutions/core-app:buildcache,mode=max,ignore-error=true',
+					],
 				},
 			},
 		})
@@ -174,8 +180,14 @@ describe('computeImageRefCommand', () => {
 					target: 'app',
 					args: { SITE_URL: 'https://example.com' },
 					tags: ['ghcr.io/nextnodesolutions/core-app:sha-abc1234'],
-					'cache-from': ['type=gha,scope=app'],
-					'cache-to': ['type=gha,scope=app,mode=max'],
+					'cache-from': [
+						'type=gha,scope=app',
+						'type=registry,ref=ghcr.io/nextnodesolutions/core-app:buildcache',
+					],
+					'cache-to': [
+						'type=gha,scope=app,mode=max',
+						'type=registry,ref=ghcr.io/nextnodesolutions/core-app:buildcache,mode=max,ignore-error=true',
+					],
 				},
 			},
 		})
