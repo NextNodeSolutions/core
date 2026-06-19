@@ -1,6 +1,5 @@
 import { StatCard } from '@/islands/overview/StatCard.tsx'
 
-import type { OverviewIconName } from '@/islands/overview/OverviewIcon.tsx'
 import type { FleetStat } from '@/lib/domain/monitoring/fleet-overview.ts'
 
 /**
@@ -14,20 +13,11 @@ import type { FleetStat } from '@/lib/domain/monitoring/fleet-overview.ts'
  *   mid-row. When nothing is critical (the common case) the order is unchanged
  *   and the grid reads as one clean, uniform row - the homogeneous default.
  *
- * Icons follow `summarizeFleet`'s fixed output order: [active, cpu, traffic,
- * errors]. If that order ever changes, update STAT_ICONS in lock-step.
+ * Each stat carries its own `icon` (set by `summarizeFleet`), so reordering
+ * here never desyncs the glyph from the stat - the grid only decides placement.
  */
 
-const STAT_ICONS: ReadonlyArray<OverviewIconName> = [
-	'server',
-	'cpu',
-	'net',
-	'alert',
-]
-const FALLBACK_ICON: OverviewIconName = 'server'
-
 interface DisplayStat {
-	readonly icon: OverviewIconName
 	readonly stat: FleetStat
 	readonly isElevated: boolean
 }
@@ -35,8 +25,7 @@ interface DisplayStat {
 const toDisplayStats = (
 	stats: ReadonlyArray<FleetStat>,
 ): ReadonlyArray<DisplayStat> => {
-	const decorated = stats.map((stat, index) => ({
-		icon: STAT_ICONS[index] ?? FALLBACK_ICON,
+	const decorated = stats.map(stat => ({
 		stat,
 		isElevated: stat.tone === 'danger',
 	}))
@@ -53,10 +42,9 @@ export function StatGrid({ stats }: StatGridProps): React.ReactElement {
 	const display = toDisplayStats(stats)
 	return (
 		<div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
-			{display.map(({ icon, stat, isElevated }) => (
+			{display.map(({ stat, isElevated }) => (
 				<StatCard
-					key={icon}
-					icon={icon}
+					key={stat.label}
 					stat={stat}
 					className={isElevated ? 'sm:col-span-2 lg:col-span-2' : ''}
 				/>

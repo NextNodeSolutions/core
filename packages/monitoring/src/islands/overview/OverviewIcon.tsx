@@ -1,19 +1,20 @@
+import type { FleetStatIcon } from '@/lib/domain/monitoring/fleet-overview.ts'
+
 /**
  * The inline SVG glyphs the overview island needs, ported verbatim from the
  * Lucide paths Icon.astro renders (server, cpu, net=network, alert). Kept as one
  * tiny `name`-dispatched component - the same indirection as Icon.astro and the
  * logs/deployments islands' icon components - rather than pulling a React icon
  * dependency into the bundle. The 1.7 stroke / round caps match Icon.astro so
- * the island is pixel-identical to the former server markup.
+ * the island is pixel-identical to the former server markup. Keyed by the
+ * domain's `FleetStatIcon` so a stat renders the glyph it declares.
  */
 
 const STROKE_WIDTH = 1.7
 const DEFAULT_SIZE = 16
 const VIEW_BOX = '0 0 24 24'
 
-export type OverviewIconName = 'server' | 'cpu' | 'net' | 'alert'
-
-const GLYPH_PATHS: Record<OverviewIconName, ReadonlyArray<string>> = {
+const GLYPH_PATHS: Record<FleetStatIcon, ReadonlyArray<string>> = {
 	server: [],
 	cpu: [
 		'M15 2v2',
@@ -34,7 +35,7 @@ const GLYPH_PATHS: Record<OverviewIconName, ReadonlyArray<string>> = {
 }
 
 interface OverviewIconProps {
-	readonly name: OverviewIconName
+	readonly name: FleetStatIcon
 	readonly size?: number
 	readonly className?: string
 }

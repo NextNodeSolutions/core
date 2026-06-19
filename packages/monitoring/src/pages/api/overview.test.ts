@@ -26,7 +26,13 @@ const WINDOW: OverviewWindow = {
 	range: 'live',
 	windowHours: 1,
 	stats: [
-		{ label: 'VPS actifs', value: '2/2', hint: 'ok', tone: 'positive' },
+		{
+			label: 'VPS actifs',
+			value: '2/2',
+			hint: 'ok',
+			tone: 'positive',
+			icon: 'server',
+		},
 	],
 	stream: [],
 	notices: [{ section: 'logs', label: 'VictoriaLogs', message: 'HTTP 0' }],

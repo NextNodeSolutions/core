@@ -1,6 +1,5 @@
 import { OverviewIcon } from '@/islands/overview/OverviewIcon.tsx'
 
-import type { OverviewIconName } from '@/islands/overview/OverviewIcon.tsx'
 import type { Tone } from '@/lib/domain/badge-status.ts'
 import type { FleetStat } from '@/lib/domain/monitoring/fleet-overview.ts'
 
@@ -32,18 +31,16 @@ const LABEL_TONE: Record<Tone, string> = {
 }
 
 interface StatCardProps {
-	readonly icon: OverviewIconName
 	readonly stat: FleetStat
 	/** Grid placement (e.g. a `col-span-*` for an elevated/critical card). */
 	readonly className?: string
 }
 
 export function StatCard({
-	icon,
 	stat,
 	className = '',
 }: StatCardProps): React.ReactElement {
-	const { label, value, hint, tone } = stat
+	const { label, value, hint, tone, icon } = stat
 	return (
 		<article
 			className={`shadow-subtle hover:shadow-navy flex flex-col rounded-xl border px-4 py-4 transition-shadow ${SURFACE_TONE[tone]} ${className}`}

@@ -47,11 +47,20 @@ export interface DerivedAlert {
 	readonly label: string
 }
 
+/**
+ * Semantic glyph a stat is rendered with. The domain owns this (alongside the
+ * label/value/tone it already emits) so the island renders icon-by-stat instead
+ * of mapping icons positionally against `summarizeFleet`'s output order - the
+ * stat carries its own identity, order changes can't desync the icons.
+ */
+export type FleetStatIcon = 'server' | 'cpu' | 'net' | 'alert'
+
 export interface FleetStat {
 	readonly label: string
 	readonly value: string
 	readonly hint: string
 	readonly tone: Tone
+	readonly icon: FleetStatIcon
 }
 
 export interface FleetSummaryInput {
@@ -170,6 +179,7 @@ function activeStat(servers: ReadonlyArray<HetznerVps>): FleetStat {
 		value: `${running}/${total}`,
 		hint: allUp ? 'Tous opérationnels' : `${total - running} hors service`,
 		tone: allUp ? 'positive' : 'warning',
+		icon: 'server',
 	}
 }
 
@@ -199,6 +209,7 @@ function cpuStat(input: FleetSummaryInput): FleetStat {
 			value: EMPTY_LABEL,
 			hint: 'aucune métrique',
 			tone: 'neutral',
+			icon: 'cpu',
 		}
 	}
 	const severity = severityForPercent(input.cpuWindowAverage)
@@ -213,6 +224,7 @@ function cpuStat(input: FleetSummaryInput): FleetStat {
 		value: formatPercent(input.cpuWindowAverage),
 		hint: `${input.cpuNodeCount} nœud${input.cpuNodeCount > 1 ? 's' : ''}`,
 		tone,
+		icon: 'cpu',
 	}
 }
 
@@ -228,6 +240,7 @@ function trafficStat(servers: ReadonlyArray<HetznerVps>): FleetStat {
 		value: formatTrafficGb(outgoingGb),
 		hint: `sur ${formatTrafficGb(includedGb)} inclus`,
 		tone: 'neutral',
+		icon: 'net',
 	}
 }
 
@@ -241,6 +254,7 @@ function errorStat(input: FleetSummaryInput): FleetStat {
 		value: formatCount(input.errorCount),
 		hint: `${alertCount} alerte${alertCount > 1 ? 's' : ''}`,
 		tone: input.errorCount > 0 ? 'danger' : 'positive',
+		icon: 'alert',
 	}
 }
 
