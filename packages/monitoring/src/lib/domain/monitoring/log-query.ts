@@ -76,6 +76,12 @@ export const parseLogLevel = (candidate: unknown): LogLevel | null => {
 	return LEVEL_ALIASES[candidate.trim().toLowerCase()] ?? null
 }
 
+// The raw level/severity spellings that normalise to `error` (the subset of
+// LEVEL_ALIASES mapping to 'error'), as a case-insensitive anchored LogsQL
+// regex. Kept next to LEVEL_ALIASES so the server-side error tally and the
+// client-side level parsing can never drift apart.
+const ERROR_LEVEL_PATTERN = '(?i)^(error|err|fatal|critical|crit)$'
+
 /**
  * Build a LogsQL query for the most recent lines of one VPS. `nn_project`
  * is the VPS-level stream field Vector stamps (= the host hostname), so
@@ -108,6 +114,48 @@ export const buildFleetLogsQuery = (
 	windowHours: number = DEFAULT_FLEET_LOG_HOURS,
 ): string =>
 	`_time:${String(windowHours)}h | sort by (_time desc) | limit ${String(LOGSQL_QUERY_LIMIT)} ${UNPACK_PIPE}`
+
+/**
+ * Build a LogsQL query that COUNTS error-level lines across the whole fleet
+ * over `windowHours`. Crucial that this is a true windowed aggregate, NOT a
+ * tally of `buildFleetLogsQuery`'s 200-line display sample: that sample is the
+ * 200 NEWEST lines, so on a busy fleet it is the same set for every window and
+ * its error tally never moves when the range changes. `stats count() if (...)`
+ * (the same pipe `caddy-stats` uses) counts the whole window with no limit, so
+ * the overview "Erreurs (X h)" stat finally tracks the selected range.
+ */
+export const buildFleetErrorCountQuery = (
+	windowHours: number = DEFAULT_FLEET_LOG_HOURS,
+): string =>
+	[
+		`_time:${String(windowHours)}h`,
+		UNPACK_PIPE,
+		`| stats count() if (level:~${logsqlQuoted(ERROR_LEVEL_PATTERN)} or severity:~${logsqlQuoted(ERROR_LEVEL_PATTERN)}) as errors`,
+	].join(' ')
+
+/**
+ * Read a single named `stats count()` value out of a VictoriaLogs stats body
+ * (one JSON row like `{"errors":"42"}`; counts come back as strings). Returns 0
+ * when the row, the field, or the whole body is missing/unparseable - a count
+ * query over an empty window legitimately yields no error lines.
+ */
+export const parseStatsCount = (body: string, field: string): number => {
+	for (const raw of body.split('\n')) {
+		const trimmed = raw.trim()
+		if (trimmed.length === 0) continue
+		let parsed: unknown
+		try {
+			parsed = JSON.parse(trimmed)
+		} catch {
+			continue
+		}
+		if (!isRecord(parsed)) continue
+		const cell = parsed[field]
+		const count = typeof cell === 'number' ? cell : Number(cell)
+		if (Number.isFinite(count)) return count
+	}
+	return 0
+}
 
 /**
  * Parse the newline-delimited JSON VictoriaLogs streams back. Tolerant:

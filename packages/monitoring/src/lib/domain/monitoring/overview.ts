@@ -55,7 +55,15 @@ export interface BuildOverviewWindowInput {
 	readonly servers: ReadonlyArray<HetznerVps>
 	readonly metricsByName: Readonly<Record<string, ServerMetrics>>
 	readonly cpuSeriesByServer: ReadonlyArray<ReadonlyArray<number>>
+	/** Recent fleet lines for the preview stream (a display sample). */
 	readonly logs: ReadonlyArray<LogLine>
+	/**
+	 * Error lines across the WHOLE window, from a dedicated count query - NOT
+	 * derived from `logs`, which is the capped 200-line display sample and so is
+	 * range-invariant on a busy fleet. This is what makes the error stat track
+	 * the selected range.
+	 */
+	readonly errorCount: number
 	readonly notices: ReadonlyArray<OverviewNotice>
 }
 
@@ -75,11 +83,10 @@ export const buildOverviewWindow = (
 	const { average, nodeCount } = fleetCpuWindowAverage(
 		input.cpuSeriesByServer,
 	)
-	const errorCount = input.logs.filter(line => line.level === 'error').length
 	const stats = summarizeFleet({
 		servers: input.servers,
 		metricsByName: input.metricsByName,
-		errorCount,
+		errorCount: input.errorCount,
 		windowHours: input.windowHours,
 		cpuWindowAverage: average,
 		cpuNodeCount: nodeCount,
