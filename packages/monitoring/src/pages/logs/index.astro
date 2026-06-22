@@ -3,9 +3,11 @@ import LoadStateBanner from '@/components/dashboard/LoadStateBanner.astro'
 import { LogsExplorer } from '@/islands/logs/LogsExplorer.tsx'
 import DashboardLayout from '@/layouts/DashboardLayout.astro'
 import { loadPageState } from '@/lib/adapters/load-page-state.ts'
-import { loadFleetLogs } from '@/lib/adapters/victoria/logs.ts'
+import { loadFleetLogs, loadFleetStats } from '@/lib/adapters/victoria/logs.ts'
+import { EMPTY_FLEET_STATS } from '@/lib/domain/monitoring/log-aggregates.ts'
 import { rangeToHours } from '@/lib/domain/monitoring/vps-metrics.ts'
 
+import type { FleetLogStats } from '@/lib/domain/monitoring/log-aggregates.ts'
 import type { LogLine } from '@/lib/domain/monitoring/log-query.ts'
 
 // oxlint-disable-next-line nextnode/boolean-naming -- prerender is Astro's required route export name
@@ -15,16 +17,22 @@ const DEFAULT_RANGE = '6h'
 
 const range = Astro.url.searchParams.get('range') ?? DEFAULT_RANGE
 
-// First paint: load the initial range's logs once on the server so the island
-// hydrates with data and never flashes a loading state. `rangeToHours` maps
-// `live` -> 1h. `nowMs` is computed server-side and injected so client-side
-// bucketing is deterministic - the island never calls Date.now() in render.
+// First paint: load the initial range's log SAMPLE (the list) and its WINDOWED
+// aggregates (histogram + counts) once on the server so the island hydrates
+// fully with no loading flash. `rangeToHours` maps `live` -> 1h. `nowMs` is the
+// server clock injected into both the stats bucket grid and the island so the
+// histogram lines up with the list's window.
 const hours = rangeToHours(range)
-const logsState = await loadPageState('logs.fleet', () => loadFleetLogs(hours))
+const nowMs = Date.now()
+const [logsState, statsState] = await Promise.all([
+	loadPageState('logs.fleet', () => loadFleetLogs(hours)),
+	loadPageState('logs.stats', () => loadFleetStats(hours, nowMs)),
+])
 const initialLogs: ReadonlyArray<LogLine> =
 	logsState.kind === 'ok' ? logsState.data : []
+const initialStats: FleetLogStats =
+	statsState.kind === 'ok' ? statsState.data : EMPTY_FLEET_STATS
 const failedToLoad = logsState.kind !== 'ok'
-const nowMs = Date.now()
 ---
 
 <DashboardLayout title="Explorateur de logs" bare breadcrumbs={[{ label: 'Logs' }]}>
@@ -39,7 +47,7 @@ const nowMs = Date.now()
 	<LogsExplorer
 		client:load
 		initialLogs={initialLogs}
+		initialStats={initialStats}
 		initialRange={range}
-		nowMs={nowMs}
 	/>
 </DashboardLayout>

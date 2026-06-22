@@ -38,7 +38,10 @@ describe('GET /api/logs', () => {
 		const body: unknown = await response.json()
 
 		expect(response.status).toBe(200)
-		expect(body).toEqual({
+		// The body now carries the line sample AND the windowed stats. This stub
+		// returns the same log line for every query, so the stats query (which
+		// expects `hits` rows) finds none -> an honest empty aggregate.
+		expect(body).toMatchObject({
 			logs: [
 				expect.objectContaining({
 					message: 'server started',
@@ -47,6 +50,7 @@ describe('GET /api/logs', () => {
 					vps: 'stylot',
 				}),
 			],
+			stats: { total: 0, levelCounts: { error: 0 } },
 		})
 	})
 

@@ -3,7 +3,13 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { LogsExplorer } from '@/islands/logs/LogsExplorer.tsx'
+import {
+	fleetStatsFromLogs,
+	windowMsFor,
+} from '@/lib/domain/monitoring/log-aggregates.ts'
+import { rangeToHours } from '@/lib/domain/monitoring/vps-metrics.ts'
 
+import type { FleetLogStats } from '@/lib/domain/monitoring/log-aggregates.ts'
 import type { LogLine } from '@/lib/domain/monitoring/log-query.ts'
 
 /**
@@ -68,6 +74,14 @@ const SEED_LOGS: ReadonlyArray<LogLine> = [
 	}),
 ]
 
+// The windowed stats (histogram + chip counts + total) the server would send,
+// derived from the same fixture lines so the chip counts match the seeded rows.
+const statsFor = (logs: ReadonlyArray<LogLine>, range: string): FleetLogStats =>
+	fleetStatsFromLogs(logs, {
+		nowMs: NOW_MS,
+		windowMs: windowMsFor(rangeToHours(range)),
+	})
+
 // The data region suspends on its first render until the seeded logs resolve;
 // React 19 requires that initial suspend to be flushed inside an awaited `act`,
 // so the helper is async. After it resolves the seeded rows are on screen.
@@ -79,8 +93,8 @@ const renderExplorer = async (
 		render(
 			<LogsExplorer
 				initialLogs={logs}
+				initialStats={statsFor(logs, range)}
 				initialRange={range}
-				nowMs={NOW_MS}
 			/>,
 		)
 	})
@@ -252,9 +266,13 @@ describe('LogsExplorer island', () => {
 		})
 		const fetchSpy = vi.fn(() =>
 			Promise.resolve(
-				new Response(JSON.stringify({ logs: [liveLine] }), {
-					status: 200,
-				}),
+				new Response(
+					JSON.stringify({
+						logs: [liveLine],
+						stats: statsFor([liveLine], 'live'),
+					}),
+					{ status: 200 },
+				),
 			),
 		)
 		vi.stubGlobal('fetch', fetchSpy)
