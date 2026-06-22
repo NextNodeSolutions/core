@@ -5,6 +5,10 @@ import {
 	countByLevel,
 } from '@/lib/domain/monitoring/log-explorer.ts'
 import { parseLogLevel } from '@/lib/domain/monitoring/log-query.ts'
+import {
+	MIN_WINDOW_HOURS,
+	windowToLogsQL,
+} from '@/lib/domain/monitoring/vps-metrics.ts'
 
 import type {
 	LevelCounts,
@@ -61,7 +65,8 @@ export const histogramStepSeconds = (windowHours: number): number =>
 	Math.max(
 		1,
 		Math.round(
-			(Math.max(1, windowHours) * SECONDS_PER_HOUR) / HISTOGRAM_BUCKETS,
+			(Math.max(MIN_WINDOW_HOURS, windowHours) * SECONDS_PER_HOUR) /
+				HISTOGRAM_BUCKETS,
 		),
 	)
 
@@ -75,7 +80,7 @@ export const buildFleetStatsQuery = (
 	windowHours: number,
 	stepSeconds: number,
 ): string =>
-	`_time:${String(windowHours)}h | unpack_json | stats by (_time:${String(stepSeconds)}s, level) count() as hits`
+	`_time:${windowToLogsQL(windowHours)} | unpack_json | stats by (_time:${String(stepSeconds)}s, level) count() as hits`
 
 const emptyBucket = (t: number): LogBucket => ({
 	t,
@@ -173,7 +178,7 @@ export const fleetStatsFromLogs = (
 
 /** Window span in ms for `windowHours` - the histogram grid's width. */
 export const windowMsFor = (windowHours: number): number =>
-	Math.max(1, windowHours) * MS_PER_HOUR
+	Math.max(MIN_WINDOW_HOURS, windowHours) * MS_PER_HOUR
 
 const toCount = (raw: unknown): number =>
 	typeof raw === 'number' && Number.isFinite(raw) ? raw : 0

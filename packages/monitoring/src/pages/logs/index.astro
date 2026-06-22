@@ -19,9 +19,9 @@ const range = Astro.url.searchParams.get('range') ?? DEFAULT_RANGE
 
 // First paint: load the initial range's log SAMPLE (the list) and its WINDOWED
 // aggregates (histogram + counts) once on the server so the island hydrates
-// fully with no loading flash. `rangeToHours` maps `live` -> 1h. `nowMs` is the
-// server clock injected into both the stats bucket grid and the island so the
-// histogram lines up with the list's window.
+// fully with no loading flash. `rangeToHours` maps `live` to a short 5-min
+// window. `nowMs` is the server clock injected into both the stats bucket grid
+// and the island so the histogram lines up with the list's window.
 const hours = rangeToHours(range)
 const nowMs = Date.now()
 const [logsState, statsState] = await Promise.all([

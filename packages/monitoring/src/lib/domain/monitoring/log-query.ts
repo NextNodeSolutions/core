@@ -1,6 +1,7 @@
 import { escapeRegex } from '@/lib/domain/escape-regex.ts'
 import { isRecord } from '@/lib/domain/is-record.ts'
 import { logsqlQuoted } from '@/lib/domain/monitoring/logsql.ts'
+import { windowToLogsQL } from '@/lib/domain/monitoring/vps-metrics.ts'
 import { parseFiniteNumber } from '@/lib/domain/parse-number.ts'
 import { parseStringOrNull } from '@/lib/domain/parse-string.ts'
 
@@ -113,7 +114,7 @@ export const buildContainerLogsQuery = (project: string): string =>
 export const buildFleetLogsQuery = (
 	windowHours: number = DEFAULT_FLEET_LOG_HOURS,
 ): string =>
-	`_time:${String(windowHours)}h | sort by (_time desc) | limit ${String(LOGSQL_QUERY_LIMIT)} ${UNPACK_PIPE}`
+	`_time:${windowToLogsQL(windowHours)} | sort by (_time desc) | limit ${String(LOGSQL_QUERY_LIMIT)} ${UNPACK_PIPE}`
 
 /**
  * Build a LogsQL query that COUNTS error-level lines across the whole fleet
@@ -128,7 +129,7 @@ export const buildFleetErrorCountQuery = (
 	windowHours: number = DEFAULT_FLEET_LOG_HOURS,
 ): string =>
 	[
-		`_time:${String(windowHours)}h`,
+		`_time:${windowToLogsQL(windowHours)}`,
 		UNPACK_PIPE,
 		`| stats count() if (level:~${logsqlQuoted(ERROR_LEVEL_PATTERN)} or severity:~${logsqlQuoted(ERROR_LEVEL_PATTERN)}) as errors`,
 	].join(' ')

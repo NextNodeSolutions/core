@@ -84,7 +84,7 @@ const assertNeverState = (state: never): never => {
  */
 export const handleLogsRequest = async (url: URL): Promise<Response> => {
 	const range = url.searchParams.get('range') ?? DEFAULT_RANGE
-	// `rangeToHours` already maps `live` -> 1h, so no special-casing here.
+	// `rangeToHours` maps `live` to a short 5-min window; no special-casing here.
 	const hours = rangeToHours(range)
 	// One stable clock for both the bucket grid and any relative-time rendering.
 	const nowMs = Date.now()

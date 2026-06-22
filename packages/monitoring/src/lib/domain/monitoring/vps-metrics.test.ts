@@ -5,6 +5,7 @@ import {
 	buildVpsSeriesExpr,
 	rangeToHours,
 	VPS_SERIES_METRICS,
+	windowToLogsQL,
 } from './vps-metrics.ts'
 
 describe('buildVpsSeriesExpr', () => {
@@ -69,5 +70,21 @@ describe('rangeToHours', () => {
 		expect(rangeToHours('7d')).toBe(168)
 		expect(rangeToHours('30d')).toBe(720)
 		expect(rangeToHours('bogus')).toBe(1)
+	})
+
+	it('makes `live` a short 5-minute window, distinct from the 1h tab', () => {
+		expect(rangeToHours('live')).toBeCloseTo(5 / 60)
+		expect(rangeToHours('1h')).toBe(1)
+		// The whole fix: live must NOT equal 1h.
+		expect(rangeToHours('live')).not.toBe(rangeToHours('1h'))
+	})
+})
+
+describe('windowToLogsQL', () => {
+	it('emits minutes for a sub-hour window and hours for whole hours', () => {
+		expect(windowToLogsQL(5 / 60)).toBe('5m') // live
+		expect(windowToLogsQL(1)).toBe('1h')
+		expect(windowToLogsQL(6)).toBe('6h')
+		expect(windowToLogsQL(24)).toBe('24h')
 	})
 })

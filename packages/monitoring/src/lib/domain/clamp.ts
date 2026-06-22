@@ -19,3 +19,14 @@ export const clampInteger = (raw: number, bounds: IntegerBounds): number => {
 	const truncated = Math.trunc(raw)
 	return Math.min(bounds.max, Math.max(bounds.min, truncated))
 }
+
+/**
+ * Same boundary guard as `clampInteger` but KEEPS the fractional part - for a
+ * window that can legitimately be sub-hour (the "live" 5-minute view). Non-finite
+ * input still falls back; the value is only clamped into [min, max], never
+ * truncated, so `_time:5m` survives instead of collapsing to `_time:0h`/`1h`.
+ */
+export const clampNumber = (raw: number, bounds: IntegerBounds): number => {
+	if (!Number.isFinite(raw)) return bounds.fallback
+	return Math.min(bounds.max, Math.max(bounds.min, raw))
+}

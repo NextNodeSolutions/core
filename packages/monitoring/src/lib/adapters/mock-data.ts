@@ -6,6 +6,7 @@ import {
 	fleetStatsFromLogs,
 	windowMsFor,
 } from '@/lib/domain/monitoring/log-aggregates.ts'
+import { MIN_WINDOW_HOURS } from '@/lib/domain/monitoring/vps-metrics.ts'
 
 import type { VpsGauges } from '@/lib/adapters/victoria/metrics.ts'
 import type { HetznerVps } from '@/lib/domain/hetzner/vps.ts'
@@ -167,7 +168,7 @@ export const mockVpsSeries = (
 	hours: number,
 ): ReadonlyArray<RangePoint> => {
 	const nowSec = Math.floor(Date.now() / 1000)
-	const windowHours = Math.max(1, hours)
+	const windowHours = Math.max(MIN_WINDOW_HOURS, hours)
 	const span = windowHours * SECONDS_PER_HOUR
 	const step = span / SERIES_POINTS
 	const shape = SERIES_SHAPE[metric]
@@ -210,7 +211,9 @@ const LINES: ReadonlyArray<{ level: LogLine['level']; message: string }> = [
 
 const MS_PER_HOUR = 3_600_000
 const MOCK_LOG_LINES_PER_HOUR = 8
-const MIN_MOCK_LOG_LINES = 8
+// Low floor so the 5-minute live window shows FEWER lines (and errors) than the
+// 1h window - the whole point of making `live` a distinct short window.
+const MIN_MOCK_LOG_LINES = 2
 const MAX_MOCK_LOG_LINES = 240
 const DEFAULT_MOCK_LOG_HOURS = 6
 
@@ -225,7 +228,10 @@ const mockLogCount = (windowHours: number): number =>
 		MAX_MOCK_LOG_LINES,
 		Math.max(
 			MIN_MOCK_LOG_LINES,
-			Math.round(Math.max(1, windowHours) * MOCK_LOG_LINES_PER_HOUR),
+			Math.round(
+				Math.max(MIN_WINDOW_HOURS, windowHours) *
+					MOCK_LOG_LINES_PER_HOUR,
+			),
 		),
 	)
 
@@ -239,7 +245,7 @@ export const mockFleetLogs = (
 	windowHours: number = DEFAULT_MOCK_LOG_HOURS,
 ): ReadonlyArray<LogLine> => {
 	const nowMs = Date.now()
-	const windowMs = Math.max(1, windowHours) * MS_PER_HOUR
+	const windowMs = Math.max(MIN_WINDOW_HOURS, windowHours) * MS_PER_HOUR
 	const count = mockLogCount(windowHours)
 	return Array.from({ length: count }, (_, index) => {
 		const line = LINES[index % LINES.length] ?? {

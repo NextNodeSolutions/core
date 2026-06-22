@@ -6,7 +6,7 @@ import {
 	mockVpsLogs,
 } from '@/lib/adapters/mock-data.ts'
 import { queryVictoriaLogs } from '@/lib/adapters/victoria/client.ts'
-import { clampInteger } from '@/lib/domain/clamp.ts'
+import { clampNumber } from '@/lib/domain/clamp.ts'
 import {
 	buildCaddyStatsQuery,
 	parseCaddyStats,
@@ -25,6 +25,7 @@ import {
 	parseLogLines,
 	parseStatsCount,
 } from '@/lib/domain/monitoring/log-query.ts'
+import { MIN_WINDOW_HOURS } from '@/lib/domain/monitoring/vps-metrics.ts'
 
 import type { CaddyHostStat } from '@/lib/domain/monitoring/caddy-stats.ts'
 import type { FleetLogStats } from '@/lib/domain/monitoring/log-aggregates.ts'
@@ -38,9 +39,14 @@ import type { LogLine } from '@/lib/domain/monitoring/log-query.ts'
  */
 
 // Window bound for the fleet-log query, mirroring the domain's metric window
-// (0, 720h]. Clamp at the boundary so a NaN/negative value never reaches the
-// LogsQL `_time:` filter.
-const FLEET_LOG_WINDOW_BOUNDS = { min: 1, max: 720, fallback: 6 } as const
+// (0, 720h]. `min` is one minute (not 1h) so the live 5-minute window survives;
+// `clampNumber` keeps the fraction. Guards NaN/negative/over-max at the boundary
+// so a bad value never reaches the LogsQL `_time:` filter.
+const FLEET_LOG_WINDOW_BOUNDS = {
+	min: MIN_WINDOW_HOURS,
+	max: 720,
+	fallback: 6,
+} as const
 
 /** Most-recent log lines from a whole VPS (container + journald), newest first. */
 export const loadVpsLogs = async (
@@ -61,7 +67,7 @@ export const loadFleetLogs = async (
 	const safeWindowHours =
 		windowHours === undefined
 			? undefined
-			: clampInteger(windowHours, FLEET_LOG_WINDOW_BOUNDS)
+			: clampNumber(windowHours, FLEET_LOG_WINDOW_BOUNDS)
 	const body = await queryVictoriaLogs(buildFleetLogsQuery(safeWindowHours))
 	return parseLogLines(body)
 }
@@ -80,7 +86,7 @@ export const loadFleetErrorCount = async (
 	const safeWindowHours =
 		windowHours === undefined
 			? undefined
-			: clampInteger(windowHours, FLEET_LOG_WINDOW_BOUNDS)
+			: clampNumber(windowHours, FLEET_LOG_WINDOW_BOUNDS)
 	const body = await queryVictoriaLogs(
 		buildFleetErrorCountQuery(safeWindowHours),
 	)
@@ -98,7 +104,7 @@ export const loadFleetStats = async (
 	windowHours: number,
 	nowMs: number,
 ): Promise<FleetLogStats> => {
-	const safeWindowHours = clampInteger(windowHours, FLEET_LOG_WINDOW_BOUNDS)
+	const safeWindowHours = clampNumber(windowHours, FLEET_LOG_WINDOW_BOUNDS)
 	if (MOCK_DATA) return mockFleetStats(safeWindowHours, nowMs)
 	const body = await queryVictoriaLogs(
 		buildFleetStatsQuery(

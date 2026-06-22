@@ -114,6 +114,18 @@ describe('buildOverviewWindow', () => {
 		expect(cpu).toMatchObject({ value: '20%', hint: '1 nœud' })
 	})
 
+	it('labels a sub-hour live window in minutes, not "0 h"', () => {
+		const window = buildOverviewWindow({
+			...base,
+			windowHours: 5 / 60,
+			errorCount: 3,
+			logs: [],
+		})
+		expect(window.stats.map(stat => stat.label)).toEqual(
+			expect.arrayContaining(['CPU moyen (5 min)', 'Erreurs (5 min)']),
+		)
+	})
+
 	it('caps the stream at OVERVIEW_STREAM_COUNT, newest-first as given', () => {
 		const logs = Array.from({ length: 12 }, (_, index) =>
 			logLine({ message: `line-${String(index)}` }),

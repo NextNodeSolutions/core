@@ -80,7 +80,7 @@ describe('GET /api/logs', () => {
 		expect(queried.some(url => url.includes('_time%3A6h'))).toBe(true)
 	})
 
-	it('maps the live range to a 1h window', async () => {
+	it('maps the live range to a short 5-minute window (not 1h history)', async () => {
 		const queried: string[] = []
 		stubVictoriaResponse(url => {
 			queried.push(url)
@@ -89,6 +89,8 @@ describe('GET /api/logs', () => {
 
 		await handleLogsRequest(buildUrl('?range=live'))
 
-		expect(queried.some(url => url.includes('_time%3A1h'))).toBe(true)
+		// `_time:5m`, never `_time:1h` - live is a recent window, not a 1h history.
+		expect(queried.some(url => url.includes('_time%3A5m'))).toBe(true)
+		expect(queried.some(url => url.includes('_time%3A1h'))).toBe(false)
 	})
 })

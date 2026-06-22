@@ -79,8 +79,16 @@ export interface FleetSummaryInput {
 	readonly cpuNodeCount: number
 }
 
-/** `6` -> `6 h`. The honest label for a windowed stat: never a fixed "6 h". */
-const windowLabel = (windowHours: number): string => `${windowHours} h`
+const MINUTES_PER_HOUR = 60
+
+/**
+ * The honest label for a windowed stat: `6` -> `6 h`, but a sub-hour live
+ * window -> `5 min` (never `0.0833 h`). Never a fixed string.
+ */
+const windowLabel = (windowHours: number): string =>
+	windowHours < 1
+		? `${String(Math.round(windowHours * MINUTES_PER_HOUR))} min`
+		: `${String(windowHours)} h`
 
 const ALERT_METRICS: AlertMetric[] = ['cpu', 'memory', 'disk']
 
