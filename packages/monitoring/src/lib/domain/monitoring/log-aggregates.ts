@@ -137,11 +137,15 @@ export const parseFleetStats = (
 		// hits drifting the tallies away from the bars).
 		const timeField = parsed['_time']
 		const at = Date.parse(typeof timeField === 'string' ? timeField : '')
-		// Drop rows outside the grid rather than clamping them onto an edge bar
-		// (mirrors `bucketLogs`), so total/per-level stay equal to the visible
-		// histogram. The `_time:${windowHours}h` filter already bounds the query;
-		// this just keeps the two "same shape" code paths from diverging.
-		if (Number.isNaN(at) || at < start || at > grid.nowMs) continue
+		// Only an unparseable time is dropped. Every row here was already bounded
+		// to the window by the `_time:` filter, so we CLAMP its bucket index into
+		// the grid rather than re-testing `at` against `start`/`nowMs`: VictoriaLogs
+		// aligns `stats by (_time:step)` buckets to absolute epoch multiples, so the
+		// oldest bucket's label sits up to one step BEFORE `start`, and clock skew
+		// can push the newest a hair past `nowMs`. Re-filtering would silently drop
+		// those real edge buckets - under-counting the total and blanking the end
+		// bars (and disagreeing with the un-bucketed `loadFleetErrorCount`).
+		if (Number.isNaN(at)) continue
 		const index = Math.min(
 			HISTOGRAM_BUCKETS - 1,
 			Math.max(0, Math.floor((at - start) / bucketMs)),

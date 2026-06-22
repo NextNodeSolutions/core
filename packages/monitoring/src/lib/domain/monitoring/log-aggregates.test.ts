@@ -65,6 +65,21 @@ describe('parseFleetStats', () => {
 			level: 'warn',
 			hits: '2',
 		}),
+		// EDGE buckets: VictoriaLogs aligns `_time:step` buckets to absolute
+		// epoch multiples, so the oldest bucket's label sits just BEFORE start
+		// (06:00) and clock skew nudges the newest just AFTER now (12:00). Both
+		// rows are genuinely in-window (the `_time:` filter returned them) and
+		// MUST be counted (clamped onto the end bars), never dropped.
+		JSON.stringify({
+			_time: '2026-06-15T05:58:00.000Z',
+			level: 'error',
+			hits: '4',
+		}),
+		JSON.stringify({
+			_time: '2026-06-15T12:00:20.000Z',
+			level: 'info',
+			hits: '1',
+		}),
 		// noise rows that must be ignored.
 		JSON.stringify({ _time: 'not-a-date', level: 'error', hits: '99' }),
 		JSON.stringify({ _time: '2026-06-15T11:30:00.000Z', hits: 'NaN' }),
@@ -80,18 +95,18 @@ describe('parseFleetStats', () => {
 		expect(stats.buckets).toHaveLength(HISTOGRAM_BUCKETS)
 	})
 
-	it('sums hits into the per-level totals and the grand total', () => {
+	it('counts every in-window row, including the step-aligned edge buckets', () => {
 		expect(stats.levelCounts).toEqual({
 			debug: 0,
-			info: 10,
+			info: 11, // 10 in-grid + 1 just past now
 			warn: 2,
-			error: 3,
+			error: 7, // 3 in-grid + 4 just before start
 		})
-		// The unparseable-time error row (hits 99) is excluded from the total.
-		expect(stats.total).toBe(15)
+		// 3 + 10 + 2 + 4 + 1 = 20; the unparseable/NaN rows are still excluded.
+		expect(stats.total).toBe(20)
 	})
 
-	it('places each row in its time bucket (5-min buckets over 6h)', () => {
+	it('places each row in its time bucket and clamps the edges (5-min buckets over 6h)', () => {
 		// 11:30 is 5.5h after start (06:00) -> bucket 66; 07:00 -> bucket 12.
 		expect(stats.buckets[66]).toMatchObject({
 			error: 3,
@@ -99,6 +114,9 @@ describe('parseFleetStats', () => {
 			total: 13,
 		})
 		expect(stats.buckets[12]).toMatchObject({ warn: 2, total: 2 })
+		// Pre-start row clamps onto the first bar; post-now row onto the last.
+		expect(stats.buckets[0]).toMatchObject({ error: 4 })
+		expect(stats.buckets[HISTOGRAM_BUCKETS - 1]).toMatchObject({ info: 1 })
 	})
 })
 
