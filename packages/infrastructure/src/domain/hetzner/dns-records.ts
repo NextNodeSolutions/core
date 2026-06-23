@@ -42,15 +42,35 @@ export function computeVpsDnsLookups(input: {
 	return [{ zoneName: extractRootDomain(hostname), name: hostname }]
 }
 
+/**
+ * Cloudflare's free Universal SSL edge certificate covers the zone apex and a
+ * SINGLE-level wildcard (`*.<zone>`) only. A hostname two or more labels below
+ * the apex - e.g. `admin.fleurs.nextnode.fr` under zone `nextnode.fr`, which
+ * arises whenever `project.domain` is itself a subdomain - gets NO edge
+ * certificate on a Free/Pro zone (Advanced Certificate Manager / Total TLS
+ * would be required), so a PROXIED record there fails the client<->Cloudflare
+ * TLS handshake outright. Such hostnames must stay DNS-only so the VPS Caddy
+ * serves its own Let's Encrypt certificate directly (valid at any depth).
+ *
+ * Apex and one-label hostnames - the norm when `project.domain` is a
+ * registrable domain - are covered by Universal SSL and stay proxied.
+ */
+function isCoveredByUniversalSsl(hostname: string, zoneName: string): boolean {
+	if (hostname === zoneName) return true
+	const subdomain = hostname.slice(0, -(zoneName.length + 1))
+	return !subdomain.includes('.')
+}
+
 export function computeVpsDnsRecords(
 	input: VpsDnsRecordsInput,
 ): ReadonlyArray<DesiredDnsRecord> {
 	const hostname = resolveDeployDomain(input.domain, input.environment)
+	const zoneName = extractRootDomain(hostname)
 
 	if (input.internal) {
 		return [
 			{
-				zoneName: extractRootDomain(hostname),
+				zoneName,
 				name: hostname,
 				type: 'A',
 				content: input.tailnetIp,
@@ -60,10 +80,12 @@ export function computeVpsDnsRecords(
 		]
 	}
 
-	const proxied = input.environment === 'production'
+	const proxied =
+		input.environment === 'production' &&
+		isCoveredByUniversalSsl(hostname, zoneName)
 	return [
 		{
-			zoneName: extractRootDomain(hostname),
+			zoneName,
 			name: hostname,
 			type: 'A',
 			content: input.publicIp,
