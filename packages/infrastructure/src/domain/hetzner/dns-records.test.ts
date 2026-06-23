@@ -36,6 +36,55 @@ describe('computeVpsDnsRecords', () => {
 
 			expect(records[0]?.ttl).toBe(1)
 		})
+
+		it('keeps an apex domain proxied (covered by Universal SSL)', () => {
+			const records = computeVpsDnsRecords({
+				internal: false,
+				domain: 'example.com',
+				environment: 'production',
+				publicIp: '1.2.3.4',
+				tailnetIp: '100.64.0.1',
+			})
+
+			expect(records[0]?.proxied).toBe(true)
+		})
+
+		it('keeps a one-label service subdomain proxied (covered by *.zone)', () => {
+			const records = computeVpsDnsRecords({
+				internal: false,
+				domain: 'fleurs.nextnode.fr',
+				environment: 'production',
+				publicIp: '1.2.3.4',
+				tailnetIp: '100.64.0.1',
+			})
+
+			expect(records[0]?.proxied).toBe(true)
+		})
+
+		it('grey-clouds a two-label service subdomain Universal SSL cannot cover', () => {
+			// admin.fleurs.nextnode.fr is two labels below the apex nextnode.fr,
+			// so the free `*.nextnode.fr` edge cert does not cover it. A proxied
+			// record would fail the client<->Cloudflare TLS handshake; the record
+			// must be DNS-only so Caddy's origin certificate serves it directly.
+			const records = computeVpsDnsRecords({
+				internal: false,
+				domain: 'admin.fleurs.nextnode.fr',
+				environment: 'production',
+				publicIp: '1.2.3.4',
+				tailnetIp: '100.64.0.1',
+			})
+
+			expect(records).toEqual([
+				{
+					zoneName: 'nextnode.fr',
+					name: 'admin.fleurs.nextnode.fr',
+					type: 'A',
+					content: '1.2.3.4',
+					proxied: false,
+					ttl: 300,
+				},
+			])
+		})
 	})
 
 	describe('development', () => {
