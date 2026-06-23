@@ -8,7 +8,7 @@ import {
 	queryVictoriaMetricsInstant,
 	queryVictoriaMetricsRange,
 } from '@/lib/adapters/victoria/client.ts'
-import { clampInteger } from '@/lib/domain/clamp.ts'
+import { clampNumber } from '@/lib/domain/clamp.ts'
 import { buildHostMetricExprs } from '@/lib/domain/monitoring/host-metrics.ts'
 import { buildMetricRangeWindow } from '@/lib/domain/monitoring/metric-range-request.ts'
 import {
@@ -18,6 +18,7 @@ import {
 import {
 	buildVpsGaugeExprs,
 	buildVpsSeriesExpr,
+	MIN_WINDOW_HOURS,
 } from '@/lib/domain/monitoring/vps-metrics.ts'
 
 import type { HostMetrics } from '@/lib/domain/monitoring/host-metrics.ts'
@@ -33,9 +34,13 @@ import type { VpsSeriesMetric } from '@/lib/domain/monitoring/vps-metrics.ts'
 const MS_PER_SECOND = 1000
 
 // Window bounds for the range queries, mirroring the domain's metric window
-// (0, 720h]. Clamp at the boundary so a NaN/negative/fractional hours value
-// never reaches the range `step`.
-const SERIES_WINDOW_BOUNDS = { min: 1, max: 720, fallback: 1 } as const
+// (0, 720h]. `min` is one minute (not 1h) so the live 5-minute window survives;
+// `clampNumber` keeps the fraction. Guards NaN/negative/over-max at the boundary.
+const SERIES_WINDOW_BOUNDS = {
+	min: MIN_WINDOW_HOURS,
+	max: 720,
+	fallback: 1,
+} as const
 
 const scalarOrNull = async (expr: string): Promise<number | null> => {
 	const payload = await queryVictoriaMetricsInstant(expr)
@@ -95,7 +100,7 @@ export const loadVpsSeries = async (
 ): Promise<ReadonlyArray<RangePoint>> => {
 	if (MOCK_DATA) return mockVpsSeries(vpsName, metric, hours)
 	const rangeWindow = buildMetricRangeWindow(
-		clampInteger(hours, SERIES_WINDOW_BOUNDS),
+		clampNumber(hours, SERIES_WINDOW_BOUNDS),
 		Math.floor(Date.now() / MS_PER_SECOND),
 	)
 	const payload = await queryVictoriaMetricsRange({

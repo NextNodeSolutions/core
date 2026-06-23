@@ -76,12 +76,17 @@ describe('buildOverviewWindow', () => {
 			ServerMetrics
 		>,
 		cpuSeriesByServer: [[10, 30]], // mean 20
+		errorCount: 0,
 		notices: [],
 	}
 
-	it('counts only error-level lines for the error stat', () => {
+	it('shows the provided WINDOWED error count, not a tally of the preview sample', () => {
+		// The preview `logs` carry only 2 error lines (the capped display
+		// sample), but the windowed aggregate counted 47 over the whole range.
+		// The stat must reflect the aggregate, never re-count the sample.
 		const window = buildOverviewWindow({
 			...base,
+			errorCount: 47,
 			logs: [
 				logLine({ level: 'error' }),
 				logLine({ level: 'warn' }),
@@ -90,13 +95,35 @@ describe('buildOverviewWindow', () => {
 			],
 		})
 		const errors = window.stats.find(s => s.label === 'Erreurs (6 h)')
-		expect(errors).toMatchObject({ value: '2', tone: 'danger' })
+		expect(errors).toMatchObject({ value: '47', tone: 'danger' })
+	})
+
+	it('marks the error stat positive when the windowed count is zero', () => {
+		const window = buildOverviewWindow({
+			...base,
+			errorCount: 0,
+			logs: [logLine({ level: 'error' })], // sample has an error; window had none
+		})
+		const errors = window.stats.find(s => s.label === 'Erreurs (6 h)')
+		expect(errors).toMatchObject({ value: '0', tone: 'positive' })
 	})
 
 	it('derives the windowed CPU average from the series, labelled by window', () => {
 		const window = buildOverviewWindow({ ...base, logs: [] })
 		const cpu = window.stats.find(s => s.label === 'CPU moyen (6 h)')
 		expect(cpu).toMatchObject({ value: '20%', hint: '1 nœud' })
+	})
+
+	it('labels a sub-hour live window in minutes, not "0 h"', () => {
+		const window = buildOverviewWindow({
+			...base,
+			windowHours: 5 / 60,
+			errorCount: 3,
+			logs: [],
+		})
+		expect(window.stats.map(stat => stat.label)).toEqual(
+			expect.arrayContaining(['CPU moyen (5 min)', 'Erreurs (5 min)']),
+		)
 	})
 
 	it('caps the stream at OVERVIEW_STREAM_COUNT, newest-first as given', () => {

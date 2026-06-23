@@ -2,10 +2,14 @@ import { describe, expect, it } from 'vitest'
 
 import {
 	buildContainerLogsQuery,
+	buildFleetErrorCountQuery,
 	buildFleetLogsQuery,
+	buildLogFacetsQuery,
 	buildVpsLogsQuery,
+	parseLogFacet,
 	parseLogLevel,
 	parseLogLines,
+	parseStatsCount,
 } from './log-query.ts'
 
 describe('buildVpsLogsQuery', () => {
@@ -70,6 +74,114 @@ describe('buildFleetLogsQuery', () => {
 		expect(query.indexOf('limit 200')).toBeLessThan(
 			query.indexOf('| unpack_json'),
 		)
+	})
+})
+
+describe('buildFleetLogsQuery server-side filter', () => {
+	it('keeps the fast shape (unpack after limit) when unfiltered', () => {
+		const query = buildFleetLogsQuery(6)
+		expect(query.indexOf('limit 200')).toBeLessThan(
+			query.indexOf('| unpack_json'),
+		)
+		expect(query).not.toContain('| filter')
+	})
+
+	it('scopes by vps (stream), service + search (post-unpack), then sorts+limits', () => {
+		const query = buildFleetLogsQuery(6, {
+			service: 'app',
+			vps: 'nn-prod',
+			query: 'boom',
+		})
+		expect(query).toContain('_time:6h nn_project:"nn-prod"')
+		// unpack BEFORE filtering on the unpacked fields, before sort+limit.
+		expect(query.indexOf('| unpack_json')).toBeLessThan(
+			query.indexOf('| filter'),
+		)
+		expect(query).toContain('| filter nn_service:"app"')
+		expect(query).toContain('_msg:~"(?i)boom"')
+		expect(query.indexOf('| filter')).toBeLessThan(
+			query.indexOf('sort by (_time desc)'),
+		)
+	})
+
+	it('escapes regex metacharacters in the search term', () => {
+		const query = buildFleetLogsQuery(6, { query: 'a.b' })
+		expect(query).toContain(String.raw`_msg:~"(?i)a\\.b"`)
+	})
+})
+
+describe('buildLogFacetsQuery / parseLogFacet', () => {
+	it('asks for the distinct values of a facet field over the window', () => {
+		expect(buildLogFacetsQuery(6, 'nn_service')).toBe(
+			'_time:6h | unpack_json | uniq by (nn_service)',
+		)
+	})
+
+	it('parses uniq rows into a sorted, de-duped value list', () => {
+		const body = [
+			JSON.stringify({ nn_project: 'nn-prod' }),
+			JSON.stringify({ nn_project: 'nn-internals' }),
+			JSON.stringify({ nn_project: 'nn-prod' }),
+			'',
+		].join('\n')
+		expect(parseLogFacet(body, 'nn_project')).toEqual([
+			'nn-internals',
+			'nn-prod',
+		])
+	})
+})
+
+describe('buildFleetErrorCountQuery', () => {
+	it('counts errors over the WHOLE window with no limit (a true aggregate)', () => {
+		const query = buildFleetErrorCountQuery(24)
+		expect(query).toContain('_time:24h')
+		expect(query).toContain('| stats count() if (')
+		expect(query).toContain('as errors')
+		// Crucially NOT a sort+limit display sample - that is the frozen-stat bug.
+		expect(query).not.toContain('sort by')
+		expect(query).not.toContain('limit')
+	})
+
+	it('unpacks _msg so the trapped level field is filterable', () => {
+		const query = buildFleetErrorCountQuery(6)
+		expect(query).toContain('| unpack_json')
+		expect(query.indexOf('| unpack_json')).toBeLessThan(
+			query.indexOf('| stats'),
+		)
+	})
+
+	it('matches the error-ish level OR severity spellings, case-insensitively', () => {
+		const query = buildFleetErrorCountQuery(6)
+		expect(query).toContain(
+			'level:~"(?i)^(error|err|fatal|critical|crit)$"',
+		)
+		expect(query).toContain(
+			'severity:~"(?i)^(error|err|fatal|critical|crit)$"',
+		)
+	})
+
+	it('defaults to the 6h window when none is given', () => {
+		expect(buildFleetErrorCountQuery()).toContain('_time:6h')
+	})
+})
+
+describe('parseStatsCount', () => {
+	it('reads a named count returned as a string', () => {
+		expect(parseStatsCount('{"errors":"42"}', 'errors')).toBe(42)
+	})
+
+	it('reads a named count returned as a number', () => {
+		expect(parseStatsCount('{"errors":7}', 'errors')).toBe(7)
+	})
+
+	it('returns 0 for an empty body, missing field, or unparseable row', () => {
+		expect(parseStatsCount('', 'errors')).toBe(0)
+		expect(parseStatsCount('{"other":3}', 'errors')).toBe(0)
+		expect(parseStatsCount('not json', 'errors')).toBe(0)
+	})
+
+	it('skips blank lines and reads the first valid stats row', () => {
+		expect(parseStatsCount('\n\n{"errors":"5"}\n', 'errors')).toBe(5)
 	})
 })
 

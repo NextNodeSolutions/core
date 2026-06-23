@@ -38,7 +38,10 @@ describe('GET /api/logs', () => {
 		const body: unknown = await response.json()
 
 		expect(response.status).toBe(200)
-		expect(body).toEqual({
+		// The body now carries the line sample AND the windowed stats. This stub
+		// returns the same log line for every query, so the stats query (which
+		// expects `hits` rows) finds none -> an honest empty aggregate.
+		expect(body).toMatchObject({
 			logs: [
 				expect.objectContaining({
 					message: 'server started',
@@ -47,7 +50,31 @@ describe('GET /api/logs', () => {
 					vps: 'stylot',
 				}),
 			],
+			stats: { total: 0, levelCounts: { error: 0 } },
+			// Facet dropdown values come from the `uniq by (...)` queries.
+			facets: { services: ['app'], vps: ['stylot'] },
 		})
+	})
+
+	it('threads the service/vps/search facets into the LogsQL queries', async () => {
+		const queried: string[] = []
+		stubVictoriaResponse(url => {
+			queried.push(url)
+			return new Response('', { status: 200 })
+		})
+
+		await handleLogsRequest(
+			buildUrl('?range=6h&service=app&vps=nn-prod&q=boom'),
+		)
+
+		// The sample + stats queries carry the facet/search scope (URL-encoded).
+		const scoped = queried.filter(
+			url =>
+				url.includes('nn_project%3A%22nn-prod%22') &&
+				url.includes('nn_service%3A%22app%22'),
+		)
+		expect(scoped.length).toBeGreaterThanOrEqual(2)
+		expect(queried.some(url => url.includes('boom'))).toBe(true)
 	})
 
 	it('maps an upstream VictoriaLogs failure to 502, not a silent empty 200', async () => {
@@ -76,7 +103,7 @@ describe('GET /api/logs', () => {
 		expect(queried.some(url => url.includes('_time%3A6h'))).toBe(true)
 	})
 
-	it('maps the live range to a 1h window', async () => {
+	it('maps the live range to a short 5-minute window (not 1h history)', async () => {
 		const queried: string[] = []
 		stubVictoriaResponse(url => {
 			queried.push(url)
@@ -85,6 +112,8 @@ describe('GET /api/logs', () => {
 
 		await handleLogsRequest(buildUrl('?range=live'))
 
-		expect(queried.some(url => url.includes('_time%3A1h'))).toBe(true)
+		// `_time:5m`, never `_time:1h` - live is a recent window, not a 1h history.
+		expect(queried.some(url => url.includes('_time%3A5m'))).toBe(true)
+		expect(queried.some(url => url.includes('_time%3A1h'))).toBe(false)
 	})
 })

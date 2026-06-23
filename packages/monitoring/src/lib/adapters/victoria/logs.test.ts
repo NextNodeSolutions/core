@@ -37,7 +37,9 @@ describe('loadFleetLogs window clamping', () => {
 		const query = decodedQuery(probe.lastUrl())
 		expect(query).not.toContain('_time:-5h')
 		expect(query).not.toContain('_time:-')
-		expect(query).toMatch(/_time:\d+h/)
+		// Clamped to the 1-minute floor (a safe positive window), never negative.
+		expect(query).toMatch(/_time:\d+[mh]/)
+		expect(query).toContain('_time:1m')
 	})
 
 	it('clamps a NaN window rather than emitting _time:NaNh', async () => {

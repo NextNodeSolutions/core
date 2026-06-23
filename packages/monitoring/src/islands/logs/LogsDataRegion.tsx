@@ -2,9 +2,9 @@ import { useAtomValue } from 'jotai'
 
 import {
 	bucketsAtom,
-	filteredCountAtom,
 	logsLoaderAtom,
 	rangeAtom,
+	windowTotalAtom,
 } from '@/islands/logs/atoms.ts'
 import { LogDetailPanel } from '@/islands/logs/LogDetailPanel.tsx'
 import { LogHistogram } from '@/islands/logs/LogHistogram.tsx'
@@ -23,7 +23,9 @@ export function LogsDataRegion(): React.ReactElement {
 	// Gate: suspends until the active range's logs are loaded.
 	useAtomValue(logsLoaderAtom)
 	const buckets = useAtomValue(bucketsAtom)
-	const filteredCount = useAtomValue(filteredCountAtom)
+	// Windowed total (the whole range), not the sample size - so the number
+	// moves with the time filter just like the histogram above it.
+	const windowTotal = useAtomValue(windowTotalAtom)
 	const range = useAtomValue(rangeAtom)
 	const [firstBucket] = buckets
 
@@ -35,7 +37,7 @@ export function LogsDataRegion(): React.ReactElement {
 						Volume · {range}
 					</span>
 					<span className="text-base-500 font-mono text-[10.5px]">
-						{filteredCount} évènements
+						{windowTotal} évènements
 					</span>
 				</div>
 				<LogHistogram />

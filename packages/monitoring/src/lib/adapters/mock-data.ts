@@ -2,11 +2,11 @@
 // the data. Naming every server spec, metric base and offset would bury the
 // shape it exists to show. Logic-bearing numbers stay named (see the constants).
 import { getEnv } from '@/lib/adapters/env.ts'
+import { MIN_WINDOW_HOURS } from '@/lib/domain/monitoring/vps-metrics.ts'
 
 import type { VpsGauges } from '@/lib/adapters/victoria/metrics.ts'
 import type { HetznerVps } from '@/lib/domain/hetzner/vps.ts'
 import type { HostMetrics } from '@/lib/domain/monitoring/host-metrics.ts'
-import type { LogLine } from '@/lib/domain/monitoring/log-query.ts'
 import type { RangePoint } from '@/lib/domain/monitoring/promql-response.ts'
 import type { VpsSeriesMetric } from '@/lib/domain/monitoring/vps-metrics.ts'
 
@@ -145,64 +145,44 @@ const SERIES_SHAPE: Record<VpsSeriesMetric, { base: number; amp: number }> = {
 	load: { base: 0.6, amp: 0.5 },
 }
 
+// A slow trend keyed off each sample's ABSOLUTE age (rising over the first
+// ~48h) is what makes the window MEAN differ by range: a 1h window samples only
+// the flat head, a 24h window averages a higher arc. SLOW/FAST weights sum to 1
+// so the swing stays within `base ± amp` (no clamp distortion skewing the mean).
+const SLOW_TREND_RATE = Math.PI / 24
+const SLOW_WEIGHT = 0.6
+const FAST_WEIGHT = 0.4
+
 export const mockVpsSeries = (
 	vpsName: string,
 	metric: VpsSeriesMetric,
 	hours: number,
 ): ReadonlyArray<RangePoint> => {
 	const nowSec = Math.floor(Date.now() / 1000)
-	const span = Math.max(1, hours) * SECONDS_PER_HOUR
+	// Guard a NaN/Infinity window (the real path clamps via clampNumber; the mock
+	// branch returns before that, so guard here) so points never become NaN.
+	const windowHours = Number.isFinite(hours)
+		? Math.max(MIN_WINDOW_HOURS, hours)
+		: 1
+	const span = windowHours * SECONDS_PER_HOUR
 	const step = span / SERIES_POINTS
 	const shape = SERIES_SHAPE[metric]
 	const seed = seedFromName(vpsName + metric)
-	return Array.from({ length: SERIES_POINTS }, (_, index) => ({
-		t: Math.floor(nowSec - span + index * step),
-		v: Math.max(
-			0,
+	return Array.from({ length: SERIES_POINTS }, (_, index) => {
+		// index 0 is the oldest sample (now - span); the last is ~now. The slow
+		// trend reads the sample's absolute age so wider windows reach higher up
+		// the curve; the fast term is pure per-point texture (mean ~0). Neither
+		// uses the wall clock, so the VALUES are reload-stable.
+		const ageHours =
+			((SERIES_POINTS - 1 - index) / SERIES_POINTS) * windowHours
+		const sample =
 			shape.base +
-				Math.sin(index / 6 + seed) * shape.amp +
-				wobble(seed + index) * (shape.amp / 3),
-		),
-	}))
-}
-
-const SERVICES = ['app', 'api', 'caddy', 'worker', 'cron'] as const
-const VPS_NAMES = ['nn-prod', 'nn-internals', 'nn-staging'] as const
-const LINES: ReadonlyArray<{ level: LogLine['level']; message: string }> = [
-	{ level: 'info', message: 'GET /api/health 200 in 4ms' },
-	{ level: 'info', message: 'request completed' },
-	{ level: 'warn', message: 'slow query: 812ms on projects.list' },
-	{ level: 'error', message: 'upstream timeout reaching cloudflare api' },
-	{ level: 'info', message: 'cache hit ratio 0.93' },
-	{ level: 'debug', message: 'scheduler tick: 3 jobs enqueued' },
-	{ level: 'info', message: 'deploy webhook accepted' },
-	{ level: 'warn', message: 'memory pressure 78% on container' },
-	{ level: 'error', message: 'ECONNRESET while streaming logs' },
-	{ level: 'info', message: 'POST /api/overview 200 in 21ms' },
-	{ level: 'debug', message: 'jwt verified for operator session' },
-	{ level: 'info', message: 'background backup completed (1.2 GB)' },
-]
-
-export const mockFleetLogs = (): ReadonlyArray<LogLine> => {
-	const nowMs = Date.now()
-	return LINES.map((line, index) => ({
-		time: new Date(nowMs - index * 47_000).toISOString(),
-		message: line.message,
-		container: null,
-		level: line.level,
-		service: SERVICES[index % SERVICES.length] ?? null,
-		vps: VPS_NAMES[index % VPS_NAMES.length] ?? null,
-		status: null,
-		method: null,
-		path: null,
-		durationMs: null,
-		traceId: null,
-		stack: null,
-		meta: {},
-	}))
-}
-
-export const mockVpsLogs = (vpsName: string): ReadonlyArray<LogLine> => {
-	const own = mockFleetLogs().filter(line => line.vps === vpsName)
-	return own.length > 0 ? own : mockFleetLogs()
+			Math.sin(ageHours * SLOW_TREND_RATE) * shape.amp * SLOW_WEIGHT +
+			Math.sin(index / 6 + seed) * shape.amp * FAST_WEIGHT +
+			wobble(seed + index) * (shape.amp / 4)
+		return {
+			t: Math.floor(nowSec - span + index * step),
+			v: Math.max(0, sample),
+		}
+	})
 }

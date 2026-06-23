@@ -1,13 +1,25 @@
 import { HTTP_STATUS } from '@/lib/adapters/http-status.ts'
 import { jsonResponse } from '@/lib/adapters/json-response.ts'
 import { loadPageState } from '@/lib/adapters/load-page-state.ts'
-import { loadFleetLogs } from '@/lib/adapters/victoria/logs.ts'
+import {
+	loadFleetLogs,
+	loadFleetStats,
+	loadLogFacets,
+} from '@/lib/adapters/victoria/logs.ts'
 import { apiErr } from '@/lib/domain/api-result.ts'
+import { EMPTY_FLEET_STATS } from '@/lib/domain/monitoring/log-aggregates.ts'
 import { rangeToHours } from '@/lib/domain/monitoring/vps-metrics.ts'
 
 import type { APIRoute } from 'astro'
 import type { LoadState } from '@/lib/domain/load-state.ts'
-import type { LogLine } from '@/lib/domain/monitoring/log-query.ts'
+import type { FleetLogStats } from '@/lib/domain/monitoring/log-aggregates.ts'
+import type {
+	FleetLogFilter,
+	LogFacets,
+	LogLine,
+} from '@/lib/domain/monitoring/log-query.ts'
+
+const EMPTY_LOG_FACETS: LogFacets = { services: [], vps: [] }
 
 /**
  * Fleet-log JSON feed for the dynamic /logs island. The island fetches this
@@ -23,23 +35,38 @@ export const prerender = false
 
 const DEFAULT_RANGE = '6h'
 
-/** Success body shape the island reads: just the loaded lines. */
+/**
+ * Success body shape the island reads: the recent line SAMPLE (the list) plus
+ * the WINDOWED aggregates (histogram + per-level + total). The two are distinct
+ * on purpose - the sample is the 200 newest lines, the stats cover the whole
+ * window - so the time filter visibly moves the histogram and counts.
+ */
 interface LogsPayload {
 	readonly logs: ReadonlyArray<LogLine>
+	readonly stats: FleetLogStats
+	readonly facets: LogFacets
 }
 
-const okLogsResponse = (logs: ReadonlyArray<LogLine>): Response => {
-	const payload: LogsPayload = { logs }
+const okLogsResponse = (
+	logs: ReadonlyArray<LogLine>,
+	stats: FleetLogStats,
+	facets: LogFacets,
+): Response => {
+	const payload: LogsPayload = { logs, stats, facets }
 	return new Response(JSON.stringify(payload), {
 		status: HTTP_STATUS.OK,
 		headers: { 'content-type': 'application/json; charset=utf-8' },
 	})
 }
 
-const toResponse = (state: LoadState<ReadonlyArray<LogLine>>): Response => {
+const toResponse = (
+	state: LoadState<ReadonlyArray<LogLine>>,
+	stats: FleetLogStats,
+	facets: LogFacets,
+): Response => {
 	switch (state.kind) {
 		case 'ok':
-			return okLogsResponse(state.data)
+			return okLogsResponse(state.data, stats, facets)
 		case 'upstream_error':
 			return jsonResponse(
 				apiErr('upstream_error', state.message),
@@ -68,12 +95,38 @@ const assertNeverState = (state: never): never => {
  * The pure request handler, separated from the Astro `GET` wiring so it can be
  * driven by a plain `URL` in tests (no `APIContext` fake, no cast).
  */
+/** Read a filter value, treating a missing/empty/`all` param as "no filter". */
+const filterParam = (url: URL, key: string): string | undefined => {
+	const param = url.searchParams.get(key)
+	return param && param.length > 0 && param !== 'all' ? param : undefined
+}
+
 export const handleLogsRequest = async (url: URL): Promise<Response> => {
 	const range = url.searchParams.get('range') ?? DEFAULT_RANGE
-	// `rangeToHours` already maps `live` -> 1h, so no special-casing here.
+	// `rangeToHours` maps `live` to a short 5-min window; no special-casing here.
 	const hours = rangeToHours(range)
-	const state = await loadPageState('logs.fleet', () => loadFleetLogs(hours))
-	return toResponse(state)
+	// Server-side scope: the sample and the windowed stats are BOTH filtered, so
+	// the list, histogram and counts all reflect the operator's facets/search.
+	const filter: FleetLogFilter = {
+		service: filterParam(url, 'service'),
+		vps: filterParam(url, 'vps'),
+		query: filterParam(url, 'q'),
+	}
+	// One stable clock for both the bucket grid and any relative-time rendering.
+	const nowMs = Date.now()
+	// Sample, windowed aggregate and facet values hit VictoriaLogs independently;
+	// fire all three and await once. The list gates the page, so only its failure
+	// becomes an error response; stats/facets degrade to empty (loud-logged by
+	// loadPageState) rather than blanking the logs.
+	const [logsState, statsState, facetsState] = await Promise.all([
+		loadPageState('logs.fleet', () => loadFleetLogs(hours, filter)),
+		loadPageState('logs.stats', () => loadFleetStats(hours, nowMs, filter)),
+		loadPageState('logs.facets', () => loadLogFacets(hours)),
+	])
+	const stats = statsState.kind === 'ok' ? statsState.data : EMPTY_FLEET_STATS
+	const facets =
+		facetsState.kind === 'ok' ? facetsState.data : EMPTY_LOG_FACETS
+	return toResponse(logsState, stats, facets)
 }
 
 export const GET: APIRoute = ({ url }) => handleLogsRequest(url)

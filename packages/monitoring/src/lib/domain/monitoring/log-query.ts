@@ -1,6 +1,7 @@
 import { escapeRegex } from '@/lib/domain/escape-regex.ts'
 import { isRecord } from '@/lib/domain/is-record.ts'
 import { logsqlQuoted } from '@/lib/domain/monitoring/logsql.ts'
+import { windowToLogsQL } from '@/lib/domain/monitoring/vps-metrics.ts'
 import { parseFiniteNumber } from '@/lib/domain/parse-number.ts'
 import { parseStringOrNull } from '@/lib/domain/parse-string.ts'
 
@@ -76,6 +77,12 @@ export const parseLogLevel = (candidate: unknown): LogLevel | null => {
 	return LEVEL_ALIASES[candidate.trim().toLowerCase()] ?? null
 }
 
+// The raw level/severity spellings that normalise to `error` (the subset of
+// LEVEL_ALIASES mapping to 'error'), as a case-insensitive anchored LogsQL
+// regex. Kept next to LEVEL_ALIASES so the server-side error tally and the
+// client-side level parsing can never drift apart.
+const ERROR_LEVEL_PATTERN = '(?i)^(error|err|fatal|critical|crit)$'
+
 /**
  * Build a LogsQL query for the most recent lines of one VPS. `nn_project`
  * is the VPS-level stream field Vector stamps (= the host hostname), so
@@ -99,15 +106,141 @@ export const buildContainerLogsQuery = (project: string): string =>
 	`_time:${CONTAINER_SCAN_WINDOW} container_name:~${logsqlQuoted(`^${escapeRegex(project)}-`)} | sort by (_time desc) | limit ${String(LOGSQL_QUERY_LIMIT)} ${UNPACK_PIPE}`
 
 /**
+ * The /logs server-side filters that scope BOTH the line sample and the
+ * windowed stats, so the histogram / counts / list all reflect the operator's
+ * facet + search choices (no client-side facet drift). `vps` rides as a stream
+ * filter before unpack (cheap); `service`/`query` filter the unpacked fields.
+ * The LEVEL filter is intentionally NOT here - it stays a client-side list
+ * refinement so the histogram keeps showing the full level distribution.
+ */
+export interface FleetLogFilter {
+	readonly service?: string
+	readonly vps?: string
+	readonly query?: string
+}
+
+/** Distinct facet values over the window, for the /logs filter dropdowns. */
+export interface LogFacets {
+	readonly services: ReadonlyArray<string>
+	readonly vps: ReadonlyArray<string>
+}
+
+export const hasFleetLogFilter = (filter: FleetLogFilter): boolean =>
+	Boolean(filter.vps ?? '') ||
+	Boolean(filter.service ?? '') ||
+	Boolean(filter.query ?? '')
+
+/** Stream-field scope appended to the `_time:` head (rides BEFORE unpack). */
+export const streamScope = (filter: FleetLogFilter): string =>
+	filter.vps ? ` nn_project:${logsqlQuoted(filter.vps)}` : ''
+
+/**
+ * Post-unpack `| filter` clauses for fields inside the unpacked JSON
+ * (`nn_service`) and a case-insensitive substring search over the raw line
+ * (`_msg`, which still holds the whole record so message/path/etc. match).
+ * Empty string when neither is set. Validated against a live VictoriaLogs.
+ */
+export const unpackedScope = (filter: FleetLogFilter): string => {
+	const clauses: Array<string> = []
+	if (filter.service)
+		clauses.push(`nn_service:${logsqlQuoted(filter.service)}`)
+	if (filter.query) {
+		clauses.push(
+			`_msg:~${logsqlQuoted(`(?i)${escapeRegex(filter.query)}`)}`,
+		)
+	}
+	return clauses.length > 0 ? ` | filter ${clauses.join(' ')}` : ''
+}
+
+/**
  * Build a LogsQL query for the most recent lines across the WHOLE fleet
- * (every VPS, every container + journald), newest first. Used by the
- * overview log stream and its error tally. Time-bounded since there is no
- * stream filter to ride.
+ * (every VPS, every container + journald), newest first - optionally scoped by
+ * the server-side `filter`. With NO filter it keeps the fast shape (unpack only
+ * the 200 returned lines). With a filter it unpacks BEFORE filtering so the
+ * service/search predicates see the lifted fields, then sorts + limits.
  */
 export const buildFleetLogsQuery = (
 	windowHours: number = DEFAULT_FLEET_LOG_HOURS,
+	filter: FleetLogFilter = {},
+): string => {
+	const window = windowToLogsQL(windowHours)
+	const limit = String(LOGSQL_QUERY_LIMIT)
+	if (!hasFleetLogFilter(filter)) {
+		return `_time:${window} | sort by (_time desc) | limit ${limit} ${UNPACK_PIPE}`
+	}
+	return `_time:${window}${streamScope(filter)} ${UNPACK_PIPE}${unpackedScope(filter)} | sort by (_time desc) | limit ${limit}`
+}
+
+/** Distinct values of a facet field over the window, for the filter dropdowns. */
+export const buildLogFacetsQuery = (
+	windowHours: number,
+	field: 'nn_service' | 'nn_project',
 ): string =>
-	`_time:${String(windowHours)}h | sort by (_time desc) | limit ${String(LOGSQL_QUERY_LIMIT)} ${UNPACK_PIPE}`
+	`_time:${windowToLogsQL(windowHours)} ${UNPACK_PIPE} | uniq by (${field})`
+
+/** Parse the `uniq by (field)` rows into a sorted, de-duped value list. */
+export const parseLogFacet = (
+	body: string,
+	field: string,
+): ReadonlyArray<string> => {
+	const values = new Set<string>()
+	for (const raw of body.split('\n')) {
+		const trimmed = raw.trim()
+		if (trimmed.length === 0) continue
+		let parsed: unknown
+		try {
+			parsed = JSON.parse(trimmed)
+		} catch {
+			continue
+		}
+		if (!isRecord(parsed)) continue
+		const cell = parsed[field]
+		if (typeof cell === 'string' && cell.length > 0) values.add(cell)
+	}
+	return [...values].toSorted((left, right) => left.localeCompare(right))
+}
+
+/**
+ * Build a LogsQL query that COUNTS error-level lines across the whole fleet
+ * over `windowHours`. Crucial that this is a true windowed aggregate, NOT a
+ * tally of `buildFleetLogsQuery`'s 200-line display sample: that sample is the
+ * 200 NEWEST lines, so on a busy fleet it is the same set for every window and
+ * its error tally never moves when the range changes. `stats count() if (...)`
+ * (the same pipe `caddy-stats` uses) counts the whole window with no limit, so
+ * the overview "Erreurs (X h)" stat finally tracks the selected range.
+ */
+export const buildFleetErrorCountQuery = (
+	windowHours: number = DEFAULT_FLEET_LOG_HOURS,
+): string =>
+	[
+		`_time:${windowToLogsQL(windowHours)}`,
+		UNPACK_PIPE,
+		`| stats count() if (level:~${logsqlQuoted(ERROR_LEVEL_PATTERN)} or severity:~${logsqlQuoted(ERROR_LEVEL_PATTERN)}) as errors`,
+	].join(' ')
+
+/**
+ * Read a single named `stats count()` value out of a VictoriaLogs stats body
+ * (one JSON row like `{"errors":"42"}`; counts come back as strings). Returns 0
+ * when the row, the field, or the whole body is missing/unparseable - a count
+ * query over an empty window legitimately yields no error lines.
+ */
+export const parseStatsCount = (body: string, field: string): number => {
+	for (const raw of body.split('\n')) {
+		const trimmed = raw.trim()
+		if (trimmed.length === 0) continue
+		let parsed: unknown
+		try {
+			parsed = JSON.parse(trimmed)
+		} catch {
+			continue
+		}
+		if (!isRecord(parsed)) continue
+		const cell = parsed[field]
+		const count = typeof cell === 'number' ? cell : Number(cell)
+		if (Number.isFinite(count)) return count
+	}
+	return 0
+}
 
 /**
  * Parse the newline-delimited JSON VictoriaLogs streams back. Tolerant:

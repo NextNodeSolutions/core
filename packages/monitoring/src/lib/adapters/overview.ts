@@ -1,7 +1,10 @@
 import { ENV_KEYS, requireEnv } from '@/lib/adapters/env.ts'
 import { listServers } from '@/lib/adapters/hetzner/servers.ts'
 import { loadPageState } from '@/lib/adapters/load-page-state.ts'
-import { loadFleetLogs } from '@/lib/adapters/victoria/logs.ts'
+import {
+	loadFleetErrorCount,
+	loadFleetLogs,
+} from '@/lib/adapters/victoria/logs.ts'
 import {
 	loadHostMetrics,
 	loadVpsSeries,
@@ -101,19 +104,34 @@ export const loadOverviewWindow = async (
 	)
 	const servers = serversState.kind === 'ok' ? serversState.data : []
 
-	// The fleet pass and the log window hit independent upstreams, so run them
-	// together and await once.
-	const [fleet, logsState] = await Promise.all([
+	// The fleet pass, the log preview window and the windowed error tally hit
+	// independent upstreams (and the tally is a separate VictoriaLogs aggregate,
+	// not derived from the capped preview list), so run them together and await
+	// once.
+	const [fleet, logsState, errorCountState] = await Promise.all([
 		loadFleetSnapshot(servers, windowHours),
 		loadPageState(`overview.logs.${String(windowHours)}`, () =>
 			loadFleetLogs(windowHours),
 		),
+		loadPageState(`overview.errors.${String(windowHours)}`, () =>
+			loadFleetErrorCount(windowHours),
+		),
 	])
 
 	const logs = logsState.kind === 'ok' ? logsState.data : []
+	const errorCount = errorCountState.kind === 'ok' ? errorCountState.data : 0
+	// Both log queries hit the same upstream, so a full VictoriaLogs outage would
+	// otherwise stack two near-identical banners. Surface the error-tally notice
+	// ONLY when the stream itself loaded (i.e. the count alone failed) - the
+	// stream's own notice already covers a shared outage.
+	const errorCountNotice =
+		logsState.kind === 'ok'
+			? noticeFromState(errorCountState, 'logs', 'VictoriaLogs (erreurs)')
+			: null
 	const notices = [
 		noticeFromState(serversState, 'fleet', 'Hetzner API'),
 		noticeFromState(logsState, 'logs', 'VictoriaLogs'),
+		errorCountNotice,
 	].filter((notice): notice is OverviewNotice => notice !== null)
 
 	return buildOverviewWindow({
@@ -123,6 +141,7 @@ export const loadOverviewWindow = async (
 		metricsByName: fleet.metricsByName,
 		cpuSeriesByServer: fleet.cpuSeriesByServer,
 		logs,
+		errorCount,
 		notices,
 	})
 }

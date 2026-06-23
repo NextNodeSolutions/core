@@ -19,7 +19,7 @@ export function OverviewNotices({
 		<div className="flex flex-col gap-2.5">
 			{notices.map(notice => (
 				<div
-					key={notice.section}
+					key={`${notice.section}-${notice.label}`}
 					className="rounded-xl border border-red-200 bg-red-50 px-4 py-3"
 				>
 					<p className="text-sm font-semibold text-red-700">

@@ -3,18 +3,24 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { LogsExplorer } from '@/islands/logs/LogsExplorer.tsx'
+import {
+	fleetStatsFromLogs,
+	windowMsFor,
+} from '@/lib/domain/monitoring/log-aggregates.ts'
+import { rangeToHours } from '@/lib/domain/monitoring/vps-metrics.ts'
 
-import type { LogLine } from '@/lib/domain/monitoring/log-query.ts'
+import type { FleetLogStats } from '@/lib/domain/monitoring/log-aggregates.ts'
+import type { LogFacets, LogLine } from '@/lib/domain/monitoring/log-query.ts'
 
 /**
  * Behavioural tests for the dynamic logs island. Every assertion checks what
- * the operator sees (rows, panel content, fetch URL) after a real interaction -
- * never internal atom state. The seeded initial logs come from props (no
- * fetch), so only the range-change case touches the network, which we stub.
+ * the operator sees (rows, panel, fetch URL) after a real interaction. The
+ * SERVER does the windowing + facet/search filtering, so a facet select or a
+ * (debounced) search re-keys a fetch (stubbed here); the LEVEL chips remain a
+ * client-side refinement of the seeded sample (no fetch). The seeded initial
+ * range paints from props with no fetch.
  */
 
-// A fixed clock so histogram bucketing is deterministic across machines. All
-// fixtures sit inside the 6h window before this instant.
 const NOW_MS = Date.parse('2026-06-15T12:00:00.000Z')
 
 const buildLine = (overrides: Partial<LogLine>): LogLine => ({
@@ -68,9 +74,38 @@ const SEED_LOGS: ReadonlyArray<LogLine> = [
 	}),
 ]
 
+const sorted = (values: ReadonlyArray<string>): ReadonlyArray<string> =>
+	[...new Set(values)].toSorted((a, b) => a.localeCompare(b))
+
+const facetsFor = (logs: ReadonlyArray<LogLine>): LogFacets => ({
+	services: sorted(
+		logs
+			.map(line => line.service)
+			.filter((name): name is string => name !== null),
+	),
+	vps: sorted(
+		logs
+			.map(line => line.vps)
+			.filter((name): name is string => name !== null),
+	),
+})
+
+const statsFor = (logs: ReadonlyArray<LogLine>, range: string): FleetLogStats =>
+	fleetStatsFromLogs(logs, {
+		nowMs: NOW_MS,
+		windowMs: windowMsFor(rangeToHours(range)),
+	})
+
+// The {logs, stats, facets} body /api/logs returns for a given (filtered) set.
+const windowBody = (logs: ReadonlyArray<LogLine>, range: string): string =>
+	JSON.stringify({
+		logs,
+		stats: statsFor(logs, range),
+		facets: facetsFor(SEED_LOGS), // dropdowns keep the full window's values
+	})
+
 // The data region suspends on its first render until the seeded logs resolve;
-// React 19 requires that initial suspend to be flushed inside an awaited `act`,
-// so the helper is async. After it resolves the seeded rows are on screen.
+// React 19 requires that initial suspend to be flushed inside an awaited `act`.
 const renderExplorer = async (
 	logs: ReadonlyArray<LogLine> = SEED_LOGS,
 	range = '6h',
@@ -79,15 +114,14 @@ const renderExplorer = async (
 		render(
 			<LogsExplorer
 				initialLogs={logs}
+				initialStats={statsFor(logs, range)}
+				initialFacets={facetsFor(logs)}
 				initialRange={range}
-				nowMs={NOW_MS}
 			/>,
 		)
 	})
 }
 
-// Rows render as buttons whose accessible name is the concatenated row text;
-// matching on the message keeps the query resilient to the time/level columns.
 const findRow = (message: string): Promise<HTMLElement> =>
 	screen.findByRole('button', { name: new RegExp(message, 'i') })
 
@@ -111,67 +145,63 @@ describe('LogsExplorer island', () => {
 
 		expect(await findRow('user signed in')).toBeDefined()
 		expect(queryRow('unhandled exception in handler')).not.toBeNull()
-		// The seeded initial range must paint from props alone.
 		expect(fetchSpy).not.toHaveBeenCalled()
 	})
 
-	it('isolates to a level from the default, then adds a second level (isolate-then-additive)', async () => {
+	it('isolates to a level CLIENT-side from the seed, no fetch', async () => {
+		const fetchSpy = vi.fn()
+		vi.stubGlobal('fetch', fetchSpy)
 		const user = userEvent.setup()
 		await renderExplorer()
 		await findRow('user signed in')
 
 		const errorChip = screen.getByRole('button', { name: 'niveau error' })
-		// The chip shows the per-level count for `error` (one error line seeded).
+		// Chip count is the windowed per-level tally from the seeded stats.
 		expect(errorChip.textContent).toContain('1')
 
-		// From the all-active default, clicking ERROR ISOLATES to errors: the
-		// error row stays, the info/warn rows vanish - clicking a level SHOWS it
-		// rather than hiding it. The null-level row always passes the chip filter.
+		// Clicking ERROR isolates the LIST to errors with NO network (level is a
+		// client refinement); the null-level row always passes the chip filter.
 		await user.click(errorChip)
 		await waitFor(() => expect(queryRow('user signed in')).toBeNull())
 		expect(queryRow('disk almost full')).toBeNull()
 		expect(queryRow('unhandled exception in handler')).not.toBeNull()
 		expect(queryRow('cron tick')).not.toBeNull()
+		expect(fetchSpy).not.toHaveBeenCalled()
 
-		// Clicking WARN is additive: now ERROR + WARN rows are both visible.
+		// WARN is additive: ERROR + WARN rows both visible.
 		await user.click(screen.getByRole('button', { name: 'niveau warn' }))
 		expect(await findRow('disk almost full')).toBeDefined()
-		expect(queryRow('unhandled exception in handler')).not.toBeNull()
 		expect(queryRow('user signed in')).toBeNull()
 	})
 
-	it('resets to all levels when the last active level is removed (never blanks)', async () => {
+	it('resets to all levels when the last active level is removed (client)', async () => {
 		const user = userEvent.setup()
 		await renderExplorer()
 		await findRow('user signed in')
 
-		// Isolate to error, then remove it: the empty set snaps back to "all", so
-		// every level is shown again instead of leaving a dead screen.
 		await user.click(screen.getByRole('button', { name: 'niveau error' }))
 		await waitFor(() => expect(queryRow('user signed in')).toBeNull())
 
 		await user.click(screen.getByRole('button', { name: 'niveau error' }))
 		expect(await findRow('user signed in')).toBeDefined()
 		expect(queryRow('disk almost full')).not.toBeNull()
-		expect(queryRow('unhandled exception in handler')).not.toBeNull()
 	})
 
-	it('filters rows by the search query (message / path / service / trace)', async () => {
-		const user = userEvent.setup()
-		await renderExplorer()
-		await findRow('user signed in')
-
-		await user.type(
-			screen.getByLabelText('Rechercher dans les logs'),
-			'disk',
+	it('narrows rows SERVER-side by the service facet (refetch)', async () => {
+		const workerLine = buildLine({
+			message: 'disk almost full',
+			level: 'warn',
+			service: 'worker',
+			vps: 'stylot',
+		})
+		const fetchSpy = vi.fn(() =>
+			Promise.resolve(
+				new Response(windowBody([workerLine], '6h'), {
+					status: 200,
+				}),
+			),
 		)
-
-		await waitFor(() => expect(queryRow('user signed in')).toBeNull())
-		expect(queryRow('disk almost full')).not.toBeNull()
-		expect(queryRow('unhandled exception in handler')).toBeNull()
-	})
-
-	it('narrows rows by the service facet', async () => {
+		vi.stubGlobal('fetch', fetchSpy)
 		const user = userEvent.setup()
 		await renderExplorer()
 		await findRow('user signed in')
@@ -181,11 +211,30 @@ describe('LogsExplorer island', () => {
 			'worker',
 		)
 
+		// The server returns only the worker line; the list swaps to it.
+		expect(await findRow('disk almost full')).toBeDefined()
 		await waitFor(() => expect(queryRow('user signed in')).toBeNull())
-		expect(queryRow('disk almost full')).not.toBeNull()
+		// ...via a request carrying the service filter.
+		expect(fetchSpy).toHaveBeenCalledWith(
+			expect.stringContaining('service=worker'),
+		)
 	})
 
-	it('narrows rows by the vps facet', async () => {
+	it('narrows rows SERVER-side by the vps facet (refetch)', async () => {
+		const edgeLine = buildLine({
+			message: 'unhandled exception in handler',
+			level: 'error',
+			service: 'api',
+			vps: 'edge-1',
+		})
+		const fetchSpy = vi.fn(() =>
+			Promise.resolve(
+				new Response(windowBody([edgeLine], '6h'), {
+					status: 200,
+				}),
+			),
+		)
+		vi.stubGlobal('fetch', fetchSpy)
 		const user = userEvent.setup()
 		await renderExplorer()
 		await findRow('user signed in')
@@ -195,9 +244,46 @@ describe('LogsExplorer island', () => {
 			'edge-1',
 		)
 
+		expect(await findRow('unhandled exception in handler')).toBeDefined()
 		await waitFor(() => expect(queryRow('user signed in')).toBeNull())
-		expect(queryRow('unhandled exception in handler')).not.toBeNull()
-		expect(queryRow('cron tick')).not.toBeNull()
+		expect(fetchSpy).toHaveBeenCalledWith(
+			expect.stringContaining('vps=edge-1'),
+		)
+	})
+
+	it('searches SERVER-side after debouncing the input', async () => {
+		const diskLine = buildLine({
+			message: 'disk almost full',
+			level: 'warn',
+			service: 'worker',
+			vps: 'stylot',
+		})
+		const fetchSpy = vi.fn(() =>
+			Promise.resolve(
+				new Response(windowBody([diskLine], '6h'), {
+					status: 200,
+				}),
+			),
+		)
+		vi.stubGlobal('fetch', fetchSpy)
+		const user = userEvent.setup()
+		await renderExplorer()
+		await findRow('user signed in')
+
+		await user.type(
+			screen.getByLabelText('Rechercher dans les logs'),
+			'disk',
+		)
+
+		// After the debounce settles, one request carries the search and the list
+		// swaps to the server-filtered result.
+		expect(await findRow('disk almost full')).toBeDefined()
+		await waitFor(() =>
+			expect(fetchSpy).toHaveBeenCalledWith(
+				expect.stringContaining('q=disk'),
+			),
+		)
+		expect(queryRow('unhandled exception in handler')).toBeNull()
 	})
 
 	it('opens the detail panel with the clicked log and closes it - no navigation', async () => {
@@ -205,30 +291,28 @@ describe('LogsExplorer island', () => {
 		const hrefBefore = window.location.href
 		await renderExplorer()
 
-		// This row carries a request line, a status, and a meta context entry.
 		await user.click(await findRow('user signed in'))
 
-		// The panel is populated with THAT log's fields. The request line splits
-		// method + path across text nodes, so match on the path substring.
 		expect(await screen.findByText('Requête')).toBeDefined()
 		expect(screen.getByText(/\/api\/session/)).toBeDefined()
 		expect(screen.getByText('Contexte')).toBeDefined()
 		expect(screen.getByText('requestId')).toBeDefined()
-
-		// A different log's content is NOT shown (no stack on this row).
 		expect(screen.queryByText('Stack trace')).toBeNull()
 
-		// Closing clears the panel.
 		await user.click(
 			screen.getByRole('button', { name: 'Fermer le détail' }),
 		)
 		await waitFor(() => expect(screen.queryByText('Requête')).toBeNull())
-
-		// Selection is pure client state: the URL never changed.
 		expect(window.location.href).toBe(hrefBefore)
 	})
 
-	it('shows the empty state when no row matches the filters', async () => {
+	it('shows the empty state when the server returns no matching rows', async () => {
+		const fetchSpy = vi.fn(() =>
+			Promise.resolve(
+				new Response(windowBody([], '6h'), { status: 200 }),
+			),
+		)
+		vi.stubGlobal('fetch', fetchSpy)
 		const user = userEvent.setup()
 		await renderExplorer()
 		await findRow('user signed in')
@@ -252,7 +336,7 @@ describe('LogsExplorer island', () => {
 		})
 		const fetchSpy = vi.fn(() =>
 			Promise.resolve(
-				new Response(JSON.stringify({ logs: [liveLine] }), {
+				new Response(windowBody([liveLine], 'live'), {
 					status: 200,
 				}),
 			),
@@ -263,18 +347,13 @@ describe('LogsExplorer island', () => {
 		await renderExplorer()
 		await findRow('user signed in')
 
-		// The Live tab is a cold range: the click triggers a fetch and the data
-		// region suspends to the skeleton until the fetch resolves.
 		await user.click(screen.getByRole('tab', { name: /Live/i }))
 
-		// The list swaps to the freshly-fetched window...
 		expect(await findRow('fresh live event')).toBeDefined()
 		expect(queryRow('user signed in')).toBeNull()
-
-		// ...via a single request to the live (1h) window.
+		// The live range carries no facet filters, so just the range param.
 		expect(fetchSpy).toHaveBeenCalledWith('/api/logs?range=live')
 
-		// The filter controls stayed mounted/usable through the suspended reload.
 		expect(screen.getByLabelText('Rechercher dans les logs')).toBeDefined()
 		expect(screen.getByLabelText('Filtrer par service')).toBeDefined()
 	})
