@@ -36,6 +36,19 @@ describe('buildPostgresEmbeddedDatabaseUrl', () => {
 			'postgres://acme_web:s3cret@postgres:5432/acme_web',
 		)
 	})
+
+	it('percent-encodes a password carrying URL-reserved bytes and round-trips through redactPostgresPassword', () => {
+		// A base64 password inherited from a prior stack carries `+ / =`, all
+		// reserved in URL userinfo - an unencoded `/` ends the userinfo early
+		// and the connection mis-parses. Encoding it and decoding it back
+		// (what the pg client does, mirrored by redactPostgresPassword) must
+		// recover the exact original byte string.
+		const url = buildPostgresEmbeddedDatabaseUrl('acme-web', 'aB3+xy/z=')
+		expect(url).toBe(
+			'postgres://acme_web:aB3%2Bxy%2Fz%3D@postgres:5432/acme_web',
+		)
+		expect(redactPostgresPassword(url).password).toBe('aB3+xy/z=')
+	})
 })
 
 describe('buildPostgresEmbeddedEnv', () => {

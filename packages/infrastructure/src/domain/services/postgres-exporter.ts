@@ -36,6 +36,20 @@ export const POSTGRES_EXPORTER_USER = 'postgres_exporter'
 export const POSTGRES_EXPORTER_DSN_ENV = 'DATA_SOURCE_NAME'
 
 /**
+ * The same image also accepts the connection split across three env-vars:
+ * `DATA_SOURCE_URI` (host[:port]/db?params, NO scheme, NO credentials),
+ * `DATA_SOURCE_USER`, and `DATA_SOURCE_PASS`. The embedded exporter uses
+ * this form instead of a single `DATA_SOURCE_NAME` URL because its password
+ * reuses `POSTGRES_PASSWORD`, which can be ANY byte string (e.g. a base64
+ * value inherited from a prior stack) - carrying it in `DATA_SOURCE_PASS`
+ * keeps it out of URL userinfo, where `/ @ : ? +` would mis-parse. The
+ * password is a discrete field here, so no percent-encoding is needed.
+ */
+export const POSTGRES_EXPORTER_URI_ENV = 'DATA_SOURCE_URI'
+export const POSTGRES_EXPORTER_USER_ENV = 'DATA_SOURCE_USER'
+export const POSTGRES_EXPORTER_PASS_ENV = 'DATA_SOURCE_PASS'
+
+/**
  * Compose env-var the exporter password is injected into via `.env`. The
  * provisioning step generates a 32-byte b64 random secret and persists it
  * as a GitHub env-secret named literally `PG_EXPORTER_PASSWORD` on the
@@ -309,7 +323,7 @@ export function buildEmbeddedPostgresExporterSidecar(
 	embeddedPort: number,
 	databaseName: string,
 ): EmbeddedPostgresExporterSidecarService {
-	const dsn = `postgresql://${POSTGRES_EXPORTER_USER}:\${${POSTGRES_EXPORTER_EMBEDDED_PASSWORD_ENV}}@${embeddedServiceName}:${String(embeddedPort)}/${databaseName}?sslmode=disable`
+	const uri = `${embeddedServiceName}:${String(embeddedPort)}/${databaseName}?sslmode=disable`
 	return {
 		image: POSTGRES_EXPORTER_IMAGE,
 		restart: 'unless-stopped',
@@ -318,7 +332,9 @@ export function buildEmbeddedPostgresExporterSidecar(
 			`\${${TAILSCALE_IP_ENV}}:${String(POSTGRES_EXPORTER_PORT)}:${String(POSTGRES_EXPORTER_PORT)}`,
 		],
 		environment: {
-			[POSTGRES_EXPORTER_DSN_ENV]: dsn,
+			[POSTGRES_EXPORTER_URI_ENV]: uri,
+			[POSTGRES_EXPORTER_USER_ENV]: POSTGRES_EXPORTER_USER,
+			[POSTGRES_EXPORTER_PASS_ENV]: `\${${POSTGRES_EXPORTER_EMBEDDED_PASSWORD_ENV}}`,
 		},
 	}
 }
