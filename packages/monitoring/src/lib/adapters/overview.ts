@@ -120,10 +120,18 @@ export const loadOverviewWindow = async (
 
 	const logs = logsState.kind === 'ok' ? logsState.data : []
 	const errorCount = errorCountState.kind === 'ok' ? errorCountState.data : 0
+	// Both log queries hit the same upstream, so a full VictoriaLogs outage would
+	// otherwise stack two near-identical banners. Surface the error-tally notice
+	// ONLY when the stream itself loaded (i.e. the count alone failed) - the
+	// stream's own notice already covers a shared outage.
+	const errorCountNotice =
+		logsState.kind === 'ok'
+			? noticeFromState(errorCountState, 'logs', 'VictoriaLogs (erreurs)')
+			: null
 	const notices = [
 		noticeFromState(serversState, 'fleet', 'Hetzner API'),
 		noticeFromState(logsState, 'logs', 'VictoriaLogs'),
-		noticeFromState(errorCountState, 'logs', 'VictoriaLogs (erreurs)'),
+		errorCountNotice,
 	].filter((notice): notice is OverviewNotice => notice !== null)
 
 	return buildOverviewWindow({
