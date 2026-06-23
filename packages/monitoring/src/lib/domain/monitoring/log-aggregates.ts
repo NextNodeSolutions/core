@@ -4,7 +4,11 @@ import {
 	bucketLogs,
 	countByLevel,
 } from '@/lib/domain/monitoring/log-explorer.ts'
-import { parseLogLevel } from '@/lib/domain/monitoring/log-query.ts'
+import {
+	parseLogLevel,
+	streamScope,
+	unpackedScope,
+} from '@/lib/domain/monitoring/log-query.ts'
 import {
 	MIN_WINDOW_HOURS,
 	windowToLogsQL,
@@ -14,7 +18,10 @@ import type {
 	LevelCounts,
 	LogBucket,
 } from '@/lib/domain/monitoring/log-explorer.ts'
-import type { LogLine } from '@/lib/domain/monitoring/log-query.ts'
+import type {
+	FleetLogFilter,
+	LogLine,
+} from '@/lib/domain/monitoring/log-query.ts'
 
 /**
  * The /logs page's WINDOWED aggregates - the volume histogram, the per-level
@@ -79,8 +86,9 @@ export const histogramStepSeconds = (windowHours: number): number =>
 export const buildFleetStatsQuery = (
 	windowHours: number,
 	stepSeconds: number,
+	filter: FleetLogFilter = {},
 ): string =>
-	`_time:${windowToLogsQL(windowHours)} | unpack_json | stats by (_time:${String(stepSeconds)}s, level) count() as hits`
+	`_time:${windowToLogsQL(windowHours)}${streamScope(filter)} | unpack_json${unpackedScope(filter)} | stats by (_time:${String(stepSeconds)}s, level) count() as hits`
 
 const emptyBucket = (t: number): LogBucket => ({
 	t,
@@ -220,7 +228,11 @@ const toBucket = (raw: unknown): LogBucket => {
 export const coerceFleetStats = (raw: unknown): FleetLogStats => {
 	if (!isRecord(raw)) return EMPTY_FLEET_STATS
 	return {
-		buckets: Array.isArray(raw.buckets) ? raw.buckets.map(toBucket) : [],
+		// Keep only well-formed bucket objects, so a garbled/truncated array
+		// can't inject `{t:0,…}` rows that would render at the Unix epoch.
+		buckets: Array.isArray(raw.buckets)
+			? raw.buckets.filter(isRecord).map(toBucket)
+			: [],
 		levelCounts: toLevelCounts(raw.levelCounts),
 		total: toCount(raw.total),
 	}

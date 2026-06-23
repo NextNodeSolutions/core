@@ -8,13 +8,14 @@ import {
 	vpsOptionsAtom,
 } from '@/islands/logs/atoms.ts'
 import { LogIcon } from '@/islands/logs/LogIcon.tsx'
+import { useDebouncedSearch } from '@/islands/logs/use-debounced-search.ts'
 import { ALL } from '@/lib/domain/monitoring/log-explorer.ts'
 
 /**
- * Search + service/vps facets. Every change is instant client-side filtering -
- * no form submit, no navigation. The facet option lists come from the loaded
- * logs (unwrapped, so this bar never suspends during a range reload). Markup
- * and classes mirror the original LogsExplorer.astro filter row.
+ * Search + service/vps facets. The service/vps selects and the (debounced)
+ * search re-key the SERVER fetch, so the list, histogram and counts all reflect
+ * them; the facet option lists come from the server facet values (unwrapped, so
+ * this bar never suspends during a reload). Markup mirrors the original row.
  */
 
 const SEARCH_ICON_SIZE = 15
@@ -25,6 +26,7 @@ export function FilterBar(): React.ReactElement {
 	const [vps, setVps] = useAtom(vpsAtom)
 	const serviceOptions = useAtomValue(serviceOptionsAtom)
 	const vpsOptions = useAtomValue(vpsOptionsAtom)
+	useDebouncedSearch()
 
 	return (
 		<div className="flex flex-wrap items-center gap-2.5">

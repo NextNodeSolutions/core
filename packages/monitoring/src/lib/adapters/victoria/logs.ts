@@ -1,10 +1,11 @@
+import { MOCK_DATA } from '@/lib/adapters/mock-data.ts'
 import {
-	MOCK_DATA,
 	mockFleetErrorCount,
 	mockFleetLogs,
 	mockFleetStats,
+	mockLogFacets,
 	mockVpsLogs,
-} from '@/lib/adapters/mock-data.ts'
+} from '@/lib/adapters/mock-logs.ts'
 import { queryVictoriaLogs } from '@/lib/adapters/victoria/client.ts'
 import { clampNumber } from '@/lib/domain/clamp.ts'
 import {
@@ -21,7 +22,9 @@ import {
 	buildContainerLogsQuery,
 	buildFleetErrorCountQuery,
 	buildFleetLogsQuery,
+	buildLogFacetsQuery,
 	buildVpsLogsQuery,
+	parseLogFacet,
 	parseLogLines,
 	parseStatsCount,
 } from '@/lib/domain/monitoring/log-query.ts'
@@ -29,7 +32,11 @@ import { MIN_WINDOW_HOURS } from '@/lib/domain/monitoring/vps-metrics.ts'
 
 import type { CaddyHostStat } from '@/lib/domain/monitoring/caddy-stats.ts'
 import type { FleetLogStats } from '@/lib/domain/monitoring/log-aggregates.ts'
-import type { LogLine } from '@/lib/domain/monitoring/log-query.ts'
+import type {
+	FleetLogFilter,
+	LogFacets,
+	LogLine,
+} from '@/lib/domain/monitoring/log-query.ts'
 
 /**
  * VictoriaLogs adapter: VPS / fleet / project log streams and the per-host
@@ -57,18 +64,26 @@ export const loadVpsLogs = async (
 	return parseLogLines(body)
 }
 
-/** Most-recent log lines across the whole fleet over `windowHours`, newest first. */
+/**
+ * Most-recent log lines across the whole fleet over `windowHours`, newest
+ * first, optionally scoped by the server-side `filter` (service / vps / search)
+ * so the /logs list matches the windowed stats. The overview passes no filter
+ * (its preview is the whole fleet); /api/logs threads the operator's facets.
+ */
 export const loadFleetLogs = async (
 	windowHours?: number,
+	filter: FleetLogFilter = {},
 ): Promise<ReadonlyArray<LogLine>> => {
-	if (MOCK_DATA) return mockFleetLogs(windowHours)
+	if (MOCK_DATA) return mockFleetLogs(windowHours, filter)
 	// Omitted window keeps the domain default; a provided one is clamped so a
 	// NaN/negative value never reaches the LogsQL `_time:` filter.
 	const safeWindowHours =
 		windowHours === undefined
 			? undefined
 			: clampNumber(windowHours, FLEET_LOG_WINDOW_BOUNDS)
-	const body = await queryVictoriaLogs(buildFleetLogsQuery(safeWindowHours))
+	const body = await queryVictoriaLogs(
+		buildFleetLogsQuery(safeWindowHours, filter),
+	)
 	return parseLogLines(body)
 }
 
@@ -103,19 +118,41 @@ export const loadFleetErrorCount = async (
 export const loadFleetStats = async (
 	windowHours: number,
 	nowMs: number,
+	filter: FleetLogFilter = {},
 ): Promise<FleetLogStats> => {
 	const safeWindowHours = clampNumber(windowHours, FLEET_LOG_WINDOW_BOUNDS)
-	if (MOCK_DATA) return mockFleetStats(safeWindowHours, nowMs)
+	if (MOCK_DATA) return mockFleetStats(safeWindowHours, nowMs, filter)
 	const body = await queryVictoriaLogs(
 		buildFleetStatsQuery(
 			safeWindowHours,
 			histogramStepSeconds(safeWindowHours),
+			filter,
 		),
 	)
 	return parseFleetStats(body, {
 		nowMs,
 		windowMs: windowMsFor(safeWindowHours),
 	})
+}
+
+/**
+ * Distinct service + vps values over the window, for the /logs filter
+ * dropdowns. Unscoped by the current facet selection (so the operator can
+ * always switch facets), unlike the sample/stats which ARE scoped.
+ */
+export const loadLogFacets = async (
+	windowHours: number,
+): Promise<LogFacets> => {
+	const safeWindowHours = clampNumber(windowHours, FLEET_LOG_WINDOW_BOUNDS)
+	if (MOCK_DATA) return mockLogFacets()
+	const [serviceBody, vpsBody] = await Promise.all([
+		queryVictoriaLogs(buildLogFacetsQuery(safeWindowHours, 'nn_service')),
+		queryVictoriaLogs(buildLogFacetsQuery(safeWindowHours, 'nn_project')),
+	])
+	return {
+		services: parseLogFacet(serviceBody, 'nn_service'),
+		vps: parseLogFacet(vpsBody, 'nn_project'),
+	}
 }
 
 /** Most-recent container log lines for one project, across its host VPS. */

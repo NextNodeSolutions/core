@@ -1,7 +1,11 @@
 import { HTTP_STATUS } from '@/lib/adapters/http-status.ts'
 import { jsonResponse } from '@/lib/adapters/json-response.ts'
 import { loadPageState } from '@/lib/adapters/load-page-state.ts'
-import { loadFleetLogs, loadFleetStats } from '@/lib/adapters/victoria/logs.ts'
+import {
+	loadFleetLogs,
+	loadFleetStats,
+	loadLogFacets,
+} from '@/lib/adapters/victoria/logs.ts'
 import { apiErr } from '@/lib/domain/api-result.ts'
 import { EMPTY_FLEET_STATS } from '@/lib/domain/monitoring/log-aggregates.ts'
 import { rangeToHours } from '@/lib/domain/monitoring/vps-metrics.ts'
@@ -9,7 +13,13 @@ import { rangeToHours } from '@/lib/domain/monitoring/vps-metrics.ts'
 import type { APIRoute } from 'astro'
 import type { LoadState } from '@/lib/domain/load-state.ts'
 import type { FleetLogStats } from '@/lib/domain/monitoring/log-aggregates.ts'
-import type { LogLine } from '@/lib/domain/monitoring/log-query.ts'
+import type {
+	FleetLogFilter,
+	LogFacets,
+	LogLine,
+} from '@/lib/domain/monitoring/log-query.ts'
+
+const EMPTY_LOG_FACETS: LogFacets = { services: [], vps: [] }
 
 /**
  * Fleet-log JSON feed for the dynamic /logs island. The island fetches this
@@ -34,13 +44,15 @@ const DEFAULT_RANGE = '6h'
 interface LogsPayload {
 	readonly logs: ReadonlyArray<LogLine>
 	readonly stats: FleetLogStats
+	readonly facets: LogFacets
 }
 
 const okLogsResponse = (
 	logs: ReadonlyArray<LogLine>,
 	stats: FleetLogStats,
+	facets: LogFacets,
 ): Response => {
-	const payload: LogsPayload = { logs, stats }
+	const payload: LogsPayload = { logs, stats, facets }
 	return new Response(JSON.stringify(payload), {
 		status: HTTP_STATUS.OK,
 		headers: { 'content-type': 'application/json; charset=utf-8' },
@@ -50,10 +62,11 @@ const okLogsResponse = (
 const toResponse = (
 	state: LoadState<ReadonlyArray<LogLine>>,
 	stats: FleetLogStats,
+	facets: LogFacets,
 ): Response => {
 	switch (state.kind) {
 		case 'ok':
-			return okLogsResponse(state.data, stats)
+			return okLogsResponse(state.data, stats, facets)
 		case 'upstream_error':
 			return jsonResponse(
 				apiErr('upstream_error', state.message),
@@ -82,22 +95,38 @@ const assertNeverState = (state: never): never => {
  * The pure request handler, separated from the Astro `GET` wiring so it can be
  * driven by a plain `URL` in tests (no `APIContext` fake, no cast).
  */
+/** Read a filter value, treating a missing/empty/`all` param as "no filter". */
+const filterParam = (url: URL, key: string): string | undefined => {
+	const param = url.searchParams.get(key)
+	return param && param.length > 0 && param !== 'all' ? param : undefined
+}
+
 export const handleLogsRequest = async (url: URL): Promise<Response> => {
 	const range = url.searchParams.get('range') ?? DEFAULT_RANGE
 	// `rangeToHours` maps `live` to a short 5-min window; no special-casing here.
 	const hours = rangeToHours(range)
+	// Server-side scope: the sample and the windowed stats are BOTH filtered, so
+	// the list, histogram and counts all reflect the operator's facets/search.
+	const filter: FleetLogFilter = {
+		service: filterParam(url, 'service'),
+		vps: filterParam(url, 'vps'),
+		query: filterParam(url, 'q'),
+	}
 	// One stable clock for both the bucket grid and any relative-time rendering.
 	const nowMs = Date.now()
-	// The line sample and the windowed aggregate hit VictoriaLogs independently;
-	// fire both and await once. The list is the contract that gates the page, so
-	// only its failure becomes an error response; a stats failure degrades to an
-	// empty histogram (loud-logged by loadPageState) rather than blanking logs.
-	const [logsState, statsState] = await Promise.all([
-		loadPageState('logs.fleet', () => loadFleetLogs(hours)),
-		loadPageState('logs.stats', () => loadFleetStats(hours, nowMs)),
+	// Sample, windowed aggregate and facet values hit VictoriaLogs independently;
+	// fire all three and await once. The list gates the page, so only its failure
+	// becomes an error response; stats/facets degrade to empty (loud-logged by
+	// loadPageState) rather than blanking the logs.
+	const [logsState, statsState, facetsState] = await Promise.all([
+		loadPageState('logs.fleet', () => loadFleetLogs(hours, filter)),
+		loadPageState('logs.stats', () => loadFleetStats(hours, nowMs, filter)),
+		loadPageState('logs.facets', () => loadLogFacets(hours)),
 	])
 	const stats = statsState.kind === 'ok' ? statsState.data : EMPTY_FLEET_STATS
-	return toResponse(logsState, stats)
+	const facets =
+		facetsState.kind === 'ok' ? facetsState.data : EMPTY_LOG_FACETS
+	return toResponse(logsState, stats, facets)
 }
 
 export const GET: APIRoute = ({ url }) => handleLogsRequest(url)

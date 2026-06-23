@@ -6,7 +6,7 @@ import { rangeAtom, seedAtom } from '@/islands/logs/atoms.ts'
 import { ExplorerScreen } from '@/islands/logs/ExplorerScreen.tsx'
 
 import type { FleetLogStats } from '@/lib/domain/monitoring/log-aggregates.ts'
-import type { LogLine } from '@/lib/domain/monitoring/log-query.ts'
+import type { LogFacets, LogLine } from '@/lib/domain/monitoring/log-query.ts'
 
 /**
  * Root of the dynamic /logs island. It builds a private Jotai store ONCE per
@@ -20,12 +20,14 @@ import type { LogLine } from '@/lib/domain/monitoring/log-query.ts'
 interface LogsExplorerProps {
 	readonly initialLogs: ReadonlyArray<LogLine>
 	readonly initialStats: FleetLogStats
+	readonly initialFacets: LogFacets
 	readonly initialRange: string
 }
 
 export function LogsExplorer({
 	initialLogs,
 	initialStats,
+	initialFacets,
 	initialRange,
 }: LogsExplorerProps): React.ReactElement {
 	// `useState` initializer runs once: create + seed the store before render
@@ -36,6 +38,7 @@ export function LogsExplorer({
 			range: initialRange,
 			logs: initialLogs,
 			stats: initialStats,
+			facets: initialFacets,
 		})
 		seeded.set(rangeAtom, initialRange)
 		return seeded

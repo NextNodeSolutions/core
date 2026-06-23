@@ -44,6 +44,19 @@ describe('buildFleetStatsQuery', () => {
 		expect(query).not.toContain('limit')
 		expect(query).not.toContain('sort by')
 	})
+
+	it('threads the server-side facet/search scope into the aggregate', () => {
+		const query = buildFleetStatsQuery(6, 300, {
+			service: 'app',
+			vps: 'nn-prod',
+			query: 'boom',
+		})
+		expect(query).toContain('_time:6h nn_project:"nn-prod"')
+		expect(query).toContain('| filter nn_service:"app"')
+		expect(query).toContain('_msg:~"(?i)boom"')
+		// Level is NOT scoped here - the histogram shows the full distribution.
+		expect(query).toContain('stats by (_time:300s, level) count() as hits')
+	})
 })
 
 describe('parseFleetStats', () => {

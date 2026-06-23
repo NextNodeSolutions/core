@@ -1,35 +1,38 @@
 import { atom } from 'jotai'
 import { atomFamily, unwrap } from 'jotai/utils'
 
-import { isRecord } from '@/lib/domain/is-record.ts'
 import {
-	coerceFleetStats,
-	EMPTY_FLEET_STATS,
-} from '@/lib/domain/monitoring/log-aggregates.ts'
+	effectiveFilter,
+	EMPTY_WINDOW,
+	fetchLogsWindow,
+	keyOf,
+} from '@/islands/logs/window-source.ts'
 import {
 	ALL,
-	collectDistinct,
-	filterLogs,
 	nextActiveLevels,
 	selectLogByKey,
 } from '@/lib/domain/monitoring/log-explorer.ts'
 import { LOG_LEVELS } from '@/lib/domain/monitoring/log-query.ts'
 
+import type { LogsWindow, WindowParams } from '@/islands/logs/window-source.ts'
 import type { FleetLogStats } from '@/lib/domain/monitoring/log-aggregates.ts'
-import type { LogFilter } from '@/lib/domain/monitoring/log-explorer.ts'
-import type { LogLevel, LogLine } from '@/lib/domain/monitoring/log-query.ts'
+import type {
+	LogFacets,
+	LogLevel,
+	LogLine,
+} from '@/lib/domain/monitoring/log-query.ts'
 
 /**
- * State for the dynamic /logs island. Each range fetches ONCE
- * (`logsFamily`) and yields TWO things: the recent line SAMPLE (the list) and
- * the WINDOWED aggregates (histogram + per-level + total). The split is the
- * whole fix: the sample is the 200 newest lines (range-invariant on a busy
- * fleet), so the histogram and counts now come from a server aggregate over the
- * full window instead of bucketing that capped sample. Filters / selection /
- * search are pure client-side derivations over the loaded SAMPLE - no network
- * on a chip toggle, a keystroke, a row click, or a facet change. The initial
- * range is seeded from the server (no fetch on first paint); switching back to
- * an already-loaded range is instant because the family caches each range.
+ * State for the dynamic /logs island. The SERVER does the windowing AND the
+ * facet/search filtering: a fetch is keyed by (range, service, vps, search), so
+ * the line SAMPLE (list), the windowed aggregates (histogram + per-level +
+ * total) AND the facet value lists all come back already scoped to the
+ * operator's choices - no client-side facet drift, no chip/list contradiction.
+ * Only the LEVEL chips stay a client-side list refinement (instant, no refetch):
+ * the histogram keeps showing the full level distribution while clicking a level
+ * narrows the rows. The search box is debounced before it re-keys the fetch. The
+ * initial range is seeded from the server (no fetch on first paint). The fetch
+ * plumbing lives in `window-source.ts`.
  */
 
 /** All four levels active = the default "show everything" chip state. */
@@ -38,7 +41,10 @@ const ALL_LEVELS: ReadonlySet<LogLevel> = new Set(LOG_LEVELS)
 // --- Filter / selection primitives (drive the always-interactive controls) ---
 
 export const rangeAtom = atom('6h')
+/** The live search input value (updates per keystroke for the text field). */
 export const queryAtom = atom('')
+/** The debounced search that actually re-keys the fetch (set by FilterBar). */
+export const debouncedQueryAtom = atom('')
 export const serviceAtom = atom(ALL)
 export const vpsAtom = atom(ALL)
 export const levelsAtom = atom<ReadonlySet<LogLevel>>(ALL_LEVELS)
@@ -49,138 +55,125 @@ export const selAtom = atom<string | null>(null)
  * all-active default a click isolates to that level (click ERROR -> see
  * errors, not "everything except errors"); thereafter it is an additive
  * multi-select, and removing the last active level snaps back to all so the
- * screen never goes blank. The transition itself is the pure, unit-tested
- * `nextActiveLevels`; this write-atom only wires state to it.
+ * screen never goes blank. Pure transition is the unit-tested `nextActiveLevels`.
  */
 export const toggleLevelAtom = atom(null, (get, set, level: LogLevel) => {
 	set(levelsAtom, nextActiveLevels(get(levelsAtom), LOG_LEVELS, level))
 })
 
-// --- Per-range data loading (the only place that touches the network) ---
-//
-// `logsFamily` memoises one async atom per range, resolving a `LogsWindow`: the
-// seeded initial range resolves synchronously from the seed (no fetch, no
-// flash), and any other range fetches `/api/logs` once - jotai caches the
-// resolved value, so flipping back is instant. The data region reads
-// `logsLoaderAtom` ONCE behind its Suspense boundary (the only thing that
-// suspends, and only on a cold range). The sample-derived views read
-// `currentLogsAtom`; the histogram / chips / total read `currentStatsAtom` -
-// both UNWRAPPED to sync values - so a filter or selection recomputes instantly.
-
-/** The recent line sample + the windowed aggregates for one range. */
-interface LogsWindow {
-	readonly logs: ReadonlyArray<LogLine>
-	readonly stats: FleetLogStats
-}
-
-const EMPTY_WINDOW: LogsWindow = { logs: [], stats: EMPTY_FLEET_STATS }
+// --- Per-filter data loading (the only place that touches the network) ---
 
 export interface LogsSeed {
 	readonly range: string
 	readonly logs: ReadonlyArray<LogLine>
 	readonly stats: FleetLogStats
+	readonly facets: LogFacets
 }
 
-/** Seeded once from server props; read by the loader for the initial range. */
+/** Seeded once from server props; the loader returns it for the initial range. */
 export const seedAtom = atom<LogsSeed | null>(null)
 
-const parseLogsWindow = (payload: unknown): LogsWindow => {
-	if (!isRecord(payload) || !Array.isArray(payload.logs)) {
-		throw new Error('Réponse /api/logs inattendue : champ `logs` manquant.')
-	}
-	// The endpoint serialises our own domain `LogLine[]`; trust the element
-	// shape. `stats` is coerced back through the client trust boundary.
-	return { logs: payload.logs, stats: coerceFleetStats(payload.stats) }
-}
-
-const fetchLogsWindow = async (range: string): Promise<LogsWindow> => {
-	const response = await fetch(`/api/logs?range=${encodeURIComponent(range)}`)
-	if (!response.ok) {
-		throw new Error(
-			`Échec du chargement des logs (${String(response.status)}).`,
-		)
-	}
-	return parseLogsWindow(await response.json())
-}
-
-const logsFamily = atomFamily((range: string) =>
-	atom(async (get): Promise<LogsWindow> => {
-		const seed = get(seedAtom)
-		if (seed?.range === range) return { logs: seed.logs, stats: seed.stats }
-		return fetchLogsWindow(range)
+export const fetchKeyAtom = atom(get =>
+	keyOf({
+		range: get(rangeAtom),
+		service: effectiveFilter(get(serviceAtom)),
+		vps: effectiveFilter(get(vpsAtom)),
+		query: effectiveFilter(get(debouncedQueryAtom)),
 	}),
 )
 
-/** Suspends until the active range's window is loaded (cold range = one fetch). */
-export const logsLoaderAtom = atom(get => get(logsFamily(get(rangeAtom))))
+/**
+ * One async atom per filter key: the seeded initial range (no filters) resolves
+ * synchronously; any other key fetches `/api/logs` once and is cached, so
+ * flipping back is instant. `logsLoaderAtom` is the single Suspense point.
+ */
+const windowFamily = atomFamily((key: string) =>
+	atom(async (get): Promise<LogsWindow> => {
+		const params: WindowParams = JSON.parse(key)
+		const seed = get(seedAtom)
+		const unfiltered =
+			params.service === undefined &&
+			params.vps === undefined &&
+			params.query === undefined
+		if (seed && unfiltered && seed.range === params.range) {
+			return { logs: seed.logs, stats: seed.stats, facets: seed.facets }
+		}
+		return fetchLogsWindow(params)
+	}),
+)
+
+/** Suspends until the active filter key's window is loaded (cold key = a fetch). */
+export const logsLoaderAtom = atom(get => get(windowFamily(get(fetchKeyAtom))))
 
 /**
- * The active range's window as a SYNC value (the loader unwrapped). During a
- * cold fetch it falls back to the empty window, but the data region is
- * suspended on `logsLoaderAtom` then, so that empty value is never shown; once
- * loaded every view reads it instantly.
+ * The active window as a SYNC value (the loader unwrapped). During a cold fetch
+ * it falls back to the PREVIOUS window, so the facet dropdowns (outside the
+ * Suspense boundary) keep their values mid-refetch; the data region is suspended
+ * then, so the stale sample/stats are never shown in the list.
  */
 const currentWindowAtom = unwrap(
 	logsLoaderAtom,
 	previous => previous ?? EMPTY_WINDOW,
 )
 
-/** The loaded line sample (list + facets + selection derive from this). */
+/** The loaded line sample (already server-filtered by service/vps/search). */
 export const currentLogsAtom = atom(get => get(currentWindowAtom).logs)
 
-/** The windowed aggregates (histogram + per-level + total). */
+/** The windowed aggregates (histogram + per-level + total), server-filtered. */
 export const currentStatsAtom = atom(get => get(currentWindowAtom).stats)
 
-// --- Derived views: pure SYNC projections of the loaded data + filter state ---
+/** Distinct facet values over the window (unscoped by the current selection). */
+export const currentFacetsAtom = atom(get => get(currentWindowAtom).facets)
 
-const filterAtom = atom<LogFilter>(get => ({
-	query: get(queryAtom),
-	levels: [...get(levelsAtom)],
-	service: get(serviceAtom),
-	vps: get(vpsAtom),
-}))
+// --- Derived views: LEVEL is the only client-side refinement of the sample ---
 
-/** Filtered rows for the list - sync, recomputed on any filter change. */
-export const filteredLogsAtom = atom(get =>
-	filterLogs(get(currentLogsAtom), get(filterAtom)),
-)
+/**
+ * The list rows: the server-filtered sample narrowed by the active LEVEL chips
+ * (client-side, instant). A null-level line always passes; all-active shows all.
+ */
+export const filteredLogsAtom = atom(get => {
+	const levels = get(levelsAtom)
+	if (levels.size === LOG_LEVELS.length) return get(currentLogsAtom)
+	return get(currentLogsAtom).filter(
+		line => line.level === null || levels.has(line.level),
+	)
+})
 
-/** Count of filtered rows in the sample (the list size). */
+/** Count of visible rows (the "X lignes" label). */
 export const filteredCountAtom = atom(get => get(filteredLogsAtom).length)
 
-/** Windowed histogram buckets - server aggregate, redrawn per range. */
+/** Windowed histogram buckets - server aggregate, redrawn per filter. */
 export const bucketsAtom = atom(get => get(currentStatsAtom).buckets)
 
-/** Total lines across the window (the volume header), not the sample size. */
+/** Total lines across the windowed + facet-filtered query (the volume header). */
 export const windowTotalAtom = atom(get => get(currentStatsAtom).total)
 
 /**
  * Per-key "is this row selected" booleans. A row subscribes only to its own
- * atom, so changing the selection re-renders just the two affected rows (the
- * old and the new), never the whole list.
+ * atom, so changing the selection re-renders just the two affected rows.
  */
 export const isSelectedFamily = atomFamily((key: string) =>
 	atom(get => get(selAtom) === key),
 )
 
-/** The selected line resolved by its stable key against the filtered rows. */
+/** The selected line resolved by its stable key against the visible rows. */
 export const selectedLogAtom = atom((get): LogLine | null => {
 	const key = get(selAtom)
 	if (key === null) return null
 	return selectLogByKey(get(filteredLogsAtom), key)
 })
 
-/** Per-level counts for the chips - the WINDOWED tally, not the sample's. */
+/** Per-level counts for the chips - the windowed, facet-scoped tally. */
 export const levelCountsAtom = atom(get => get(currentStatsAtom).levelCounts)
 
-/** Distinct service facet options across the loaded sample. */
+/** Service facet options from the server facet list (window-wide, unscoped). */
 export const serviceOptionsAtom = atom<ReadonlyArray<string>>(get => [
 	ALL,
-	...collectDistinct(get(currentLogsAtom), line => line.service),
+	...get(currentFacetsAtom).services,
 ])
 
-/** Distinct vps facet options across the loaded sample. */
+/** Vps facet options from the server facet list (window-wide, unscoped). */
 export const vpsOptionsAtom = atom<ReadonlyArray<string>>(get => [
 	ALL,
-	...collectDistinct(get(currentLogsAtom), line => line.vps),
+	...get(currentFacetsAtom).vps,
 ])

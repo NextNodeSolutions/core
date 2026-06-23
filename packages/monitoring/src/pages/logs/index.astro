@@ -3,12 +3,19 @@ import LoadStateBanner from '@/components/dashboard/LoadStateBanner.astro'
 import { LogsExplorer } from '@/islands/logs/LogsExplorer.tsx'
 import DashboardLayout from '@/layouts/DashboardLayout.astro'
 import { loadPageState } from '@/lib/adapters/load-page-state.ts'
-import { loadFleetLogs, loadFleetStats } from '@/lib/adapters/victoria/logs.ts'
+import {
+	loadFleetLogs,
+	loadFleetStats,
+	loadLogFacets,
+} from '@/lib/adapters/victoria/logs.ts'
 import { EMPTY_FLEET_STATS } from '@/lib/domain/monitoring/log-aggregates.ts'
 import { rangeToHours } from '@/lib/domain/monitoring/vps-metrics.ts'
 
 import type { FleetLogStats } from '@/lib/domain/monitoring/log-aggregates.ts'
-import type { LogLine } from '@/lib/domain/monitoring/log-query.ts'
+import type {
+	LogFacets,
+	LogLine,
+} from '@/lib/domain/monitoring/log-query.ts'
 
 // oxlint-disable-next-line nextnode/boolean-naming -- prerender is Astro's required route export name
 export const prerender = false
@@ -24,14 +31,19 @@ const range = Astro.url.searchParams.get('range') ?? DEFAULT_RANGE
 // and the island so the histogram lines up with the list's window.
 const hours = rangeToHours(range)
 const nowMs = Date.now()
-const [logsState, statsState] = await Promise.all([
+// First paint has no facet selection yet, so the sample + stats load unfiltered;
+// the facet value lists seed the dropdowns. Filtering kicks in on the client.
+const [logsState, statsState, facetsState] = await Promise.all([
 	loadPageState('logs.fleet', () => loadFleetLogs(hours)),
 	loadPageState('logs.stats', () => loadFleetStats(hours, nowMs)),
+	loadPageState('logs.facets', () => loadLogFacets(hours)),
 ])
 const initialLogs: ReadonlyArray<LogLine> =
 	logsState.kind === 'ok' ? logsState.data : []
 const initialStats: FleetLogStats =
 	statsState.kind === 'ok' ? statsState.data : EMPTY_FLEET_STATS
+const initialFacets: LogFacets =
+	facetsState.kind === 'ok' ? facetsState.data : { services: [], vps: [] }
 const failedToLoad = logsState.kind !== 'ok'
 ---
 
@@ -48,6 +60,7 @@ const failedToLoad = logsState.kind !== 'ok'
 		client:load
 		initialLogs={initialLogs}
 		initialStats={initialStats}
+		initialFacets={initialFacets}
 		initialRange={range}
 	/>
 </DashboardLayout>

@@ -106,15 +106,99 @@ export const buildContainerLogsQuery = (project: string): string =>
 	`_time:${CONTAINER_SCAN_WINDOW} container_name:~${logsqlQuoted(`^${escapeRegex(project)}-`)} | sort by (_time desc) | limit ${String(LOGSQL_QUERY_LIMIT)} ${UNPACK_PIPE}`
 
 /**
+ * The /logs server-side filters that scope BOTH the line sample and the
+ * windowed stats, so the histogram / counts / list all reflect the operator's
+ * facet + search choices (no client-side facet drift). `vps` rides as a stream
+ * filter before unpack (cheap); `service`/`query` filter the unpacked fields.
+ * The LEVEL filter is intentionally NOT here - it stays a client-side list
+ * refinement so the histogram keeps showing the full level distribution.
+ */
+export interface FleetLogFilter {
+	readonly service?: string
+	readonly vps?: string
+	readonly query?: string
+}
+
+/** Distinct facet values over the window, for the /logs filter dropdowns. */
+export interface LogFacets {
+	readonly services: ReadonlyArray<string>
+	readonly vps: ReadonlyArray<string>
+}
+
+export const hasFleetLogFilter = (filter: FleetLogFilter): boolean =>
+	Boolean(filter.vps ?? '') ||
+	Boolean(filter.service ?? '') ||
+	Boolean(filter.query ?? '')
+
+/** Stream-field scope appended to the `_time:` head (rides BEFORE unpack). */
+export const streamScope = (filter: FleetLogFilter): string =>
+	filter.vps ? ` nn_project:${logsqlQuoted(filter.vps)}` : ''
+
+/**
+ * Post-unpack `| filter` clauses for fields inside the unpacked JSON
+ * (`nn_service`) and a case-insensitive substring search over the raw line
+ * (`_msg`, which still holds the whole record so message/path/etc. match).
+ * Empty string when neither is set. Validated against a live VictoriaLogs.
+ */
+export const unpackedScope = (filter: FleetLogFilter): string => {
+	const clauses: Array<string> = []
+	if (filter.service)
+		clauses.push(`nn_service:${logsqlQuoted(filter.service)}`)
+	if (filter.query) {
+		clauses.push(
+			`_msg:~${logsqlQuoted(`(?i)${escapeRegex(filter.query)}`)}`,
+		)
+	}
+	return clauses.length > 0 ? ` | filter ${clauses.join(' ')}` : ''
+}
+
+/**
  * Build a LogsQL query for the most recent lines across the WHOLE fleet
- * (every VPS, every container + journald), newest first. Used by the
- * overview log stream and its error tally. Time-bounded since there is no
- * stream filter to ride.
+ * (every VPS, every container + journald), newest first - optionally scoped by
+ * the server-side `filter`. With NO filter it keeps the fast shape (unpack only
+ * the 200 returned lines). With a filter it unpacks BEFORE filtering so the
+ * service/search predicates see the lifted fields, then sorts + limits.
  */
 export const buildFleetLogsQuery = (
 	windowHours: number = DEFAULT_FLEET_LOG_HOURS,
+	filter: FleetLogFilter = {},
+): string => {
+	const window = windowToLogsQL(windowHours)
+	const limit = String(LOGSQL_QUERY_LIMIT)
+	if (!hasFleetLogFilter(filter)) {
+		return `_time:${window} | sort by (_time desc) | limit ${limit} ${UNPACK_PIPE}`
+	}
+	return `_time:${window}${streamScope(filter)} ${UNPACK_PIPE}${unpackedScope(filter)} | sort by (_time desc) | limit ${limit}`
+}
+
+/** Distinct values of a facet field over the window, for the filter dropdowns. */
+export const buildLogFacetsQuery = (
+	windowHours: number,
+	field: 'nn_service' | 'nn_project',
 ): string =>
-	`_time:${windowToLogsQL(windowHours)} | sort by (_time desc) | limit ${String(LOGSQL_QUERY_LIMIT)} ${UNPACK_PIPE}`
+	`_time:${windowToLogsQL(windowHours)} ${UNPACK_PIPE} | uniq by (${field})`
+
+/** Parse the `uniq by (field)` rows into a sorted, de-duped value list. */
+export const parseLogFacet = (
+	body: string,
+	field: string,
+): ReadonlyArray<string> => {
+	const values = new Set<string>()
+	for (const raw of body.split('\n')) {
+		const trimmed = raw.trim()
+		if (trimmed.length === 0) continue
+		let parsed: unknown
+		try {
+			parsed = JSON.parse(trimmed)
+		} catch {
+			continue
+		}
+		if (!isRecord(parsed)) continue
+		const cell = parsed[field]
+		if (typeof cell === 'string' && cell.length > 0) values.add(cell)
+	}
+	return [...values].toSorted((left, right) => left.localeCompare(right))
+}
 
 /**
  * Build a LogsQL query that COUNTS error-level lines across the whole fleet

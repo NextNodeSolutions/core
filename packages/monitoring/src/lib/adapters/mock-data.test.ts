@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-	mockFleetErrorCount,
-	mockFleetLogs,
-	mockVpsSeries,
-} from '@/lib/adapters/mock-data.ts'
+import { mockVpsSeries } from '@/lib/adapters/mock-data.ts'
+import { mockFleetErrorCount, mockFleetLogs } from '@/lib/adapters/mock-logs.ts'
 
 /**
  * The mock fixtures back `MOCK_DATA=1` offline UI work. Their ONE non-obvious
