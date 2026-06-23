@@ -68,13 +68,22 @@ export const POSTGRES_DATA_DIR = '/var/lib/postgresql'
  * Compose the `DATABASE_URL` the app uses to reach the embedded sidecar.
  * The host is the docker compose service name (`postgres`), reachable on
  * the project's internal network only - never via a host port binding.
+ *
+ * The password is percent-encoded: it lands in the URL userinfo, where
+ * `/ @ : ? # +` are reserved delimiters, so a value carrying any of them
+ * (e.g. a base64 secret inherited from a prior stack) would otherwise
+ * mis-parse and break the connection. This is the exact inverse of
+ * {@link redactPostgresPassword}, which percent-decodes the userinfo back
+ * to the raw byte for libpq - the two round-trip. Alphanumeric passwords
+ * (what `ensureEmbeddedPostgresPasswordSecret` generates) are unchanged by
+ * `encodeURIComponent`, so existing deploys see no difference.
  */
 export function buildPostgresEmbeddedDatabaseUrl(
 	projectName: string,
 	password: string,
 ): string {
 	const id = postgresProjectIdentifier(projectName)
-	return `postgres://${id}:${password}@${POSTGRES_SIDECAR_SERVICE_NAME}:${String(POSTGRES_SIDECAR_PORT)}/${id}`
+	return `postgres://${id}:${encodeURIComponent(password)}@${POSTGRES_SIDECAR_SERVICE_NAME}:${String(POSTGRES_SIDECAR_PORT)}/${id}`
 }
 
 /**

@@ -3,10 +3,12 @@ import { parse } from 'yaml'
 
 import {
 	POSTGRES_EXPORTER_DSN_ENV,
+	POSTGRES_EXPORTER_EMBEDDED_PASSWORD_ENV,
 	POSTGRES_EXPORTER_IMAGE,
 	POSTGRES_EXPORTER_INIT_FILENAME,
 	POSTGRES_EXPORTER_INIT_HOST_PATH,
 	POSTGRES_EXPORTER_INIT_MOUNT_PATH,
+	POSTGRES_EXPORTER_PASS_ENV,
 	POSTGRES_EXPORTER_PASSWORD_ENV,
 	POSTGRES_EXPORTER_PORT,
 	POSTGRES_EXPORTER_QUERIES_ENV,
@@ -15,8 +17,11 @@ import {
 	POSTGRES_EXPORTER_QUERIES_MOUNT_PATH,
 	POSTGRES_EXPORTER_SERVICE_NAME,
 	POSTGRES_EXPORTER_TOP_QUERIES_LIMIT,
+	POSTGRES_EXPORTER_URI_ENV,
 	POSTGRES_EXPORTER_USER,
+	POSTGRES_EXPORTER_USER_ENV,
 	TAILSCALE_IP_ENV,
+	buildEmbeddedPostgresExporterSidecar,
 	buildPostgresExporterDsn,
 	buildPostgresExporterInitMount,
 	buildPostgresExporterQueriesMount,
@@ -109,6 +114,42 @@ describe('buildPostgresExporterSidecar', () => {
 		expect(buildPostgresExporterSidecar().volumes).toEqual([
 			buildPostgresExporterQueriesMount(),
 		])
+	})
+})
+
+describe('buildEmbeddedPostgresExporterSidecar', () => {
+	const sidecar = buildEmbeddedPostgresExporterSidecar(
+		'postgres',
+		5432,
+		'acme_web',
+	)
+
+	it('pins the sidecar image and restart policy to the module constants', () => {
+		expect(sidecar.image).toBe(POSTGRES_EXPORTER_IMAGE)
+		expect(sidecar.restart).toBe('unless-stopped')
+	})
+
+	it('depends on the embedded postgres service so the exporter only starts after the database', () => {
+		expect(sidecar.depends_on).toEqual(['postgres'])
+	})
+
+	it('binds the exporter port to the VPS tailscale interface via compose env interpolation', () => {
+		expect(sidecar.ports).toEqual([
+			`\${${TAILSCALE_IP_ENV}}:${String(POSTGRES_EXPORTER_PORT)}:${String(POSTGRES_EXPORTER_PORT)}`,
+		])
+	})
+
+	it('splits the connection across DATA_SOURCE_URI/USER/PASS so a URL-unsafe POSTGRES_PASSWORD never lands in URL userinfo', () => {
+		// The embedded exporter reuses POSTGRES_PASSWORD, which can be any byte
+		// string (e.g. a base64 secret inherited from a prior stack). Carrying
+		// it in the discrete DATA_SOURCE_PASS field - not a DSN URL - means
+		// `/ @ : ? +` never mis-parse and no percent-encoding is needed.
+		expect(sidecar.environment).toEqual({
+			[POSTGRES_EXPORTER_URI_ENV]:
+				'postgres:5432/acme_web?sslmode=disable',
+			[POSTGRES_EXPORTER_USER_ENV]: POSTGRES_EXPORTER_USER,
+			[POSTGRES_EXPORTER_PASS_ENV]: `\${${POSTGRES_EXPORTER_EMBEDDED_PASSWORD_ENV}}`,
+		})
 	})
 })
 
