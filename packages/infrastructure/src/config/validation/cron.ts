@@ -18,6 +18,14 @@ import type { ValidationResult } from './result.ts'
 const CRON_FIELD_PATTERN = /^[0-9*,/-]+$/
 const CRON_FIELD_COUNT = 5
 
+// A `path` is interpolated INTO a crontab line and single-quoted into the shell
+// command crond runs (`domain/services/cron.ts`). Whitespace or a newline would
+// split the wget args or inject a whole new crontab line; a quote would break
+// out of the surrounding single-quotes. Reject all of them - a request path
+// never legitimately contains one. Query strings (`?a=1&b=2`) stay allowed: the
+// single-quoting makes `&` and friends inert.
+const UNSAFE_PATH_PATTERN = /[\s'"\\`]/
+
 // A standard 5-field cron expression (minute hour day-of-month month
 // day-of-week). Deliberately structural, not a full semantic parser: it
 // rejects the wrong field count, stray letters, and macros - enough to fail
@@ -128,6 +136,12 @@ function readCronPath(
 	if (typeof path !== 'string' || !path.startsWith('/')) {
 		addIssue({
 			message: `deploy.cron job "${name}" path must be an absolute request path starting with "/"`,
+		})
+		return null
+	}
+	if (UNSAFE_PATH_PATTERN.test(path)) {
+		addIssue({
+			message: `deploy.cron job "${name}" path must not contain whitespace or quote characters (it is shell-quoted into the cron command)`,
 		})
 		return null
 	}

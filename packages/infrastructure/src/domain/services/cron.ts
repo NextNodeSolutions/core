@@ -75,10 +75,14 @@ function resolveCronTarget(
 // BusyBox `wget`: GET by default, POST via `--post-data` (empty body - the
 // trigger is the call, the app owns the work). `-q -O /dev/null` keeps the run
 // log clean (crond logs the invocation itself); `-T` bounds a hung endpoint.
+// The URL is SINGLE-QUOTED: crond runs the whole crontab line through `/bin/sh
+// -c`, so an unquoted query string (`?a=1&b=2`) would let `&` background the
+// request and run the rest as a command. `readCronPath` rejects whitespace and
+// quotes in `path`, so the single quotes can never be broken out of.
 function buildWgetCommand(method: CronMethod, url: string): string {
 	const base = `wget -q -O /dev/null -T ${String(CRON_REQUEST_TIMEOUT_SECONDS)}`
-	if (method === 'POST') return `${base} --post-data='' ${url}`
-	return `${base} ${url}`
+	if (method === 'POST') return `${base} --post-data='' '${url}'`
+	return `${base} '${url}'`
 }
 
 function buildCrontabLine(job: CronJobConfig, target: CronTarget): string {

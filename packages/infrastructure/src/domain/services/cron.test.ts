@@ -49,7 +49,7 @@ describe('buildCronScheduler', () => {
 		const scheduler = buildCronScheduler([job()], { web: WEB })
 
 		expect(scheduler?.[CRON_SERVICE_NAME]?.environment.CRONTAB).toBe(
-			"0 3 * * * wget -q -O /dev/null -T 30 --post-data='' http://web:3000/api/cron/cleanup",
+			"0 3 * * * wget -q -O /dev/null -T 30 --post-data='' 'http://web:3000/api/cron/cleanup'",
 		)
 	})
 
@@ -66,7 +66,7 @@ describe('buildCronScheduler', () => {
 		)
 
 		expect(scheduler?.[CRON_SERVICE_NAME]?.environment.CRONTAB).toBe(
-			'*/15 * * * * wget -q -O /dev/null -T 30 http://web:3000/api/ping',
+			"*/15 * * * * wget -q -O /dev/null -T 30 'http://web:3000/api/ping'",
 		)
 	})
 
@@ -93,6 +93,19 @@ describe('buildCronScheduler', () => {
 		expect(
 			scheduler?.[CRON_SERVICE_NAME]?.environment.CRONTAB.split('\n'),
 		).toHaveLength(2)
+	})
+
+	it('single-quotes the target URL so a query string is inert to the shell crond runs the line through', () => {
+		const scheduler = buildCronScheduler(
+			[job({ path: '/api/cron/run?scope=all&force=1' })],
+			{ web: WEB },
+		)
+
+		// Unquoted, the `&` would background wget at `?scope=all` and run
+		// `force=1` as a separate command. Quoted, the whole URL is one argument.
+		expect(scheduler?.[CRON_SERVICE_NAME]?.environment.CRONTAB).toBe(
+			"0 3 * * * wget -q -O /dev/null -T 30 --post-data='' 'http://web:3000/api/cron/run?scope=all&force=1'",
+		)
 	})
 
 	it('renders no sidecar when no job is declared', () => {

@@ -89,6 +89,40 @@ describe('validateCronJobs', () => {
 		)
 	})
 
+	it('rejects a path containing whitespace, a newline, or a quote', () => {
+		for (const path of [
+			'/api/c run',
+			'/api/c\nrun',
+			"/api/'c",
+			'/api/"c',
+		]) {
+			const parsed = validateCronJobs(
+				[{ name: 'c', schedule: '0 0 * * *', path }],
+				SERVICES,
+			)
+
+			expect(parsed.ok).toBe(false)
+			expect(parsed.ok ? [] : parsed.errors).toContain(
+				'deploy.cron job "c" path must not contain whitespace or quote characters (it is shell-quoted into the cron command)',
+			)
+		}
+	})
+
+	it('accepts a path that carries a query string', () => {
+		const parsed = validateCronJobs(
+			[
+				{
+					name: 'c',
+					schedule: '0 0 * * *',
+					path: '/api/run?scope=all&force=1',
+				},
+			],
+			SERVICES,
+		)
+
+		expect(parsed.ok).toBe(true)
+	})
+
 	it('rejects an unknown method', () => {
 		const parsed = validateCronJobs(
 			[{ name: 'c', schedule: '0 0 * * *', path: '/x', method: 'PUT' }],
