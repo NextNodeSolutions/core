@@ -205,6 +205,29 @@ Custom domains are detached on `project`-scope teardown. Requires the
 project's zone to live in the same Cloudflare account (already true for any
 project with `project.domain`).
 
+## Scheduled jobs: `[[deploy.cron]]`
+
+Scheduled HTTP jobs declared as a table-array under `[deploy]` (Hetzner only).
+Each `{ name, schedule, path, method?, service? }` fires an internal request at
+one of the project's services (`http://<service>:<port><path>`; `service`
+defaults to the primary/first service) on a standard 5-field cron schedule.
+
+- **Render** (`domain/services/cron.ts`, pure): `buildCronScheduler` produces a
+  single `cron` compose sidecar (alpine BusyBox `crond` + `wget`) carrying one
+  crontab line per job in the `CRONTAB` env. No host port, no Docker socket, no
+  app-image dependency, no external config — everything is in `nextnode.toml`.
+  Spread into the compose `services` by `renderComposeFile`, after the backing
+  services; threaded `config.deploy.cron → create-hetzner-target →
+  HetznerVpsTargetConfig → rollout → DeployContainerInput → stageRollout`.
+- **Validate** (`config/validation/cron.ts`): 5-field schedule (macros rejected
+  — BusyBox can't read them), absolute `path`, `method ∈ {GET, POST}` (default
+  POST), `service` ⊆ declared `[deploy.services.<name>]`, unique kebab names.
+  Wired in the hetzner provider validator; rejected on `cloudflare-pages`.
+- **Dev/prod**: rendered in BOTH (not prod-gated like the backup loop) — each
+  environment's stack runs its own sidecar against its own app, isolated by
+  construction. Cron is NOT a `[services.*]` backing service: it contributes no
+  `ServiceEnv`, only a compose sidecar.
+
 ## Secrets: global pool + auto-generation
 
 A `[deploy].secrets` entry is either a **must-exist** name (a string — the
