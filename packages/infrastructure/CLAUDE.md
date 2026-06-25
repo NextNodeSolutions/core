@@ -42,9 +42,8 @@ src/
         token-policy.ts     — buildR2TokenPolicy
     caddy/            — Caddy reverse-proxy domain logic (provider-agnostic)
       config.ts             — Caddy JSON types + buildCaddyConfig (pure) + issuer factories
-      compose.ts            — composeCaddyConfig (orchestrates upstreams + supabase + issuer)
+      compose.ts            — composeCaddyConfig (orchestrates upstreams + issuer)
       env.ts                — renderCaddyEnv + CADDY_ENV_PATH (systemd EnvironmentFile)
-      supabase.ts           — Supabase-specific Caddy routes (api/kong + studio basic-auth)
     hetzner/          — Hetzner VPS domain logic
       env-silo.ts           — EnvSilo type
       compute-silo.ts       — computeSilo (pure)
@@ -220,7 +219,7 @@ defaults to the primary/first service) on a standard 5-field cron schedule.
   socket, no app-image dependency, no external config — everything is in
   `nextnode.toml`. Spread into the compose `services` by `renderComposeFile`,
   after the backing services; threaded `config.deploy.cron → create-hetzner-target →
-  HetznerVpsTargetConfig → rollout → DeployContainerInput → stageRollout`.
+HetznerVpsTargetConfig → rollout → DeployContainerInput → stageRollout`.
 - **Validate** (`config/validation/cron.ts`): 5-field schedule parsed per field
   — value ranges + `*` / `N` / `N-M` / `*/STEP` / comma-list grammar, so macros
   and unschedulable expressions (`*/0`, out-of-range, inverted ranges) fail loud
@@ -260,13 +259,14 @@ secrets = [
   unknown generators, and out-of-range lengths fail loud at parse.
 - **Provision** (`cli/deploy/ensure-generated-secrets.ts`): for each generated
   secret ABSENT from `ALL_SECRETS`, generate the value and `gh secret set
-<name> --env <env>` (reuses the supabase `EnvSecretsAdapter`). **Idempotent +
+<name> --env <env>` (via the `EnvSecretsAdapter`). **Idempotent +
   non-rotating** — a secret already in `ALL_SECRETS` is left untouched
   (regenerating would invalidate every live token / break the DB connection).
   Fails loud if gh is unavailable but a push is needed.
 - **Contract**: a secret pushed during provision lands in a LATER run's
   `ALL_SECRETS` snapshot (GitHub freezes secrets at job start), so the flow is
-  _provision → re-trigger deploy_ — the same contract the supabase service uses.
+  _provision → re-trigger deploy_ — the same contract every auto-generated
+  secret uses.
 
 ## How It Runs
 

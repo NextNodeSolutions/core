@@ -19,8 +19,9 @@ const logger = createLogger()
  * Idempotent and non-rotating: a secret already present in `ALL_SECRETS` is left
  * untouched (regenerating a JWT/DB secret would invalidate every live token /
  * break the connection). The freshly-pushed value lands in a LATER run's
- * `ALL_SECRETS` snapshot - the same provision-then-redeploy contract the
- * supabase service uses. Fails loud when gh is unavailable but a push is needed.
+ * `ALL_SECRETS` snapshot - the same provision-then-redeploy contract used for
+ * every auto-generated secret. Fails loud when gh is unavailable but a push is
+ * needed.
  */
 export async function ensureGeneratedSecrets(
 	generated: ReadonlyArray<GeneratedSecretConfig>,

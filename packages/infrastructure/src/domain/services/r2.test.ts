@@ -12,11 +12,11 @@ import {
 import type { R2ServiceState } from './r2.ts'
 
 describe('computeR2ServiceBuckets', () => {
-	it('returns an empty list when neither [services.r2] nor [services.supabase] is declared', () => {
+	it('returns an empty list when no [services.r2] is declared', () => {
 		expect(computeR2ServiceBuckets({})).toEqual([])
 	})
 
-	it('returns the explicit buckets unchanged when only [services.r2] is declared', () => {
+	it('returns the explicit buckets unchanged when [services.r2] is declared', () => {
 		expect(
 			computeR2ServiceBuckets({
 				r2: {
@@ -29,41 +29,6 @@ describe('computeR2ServiceBuckets', () => {
 		).toEqual([
 			{ name: 'uploads', cdn: true },
 			{ name: 'media', cdn: false },
-		])
-	})
-
-	it('returns just the private backups bucket when only [services.supabase] is declared', () => {
-		expect(computeR2ServiceBuckets({ supabase: {} })).toEqual([
-			{ name: 'backups', cdn: false },
-		])
-	})
-
-	it('appends a private backups bucket after the explicit buckets when both are declared', () => {
-		expect(
-			computeR2ServiceBuckets({
-				r2: { buckets: [{ name: 'uploads', cdn: true }] },
-				supabase: {},
-			}),
-		).toEqual([
-			{ name: 'uploads', cdn: true },
-			{ name: 'backups', cdn: false },
-		])
-	})
-
-	it('does not duplicate backups if the user already declared it in [services.r2]', () => {
-		expect(
-			computeR2ServiceBuckets({
-				r2: {
-					buckets: [
-						{ name: 'backups', cdn: false },
-						{ name: 'uploads', cdn: true },
-					],
-				},
-				supabase: {},
-			}),
-		).toEqual([
-			{ name: 'backups', cdn: false },
-			{ name: 'uploads', cdn: true },
 		])
 	})
 })

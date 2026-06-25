@@ -145,7 +145,7 @@ describe('composeCaddyConfig', () => {
 		expect(storage?.prefix).toBe('monitor/')
 	})
 
-	it('emits no supabase route when supabase is not declared', () => {
+	it('emits exactly one route and subject per declared upstream', () => {
 		const config = composeCaddyConfig({
 			internal: false,
 			storage: STORAGE,
@@ -159,54 +159,5 @@ describe('composeCaddyConfig', () => {
 		expect(config.apps.tls.automation.policies[0]?.subjects).toStrictEqual([
 			'acme.example.com',
 		])
-	})
-
-	it('appends supabase routes (kong + studio) and subjects after the upstream routes', () => {
-		const config = composeCaddyConfig({
-			internal: false,
-			storage: STORAGE,
-			upstreams: [
-				{ hostname: 'acme.example.com', dial: 'localhost:8080' },
-			],
-			acmeEmail: 'test@example.com',
-			supabase: { deployDomain: 'acme.example.com' },
-		})
-
-		const { routes } = config.apps.http.servers.https
-		expect(routes).toHaveLength(3)
-		expect(routes[1]?.match[0]?.host).toStrictEqual([
-			'api.acme.example.com',
-		])
-		expect(routes[2]?.match[0]?.host).toStrictEqual([
-			'studio.acme.example.com',
-		])
-		expect(config.apps.tls.automation.policies[0]?.subjects).toStrictEqual([
-			'acme.example.com',
-			'api.acme.example.com',
-			'studio.acme.example.com',
-		])
-	})
-
-	it('composes supabase routing with the internal DNS-01 issuer', () => {
-		const config = composeCaddyConfig({
-			internal: true,
-			storage: STORAGE,
-			upstreams: [],
-			acmeEmail: 'infra@nextnode.fr',
-			supabase: { deployDomain: 'monitor.example.com' },
-		})
-
-		const { routes } = config.apps.http.servers.https
-		expect(routes).toHaveLength(2)
-		expect(routes[0]?.match[0]?.host).toStrictEqual([
-			'api.monitor.example.com',
-		])
-		expect(routes[1]?.match[0]?.host).toStrictEqual([
-			'studio.monitor.example.com',
-		])
-
-		const issuer = config.apps.tls.automation.policies[0]?.issuers[0]
-		if (issuer?.module !== 'acme') throw new Error('Expected ACME issuer')
-		expect(issuer.challenges?.dns?.provider.name).toBe('cloudflare')
 	})
 })

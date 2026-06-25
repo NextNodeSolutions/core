@@ -1,12 +1,7 @@
-import {
-	SUPABASE_DB_SERVICE_NAME,
-	SUPABASE_DEFAULT_DATABASE,
-} from './supabase.ts'
-
 /**
  * Prometheus community postgres_exporter, pinned. Hosted on quay.io per
  * upstream convention. Bumping this constant rolls out a new exporter
- * version to every NextNode Supabase project on the next pipeline run.
+ * version to every NextNode postgres project on the next pipeline run.
  */
 export const POSTGRES_EXPORTER_IMAGE =
 	'quay.io/prometheuscommunity/postgres-exporter:v0.18.0'
@@ -29,17 +24,10 @@ export const POSTGRES_EXPORTER_SERVICE_NAME = 'postgres-exporter'
 export const POSTGRES_EXPORTER_USER = 'postgres_exporter'
 
 /**
- * Compose env-var name the exporter receives the DSN through.
- * `DATA_SOURCE_NAME` is the documented contract of the prometheus
- * community postgres_exporter image - any other name is ignored.
- */
-export const POSTGRES_EXPORTER_DSN_ENV = 'DATA_SOURCE_NAME'
-
-/**
- * The same image also accepts the connection split across three env-vars:
- * `DATA_SOURCE_URI` (host[:port]/db?params, NO scheme, NO credentials),
- * `DATA_SOURCE_USER`, and `DATA_SOURCE_PASS`. The embedded exporter uses
- * this form instead of a single `DATA_SOURCE_NAME` URL because its password
+ * The prometheus community postgres_exporter image accepts the connection
+ * split across three env-vars: `DATA_SOURCE_URI` (host[:port]/db?params, NO
+ * scheme, NO credentials), `DATA_SOURCE_USER`, and `DATA_SOURCE_PASS`. The
+ * exporter uses this form rather than a single URL because its password
  * reuses `POSTGRES_PASSWORD`, which can be ANY byte string (e.g. a base64
  * value inherited from a prior stack) - carrying it in `DATA_SOURCE_PASS`
  * keeps it out of URL userinfo, where `/ @ : ? +` would mis-parse. The
@@ -50,17 +38,6 @@ export const POSTGRES_EXPORTER_USER_ENV = 'DATA_SOURCE_USER'
 export const POSTGRES_EXPORTER_PASS_ENV = 'DATA_SOURCE_PASS'
 
 /**
- * Compose env-var the exporter password is injected into via `.env`. The
- * provisioning step generates a 32-byte b64 random secret and persists it
- * as a GitHub env-secret named literally `PG_EXPORTER_PASSWORD` on the
- * project's repository, scoped to the current pipeline environment. GH
- * already isolates the secret per (repo, environment), so no project or
- * environment suffix in the secret name. `convergeVps` writes it into the
- * VPS `.env` under this same name so the compose file works on every host.
- */
-export const POSTGRES_EXPORTER_PASSWORD_ENV = 'PG_EXPORTER_PASSWORD'
-
-/**
  * Compose env-var holding the VPS Tailscale IPv4 address. Written into
  * `.env` by the Hetzner cloud-init / convergeVps step, so the exporter
  * port binding resolves to the tailnet interface at compose-up.
@@ -68,16 +45,9 @@ export const POSTGRES_EXPORTER_PASSWORD_ENV = 'PG_EXPORTER_PASSWORD'
 export const TAILSCALE_IP_ENV = 'TAILSCALE_IP'
 
 /**
- * Port the Supabase `db` container listens on - the upstream postgres
- * default. The exporter targets this port on the internal compose
- * network only.
- */
-const SUPABASE_DB_PORT = 5432
-
-/**
- * Filename of the bootstrap script mounted into the Supabase `db`
+ * Filename of the bootstrap script mounted into the postgres `db`
  * container's `/docker-entrypoint-initdb.d/`. The numeric `00-` prefix
- * forces this script to run before Supabase's own initdb scripts, so the
+ * forces this script to run before the image's own initdb scripts, so the
  * `postgres_exporter` role exists when downstream scripts that grant
  * privileges (or create publications, etc.) run.
  */
@@ -100,7 +70,7 @@ export const POSTGRES_EXPORTER_INIT_MOUNT_PATH = `/docker-entrypoint-initdb.d/${
 export const POSTGRES_EXPORTER_INIT_HOST_PATH = `./${POSTGRES_EXPORTER_INIT_FILENAME}`
 
 /**
- * Compose volume spec mounting the bootstrap SQL into the Supabase `db`
+ * Compose volume spec mounting the bootstrap SQL into the postgres `db`
  * container as read-only. `:ro` is defensive - postgres only reads
  * `/docker-entrypoint-initdb.d/` scripts, but the bind mount prevents the
  * container from writing back to the host file should that ever change.
@@ -109,207 +79,6 @@ export function buildPostgresExporterInitMount(): string {
 	return `${POSTGRES_EXPORTER_INIT_HOST_PATH}:${POSTGRES_EXPORTER_INIT_MOUNT_PATH}:ro`
 }
 
-/**
- * Env-var the prometheus community postgres_exporter reads to discover an
- * extra custom-queries YAML (additive to its built-in metric set). Matches
- * the upstream `--extend.query-path` flag.
- */
-export const POSTGRES_EXPORTER_QUERIES_ENV = 'PG_EXPORTER_EXTEND_QUERY_PATH'
-
-/**
- * Host-side filename of the custom queries YAML, written next to
- * `compose.yaml` by the provisioning step. Kebab-case to match the rest of
- * the host-side artefacts.
- */
-export const POSTGRES_EXPORTER_QUERIES_FILENAME = 'pg-exporter-queries.yaml'
-
-/**
- * Host-side path used in the compose bind mount, resolved relative to the
- * compose file directory by docker-compose at `compose up` time.
- */
-export const POSTGRES_EXPORTER_QUERIES_HOST_PATH = `./${POSTGRES_EXPORTER_QUERIES_FILENAME}`
-
-/**
- * In-container path the exporter reads the custom queries from. Lives
- * under `/etc/postgres_exporter/` to keep it out of the data dir and
- * outside any image-managed path.
- */
-export const POSTGRES_EXPORTER_QUERIES_MOUNT_PATH =
-	'/etc/postgres_exporter/queries.yaml'
-
-/**
- * Cardinality cap on the per-statement metric set. The exporter scrapes
- * the top-N rows of `pg_stat_statements` ordered by `total_exec_time`, so
- * this is the maximum number of `pg_stat_statements_top_*` series the
- * exporter can emit per scrape, regardless of how many statements the
- * cluster has seen.
- */
-export const POSTGRES_EXPORTER_TOP_QUERIES_LIMIT = 50
-
-/**
- * Compose volume spec bind-mounting the custom queries YAML into the
- * exporter container as read-only. `ro` is mandatory here - the exporter
- * never writes back.
- */
-export function buildPostgresExporterQueriesMount(): string {
-	return `${POSTGRES_EXPORTER_QUERIES_HOST_PATH}:${POSTGRES_EXPORTER_QUERIES_MOUNT_PATH}:ro`
-}
-
-/**
- * Render the custom queries YAML the exporter loads via
- * `PG_EXPORTER_EXTEND_QUERY_PATH`. Two metric sets:
- *
- *   - `pg_stat_statements_top`: top-N statements by `total_exec_time` with
- *     per-statement `calls`, `total_exec_time`, `mean_exec_time`, `rows`.
- *     The `query` LABEL collapses to `sha256(normalized_statement)[0:16]_
- *     <first 80 chars>` - bounded length, deterministic, PII-safe (the
- *     `query` column from `pg_stat_statements` is already normalised by
- *     postgres: literals are replaced by `$N` placeholders).
- *   - `pg_stat_statements_global`: cluster-wide aggregates - total calls,
- *     total rows, total exec time, and the p95 of per-statement
- *     `mean_exec_time` via `percentile_cont`.
- *
- * Requires the `pgcrypto` extension for `digest(query, 'sha256')`; this
- * extension is enabled by default on the supabase/postgres image. The
- * `LIMIT` is hard-coded from `POSTGRES_EXPORTER_TOP_QUERIES_LIMIT` so the
- * cardinality contract is enforced from this module.
- *
- * Pure: returns the YAML as a string. The provisioning step writes the
- * rendered file to disk on the VPS next to `compose.yaml`.
- */
-export function renderPostgresExporterQueriesYaml(): string {
-	return `${renderTopStatementsYaml()}${renderGlobalStatementsYaml()}`
-}
-
-/** Per-statement top-N metric set (`pg_stat_statements_top`). */
-function renderTopStatementsYaml(): string {
-	const topLimit = String(POSTGRES_EXPORTER_TOP_QUERIES_LIMIT)
-	return `pg_stat_statements_top:
-  query: |
-    SELECT
-      substring(encode(digest(query, 'sha256'), 'hex'), 1, 16) || '_' || substring(query, 1, 80) AS query,
-      calls,
-      total_exec_time,
-      mean_exec_time,
-      rows
-    FROM pg_stat_statements
-    ORDER BY total_exec_time DESC
-    LIMIT ${topLimit};
-  metrics:
-    - query:
-        usage: "LABEL"
-        description: "sha256(normalized_statement)[0:16]_<first 80 chars>"
-    - calls:
-        usage: "COUNTER"
-        description: "Total number of times the statement was executed"
-    - total_exec_time:
-        usage: "COUNTER"
-        description: "Total time spent in the statement in milliseconds"
-    - mean_exec_time:
-        usage: "GAUGE"
-        description: "Mean time spent per execution in milliseconds"
-    - rows:
-        usage: "COUNTER"
-        description: "Total rows retrieved or affected by the statement"
-`
-}
-
-/** Cluster-wide aggregate metric set (`pg_stat_statements_global`). */
-function renderGlobalStatementsYaml(): string {
-	return `pg_stat_statements_global:
-  query: |
-    SELECT
-      sum(calls) AS total_calls,
-      sum(rows) AS total_rows,
-      sum(total_exec_time) AS total_exec_time_ms,
-      percentile_cont(0.95) WITHIN GROUP (ORDER BY mean_exec_time) AS mean_exec_time_p95_ms
-    FROM pg_stat_statements;
-  metrics:
-    - total_calls:
-        usage: "COUNTER"
-        description: "Cluster-wide sum of statement executions"
-    - total_rows:
-        usage: "COUNTER"
-        description: "Cluster-wide sum of rows retrieved or affected"
-    - total_exec_time_ms:
-        usage: "COUNTER"
-        description: "Cluster-wide cumulative execution time in milliseconds"
-    - mean_exec_time_p95_ms:
-        usage: "GAUGE"
-        description: "p95 of per-statement mean execution time in milliseconds"
-`
-}
-
-/**
- * Render the DSN postgres_exporter uses to reach the Supabase `db`
- * service over the internal compose network. `sslmode=disable` because
- * the connection never leaves the docker bridge; password is the caller's
- * to source (a literal for rendered SQL, or the `${PG_EXPORTER_PASSWORD}`
- * compose interpolation for the sidecar env).
- */
-export function buildPostgresExporterDsn(password: string): string {
-	return `postgresql://${POSTGRES_EXPORTER_USER}:${password}@${SUPABASE_DB_SERVICE_NAME}:${String(SUPABASE_DB_PORT)}/${SUPABASE_DEFAULT_DATABASE}?sslmode=disable`
-}
-
-export interface PostgresExporterSidecarService {
-	readonly image: string
-	readonly restart: string
-	readonly depends_on: ReadonlyArray<string>
-	readonly ports: ReadonlyArray<string>
-	readonly environment: Readonly<Record<string, string>>
-	readonly volumes: ReadonlyArray<string>
-}
-
-/**
- * Build the compose sidecar definition for postgres_exporter. The exporter
- * publishes /metrics on `POSTGRES_EXPORTER_PORT`, bound to the VPS
- * Tailscale interface via the compose `.env` `TAILSCALE_IP` substitution
- * - so the exporter is unreachable from the public internet but the
- * monitoring scrape job (running on a separate tailnet node) can reach it.
- * The DSN passes through the env channel as `DATA_SOURCE_NAME` (the
- * exporter image's documented env-var contract) with the per-project
- * `${PG_EXPORTER_PASSWORD}` interpolated at compose-up time.
- *
- * Pure: no IO, no env reads. The caller plugs the returned shape into
- * the compose-file orchestrator.
- */
-export function buildPostgresExporterSidecar(): PostgresExporterSidecarService {
-	return {
-		image: POSTGRES_EXPORTER_IMAGE,
-		restart: 'unless-stopped',
-		depends_on: [SUPABASE_DB_SERVICE_NAME],
-		ports: [
-			`\${${TAILSCALE_IP_ENV}}:${String(POSTGRES_EXPORTER_PORT)}:${String(POSTGRES_EXPORTER_PORT)}`,
-		],
-		environment: {
-			[POSTGRES_EXPORTER_DSN_ENV]: buildPostgresExporterDsn(
-				`\${${POSTGRES_EXPORTER_PASSWORD_ENV}}`,
-			),
-			[POSTGRES_EXPORTER_QUERIES_ENV]:
-				POSTGRES_EXPORTER_QUERIES_MOUNT_PATH,
-		},
-		volumes: [buildPostgresExporterQueriesMount()],
-	}
-}
-
-/**
- * Build the exporter sidecar for the EMBEDDED postgres service
- * (`[services.postgres] mode = "embedded"`). Same image, same tailnet
- * bind, same custom queries as the Supabase variant - only the DSN
- * differs: the embedded sidecar's compose name is `postgres` and the
- * database/role derive from the project. The exporter authenticates as
- * the dedicated `postgres_exporter` role (pg_monitor, NOT superuser)
- * created by the same bootstrap SQL, whose password deliberately reuses
- * `${POSTGRES_PASSWORD}`: it lives in the same `.env` and the same
- * containers either way, so a separate generated secret would add
- * rotation machinery without shrinking any attack surface.
- *
- * No custom-queries mount here: the pg_stat_statements set requires
- * `shared_preload_libraries` (preloaded on supabase/postgres, NOT on the
- * vanilla `postgres:<v>` image) - the exporter's built-in metric set
- * (pg_up, connections, db sizes, locks, transactions) covers the P6
- * alert rules without it.
- */
 export interface EmbeddedPostgresExporterSidecarService {
 	readonly image: string
 	readonly restart: string
@@ -318,6 +87,22 @@ export interface EmbeddedPostgresExporterSidecarService {
 	readonly environment: Readonly<Record<string, string>>
 }
 
+/**
+ * Build the exporter sidecar for the embedded postgres service
+ * (`[services.postgres] mode = "embedded"`). The exporter publishes
+ * /metrics on `POSTGRES_EXPORTER_PORT`, bound to the VPS Tailscale
+ * interface via the compose `.env` `TAILSCALE_IP` substitution - so it is
+ * unreachable from the public internet but the monitoring scrape job
+ * (running on a separate tailnet node) can reach it. The exporter
+ * authenticates as the dedicated `postgres_exporter` role (pg_monitor, NOT
+ * superuser) created by the bootstrap SQL, whose password deliberately
+ * reuses `${POSTGRES_PASSWORD}`: it lives in the same `.env` and the same
+ * containers either way, so a separate generated secret would add rotation
+ * machinery without shrinking any attack surface.
+ *
+ * Pure: no IO, no env reads. The caller plugs the returned shape into the
+ * compose-file orchestrator.
+ */
 export function buildEmbeddedPostgresExporterSidecar(
 	embeddedServiceName: string,
 	embeddedPort: number,
@@ -347,7 +132,7 @@ export function buildEmbeddedPostgresExporterSidecar(
 export const POSTGRES_EXPORTER_EMBEDDED_PASSWORD_ENV = 'POSTGRES_PASSWORD'
 
 /**
- * Render the bootstrap SQL that the Supabase `db` container runs once on
+ * Render the bootstrap SQL that the postgres `db` container runs once on
  * first boot through `docker-entrypoint-initdb.d`. Creates the
  * `postgres_exporter` role with the supplied password and grants it the
  * PG ≥10 built-in `pg_monitor` role - explicitly NOT SUPERUSER.
@@ -358,11 +143,10 @@ export const POSTGRES_EXPORTER_EMBEDDED_PASSWORD_ENV = 'POSTGRES_PASSWORD'
  *
  * Pure: returns the SQL as a string. The caller sources the password and
  * persists the rendered file to disk during provisioning. The password is
- * interpolated raw into the single-quoted SQL literal; both producers are
- * safe to single-quote because neither alphabet contains `'`: the supabase
- * exporter uses the base64 `PG_EXPORTER_PASSWORD`, and the embedded exporter
- * reuses `POSTGRES_PASSWORD`, which `ensureEmbeddedPostgresPasswordSecret`
- * auto-generates as an alphanumeric value for exactly this reason.
+ * interpolated raw into the single-quoted SQL literal; it is safe to
+ * single-quote because the embedded exporter reuses `POSTGRES_PASSWORD`,
+ * which `ensureEmbeddedPostgresPasswordSecret` auto-generates as an
+ * alphanumeric value (no `'`) for exactly this reason.
  */
 export function renderPostgresExporterBootstrapSql(password: string): string {
 	return `DO $$

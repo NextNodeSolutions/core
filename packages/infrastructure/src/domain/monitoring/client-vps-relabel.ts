@@ -17,7 +17,7 @@ export const SCRAPE_TARGET_TAG = 'server'
  * accidentally emits - so cardinality budget lives entirely on this list.
  *
  * `db_role` stays reserved here even though no source rule maps to it
- * yet: the planned `services.supabase.role` propagation (P6-08) was
+ * yet: the planned per-instance `db_role` propagation (P6-08) was
  * canceled. Series that lack a `db_role` source simply ship without that
  * label until the slot is wired again. Keeping the slot avoids a future
  * whitelist churn the day per-instance role tagging comes back.

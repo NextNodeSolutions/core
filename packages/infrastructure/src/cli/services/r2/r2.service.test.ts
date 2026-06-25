@@ -136,45 +136,13 @@ describe('createR2Service', () => {
 })
 
 describe('r2ServiceDefinition', () => {
-	it('returns null when neither [services.r2] nor [services.supabase] is declared', () => {
+	it('returns null when no [services.r2] is declared', () => {
 		expect(r2ServiceDefinition.build({}, CTX)).toBeNull()
 	})
 
 	it('builds the R2 service when [services.r2] is declared', () => {
 		const service = r2ServiceDefinition.build({ r2: CONFIG }, CTX)
 		expect(service?.name).toBe('r2')
-	})
-
-	it('builds the R2 service with the implicit backups alias when only [services.supabase] is declared', async () => {
-		ensureMock.mockResolvedValue(STATE)
-		const service = r2ServiceDefinition.build({ supabase: {} }, CTX)
-
-		expect(service?.name).toBe('r2')
-		await service?.provision()
-		expect(ensureMock).toHaveBeenCalledWith(
-			expect.objectContaining({
-				buckets: [{ name: 'backups', cdn: false }],
-			}),
-		)
-	})
-
-	it('appends the backups alias to the explicit buckets when [services.supabase] coexists with [services.r2]', async () => {
-		ensureMock.mockResolvedValue(STATE)
-		const service = r2ServiceDefinition.build(
-			{ r2: CONFIG, supabase: {} },
-			CTX,
-		)
-
-		await service?.provision()
-		expect(ensureMock).toHaveBeenCalledWith(
-			expect.objectContaining({
-				buckets: [
-					{ name: 'uploads', cdn: false },
-					{ name: 'media', cdn: false },
-					{ name: 'backups', cdn: false },
-				],
-			}),
-		)
 	})
 
 	it('propagates the missing-infra-storage precondition from createR2Service', () => {

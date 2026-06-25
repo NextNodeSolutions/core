@@ -1,7 +1,6 @@
 import { observabilityServiceDefinition } from './observability/observability.service.ts'
 import { postgresServiceDefinition } from './postgres/postgres.service.ts'
 import { r2ServiceDefinition } from './r2/r2.service.ts'
-import { supabaseServiceDefinition } from './supabase/supabase.service.ts'
 
 import type { ServiceName } from '#/config/types.ts'
 import type { ServiceDefinition } from './service.ts'
@@ -13,7 +12,6 @@ import type { ServiceDefinition } from './service.ts'
 export const SERVICE_DEFINITIONS = {
 	r2: r2ServiceDefinition,
 	postgres: postgresServiceDefinition,
-	supabase: supabaseServiceDefinition,
 	observability: observabilityServiceDefinition,
 } as const satisfies {
 	readonly [K in ServiceName]: ServiceDefinition<K>

@@ -7,7 +7,6 @@ import {
 	POSTGRES_EXPORTER_SERVICE_NAME,
 	buildEmbeddedPostgresExporterSidecar,
 	buildPostgresExporterInitMount,
-	buildPostgresExporterSidecar,
 } from '#/domain/services/postgres-exporter.ts'
 import {
 	POSTGRES_WALG_SERVICE_NAME,
@@ -22,13 +21,6 @@ import {
 	buildPostgresBackupSidecar,
 	postgresProjectIdentifier,
 } from '#/domain/services/postgres.ts'
-import {
-	SUPABASE_BACKUP_SERVICE_NAME,
-	SUPABASE_DB_DATA_VOLUME,
-	SUPABASE_DB_SERVICE_NAME,
-	buildSupabaseBackupSidecar,
-	buildSupabaseStack,
-} from '#/domain/services/supabase.ts'
 import { stringify } from 'yaml'
 
 import { buildUserServices } from './compose-user-services.ts'
@@ -37,26 +29,17 @@ import type {
 	CronJobConfig,
 	ObservabilityServiceConfig,
 	PostgresServiceConfig,
-	SupabaseServiceConfig,
 	UserServiceConfig,
 } from '#/config/types.ts'
 import type { ImageRef } from '#/domain/deploy/target.ts'
 import type { CronComposeService } from '#/domain/services/cron.ts'
 import type { ObservabilityComposeService } from '#/domain/services/observability.ts'
-import type {
-	EmbeddedPostgresExporterSidecarService,
-	PostgresExporterSidecarService,
-} from '#/domain/services/postgres-exporter.ts'
+import type { EmbeddedPostgresExporterSidecarService } from '#/domain/services/postgres-exporter.ts'
 import type {
 	PostgresSidecarService,
 	PostgresWalgSidecarService,
 } from '#/domain/services/postgres-walg.ts'
 import type { PostgresBackupSidecarService } from '#/domain/services/postgres.ts'
-import type {
-	SupabaseBackupSidecarService,
-	SupabaseService,
-	SupabaseStack,
-} from '#/domain/services/supabase.ts'
 import type { ComposeUserService } from './compose-user-services.ts'
 
 /**
@@ -78,7 +61,6 @@ export interface ComposeFileInput {
 	readonly hostPorts: Readonly<Record<string, number>>
 	readonly volumes?: ReadonlyArray<ComposeVolume>
 	readonly postgres: PostgresServiceConfig | undefined
-	readonly supabase?: SupabaseServiceConfig
 	readonly observability?: ObservabilityServiceConfig | undefined
 	// [[deploy.cron]] jobs - rendered as a single `cron` sidecar firing internal
 	// HTTP requests at the project's services. Omitted/empty = no sidecar.
@@ -92,9 +74,6 @@ type ComposeServiceLike =
 	| PostgresSidecarService
 	| PostgresWalgSidecarService
 	| PostgresBackupSidecarService
-	| SupabaseService
-	| SupabaseBackupSidecarService
-	| PostgresExporterSidecarService
 	| EmbeddedPostgresExporterSidecarService
 	| ObservabilityComposeService
 	| CronComposeService
@@ -104,36 +83,18 @@ interface ComposeConfig {
 	readonly volumes?: Readonly<Record<string, Record<string, never>>>
 }
 
-/**
- * Append the postgres-exporter bootstrap-SQL bind mount to the supabase
- * `db` service's volumes. The mount is what makes the supabase/postgres
- * image run `00-pg-monitor.sql` exactly once on initdb, creating the
- * `postgres_exporter` role the exporter sidecar authenticates as.
- */
-function withPostgresExporterInitMount(stack: SupabaseStack): SupabaseStack {
-	const db = stack[SUPABASE_DB_SERVICE_NAME]
-	if (!db) return stack
-	const augmented: SupabaseService = {
-		...db,
-		volumes: [...(db.volumes ?? []), buildPostgresExporterInitMount()],
-	}
-	return { ...stack, [SUPABASE_DB_SERVICE_NAME]: augmented }
-}
-
 interface TopLevelVolumesOptions {
 	readonly hasPostgres: boolean
-	readonly hasSupabase: boolean
 	readonly hasObservability: boolean
 }
 
 function buildTopLevelVolumes(
 	userVolumes: ReadonlyArray<ComposeVolume> = [],
-	{ hasPostgres, hasSupabase, hasObservability }: TopLevelVolumesOptions,
+	{ hasPostgres, hasObservability }: TopLevelVolumesOptions,
 ): Record<string, Record<string, never>> | undefined {
 	const volumes: Record<string, Record<string, never>> = {}
 	for (const v of userVolumes) volumes[v.name] = {}
 	if (hasPostgres) volumes[POSTGRES_DATA_VOLUME] = {}
-	if (hasSupabase) volumes[SUPABASE_DB_DATA_VOLUME] = {}
 	if (hasObservability) {
 		for (const name of OBSERVABILITY_VOLUMES) volumes[name] = {}
 	}
@@ -156,7 +117,6 @@ function buildPostgresServiceGroup(
 	config: PostgresServiceConfig,
 	projectName: string,
 	environment: string,
-	hasSupabase: boolean,
 ): Readonly<Record<string, ComposeServiceLike>> | null {
 	const sidecar = buildPostgresSidecar(config, projectName, environment)
 	if (sidecar === null) return null
@@ -173,10 +133,7 @@ function buildPostgresServiceGroup(
 	// The bootstrap SQL mount creates the pg_monitor-granted
 	// `postgres_exporter` role on first initdb; the exporter sidecar
 	// publishes /metrics on the tailnet interface for the monitoring
-	// scrape job (PRD P6 - embedded postgres gets the same observability
-	// as the Supabase variant). When the project ALSO declares supabase,
-	// the supabase group already owns the `postgres-exporter` name and
-	// the 9187 tailnet bind - one exporter per VPS port, supabase wins.
+	// scrape job (PRD P6).
 	const instrumentedSidecar: PostgresSidecarService = {
 		...sidecar,
 		volumes: [...sidecar.volumes, buildPostgresExporterInitMount()],
@@ -185,34 +142,10 @@ function buildPostgresServiceGroup(
 		[POSTGRES_SIDECAR_SERVICE_NAME]: instrumentedSidecar,
 		...(walgBackup ? { [POSTGRES_WALG_SERVICE_NAME]: walgBackup } : {}),
 		...(dumpBackup ? { [POSTGRES_BACKUP_SERVICE_NAME]: dumpBackup } : {}),
-		...(hasSupabase
-			? {}
-			: {
-					[POSTGRES_EXPORTER_SERVICE_NAME]:
-						buildEmbeddedPostgresExporterSidecar(
-							POSTGRES_SIDECAR_SERVICE_NAME,
-							POSTGRES_SIDECAR_PORT,
-							postgresProjectIdentifier(projectName),
-						),
-				}),
-	}
-}
-
-/**
- * Build the supabase group (six-service stack + postgres-exporter +
- * backup sidecar) for the compose file. Always non-null when called -
- * `[services.supabase]` has no mode switch like postgres does.
- */
-function buildSupabaseServiceGroup(
-	projectName: string,
-	environment: string,
-): Readonly<Record<string, ComposeServiceLike>> {
-	return {
-		...withPostgresExporterInitMount(buildSupabaseStack()),
-		[POSTGRES_EXPORTER_SERVICE_NAME]: buildPostgresExporterSidecar(),
-		[SUPABASE_BACKUP_SERVICE_NAME]: buildSupabaseBackupSidecar(
-			projectName,
-			environment,
+		[POSTGRES_EXPORTER_SERVICE_NAME]: buildEmbeddedPostgresExporterSidecar(
+			POSTGRES_SIDECAR_SERVICE_NAME,
+			POSTGRES_SIDECAR_PORT,
+			postgresProjectIdentifier(projectName),
 		),
 	}
 }
@@ -224,11 +157,7 @@ export function renderComposeFile(input: ComposeFileInput): string {
 				input.postgres,
 				input.projectName,
 				input.environment,
-				input.supabase !== undefined,
 			)
-		: null
-	const supabase = input.supabase
-		? buildSupabaseServiceGroup(input.projectName, input.environment)
 		: null
 	const observability = input.observability
 		? buildObservabilityStack(input.observability)
@@ -236,7 +165,6 @@ export function renderComposeFile(input: ComposeFileInput): string {
 	const cron = buildCronScheduler(input.cron ?? [], input.services)
 	const topLevelVolumes = buildTopLevelVolumes(userVolumes, {
 		hasPostgres: postgres !== null,
-		hasSupabase: supabase !== null,
 		hasObservability: observability !== null,
 	})
 
@@ -250,7 +178,6 @@ export function renderComposeFile(input: ComposeFileInput): string {
 				hasPostgres: postgres !== null,
 			}),
 			...postgres,
-			...supabase,
 			...observability,
 			...cron,
 		},

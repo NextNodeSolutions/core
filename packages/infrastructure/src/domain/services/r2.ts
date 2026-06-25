@@ -3,15 +3,6 @@ import type { AppEnvironment } from '#/domain/environment.ts'
 import type { ServiceEnv } from './service.ts'
 
 /**
- * Alias every Supabase project carries on its R2 service. The bucket
- * `<project>-<env>-backups` is provisioned alongside the project's other
- * R2 buckets and reuses the project's existing R2 service token at
- * provision time. The monitoring backup-tracker reads it back through a
- * separate read-only token issued later.
- */
-export const R2_BACKUPS_ALIAS = 'backups'
-
-/**
  * Per-project R2 buckets declared in `[r2] buckets = [...]`. Each declared
  * alias is materialised as a real Cloudflare R2 bucket via
  * `computeR2BucketName`, scoped per environment so production and preview
@@ -39,27 +30,15 @@ export interface R2ServiceState {
 }
 
 /**
- * Resolve the buckets the R2 service must provision for a project.
- *
- * Combines the explicit `[services.r2].buckets` list (declared order +
- * `cdn` flags preserved) with the implicit `backups` bucket every project
- * opting into `[services.supabase]` needs. The implicit backups bucket is
- * always private (`cdn: false`) - it is internal and must never be served
- * over a public custom domain. An empty result means the R2 service does
- * not need to run for this project - callers use that as the skip signal.
- *
- * Idempotent: a user who already declared `backups` in `[services.r2]`
- * keeps their own declaration, not a duplicate.
+ * Resolve the buckets the R2 service must provision for a project: the
+ * explicit `[services.r2].buckets` list (declared order + `cdn` flags
+ * preserved). An empty result means the R2 service does not need to run for
+ * this project - callers use that as the skip signal.
  */
 export function computeR2ServiceBuckets(
 	services: ServicesConfig,
 ): ReadonlyArray<R2BucketConfig> {
-	const explicit = services.r2?.buckets ?? []
-	if (services.supabase === undefined) return explicit
-	if (explicit.some(bucket => bucket.name === R2_BACKUPS_ALIAS)) {
-		return explicit
-	}
-	return [...explicit, { name: R2_BACKUPS_ALIAS, cdn: false }]
+	return services.r2?.buckets ?? []
 }
 
 export function computeR2BucketName(
