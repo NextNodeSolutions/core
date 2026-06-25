@@ -12,11 +12,56 @@ import type { CronJobConfig, CronMethod } from '#/config/types.ts'
 import type { GenericSchema } from 'valibot'
 import type { ValidationResult } from './result.ts'
 
-// A single cron field's allowed alphabet: digits, the `*` wildcard, and the
-// `,` `-` `/` operators. Letters (and the `@daily` macros BusyBox crond does
-// NOT understand) are rejected.
-const CRON_FIELD_PATTERN = /^[0-9*,/-]+$/
 const CRON_FIELD_COUNT = 5
+
+// The inclusive value range of each of the 5 cron fields, in order. Day-of-week
+// allows 7 as a second spelling of Sunday (0), matching BusyBox crond.
+interface CronFieldRange {
+	readonly min: number
+	readonly max: number
+}
+const CRON_FIELD_RANGES: ReadonlyArray<CronFieldRange> = [
+	{ min: 0, max: 59 }, // minute
+	{ min: 0, max: 23 }, // hour
+	{ min: 1, max: 31 }, // day-of-month
+	{ min: 1, max: 12 }, // month
+	{ min: 0, max: 7 }, // day-of-week (0 and 7 are both Sunday)
+]
+
+function isIntInRange(raw: string, min: number, max: number): boolean {
+	if (!/^\d+$/.test(raw)) return false
+	const candidate = Number(raw)
+	return candidate >= min && candidate <= max
+}
+
+// A field item's base: `*`, a single value `N`, or a range `N-M`. Letters,
+// empty operands, and inverted ranges (`5-1`) are all rejected here.
+function isValidCronBase(base: string, { min, max }: CronFieldRange): boolean {
+	if (base === '*') return true
+	const [low, high, ...rest] = base.split('-')
+	if (rest.length > 0 || low === undefined) return false
+	if (high === undefined) return isIntInRange(low, min, max)
+	return (
+		isIntInRange(low, min, max) &&
+		isIntInRange(high, min, max) &&
+		Number(low) <= Number(high)
+	)
+}
+
+// One comma entry: a base optionally followed by `/STEP`. A zero or
+// non-numeric step (`*/0`) is rejected - on the VPS it is a parse error and the
+// job never fires.
+function isValidCronEntry(listEntry: string, range: CronFieldRange): boolean {
+	const [base, step, ...rest] = listEntry.split('/')
+	if (rest.length > 0 || base === undefined) return false
+	if (step !== undefined && !isIntInRange(step, 1, range.max)) return false
+	return isValidCronBase(base, range)
+}
+
+function isValidCronField(field: string, range: CronFieldRange): boolean {
+	const entries = field.split(',')
+	return entries.every(listEntry => isValidCronEntry(listEntry, range))
+}
 
 // The compose service name the cron sidecar is rendered under (mirrors
 // `CRON_SERVICE_NAME` in `domain/services/cron.ts`, which the config layer may
@@ -34,13 +79,17 @@ const RESERVED_CRON_SERVICE_NAME = 'cron'
 const UNSAFE_PATH_PATTERN = /[\s'"\\`]/
 
 // A standard 5-field cron expression (minute hour day-of-month month
-// day-of-week). Deliberately structural, not a full semantic parser: it
-// rejects the wrong field count, stray letters, and macros - enough to fail
-// loud at parse instead of as a silent no-fire on the VPS.
+// day-of-week). Validates each field against its real value range and operator
+// grammar (`*`, `N`, `N-M`, `*/STEP`, lists) so a schedule that would be a
+// silent no-fire on the VPS (out-of-range field, `*/0`, bare operators, macros)
+// fails loud at parse instead.
 function isValidCronSchedule(schedule: string): boolean {
 	const fields = schedule.trim().split(/\s+/)
 	if (fields.length !== CRON_FIELD_COUNT) return false
-	return fields.every(field => CRON_FIELD_PATTERN.test(field))
+	return fields.every((field, index) => {
+		const range = CRON_FIELD_RANGES[index]
+		return range !== undefined && isValidCronField(field, range)
+	})
 }
 
 function isCronMethod(candidate: unknown): candidate is CronMethod {

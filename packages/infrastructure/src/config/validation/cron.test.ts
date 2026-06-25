@@ -77,6 +77,44 @@ describe('validateCronJobs', () => {
 		)
 	})
 
+	it('rejects schedules that parse structurally but never fire on the VPS', () => {
+		// Each was accepted by the old alphabet-only regex but is a silent
+		// no-fire on BusyBox crond: step zero, out-of-range fields, bare
+		// operators, inverted range.
+		for (const schedule of [
+			'*/0 * * * *',
+			'60 * * * *',
+			'0 24 * * *',
+			'0 0 0 * *',
+			'0 0 * 13 *',
+			'0 0 * * 8',
+			'- - - - -',
+			'5-1 * * * *',
+		]) {
+			const parsed = validateCronJobs(
+				[{ name: 'c', schedule, path: '/x' }],
+				SERVICES,
+			)
+
+			expect(parsed.ok, `expected ${schedule} to be rejected`).toBe(false)
+		}
+	})
+
+	it('accepts a complex but valid schedule (lists, ranges, steps)', () => {
+		const parsed = validateCronJobs(
+			[
+				{
+					name: 'c',
+					schedule: '*/15 0-6,18-23 1 1,6,12 1-5',
+					path: '/x',
+				},
+			],
+			SERVICES,
+		)
+
+		expect(parsed.ok).toBe(true)
+	})
+
 	it('rejects a path without a leading slash', () => {
 		const parsed = validateCronJobs(
 			[{ name: 'c', schedule: '0 0 * * *', path: 'api/x' }],
