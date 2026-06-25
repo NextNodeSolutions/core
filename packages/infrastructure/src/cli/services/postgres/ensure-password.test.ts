@@ -13,7 +13,9 @@ const SCOPE = {
 	environment: 'production',
 } as const
 
-function fakeAdapter(overrides: Partial<EnvSecretsAdapter> = {}): EnvSecretsAdapter {
+function fakeAdapter(
+	overrides: Partial<EnvSecretsAdapter> = {},
+): EnvSecretsAdapter {
 	return {
 		ghAvailable: () => Promise.resolve(true),
 		setRepoEnvSecret: () => Promise.resolve(),
