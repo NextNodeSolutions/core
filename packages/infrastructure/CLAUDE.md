@@ -219,7 +219,7 @@ defaults to the primary/first service) on a standard 5-field cron schedule.
   socket, no app-image dependency, no external config — everything is in
   `nextnode.toml`. Spread into the compose `services` by `renderComposeFile`,
   after the backing services; threaded `config.deploy.cron → create-hetzner-target →
-  HetznerVpsTargetConfig → rollout → DeployContainerInput → stageRollout`.
+HetznerVpsTargetConfig → rollout → DeployContainerInput → stageRollout`.
 - **Validate** (`config/validation/cron.ts`): 5-field schedule parsed per field
   — value ranges + `*` / `N` / `N-M` / `*/STEP` / comma-list grammar, so macros
   and unschedulable expressions (`*/0`, out-of-range, inverted ranges) fail loud
