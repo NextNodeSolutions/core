@@ -214,15 +214,22 @@ defaults to the primary/first service) on a standard 5-field cron schedule.
 
 - **Render** (`domain/services/cron.ts`, pure): `buildCronScheduler` produces a
   single `cron` compose sidecar (alpine BusyBox `crond` + `wget`) carrying one
-  crontab line per job in the `CRONTAB` env. No host port, no Docker socket, no
-  app-image dependency, no external config — everything is in `nextnode.toml`.
-  Spread into the compose `services` by `renderComposeFile`, after the backing
-  services; threaded `config.deploy.cron → create-hetzner-target →
+  crontab line per job in the `CRONTAB` env. The target URL is **single-quoted**
+  in the line — crond runs each command through `/bin/sh -c`, so an unquoted
+  query string would let `&` background the request. No host port, no Docker
+  socket, no app-image dependency, no external config — everything is in
+  `nextnode.toml`. Spread into the compose `services` by `renderComposeFile`,
+  after the backing services; threaded `config.deploy.cron → create-hetzner-target →
   HetznerVpsTargetConfig → rollout → DeployContainerInput → stageRollout`.
-- **Validate** (`config/validation/cron.ts`): 5-field schedule (macros rejected
-  — BusyBox can't read them), absolute `path`, `method ∈ {GET, POST}` (default
-  POST), `service` ⊆ declared `[deploy.services.<name>]`, unique kebab names.
-  Wired in the hetzner provider validator; rejected on `cloudflare-pages`.
+- **Validate** (`config/validation/cron.ts`): 5-field schedule parsed per field
+  — value ranges + `*` / `N` / `N-M` / `*/STEP` / comma-list grammar, so macros
+  and unschedulable expressions (`*/0`, out-of-range, inverted ranges) fail loud
+  instead of silently never firing on the VPS; absolute `path` with no
+  whitespace or quote characters (it is single-quoted into the wget command — a
+  query string is safe, a space/newline/quote is not); `method ∈ {GET, POST}`
+  (default POST); `service` ⊆ declared `[deploy.services.<name>]`; unique kebab
+  names; the name `cron` is reserved for the sidecar. Wired in the hetzner
+  provider validator; rejected on `cloudflare-pages`.
 - **Dev/prod**: rendered in BOTH (not prod-gated like the backup loop) — each
   environment's stack runs its own sidecar against its own app, isolated by
   construction. Cron is NOT a `[services.*]` backing service: it contributes no
