@@ -202,6 +202,7 @@ function buildContainerInput(
 		vpsName: ctx.config.vpsName,
 		clientId: ctx.config.vector?.clientId,
 		services: ctx.config.services,
+		cron: ctx.config.cron,
 	}
 }
 

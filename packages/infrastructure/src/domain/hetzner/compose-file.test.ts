@@ -1073,3 +1073,35 @@ describe('renderComposeFile - supabase-backup sidecar wiring', () => {
 		)
 	})
 })
+
+describe('renderComposeFile - cron sidecar', () => {
+	it('omits the cron service when no job is declared', () => {
+		const parsed = parse(renderComposeFile(baseInput()))
+
+		expect(parsed.services.cron).toBeUndefined()
+	})
+
+	it('renders a cron sidecar that hits the app over the compose network', () => {
+		const parsed = parse(
+			renderComposeFile(
+				baseInput({
+					cron: [
+						{
+							name: 'cleanup',
+							schedule: '0 3 * * *',
+							path: '/api/cron/cleanup',
+							method: 'POST',
+						},
+					],
+				}),
+			),
+		)
+
+		expect(parsed.services.cron.environment.CRONTAB).toContain(
+			'http://app:3000/api/cron/cleanup',
+		)
+		expect(parsed.services.cron.depends_on).toEqual({
+			app: { condition: 'service_healthy' },
+		})
+	})
+})

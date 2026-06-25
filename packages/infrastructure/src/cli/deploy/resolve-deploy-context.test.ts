@@ -38,6 +38,7 @@ const hetznerConfig = (
 	project: { ...APP_WITH_DOMAIN.project, domain: 'example.com' },
 	deploy: {
 		target: 'hetzner-vps',
+		cron: [],
 		hetzner: { serverType: 'cx23', location: 'nbg1' },
 		secrets: [],
 		generatedSecrets: [],

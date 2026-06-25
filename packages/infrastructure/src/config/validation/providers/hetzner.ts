@@ -1,6 +1,8 @@
 import { DEFAULT_HETZNER_CONFIG } from '#/config/types.ts'
 import { isRecord } from '#/kernel/guards.ts'
 
+import { validateCronJobs } from '../cron.ts'
+
 import type { HetznerDeployConfig, UserServiceConfig } from '#/config/types.ts'
 import type { DeployProviderValidator } from './registry.ts'
 
@@ -121,9 +123,14 @@ export const hetznerVps: DeployProviderValidator = {
 		const { secrets, generatedSecrets, vps, volumes, services, domain } =
 			inputs
 		const { errors, hetzner } = parseHetzner(deployRecord['hetzner'])
+		const cronResult = validateCronJobs(
+			deployRecord['cron'],
+			new Set(Object.keys(services)),
+		)
 		const serviceErrors = [
 			...validateServiceUrls(services, domain),
 			...validateServiceSources(services),
+			...(cronResult.ok ? [] : cronResult.errors),
 		]
 		if (!hetzner) {
 			return { errors: [...errors, ...serviceErrors], deploy: undefined }
@@ -138,6 +145,7 @@ export const hetznerVps: DeployProviderValidator = {
 				volumes,
 				hetzner,
 				services,
+				cron: cronResult.ok ? cronResult.section : [],
 			},
 		}
 	},

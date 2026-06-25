@@ -34,6 +34,7 @@ const APP_MULTI_SERVICE_POSTGRES: DeployableConfig = {
 	project: { ...APP_WITH_POSTGRES.project, domain: 'example.com' },
 	deploy: {
 		target: 'hetzner-vps',
+		cron: [],
 		hetzner: { serverType: 'cx23', location: 'nbg1' },
 		secrets: [],
 		generatedSecrets: [],

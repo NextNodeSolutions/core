@@ -1,3 +1,4 @@
+import { buildCronScheduler } from '#/domain/services/cron.ts'
 import {
 	OBSERVABILITY_VOLUMES,
 	buildObservabilityStack,
@@ -33,12 +34,14 @@ import { stringify } from 'yaml'
 import { buildUserServices } from './compose-user-services.ts'
 
 import type {
+	CronJobConfig,
 	ObservabilityServiceConfig,
 	PostgresServiceConfig,
 	SupabaseServiceConfig,
 	UserServiceConfig,
 } from '#/config/types.ts'
 import type { ImageRef } from '#/domain/deploy/target.ts'
+import type { CronComposeService } from '#/domain/services/cron.ts'
 import type { ObservabilityComposeService } from '#/domain/services/observability.ts'
 import type {
 	EmbeddedPostgresExporterSidecarService,
@@ -77,6 +80,9 @@ export interface ComposeFileInput {
 	readonly postgres: PostgresServiceConfig | undefined
 	readonly supabase?: SupabaseServiceConfig
 	readonly observability?: ObservabilityServiceConfig | undefined
+	// [[deploy.cron]] jobs - rendered as a single `cron` sidecar firing internal
+	// HTTP requests at the project's services. Omitted/empty = no sidecar.
+	readonly cron?: ReadonlyArray<CronJobConfig>
 	readonly projectName: string
 	readonly environment: string
 }
@@ -91,6 +97,7 @@ type ComposeServiceLike =
 	| PostgresExporterSidecarService
 	| EmbeddedPostgresExporterSidecarService
 	| ObservabilityComposeService
+	| CronComposeService
 
 interface ComposeConfig {
 	readonly services: Readonly<Record<string, ComposeServiceLike>>
@@ -226,6 +233,7 @@ export function renderComposeFile(input: ComposeFileInput): string {
 	const observability = input.observability
 		? buildObservabilityStack(input.observability)
 		: null
+	const cron = buildCronScheduler(input.cron ?? [], input.services)
 	const topLevelVolumes = buildTopLevelVolumes(userVolumes, {
 		hasPostgres: postgres !== null,
 		hasSupabase: supabase !== null,
@@ -244,6 +252,7 @@ export function renderComposeFile(input: ComposeFileInput): string {
 			...postgres,
 			...supabase,
 			...observability,
+			...cron,
 		},
 		...(topLevelVolumes && { volumes: topLevelVolumes }),
 	}

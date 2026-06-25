@@ -23,6 +23,7 @@ const APP_CONFIG: NextNodeConfig = {
 	environment: { development: true },
 	deploy: {
 		target: 'hetzner-vps',
+		cron: [],
 		secrets: [],
 		generatedSecrets: [],
 		vps: null,
@@ -123,6 +124,7 @@ describe('writePlanOutputs', () => {
 			...APP_CONFIG,
 			deploy: {
 				target: 'hetzner-vps',
+				cron: [],
 				secrets: [],
 				generatedSecrets: [],
 				vps: null,
@@ -161,6 +163,7 @@ describe('writePlanOutputs', () => {
 			...APP_CONFIG,
 			deploy: {
 				target: 'hetzner-vps',
+				cron: [],
 				secrets: [],
 				generatedSecrets: [],
 				vps: null,
@@ -222,6 +225,7 @@ describe('writePlanOutputs', () => {
 			...APP_CONFIG,
 			deploy: {
 				target: 'hetzner-vps',
+				cron: [],
 				secrets: [],
 				generatedSecrets: [],
 				vps: null,

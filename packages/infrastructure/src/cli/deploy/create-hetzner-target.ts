@@ -37,6 +37,7 @@ export function createHetznerTarget(
 		postgres: config.services.postgres,
 		observability: config.services.observability,
 		services: config.deploy.services,
+		cron: config.deploy.cron,
 		infraStorage,
 		stateStore: new R2Client({
 			endpoint: infraStorage.endpoint,

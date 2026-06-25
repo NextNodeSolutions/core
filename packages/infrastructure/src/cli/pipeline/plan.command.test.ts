@@ -38,6 +38,7 @@ const APP_CONFIG: NextNodeConfig = {
 	environment: { development: true },
 	deploy: {
 		target: 'hetzner-vps',
+		cron: [],
 		secrets: [],
 		generatedSecrets: [],
 		vps: null,

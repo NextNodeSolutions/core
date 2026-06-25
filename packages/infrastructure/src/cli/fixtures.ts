@@ -40,6 +40,7 @@ function hetznerApp({
 			vps: null,
 			volumes: [],
 			services: { app: appService },
+			cron: [],
 		},
 	}
 }

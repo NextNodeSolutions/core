@@ -14,6 +14,7 @@ import { readState } from './state/read-write.ts'
 import { runHetznerTeardown } from './teardown.ts'
 
 import type {
+	CronJobConfig,
 	DeployVolume,
 	HetznerVpsDeploySection,
 	ObservabilityServiceConfig,
@@ -69,6 +70,9 @@ export interface HetznerVpsTargetConfig {
 	// User workloads from [deploy.services.<name>], threaded into the compose
 	// renderer via deployContainer / stageRollout.
 	readonly services: Readonly<Record<string, UserServiceConfig>>
+	// [[deploy.cron]] scheduled HTTP jobs, threaded into the compose renderer as
+	// the `cron` sidecar. Empty when none declared.
+	readonly cron: ReadonlyArray<CronJobConfig>
 	readonly infraStorage: InfraStorageRuntimeConfig
 	readonly stateStore: ObjectStoreClient
 	readonly certsStore: ObjectStoreClient
