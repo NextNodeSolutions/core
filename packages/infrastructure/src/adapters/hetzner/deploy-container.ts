@@ -18,6 +18,7 @@ import { writePostgresWalgBuildContext } from './postgres-walg-build-context.ts'
 import { shellEscape } from './ssh/shell-escape.ts'
 
 import type {
+	CronJobConfig,
 	DeployVolume,
 	ObservabilityServiceConfig,
 	PostgresServiceConfig,
@@ -76,6 +77,9 @@ export interface DeployContainerInput {
 	// User workloads declared under [deploy.services.<name>]. The compose
 	// renderer loops these, pairing each with its ref from `images`.
 	readonly services: Readonly<Record<string, UserServiceConfig>>
+	// [[deploy.cron]] scheduled HTTP jobs, rendered into the compose file as the
+	// `cron` sidecar. Empty when none declared.
+	readonly cron: ReadonlyArray<CronJobConfig>
 }
 
 export interface DeployContainerResult {
@@ -191,6 +195,7 @@ export async function stageRollout(
 			projectName: input.projectName,
 			postgres: input.postgres,
 			observability: input.observability,
+			cron: input.cron,
 			environment: input.environment,
 		}),
 	)

@@ -46,6 +46,7 @@ const HETZNER_CONFIG: HetznerDeployableConfig = {
 	environment: { development: true },
 	deploy: {
 		target: 'hetzner-vps',
+		cron: [],
 		secrets: [],
 		generatedSecrets: [],
 		vps: null,

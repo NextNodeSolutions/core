@@ -205,6 +205,7 @@ const TARGET_CONFIG = {
 			target: 'app',
 		},
 	} satisfies Record<string, UserServiceConfig>,
+	cron: [],
 	infraStorage: STORAGE_CONFIG,
 	stateStore: mockStateStore,
 	certsStore: mockCertsStore,

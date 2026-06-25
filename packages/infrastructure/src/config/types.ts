@@ -141,6 +141,37 @@ export interface HetznerVpsDeploySection extends BaseDeploySection {
 	// service is required; each entry declares how its image is obtained
 	// (`build` | `upstream`), its port, and its runtime wiring.
 	readonly services: Record<string, UserServiceConfig>
+	// Scheduled HTTP jobs declared under [[deploy.cron]]. Each fires a request at
+	// one of THIS project's services over the compose network on a cron schedule.
+	// Rendered into the compose file as a single `cron` sidecar (both dev and
+	// prod - each environment's stack runs its own, hitting its own app). Empty
+	// when no job is declared.
+	readonly cron: ReadonlyArray<CronJobConfig>
+}
+
+// HTTP methods a [[deploy.cron]] job may fire. Kept to the two BusyBox `wget`
+// (the cron sidecar's client) actually implements - GET, and POST via
+// `--post-data`. A job that needs PUT/DELETE belongs in app code, not a cron
+// ping.
+export const CRON_METHODS = ['GET', 'POST'] as const
+export type CronMethod = (typeof CRON_METHODS)[number]
+
+// POST is the default: a cron almost always TRIGGERS work (a mutation), and a
+// GET endpoint risks being prefetched/cached by intermediaries.
+export const DEFAULT_CRON_METHOD: CronMethod = 'POST'
+
+// A single scheduled job declared under [[deploy.cron]]. `schedule` is a
+// standard 5-field cron expression; `path` is an absolute request path hit on
+// the target service INTERNALLY (`http://<service>:<port><path>`) - the dev
+// never spells a host out, because the public URL is infra-generated. `service`
+// names which [deploy.services.<name>] to hit; omitted = the primary (first
+// declared) service.
+export interface CronJobConfig {
+	readonly name: string
+	readonly schedule: string
+	readonly path: string
+	readonly method: CronMethod
+	readonly service?: string
 }
 
 // The image-source discriminators a [deploy.services.<name>] entry may declare:

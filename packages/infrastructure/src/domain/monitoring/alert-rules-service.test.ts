@@ -17,9 +17,11 @@ import { HTTP_RULE_GROUP } from './alert-rules-service.ts'
 const DOTTED_HOST_LABEL = 'request.host'
 
 const labelReplaceSources = (expr: string): string[] =>
-	[...expr.matchAll(/label_replace\([^,]+,\s*"[^"]+",\s*"[^"]+",\s*"([^"]+)"/g)].map(
-		match => match[1] ?? '',
-	)
+	[
+		...expr.matchAll(
+			/label_replace\([^,]+,\s*"[^"]+",\s*"[^"]+",\s*"([^"]+)"/g,
+		),
+	].map(match => match[1] ?? '')
 
 const statsByFields = (expr: string): string[] =>
 	[...expr.matchAll(/stats by \(([^)]+)\)/g)].map(match =>
@@ -45,7 +47,9 @@ describe('HTTP alert / vlogs recording contract', () => {
 			),
 		)
 		const consumed = new Set(
-			HTTP_RULE_GROUP.rules.flatMap(rule => labelReplaceSources(rule.expr)),
+			HTTP_RULE_GROUP.rules.flatMap(rule =>
+				labelReplaceSources(rule.expr),
+			),
 		)
 
 		// The alerts consume exactly the one dotted source label...

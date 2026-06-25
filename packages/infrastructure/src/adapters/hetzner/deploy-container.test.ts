@@ -178,6 +178,7 @@ describe('stageRollout', () => {
 		tailnetIp: '100.64.0.9',
 		vpsName: 'test-vps',
 		clientId: undefined,
+		cron: [],
 		services: { [name]: service },
 	})
 
@@ -257,6 +258,7 @@ describe('stageRollout', () => {
 		tailnetIp: '100.64.0.9',
 		vpsName: 'test-vps',
 		clientId: undefined,
+		cron: [],
 		services: {
 			front: buildService(3000, 'example.com'),
 			api: buildService(4000, 'api.example.com'),
@@ -308,6 +310,7 @@ describe('stageRollout', () => {
 		tailnetIp: '100.64.0.9',
 		vpsName: 'test-vps',
 		clientId: undefined,
+		cron: [],
 		services: {
 			front: secretService('example.com', ['SESSION_KEY']),
 			api: secretService('api.example.com', ['JWT_SECRET']),
@@ -362,6 +365,7 @@ describe('stageRollout', () => {
 		tailnetIp: '100.64.0.9',
 		vpsName: 'test-vps',
 		clientId: undefined,
+		cron: [],
 		services: {
 			front: secretService('example.com', ['SESSION_KEY']),
 			api: {
@@ -447,6 +451,7 @@ describe('stageRollout', () => {
 			tailnetIp: '100.64.0.9',
 			vpsName: 'test-vps',
 			clientId: undefined,
+			cron: [],
 			services: {
 				web: upstreamService(3000, 'ghcr.io/acme/web:v1', 'GHCR_PAT'),
 				cache: upstreamService(4000, 'docker.io/library/redis:7'),
@@ -491,6 +496,7 @@ describe('deployContainer', () => {
 			tailnetIp: '100.64.0.9',
 			vpsName: 'test-vps',
 			clientId: undefined,
+			cron: [],
 			services: {
 				front: buildService(3000, 'example.com'),
 				api: buildService(4000, 'api.example.com'),
@@ -527,6 +533,7 @@ describe('deployContainer', () => {
 			tailnetIp: '100.64.0.9',
 			vpsName: 'test-vps',
 			clientId: undefined,
+			cron: [],
 			services: {
 				front: buildService(3000, 'example.com'),
 				api: buildService(4000, 'api.example.com'),

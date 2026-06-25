@@ -126,6 +126,7 @@ describe('parseConfig', () => {
 			expect(parsed.config.package).toBe(false)
 			expect(parsed.config.deploy).toEqual({
 				target: 'hetzner-vps',
+				cron: [],
 				secrets: [],
 				generatedSecrets: [],
 				vps: null,
@@ -747,6 +748,7 @@ describe('parseConfig', () => {
 			expect(parsed.config.project.internal).toBe(true)
 			expect(parsed.config.deploy).toEqual({
 				target: 'hetzner-vps',
+				cron: [],
 				secrets: [],
 				generatedSecrets: [],
 				vps: 'monitor-vps',
@@ -1117,6 +1119,7 @@ describe('parseConfig', () => {
 
 			expect(parsed.config.deploy).toEqual({
 				target: 'hetzner-vps',
+				cron: [],
 				secrets: [],
 				generatedSecrets: [],
 				vps: null,
@@ -1748,6 +1751,7 @@ describe('parseConfig', () => {
 
 			expect(parsed.config.deploy).toEqual({
 				target: 'hetzner-vps',
+				cron: [],
 				secrets: [],
 				generatedSecrets: [],
 				vps: null,
@@ -1821,6 +1825,7 @@ describe('parseConfig', () => {
 
 			expect(parsed.config.deploy).toEqual({
 				target: 'hetzner-vps',
+				cron: [],
 				secrets: [],
 				generatedSecrets: [],
 				vps: null,
@@ -1853,6 +1858,7 @@ describe('parseConfig', () => {
 
 			expect(parsed.config.deploy).toEqual({
 				target: 'hetzner-vps',
+				cron: [],
 				secrets: [],
 				generatedSecrets: [],
 				vps: null,
@@ -1888,6 +1894,7 @@ describe('parseConfig', () => {
 
 			expect(parsed.config.deploy).toEqual({
 				target: 'hetzner-vps',
+				cron: [],
 				secrets: [],
 				generatedSecrets: [],
 				vps: null,
@@ -1923,6 +1930,7 @@ describe('parseConfig', () => {
 
 			expect(parsed.config.deploy).toEqual({
 				target: 'hetzner-vps',
+				cron: [],
 				secrets: [],
 				generatedSecrets: [],
 				vps: null,
@@ -2069,6 +2077,7 @@ describe('parseConfig', () => {
 
 			expect(parsed.config.deploy).toEqual({
 				target: 'hetzner-vps',
+				cron: [],
 				secrets: ['DATABASE_URL', 'REDIS_URL'],
 				generatedSecrets: [],
 				vps: null,
@@ -2226,6 +2235,100 @@ describe('parseConfig', () => {
 				test: 'test',
 				build: 'build',
 			})
+		})
+	})
+
+	describe('cron', () => {
+		it('parses [[deploy.cron]] into the hetzner deploy section', () => {
+			const parsed = parseConfig({
+				project: { name: 'my-app', type: 'app', domain: 'example.com' },
+				deploy: {
+					services: { web: { source: 'build', url: 'example.com' } },
+					cron: [
+						{
+							name: 'cleanup',
+							schedule: '0 3 * * *',
+							path: '/api/cron/cleanup',
+						},
+					],
+				},
+			})
+
+			expect(parsed.ok).toBe(true)
+			if (!parsed.ok) throw new Error(parsed.errors.join('\n'))
+			const { deploy } = parsed.config
+			if (deploy === false || deploy.target !== 'hetzner-vps') {
+				throw new Error('expected a hetzner-vps deploy section')
+			}
+
+			expect(deploy.cron).toEqual([
+				{
+					name: 'cleanup',
+					schedule: '0 3 * * *',
+					path: '/api/cron/cleanup',
+					method: 'POST',
+				},
+			])
+		})
+
+		it('defaults cron to an empty array when no job is declared', () => {
+			const parsed = parseConfig({
+				project: { name: 'my-app', type: 'app', domain: 'example.com' },
+				deploy: {
+					services: { web: { source: 'build', url: 'example.com' } },
+				},
+			})
+
+			expect(parsed.ok).toBe(true)
+			if (!parsed.ok) throw new Error(parsed.errors.join('\n'))
+			const { deploy } = parsed.config
+			if (deploy === false || deploy.target !== 'hetzner-vps') {
+				throw new Error('expected a hetzner-vps deploy section')
+			}
+
+			expect(deploy.cron).toEqual([])
+		})
+
+		it('rejects a cron job targeting an undeclared service', () => {
+			const parsed = parseConfig({
+				project: { name: 'my-app', type: 'app', domain: 'example.com' },
+				deploy: {
+					services: { web: { source: 'build', url: 'example.com' } },
+					cron: [
+						{
+							name: 'cleanup',
+							schedule: '0 3 * * *',
+							path: '/x',
+							service: 'ghost',
+						},
+					],
+				},
+			})
+
+			expect(parsed.ok).toBe(false)
+			expect(parsed.ok ? [] : parsed.errors).toContain(
+				'deploy.cron job "cleanup" service "ghost" must reference a declared [deploy.services.<name>]',
+			)
+		})
+
+		it('rejects [[deploy.cron]] on a cloudflare-pages target', () => {
+			const parsed = parseConfig({
+				project: {
+					name: 'site',
+					type: 'static',
+					domain: 'example.com',
+				},
+				deploy: {
+					cron: [
+						{ name: 'cleanup', schedule: '0 3 * * *', path: '/x' },
+					],
+				},
+			})
+
+			expect(parsed.ok).toBe(false)
+			expect(parsed.ok ? [] : parsed.errors).toContain(
+				'[[deploy.cron]] is not supported with deploy target "cloudflare-pages" (a static site has no always-on runtime to schedule against)',
+			)
 		})
 	})
 })
