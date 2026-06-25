@@ -812,7 +812,7 @@ describe('parseConfig', () => {
 		it('accepts an array of secret names', () => {
 			const parsed = parseConfig({
 				project: { name: 'my-app', type: 'static' },
-				deploy: { secrets: ['RESEND_API_KEY', 'SUPABASE_URL'] },
+				deploy: { secrets: ['RESEND_API_KEY', 'ANALYTICS_API_KEY'] },
 			})
 
 			expect(parsed.ok).toBe(true)
@@ -820,7 +820,7 @@ describe('parseConfig', () => {
 
 			expect(parsed.config.deploy).toEqual({
 				target: 'cloudflare-pages',
-				secrets: ['RESEND_API_KEY', 'SUPABASE_URL'],
+				secrets: ['RESEND_API_KEY', 'ANALYTICS_API_KEY'],
 				generatedSecrets: [],
 				vps: null,
 				volumes: [],

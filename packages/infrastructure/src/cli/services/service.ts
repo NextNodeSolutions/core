@@ -48,8 +48,7 @@ export interface ServiceFactoryContext {
 	 * environment via `resolveDeployDomain` (so callers see `example.com`
 	 * in production, `dev.example.com` in development). `null` when the
 	 * project does not declare `project.domain` - services that require
-	 * a domain (e.g. supabase, which bakes it into auth callback URLs)
-	 * must fail loud rather than fall back silently.
+	 * a domain must fail loud rather than fall back silently.
 	 */
 	readonly deployDomain: string | null
 }

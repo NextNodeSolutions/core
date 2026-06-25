@@ -48,12 +48,9 @@ export function createR2Service(
 }
 
 /**
- * The R2 service runs whenever any alias is required - either declared
- * explicitly via `[services.r2]` or pulled in implicitly by another
- * service (currently `[services.supabase]`, which adds the `backups`
- * alias). The single token created in `ensureR2Service` covers every
- * alias, so the implicit and explicit buckets share one credential
- * lifecycle.
+ * The R2 service runs whenever the project declares at least one bucket via
+ * `[services.r2]`. The single token created in `ensureR2Service` covers
+ * every declared bucket, so they share one credential lifecycle.
  */
 export const r2ServiceDefinition: ServiceDefinition<'r2'> = {
 	name: 'r2',

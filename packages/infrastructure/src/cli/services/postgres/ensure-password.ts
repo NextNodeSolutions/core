@@ -16,8 +16,8 @@ const EMBEDDED_POSTGRES_PASSWORD_LENGTH = 32
 
 /**
  * Auto-generate the embedded-postgres `POSTGRES_PASSWORD` on first provision
- * and push it as a GitHub env-secret, idempotent + non-rotating (mirroring the
- * supabase password flow). The value is drawn from the ALPHANUMERIC generator
+ * and push it as a GitHub env-secret, idempotent + non-rotating. The value is
+ * drawn from the ALPHANUMERIC generator
  * on purpose: it is interpolated RAW (no escaping) into both the exporter
  * bootstrap SQL literal (`CREATE ROLE ... PASSWORD '<pw>'`) and the embedded
  * `DATABASE_URL` (`postgres://id:<pw>@host/db`). An alphanumeric alphabet
@@ -28,7 +28,7 @@ const EMBEDDED_POSTGRES_PASSWORD_LENGTH = 32
  *
  * Contract: a secret pushed here lands in a LATER run's `ALL_SECRETS` (GitHub
  * freezes secrets at job start), so the flow is provision -> re-trigger deploy,
- * the same contract the supabase service uses.
+ * the same contract used for every auto-generated secret.
  */
 export async function ensureEmbeddedPostgresPasswordSecret(
 	repoSecrets: Readonly<Record<string, string>>,

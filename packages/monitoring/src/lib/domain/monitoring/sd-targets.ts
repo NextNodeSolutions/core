@@ -28,7 +28,7 @@ export const CLIENT_VPS_TAG = 'tag:server'
 /**
  * Exporter ports on every client VPS: node_exporter on 9100 and cAdvisor
  * on 9101 (golden image contract), postgres-exporter on 9187 (compose
- * sidecar, present whenever the project embeds postgres or Supabase).
+ * sidecar, present whenever the project embeds postgres).
  * The state file does not record which VPS actually runs a
  * postgres-exporter, so 9187 is emitted for every client VPS; a VPS
  * without one just shows up=0 on the postgres job, which no alert keys

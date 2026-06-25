@@ -4,27 +4,24 @@ import { isRecord } from '#/kernel/guards.ts'
 import { validateObservabilityService } from './services/observability.ts'
 import { validatePostgresService } from './services/postgres.ts'
 import { validateR2Service } from './services/r2.ts'
-import { validateSupabaseService } from './services/supabase.ts'
 
 import type {
 	ObservabilityServiceConfig,
 	PostgresServiceConfig,
 	R2ServiceConfig,
 	ServicesConfig,
-	SupabaseServiceConfig,
 } from '#/config/types.ts'
 import type { ValidationResult } from './result.ts'
 
 interface MutableServicesConfig {
 	r2?: R2ServiceConfig
 	postgres?: PostgresServiceConfig
-	supabase?: SupabaseServiceConfig
 	observability?: ObservabilityServiceConfig
 }
 
 /**
  * Validate the [services] table. Returns an empty `ServicesConfig` when no
- * services are declared - every backing service (R2, future Supabase, Redis)
+ * services are declared - every backing service (R2, postgres, observability)
  * lives as an optional sub-table under `[services.<name>]`.
  */
 export function validateServicesSection(
@@ -53,15 +50,6 @@ export function validateServicesSection(
 			services.postgres = postgresResult.section
 		} else {
 			errors.push(...postgresResult.errors)
-		}
-	}
-
-	if (raw['supabase'] !== undefined) {
-		const supabaseResult = validateSupabaseService(raw['supabase'])
-		if (supabaseResult.ok) {
-			services.supabase = supabaseResult.section
-		} else {
-			errors.push(...supabaseResult.errors)
 		}
 	}
 

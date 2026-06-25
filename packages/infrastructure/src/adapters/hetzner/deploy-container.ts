@@ -361,7 +361,7 @@ export async function bringUpDb(
  * it (it only rotates the user services whose image changed). If a future
  * change ever makes the backing-service rendering differ between phase 1 and
  * phase 2, this `up` would recreate the DB it just `--wait`-ed healthy - keep
- * the compose output for postgres/supabase deterministic across both phases.
+ * the compose output for postgres deterministic across both phases.
  */
 export async function bringUpApp(
 	session: SshSession,
