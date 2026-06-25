@@ -18,6 +18,13 @@ import type { ValidationResult } from './result.ts'
 const CRON_FIELD_PATTERN = /^[0-9*,/-]+$/
 const CRON_FIELD_COUNT = 5
 
+// The compose service name the cron sidecar is rendered under (mirrors
+// `CRON_SERVICE_NAME` in `domain/services/cron.ts`, which the config layer may
+// not import). A user service of this name would be silently overwritten by the
+// sidecar when `renderComposeFile` spreads it last, so reject the collision -
+// but only when at least one job is declared (no jobs -> no sidecar -> no clash).
+const RESERVED_CRON_SERVICE_NAME = 'cron'
+
 // A `path` is interpolated INTO a crontab line and single-quoted into the shell
 // command crond runs (`domain/services/cron.ts`). Whitespace or a newline would
 // split the wget args or inject a whole new crontab line; a quote would break
@@ -219,5 +226,13 @@ export function validateCronJobs(
 	serviceNames: ReadonlySet<string>,
 ): ValidationResult<CronJobConfig[]> {
 	if (raw === undefined) return { ok: true, section: [] }
-	return runSchema(cronJobsSchema(serviceNames), raw)
+	const jobs = runSchema(cronJobsSchema(serviceNames), raw)
+	if (serviceNames.has(RESERVED_CRON_SERVICE_NAME)) {
+		const reserved = `deploy.services name "${RESERVED_CRON_SERVICE_NAME}" is reserved for the cron sidecar - rename the service`
+		return {
+			ok: false,
+			errors: jobs.ok ? [reserved] : [...jobs.errors, reserved],
+		}
+	}
+	return jobs
 }

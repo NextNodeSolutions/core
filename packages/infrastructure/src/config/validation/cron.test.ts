@@ -177,4 +177,16 @@ describe('validateCronJobs', () => {
 
 		expect(parsed.ok).toBe(false)
 	})
+
+	it('rejects a deploy service named "cron", which the sidecar would clobber', () => {
+		const parsed = validateCronJobs(
+			[{ name: 'cleanup', schedule: '0 3 * * *', path: '/x' }],
+			new Set(['cron', 'web']),
+		)
+
+		expect(parsed.ok).toBe(false)
+		expect(parsed.ok ? [] : parsed.errors).toContain(
+			'deploy.services name "cron" is reserved for the cron sidecar - rename the service',
+		)
+	})
 })
