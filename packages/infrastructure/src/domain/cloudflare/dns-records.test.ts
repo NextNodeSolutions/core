@@ -233,6 +233,53 @@ describe('reconcileDnsRecord', () => {
 			deleteRecordIds: ['rec-a', 'rec-aaaa'],
 		})
 	})
+
+	it('never touches non-address records coexisting at the name (MX/TXT at apex)', () => {
+		const desiredApexA: DesiredDnsRecord = {
+			zoneName: 'example.com',
+			name: 'example.com',
+			type: 'A',
+			content: '203.0.113.7',
+			proxied: true,
+			ttl: 1,
+		}
+		expect(
+			reconcileDnsRecord(desiredApexA, [
+				{ id: 'rec-mx', type: 'MX', content: 'route1.mx.example.net', proxied: false, ttl: 300 },
+				{ id: 'rec-spf', type: 'TXT', content: 'v=spf1 ~all', proxied: false, ttl: 300 },
+			]),
+		).toEqual({ kind: 'create' })
+	})
+
+	it('updates the same-type record while ignoring coexisting MX/TXT', () => {
+		const desiredApexA: DesiredDnsRecord = {
+			zoneName: 'example.com',
+			name: 'example.com',
+			type: 'A',
+			content: '203.0.113.7',
+			proxied: true,
+			ttl: 1,
+		}
+		expect(
+			reconcileDnsRecord(desiredApexA, [
+				{ id: 'rec-mx', type: 'MX', content: 'route1.mx.example.net', proxied: false, ttl: 300 },
+				{ id: 'rec-old-a', type: 'A', content: '198.51.100.9', proxied: false, ttl: 300 },
+			]),
+		).toEqual({ kind: 'update', recordId: 'rec-old-a' })
+	})
+
+	it('replace deletes same-type records alongside conflicts so create never duplicates', () => {
+		expect(
+			reconcileDnsRecord(desired, [
+				{ id: 'rec-a', type: 'A', content: '192.168.1.1', proxied: true, ttl: 1 },
+				{ id: 'rec-old-cname', type: 'CNAME', content: 'old.pages.dev', proxied: true, ttl: 1 },
+				{ id: 'rec-txt', type: 'TXT', content: 'token=abc', proxied: false, ttl: 300 },
+			]),
+		).toEqual({
+			kind: 'replace',
+			deleteRecordIds: ['rec-a', 'rec-old-cname'],
+		})
+	})
 })
 
 describe('extractRootDomain', () => {

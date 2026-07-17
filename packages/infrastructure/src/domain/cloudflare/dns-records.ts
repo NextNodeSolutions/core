@@ -132,28 +132,48 @@ export type DnsRecordAction =
 	  }
 
 /**
- * Decide what to do with a desired DNS record given the currently
- * existing records with the same name+type in the zone.
+ * Record types the reconcile is allowed to touch. A name - the zone apex in
+ * particular - also carries MX / TXT / NS / CAA records (mail routing, SPF,
+ * DKIM, verification tokens) that legitimately coexist with an address record
+ * and MUST survive a reconcile untouched. Only address-type records can
+ * genuinely conflict with the A/CNAME records this infra manages.
+ */
+const MANAGED_RECORD_TYPES: ReadonlySet<string> = new Set(['A', 'AAAA', 'CNAME'])
+
+/**
+ * Decide what to do with a desired DNS record given the currently existing
+ * records carrying the same name in the zone (any type - the caller lists by
+ * name only).
  *
- * - No match -> create
- * - Exact match (content + proxied + ttl) -> skip (idempotent)
- * - Mismatch -> update the first existing record
+ * - No same-type match -> create
+ * - Exact same-type match (content + proxied + ttl) -> skip (idempotent)
+ * - Same-type mismatch -> update the first same-type record
+ * - Conflicting ADDRESS record (A/AAAA/CNAME of another type) -> replace:
+ *   delete the conflicting records (plus any same-type ones, so the create
+ *   never duplicates) and create the desired record
+ *
+ * Non-address records (MX, TXT, NS, ...) are never deleted or updated. If
+ * Cloudflare rejects a CNAME create because such a record coexists at a
+ * non-apex name, the reconcile fails loud for the operator to resolve -
+ * silently destroying mail/verification records is never acceptable.
  */
 export function reconcileDnsRecord(
 	desired: DesiredDnsRecord,
 	existing: ReadonlyArray<ExistingDnsRecord>,
 ): DnsRecordAction {
-	if (existing.length === 0) return { kind: 'create' }
+	const sameType = existing.filter(r => r.type === desired.type)
+	const conflicting = existing.filter(
+		r => r.type !== desired.type && MANAGED_RECORD_TYPES.has(r.type),
+	)
 
-	const conflicting = existing.filter(r => r.type !== desired.type)
 	if (conflicting.length > 0) {
 		return {
 			kind: 'replace',
-			deleteRecordIds: conflicting.map(r => r.id),
+			deleteRecordIds: [...conflicting, ...sameType].map(r => r.id),
 		}
 	}
 
-	const [current] = existing
+	const [current] = sameType
 	if (!current) return { kind: 'create' }
 	if (
 		current.content === desired.content &&
