@@ -132,8 +132,8 @@ export type DnsRecordAction =
 	  }
 
 /**
- * Record types the reconcile is allowed to touch. A name — the zone apex in
- * particular — also carries MX / TXT / NS / CAA records (mail routing, SPF,
+ * Record types the reconcile is allowed to touch. A name - the zone apex in
+ * particular - also carries MX / TXT / NS / CAA records (mail routing, SPF,
  * DKIM, verification tokens) that legitimately coexist with an address record
  * and MUST survive a reconcile untouched. Only address-type records can
  * genuinely conflict with the A/CNAME records this infra manages.
@@ -142,7 +142,7 @@ const MANAGED_RECORD_TYPES: ReadonlySet<string> = new Set(['A', 'AAAA', 'CNAME']
 
 /**
  * Decide what to do with a desired DNS record given the currently existing
- * records carrying the same name in the zone (any type — the caller lists by
+ * records carrying the same name in the zone (any type - the caller lists by
  * name only).
  *
  * - No same-type match -> create
@@ -154,7 +154,7 @@ const MANAGED_RECORD_TYPES: ReadonlySet<string> = new Set(['A', 'AAAA', 'CNAME']
  *
  * Non-address records (MX, TXT, NS, ...) are never deleted or updated. If
  * Cloudflare rejects a CNAME create because such a record coexists at a
- * non-apex name, the reconcile fails loud for the operator to resolve —
+ * non-apex name, the reconcile fails loud for the operator to resolve -
  * silently destroying mail/verification records is never acceptable.
  */
 export function reconcileDnsRecord(
