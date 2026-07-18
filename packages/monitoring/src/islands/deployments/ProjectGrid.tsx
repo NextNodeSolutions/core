@@ -7,6 +7,7 @@ import {
 } from '@/islands/deployments/atoms.ts'
 import { ProjectCard } from '@/islands/deployments/ProjectCard.tsx'
 import { RecentActivity } from '@/islands/deployments/RecentActivity.tsx'
+import { SourceFilterTabs } from '@/islands/deployments/SourceFilterTabs.tsx'
 
 /**
  * The all-projects master view: the Cloudflare Pages header, the card grid, and
@@ -42,11 +43,12 @@ export function ProjectGrid(): React.ReactElement {
 				))}
 			</div>
 
-			<div className="mt-6 mb-3">
+			<div className="mt-6 mb-3 flex flex-wrap items-center justify-between gap-2.5">
 				<span className="text-base-700 inline-flex items-center gap-2 font-mono text-[11px] font-semibold tracking-[0.12em] uppercase">
 					<span className="bg-base-900 size-2.5 rounded-[2px]" />
 					Activité récente · tous projets
 				</span>
+				<SourceFilterTabs />
 			</div>
 			<RecentActivity />
 		</div>

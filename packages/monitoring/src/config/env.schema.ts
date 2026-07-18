@@ -38,7 +38,17 @@ export const envSchema = {
 		access: 'secret',
 		optional: true,
 	}),
-	GITHUB_TOKEN: envField.string({
+	NEXTNODE_APP_ID: envField.string({
+		context: 'server',
+		access: 'secret',
+		optional: true,
+	}),
+	NEXTNODE_APP_PRIVATE_KEY_B64: envField.string({
+		context: 'server',
+		access: 'secret',
+		optional: true,
+	}),
+	GH_API_TOKEN: envField.string({
 		context: 'server',
 		access: 'secret',
 		optional: true,

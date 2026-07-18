@@ -58,6 +58,9 @@ export function RecentActivityRow({
 			<span className="border-base-200 bg-base-100 text-base-700 flex-none rounded-full border px-2 py-0.5 font-mono text-[11px]">
 				{entry.projectName}
 			</span>
+			<span className="border-base-200 bg-base-50 text-base-500 flex-none rounded-full border px-2 py-0.5 font-mono text-[11px]">
+				pages
+			</span>
 			<span
 				className={`flex-none rounded-full border px-2 py-0.5 text-[11px] font-medium ${envPillClass(entry.deployment.environment)}`}
 			>

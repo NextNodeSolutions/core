@@ -14,11 +14,20 @@ import {
 	loadVpsSeries,
 } from '@/lib/adapters/victoria/metrics.ts'
 import { loadRecentDeployments } from '@/lib/adapters/cloudflare/recent-deployments.ts'
+import { loadVpsDeployRuns } from '@/lib/adapters/github/vps-deployments.ts'
 import {
 	DEPLOY_STATUS_COLOR,
 	DEPLOY_STATUS_ICON,
 } from '@/components/cloudflare/deploy-display.ts'
 import { deploymentDisplayStatus } from '@/lib/domain/cloudflare/deployment-summary.ts'
+import {
+	mergeActivity,
+	selectRecentActivity,
+} from '@/lib/domain/deployments/deployment-activity.ts'
+import {
+	vpsRunDisplayStatus,
+	vpsRunShortSha,
+} from '@/lib/domain/github/vps-deploy-run.ts'
 import {
 	computeServerHealth,
 	deriveFleetAlerts,
@@ -29,6 +38,9 @@ import type { HostMetrics } from '@/lib/domain/monitoring/host-metrics.ts'
 
 const DEPLOY_COUNT = 4
 const COMMIT_LENGTH = 7
+// Per deploy workflow, a handful of latest runs is enough to fill a 4-row
+// merged feed (mirrors recent-deployments.ts' PER_PROJECT_LIMIT).
+const VPS_RUNS_PER_WORKFLOW = 5
 // The fleet card sparkline is a "now" glance, not a windowed series - it never
 // follows the island's range control, so it loads at a fixed short window.
 const SPARK_HOURS = 1
@@ -81,10 +93,14 @@ const fleetLoadsPromise = Promise.all(
 const recentStatePromise = loadPageState('overview.deployments', () =>
 	loadRecentDeployments(DEPLOY_COUNT),
 )
+const vpsRunsStatePromise = loadPageState('overview.vpsRuns', () =>
+	loadVpsDeployRuns(VPS_RUNS_PER_WORKFLOW),
+)
 const seedPromise = loadOverviewWindow(range)
-const [fleetLoads, recentState, seed] = await Promise.all([
+const [fleetLoads, recentState, vpsRunsState, seed] = await Promise.all([
 	fleetLoadsPromise,
 	recentStatePromise,
+	vpsRunsStatePromise,
 	seedPromise,
 ])
 
@@ -105,18 +121,43 @@ for (const load of fleetLoads) {
 const alerts = deriveFleetAlerts(servers, metricsByName)
 
 const nowMs = Date.now()
-const recentDeploys = (recentState.kind === 'ok' ? recentState.data : []).map(
-	(entry) => ({
-		href: `/deployments?project=${encodeURIComponent(entry.projectName)}&sel=${encodeURIComponent(entry.deployment.id)}`,
-		display: deploymentDisplayStatus(entry.deployment.status),
-		message: entry.deployment.commitMessage ?? '(sans message)',
-		branch: entry.deployment.branch ?? '-',
-		commit:
-			entry.deployment.commitHash?.slice(0, COMMIT_LENGTH) ??
-			entry.deployment.shortId,
-		isProd: entry.deployment.environment === 'production',
-		ago: formatRelative(Date.parse(entry.deployment.createdAt), nowMs),
-	}),
+// Merge both sources newest-first; each source degrades to [] independently
+// (its failure is logged by loadPageState), so one API down never blanks the
+// other's rows.
+const recentEntries = selectRecentActivity(
+	mergeActivity(
+		recentState.kind === 'ok' ? recentState.data : [],
+		vpsRunsState.kind === 'ok' ? vpsRunsState.data : [],
+	),
+	'all',
+	DEPLOY_COUNT,
+)
+const recentDeploys = recentEntries.map((entry) =>
+	entry.kind === 'pages'
+		? {
+				href: `/deployments?project=${encodeURIComponent(entry.projectName)}&sel=${encodeURIComponent(entry.deployment.id)}`,
+				external: false,
+				source: 'pages',
+				display: deploymentDisplayStatus(entry.deployment.status),
+				message: entry.deployment.commitMessage ?? '(sans message)',
+				branch: entry.deployment.branch ?? '-',
+				commit:
+					entry.deployment.commitHash?.slice(0, COMMIT_LENGTH) ??
+					entry.deployment.shortId,
+				isProd: entry.deployment.environment === 'production',
+				ago: formatRelative(Date.parse(entry.deployment.createdAt), nowMs),
+			}
+		: {
+				href: entry.run.htmlUrl,
+				external: true,
+				source: 'vps',
+				display: vpsRunDisplayStatus(entry.run),
+				message: entry.run.title || entry.run.workflowName,
+				branch: entry.run.branch ?? '-',
+				commit: vpsRunShortSha(entry.run),
+				isProd: entry.run.environment === 'production',
+				ago: formatRelative(Date.parse(entry.run.createdAt), nowMs),
+			},
 )
 ---
 
@@ -243,6 +284,8 @@ const recentDeploys = (recentState.kind === 'ok' ? recentState.data : []).map(
 					{recentDeploys.map((deploy) => (
 						<a
 							href={deploy.href}
+							target={deploy.external ? '_blank' : undefined}
+							rel={deploy.external ? 'noreferrer' : undefined}
 							class="flex items-center gap-3 border-b border-base-100 px-4 py-3 last:border-b-0 hover:bg-base-50"
 						>
 							<span class:list={['shrink-0', DEPLOY_STATUS_COLOR[deploy.display]]}>
@@ -257,6 +300,9 @@ const recentDeploys = (recentState.kind === 'ok' ? recentState.data : []).map(
 									{deploy.branch} · {deploy.commit}
 								</div>
 							</div>
+							<span class="shrink-0 rounded-full border border-base-200 bg-base-50 px-2 py-0.5 font-mono text-[10.5px] text-base-500">
+								{deploy.source}
+							</span>
 							<span
 								class:list={[
 									'shrink-0 rounded-full border px-2 py-0.5 text-[10.5px] font-medium',

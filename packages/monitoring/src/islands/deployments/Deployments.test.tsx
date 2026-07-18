@@ -7,6 +7,7 @@ import { Deployments } from '@/islands/deployments/Deployments.tsx'
 import type { DeploymentsSeed } from '@/islands/deployments/atoms.ts'
 import type { CloudflarePagesDeployment } from '@/lib/domain/cloudflare/pages-deployment.ts'
 import type { CloudflarePagesProject } from '@/lib/domain/cloudflare/pages-project.ts'
+import type { VpsDeployRun } from '@/lib/domain/github/vps-deploy-run.ts'
 
 /**
  * Behavioural tests for the dynamic deployments island. Every assertion checks
@@ -92,12 +93,28 @@ const BETA_ERROR = buildDeployment({
 	createdAt: '2026-06-15T11:30:00.000Z',
 })
 
+// A VPS deploy run newer than every Pages deployment, so it must lead the feed.
+const CORE_VPS_RUN: VpsDeployRun = {
+	id: '9001',
+	repoName: 'core',
+	workflowName: 'Monitoring',
+	title: 'fix fleet view on the vps side',
+	branch: 'main',
+	headSha: 'cafebabe12345',
+	htmlUrl: 'https://github.com/NextNodeSolutions/core/actions/runs/9001',
+	createdAt: '2026-06-15T11:59:00.000Z',
+	status: 'completed',
+	conclusion: 'success',
+	environment: 'production',
+}
+
 const SEED: DeploymentsSeed = {
 	projects: [PROJECT_ALPHA, PROJECT_BETA],
 	deploymentsByProject: {
 		alpha: [ALPHA_BUILDING, ALPHA_READY, ALPHA_PREVIEW],
 		beta: [BETA_ERROR],
 	},
+	vpsRuns: [CORE_VPS_RUN],
 }
 
 const renderDeployments = (
@@ -158,12 +175,44 @@ describe('Deployments island', () => {
 			screen.getByRole('button', { name: /beta\.pages\.dev/i }),
 		).toBeDefined()
 
-		// Recent activity surfaces deployments across all projects.
+		// Recent activity surfaces deployments across all projects AND the
+		// GitHub VPS deploy runs, as one merged feed.
 		expect(screen.getByText('ship the homepage')).toBeDefined()
 		expect(screen.getByText('failed deploy on beta')).toBeDefined()
+		expect(screen.getByText('fix fleet view on the vps side')).toBeDefined()
+
+		// The VPS row links to its GitHub run page.
+		expect(
+			screen
+				.getByText('fix fleet view on the vps side')
+				.closest('a')
+				?.getAttribute('href'),
+		).toBe('https://github.com/NextNodeSolutions/core/actions/runs/9001')
 
 		// The seeded master view paints from props alone.
 		expect(fetchSpy).not.toHaveBeenCalled()
+	})
+
+	it('filters the recent-activity feed by source tab client-side', async () => {
+		const user = userEvent.setup()
+
+		renderDeployments()
+
+		// "Tous" shows both sources.
+		expect(screen.getByText('ship the homepage')).toBeDefined()
+		expect(screen.getByText('fix fleet view on the vps side')).toBeDefined()
+
+		// VPS tab hides the Pages deployments.
+		await user.click(screen.getByRole('tab', { name: 'VPS' }))
+		await waitFor(() =>
+			expect(screen.queryByText('ship the homepage')).toBeNull(),
+		)
+		expect(screen.getByText('fix fleet view on the vps side')).toBeDefined()
+
+		// Pages tab hides the VPS runs.
+		await user.click(screen.getByRole('tab', { name: 'Pages' }))
+		expect(await screen.findByText('ship the homepage')).toBeDefined()
+		expect(screen.queryByText('fix fleet view on the vps side')).toBeNull()
 	})
 
 	it('opens a project detail view on card click without navigating', async () => {
