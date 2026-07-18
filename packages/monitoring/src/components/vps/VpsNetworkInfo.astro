@@ -19,7 +19,7 @@ const rows: ReadonlyArray<Row> = [
 	{ label: 'Server ID', value: String(server.id), mono: true },
 	{ label: 'IPv4', value: server.ipv4 ?? '-', mono: true },
 	{ label: 'IPv6', value: server.ipv6 ?? '-', mono: true },
-	{ label: 'Datacenter', value: server.location.datacenter ?? '-', mono: true },
+	{ label: 'Location', value: server.location.name, mono: true },
 	{ label: 'Region', value: server.location.country ?? '-' },
 	{ label: 'Traffic in', value: formatBytes(server.traffic.ingoingBytes) },
 	{ label: 'Traffic out', value: formatBytes(server.traffic.outgoingBytes) },

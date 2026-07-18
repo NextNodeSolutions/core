@@ -102,7 +102,7 @@ describe('renderPostgresExporterBootstrapSql', () => {
 		const sql = renderPostgresExporterBootstrapSql('hunter2')
 
 		expect(sql).toContain(
-			"CREATE ROLE postgres_exporter WITH LOGIN PASSWORD 'hunter2'",
+			"ALTER ROLE postgres_exporter WITH LOGIN PASSWORD 'hunter2'",
 		)
 	})
 

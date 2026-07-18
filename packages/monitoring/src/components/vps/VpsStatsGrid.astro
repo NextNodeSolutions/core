@@ -24,10 +24,7 @@ const cpuHint =
 const memoryValue = `${String(server.serverType.memoryGb)} GB`
 const diskValue = `${String(server.serverType.diskGb)} GB`
 const locationValue = server.location.city ?? server.location.name
-const locationHint =
-	[server.location.country, server.location.datacenter]
-		.filter((part): part is string => part !== null)
-		.join(' · ') || undefined
+const locationHint = server.location.country ?? undefined
 ---
 
 <section class="mt-10 grid grid-cols-2 gap-4 lg:grid-cols-4">

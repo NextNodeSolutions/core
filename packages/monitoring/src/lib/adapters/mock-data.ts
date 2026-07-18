@@ -67,7 +67,6 @@ const server = (spec: MockServerSpec): HetznerVps => ({
 		name: 'fsn1',
 		city: 'Falkenstein',
 		country: 'DE',
-		datacenter: 'fsn1-dc14',
 	},
 	image: 'nextnode-golden-5ff278206c07a66a',
 	createdAt: '2026-01-12T09:30:00Z',

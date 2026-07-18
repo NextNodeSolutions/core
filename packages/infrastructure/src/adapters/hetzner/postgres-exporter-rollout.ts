@@ -1,10 +1,16 @@
+import { computeSilo } from '#/domain/hetzner/env-silo.ts'
 import {
 	POSTGRES_EXPORTER_INIT_FILENAME,
+	POSTGRES_EXPORTER_INIT_MOUNT_PATH,
 	renderPostgresExporterBootstrapSql,
 } from '#/domain/services/postgres-exporter.ts'
+import { POSTGRES_SIDECAR_SERVICE_NAME } from '#/domain/services/postgres.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
+import { shellEscape } from './ssh/shell-escape.ts'
+
 import type { PostgresServiceConfig } from '#/config/types.ts'
+import type { AppEnvironment } from '#/domain/environment.ts'
 import type { SshSession } from './ssh/session.types.ts'
 
 const logger = createLogger()
@@ -40,4 +46,35 @@ export async function writePostgresExporterFiles(
 		renderPostgresExporterBootstrapSql(password),
 	)
 	logger.info('postgres-exporter bootstrap SQL written')
+}
+
+export interface PostgresExporterRoleInput {
+	readonly projectName: string
+	readonly environment: AppEnvironment
+	readonly postgres: PostgresServiceConfig | undefined
+}
+
+/**
+ * Re-run the bootstrap SQL inside the healthy postgres container on EVERY
+ * deploy. The initdb.d mount only fires on a fresh volume's first boot, so
+ * a stack whose volume predates the exporter feature (or a rotated
+ * POSTGRES_PASSWORD) never converges through that channel - this exec is
+ * the self-healing path. The SQL is convergent (guarded CREATE +
+ * unconditional ALTER), so re-execution is free on an already-correct
+ * stack. Must run after `bringUpDb` gated the container healthy.
+ */
+export async function ensurePostgresExporterRole(
+	session: SshSession,
+	input: PostgresExporterRoleInput,
+): Promise<void> {
+	if (input.postgres?.mode !== 'embedded') return
+
+	const silo = computeSilo(input.projectName, input.environment)
+	const composeFileQ = shellEscape(
+		`/opt/apps/${input.projectName}/${input.environment}/compose.yaml`,
+	)
+	await session.exec(
+		`docker compose -p ${shellEscape(silo.id)} -f ${composeFileQ} exec -T ${POSTGRES_SIDECAR_SERVICE_NAME} sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f ${POSTGRES_EXPORTER_INIT_MOUNT_PATH}'`,
+	)
+	logger.info('postgres-exporter role converged')
 }

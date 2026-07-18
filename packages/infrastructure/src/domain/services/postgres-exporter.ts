@@ -132,14 +132,17 @@ export function buildEmbeddedPostgresExporterSidecar(
 export const POSTGRES_EXPORTER_EMBEDDED_PASSWORD_ENV = 'POSTGRES_PASSWORD'
 
 /**
- * Render the bootstrap SQL that the postgres `db` container runs once on
- * first boot through `docker-entrypoint-initdb.d`. Creates the
- * `postgres_exporter` role with the supplied password and grants it the
- * PG ≥10 built-in `pg_monitor` role - explicitly NOT SUPERUSER.
+ * Render the bootstrap SQL that creates the `postgres_exporter` role and
+ * grants it the PG ≥10 built-in `pg_monitor` role - explicitly NOT
+ * SUPERUSER. It runs through two channels: mounted into
+ * `docker-entrypoint-initdb.d/` for a fresh volume's first `initdb`, AND
+ * re-executed by the rollout on every deploy (`ensurePostgresExporterRole`)
+ * - the initdb hook never fires on a volume that predates the exporter
+ * feature, so the deploy-time run is what converges existing stacks.
  *
- * The `DO ... IF NOT EXISTS` guard makes the script safe to re-run
- * manually (the initdb hook only fires on first boot, but operators may
- * pipe this file through psql later to repair a missing role).
+ * Convergent by construction: `CREATE` is guarded by `IF NOT EXISTS`, and
+ * the unconditional `ALTER ROLE` re-asserts LOGIN + password so a rotated
+ * `POSTGRES_PASSWORD` propagates to the exporter role on the next deploy.
  *
  * Pure: returns the SQL as a string. The caller sources the password and
  * persists the rendered file to disk during provisioning. The password is
@@ -152,11 +155,12 @@ export function renderPostgresExporterBootstrapSql(password: string): string {
 	return `DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${POSTGRES_EXPORTER_USER}') THEN
-        CREATE ROLE ${POSTGRES_EXPORTER_USER} WITH LOGIN PASSWORD '${password}';
+        CREATE ROLE ${POSTGRES_EXPORTER_USER};
     END IF;
 END
 $$;
 
+ALTER ROLE ${POSTGRES_EXPORTER_USER} WITH LOGIN PASSWORD '${password}';
 GRANT pg_monitor TO ${POSTGRES_EXPORTER_USER};
 `
 }

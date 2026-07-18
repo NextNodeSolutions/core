@@ -27,7 +27,6 @@ const server = (name: string): HetznerVps => ({
 		name: 'fsn1',
 		city: 'Falkenstein',
 		country: 'DE',
-		datacenter: null,
 	},
 	image: 'debian-12',
 	createdAt: '2026-01-01T00:00:00Z',
