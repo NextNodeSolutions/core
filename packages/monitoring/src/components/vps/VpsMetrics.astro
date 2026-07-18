@@ -16,7 +16,11 @@ import {
 	loadVpsSeries,
 } from '@/lib/adapters/victoria/metrics.ts'
 import { deriveFleetAlerts } from '@/lib/domain/monitoring/fleet-overview.ts'
-import { bytesToWholeGb } from '@/lib/domain/monitoring/host-facts.ts'
+import {
+	bytesToWholeDecimalGb,
+	bytesToWholeGb,
+	NULL_TRAFFIC_TOTALS,
+} from '@/lib/domain/monitoring/host-facts.ts'
 import {
 	EMPTY_LABEL,
 	formatFixedOrDash,
@@ -120,7 +124,7 @@ const [hostState, gaugesState, fleetState, trafficState, seriesStates] =
 const host = unwrap(hostState, NULL_HOST)
 const gauges = unwrap(gaugesState, NULL_GAUGES)
 const fleet = unwrap(fleetState, EMPTY_FLEET)
-const traffic = unwrap(trafficState, { inBytes: null, outBytes: null })
+const traffic = unwrap(trafficState, NULL_TRAFFIC_TOTALS)
 
 const seriesAt = (metric: VpsSeriesMetric): ReadonlyArray<RangePoint> => {
 	const index = seriesMetrics.indexOf(metric)
@@ -168,9 +172,12 @@ const metricsByName: Record<string, ServerMetrics> =
 			}
 const alerts = vps === null ? [] : deriveFleetAlerts([vps], metricsByName)
 
-const cores = facts.cores ?? 0
-const memoryGb = bytesToWholeGb(facts.memoryTotalBytes) ?? 0
-const diskGb = bytesToWholeGb(facts.diskTotalBytes) ?? 0
+// Facts stay nullable end-to-end: a failed facts load must render "-", never
+// a fake "0 cores" / "0 GB" capacity beside real percentage gauges.
+const { cores } = facts
+const memoryGb = bytesToWholeGb(facts.memoryTotalBytes)
+const diskGb = bytesToWholeDecimalGb(facts.diskTotalBytes)
+const coresLabel = cores === null ? EMPTY_LABEL : `${cores} cores`
 
 const summaryOf = (
 	points: ReadonlyArray<RangePoint>,
@@ -197,13 +204,17 @@ const latencyCurrent = lastValue(diskLatencySeries)
 const loadCurrent = gauges.load1 ?? lastValue(loadSeries)
 
 const memSub =
-	host.memoryPercent === null
-		? `${memoryGb} GB`
-		: `${((host.memoryPercent / PCT_FULL) * memoryGb).toFixed(1)} / ${memoryGb} GB`
+	memoryGb === null
+		? EMPTY_LABEL
+		: host.memoryPercent === null
+			? `${memoryGb} GB`
+			: `${((host.memoryPercent / PCT_FULL) * memoryGb).toFixed(1)} / ${memoryGb} GB`
 const diskSub =
-	host.diskPercent === null
-		? `${diskGb} GB`
-		: `${((host.diskPercent / PCT_FULL) * diskGb).toFixed(0)} / ${diskGb} GB`
+	diskGb === null
+		? EMPTY_LABEL
+		: host.diskPercent === null
+			? `${diskGb} GB`
+			: `${((host.diskPercent / PCT_FULL) * diskGb).toFixed(0)} / ${diskGb} GB`
 
 const windowIn =
 	traffic.inBytes === null
@@ -217,9 +228,12 @@ const windowOut =
 const latencyThresholds: ReadonlyArray<Threshold> = [
 	{ value: DISK_LATENCY_WARNING, label: 'lent', severity: 'warning' },
 ]
-const loadThresholds: ReadonlyArray<Threshold> = [
-	{ value: cores, label: `${cores} cores`, severity: 'critical' },
-]
+// No threshold when the core count is unknown: a `value: 0` line would draw
+// a critical baseline that flags ALL load as saturated.
+const loadThresholds: ReadonlyArray<Threshold> =
+	cores === null
+		? []
+		: [{ value: cores, label: coresLabel, severity: 'critical' }]
 
 const netCombinedValues = [...valuesOf(netInSeries), ...valuesOf(netOutSeries)]
 const netCombinedMax =
@@ -299,7 +313,7 @@ const swapAmber =
 					<RadialGauge
 						value={host.cpuPercent ?? 0}
 						label="CPU"
-						sub={`${cores} cores`}
+						sub={coresLabel}
 					/>
 				</div>
 				<div class="flex justify-center rounded-xl border border-base-200 bg-white p-4 shadow-subtle">

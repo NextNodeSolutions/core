@@ -170,6 +170,37 @@ describe('summarizeFleet', () => {
 		expect(day.some(s => s.label === 'Erreurs (24 h)')).toBe(true)
 	})
 
+	it('labels multi-day windows in days, not raw hours', () => {
+		const week = summarizeFleet({
+			servers,
+			metricsByName,
+			errorCount: 0,
+			windowHours: 168,
+			cpuWindowAverage: 10,
+			cpuNodeCount: 2,
+			traffic: NULL_TRAFFIC,
+		})
+		expect(week.some(s => s.label === 'Trafic sortant (7 j)')).toBe(true)
+		expect(week.some(s => s.label === 'CPU moyen (7 j)')).toBe(true)
+	})
+
+	it('flags an empty fleet as a discovery gap, never a green 0/0', () => {
+		const empty = summarizeFleet({
+			servers: [],
+			metricsByName: {},
+			errorCount: 0,
+			windowHours: 6,
+			cpuWindowAverage: null,
+			cpuNodeCount: 0,
+			traffic: NULL_TRAFFIC,
+		})
+		expect(empty.find(s => s.label === 'VPS actifs')).toMatchObject({
+			value: '0/0',
+			hint: 'aucun VPS découvert',
+			tone: 'warning',
+		})
+	})
+
 	it('shows a neutral placeholder when the window has no CPU sample', () => {
 		const blind = summarizeFleet({
 			servers,

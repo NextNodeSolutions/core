@@ -42,7 +42,8 @@ const SERIES_WINDOW_BOUNDS = {
 	fallback: 1,
 } as const
 
-const scalarOrNull = async (expr: string): Promise<number | null> => {
+/** One instant query reduced to its scalar - shared by the sibling adapters. */
+export const scalarOrNull = async (expr: string): Promise<number | null> => {
 	const payload = await queryVictoriaMetricsInstant(expr)
 	return parseInstantScalar(payload)
 }

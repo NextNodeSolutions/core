@@ -11,6 +11,7 @@ import {
 	loadHostMetrics,
 	loadVpsSeries,
 } from '@/lib/adapters/victoria/metrics.ts'
+import { NULL_TRAFFIC_TOTALS } from '@/lib/domain/monitoring/host-facts.ts'
 import { buildOverviewWindow } from '@/lib/domain/monitoring/overview.ts'
 import { rangeToHours } from '@/lib/domain/monitoring/vps-metrics.ts'
 
@@ -138,14 +139,13 @@ export const loadOverviewWindow = async (
 			: null
 	const notices = [
 		noticeFromState(serversState, 'fleet', 'VictoriaMetrics (flotte)'),
+		noticeFromState(trafficState, 'fleet', 'VictoriaMetrics (trafic)'),
 		noticeFromState(logsState, 'logs', 'VictoriaLogs'),
 		errorCountNotice,
 	].filter((notice): notice is OverviewNotice => notice !== null)
 
 	const traffic =
-		trafficState.kind === 'ok'
-			? trafficState.data
-			: { inBytes: null, outBytes: null }
+		trafficState.kind === 'ok' ? trafficState.data : NULL_TRAFFIC_TOTALS
 
 	return buildOverviewWindow({
 		range,

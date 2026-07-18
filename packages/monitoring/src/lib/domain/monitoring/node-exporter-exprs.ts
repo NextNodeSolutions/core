@@ -37,6 +37,24 @@ export const NODE_EXPORTER_METRICS = [
 
 export type NodeExporterMetric = (typeof NODE_EXPORTER_METRICS)[number]
 
+export type TrafficDirection = 'in' | 'out'
+
+/** Network byte counters, shared by the rate gauges and the windowed totals. */
+const NET_COUNTER: Record<TrafficDirection, string> = {
+	in: 'node_network_receive_bytes_total',
+	out: 'node_network_transmit_bytes_total',
+}
+
+/** Loopback-only exclusion for the instantaneous rate gauges. */
+const RATE_DEVICE_FILTER = 'device!~"lo"'
+
+/**
+ * Physical-NIC-only filter for the windowed byte totals: virtual interfaces
+ * (docker bridge, veth pairs, tailnet) re-carry the same bytes the physical
+ * NIC already counts, so summing them would double or triple the totals.
+ */
+const TRAFFIC_DEVICE_FILTER = 'device!~"lo|docker.*|veth.*|br-.*|tailscale.*"'
+
 /**
  * `vps_name` → instant/series PromQL, one entry per node_exporter metric.
  * Percentages are 0-100; uptime is seconds; network is Mb/s; disk IO is MB/s.
@@ -53,9 +71,9 @@ export const NODE_EXPORTER_EXPR: Record<
 		`100 * (1 - node_filesystem_avail_bytes{${selector(vps)},mountpoint="/",fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{${selector(vps)},mountpoint="/",fstype!~"tmpfs|overlay"})`,
 	uptime: vps => `time() - node_boot_time_seconds{${selector(vps)}}`,
 	netIn: vps =>
-		`sum(rate(node_network_receive_bytes_total{${selector(vps)},device!~"lo"}[${RATE_WINDOW}])) * 8 / 1e6`,
+		`sum(rate(${NET_COUNTER.in}{${selector(vps)},${RATE_DEVICE_FILTER}}[${RATE_WINDOW}])) * 8 / 1e6`,
 	netOut: vps =>
-		`sum(rate(node_network_transmit_bytes_total{${selector(vps)},device!~"lo"}[${RATE_WINDOW}])) * 8 / 1e6`,
+		`sum(rate(${NET_COUNTER.out}{${selector(vps)},${RATE_DEVICE_FILTER}}[${RATE_WINDOW}])) * 8 / 1e6`,
 	diskIo: vps =>
 		`sum(rate(node_disk_written_bytes_total{${selector(vps)}}[${RATE_WINDOW}])) / 1e6`,
 	diskLatency: vps =>
@@ -68,25 +86,22 @@ export const NODE_EXPORTER_EXPR: Record<
 		`100 * (1 - node_memory_SwapFree_bytes{${selector(vps)}} / node_memory_SwapTotal_bytes{${selector(vps)}})`,
 	cores: vps =>
 		`count(count by (cpu) (node_cpu_seconds_total{${selector(vps)},mode="idle"}))`,
-	memoryTotalBytes: vps => `node_memory_MemTotal_bytes{${selector(vps)}}`,
+	// `max()` collapses the row to one series: during an SD address change two
+	// instances briefly coexist for one vps_name, and `parseInstantScalar`
+	// expects a single-series result.
+	memoryTotalBytes: vps =>
+		`max(node_memory_MemTotal_bytes{${selector(vps)}})`,
 	diskTotalBytes: vps =>
-		`node_filesystem_size_bytes{${selector(vps)},mountpoint="/",fstype!~"tmpfs|overlay"}`,
+		`max(node_filesystem_size_bytes{${selector(vps)},mountpoint="/",fstype!~"tmpfs|overlay"})`,
 }
-
-export type TrafficDirection = 'in' | 'out'
 
 const SECONDS_PER_HOUR = 3600
 
-const TRAFFIC_COUNTER: Record<TrafficDirection, string> = {
-	in: 'node_network_receive_bytes_total',
-	out: 'node_network_transmit_bytes_total',
-}
-
 /**
  * Total bytes transferred over the last `windowHours`, from the network
- * counters (loopback excluded). `vpsName` scopes to one VPS; `null` sums
- * the whole fleet (`vps_name!=""` keeps only client-VPS series - the
- * blackbox/backups jobs carry no `vps_name`).
+ * counters of the physical NIC only (see TRAFFIC_DEVICE_FILTER). `vpsName`
+ * scopes to one VPS; `null` sums the whole fleet (`vps_name!=""` keeps only
+ * client-VPS series - the blackbox/backups jobs carry no `vps_name`).
  */
 export const buildTrafficTotalExpr = (
 	vpsName: string | null,
@@ -97,5 +112,5 @@ export const buildTrafficTotalExpr = (
 	// Integer seconds: the sub-hour live window would otherwise render a
 	// fractional duration, which classic PromQL rejects.
 	const window = `${String(Math.round(windowHours * SECONDS_PER_HOUR))}s`
-	return `sum(increase(${TRAFFIC_COUNTER[direction]}{${scope},device!~"lo"}[${window}]))`
+	return `sum(increase(${NET_COUNTER[direction]}{${scope},${TRAFFIC_DEVICE_FILTER}}[${window}]))`
 }

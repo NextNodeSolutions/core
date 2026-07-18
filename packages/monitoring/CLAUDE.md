@@ -239,7 +239,7 @@ Follow the global CLAUDE.md rules verbatim:
   are all injected by the infra pipeline at deploy time.
 - The container binds `$PORT=3000`; the VPS-side Caddy reverse-proxies
   `monitoring.nextnode.fr` to `127.0.0.1:<computeHostPort('production')>`.
-- **Runtime secrets** (`HETZNER_API_TOKEN`, `CLOUDFLARE_API_TOKEN`, etc.) are
+- **Runtime secrets** (`CLOUDFLARE_API_TOKEN`, `TS_OAUTH_SECRET`, etc.) are
   declared PER SERVICE in `[deploy.services.app].secrets` — names only; the
   values live in GitHub Secrets and the infra pulls exactly those into the
   service's `.env.app` at deploy (least privilege, no deploy-wide pool).

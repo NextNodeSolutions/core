@@ -42,6 +42,28 @@ describe('parseFleetVps', () => {
 		])
 	})
 
+	it('resolves an online project-rename tie deterministically', () => {
+		const rows = [
+			sample({ vps_name: 'nn-prod', project: 'new-project' }, 1),
+			sample({ vps_name: 'nn-prod', project: 'old-project' }, 1),
+		]
+		const expected = [
+			{ name: 'nn-prod', isOnline: true, project: 'old-project' },
+		]
+		expect(parseFleetVps(rows)).toEqual(expected)
+		expect(parseFleetVps(rows.toReversed())).toEqual(expected)
+	})
+
+	it('prefers a named project over null on an online tie', () => {
+		const fleet = parseFleetVps([
+			sample({ vps_name: 'nn-prod' }, 1),
+			sample({ vps_name: 'nn-prod', project: 'stylot' }, 1),
+		])
+		expect(fleet).toEqual([
+			{ name: 'nn-prod', isOnline: true, project: 'stylot' },
+		])
+	})
+
 	it('sorts the fleet by name for stable rendering', () => {
 		const fleet = parseFleetVps([
 			sample({ vps_name: 'zulu' }, 1),

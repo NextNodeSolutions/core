@@ -84,15 +84,22 @@ export interface FleetSummaryInput {
 }
 
 const MINUTES_PER_HOUR = 60
+const HOURS_PER_DAY = 24
 
 /**
- * The honest label for a windowed stat: `6` -> `6 h`, but a sub-hour live
- * window -> `5 min` (never `0.0833 h`). Never a fixed string.
+ * The honest label for a windowed stat: `6` -> `6 h`, a sub-hour live
+ * window -> `5 min` (never `0.0833 h`), and a multi-day window -> `7 j`
+ * (never `168 h`). `24` stays `24 h` to match the range control's tab.
  */
-const windowLabel = (windowHours: number): string =>
-	windowHours < 1
-		? `${String(Math.round(windowHours * MINUTES_PER_HOUR))} min`
-		: `${String(windowHours)} h`
+const windowLabel = (windowHours: number): string => {
+	if (windowHours < 1) {
+		return `${String(Math.round(windowHours * MINUTES_PER_HOUR))} min`
+	}
+	if (windowHours > HOURS_PER_DAY && windowHours % HOURS_PER_DAY === 0) {
+		return `${String(windowHours / HOURS_PER_DAY)} j`
+	}
+	return `${String(windowHours)} h`
+}
 
 const ALERT_METRICS: AlertMetric[] = ['cpu', 'memory', 'disk']
 
@@ -184,6 +191,17 @@ export function deriveFleetAlerts(
 
 function activeStat(servers: ReadonlyArray<FleetVps>): FleetStat {
 	const total = servers.length
+	// An empty fleet is a discovery gap (the query succeeded but returned no
+	// series), never "all good" - 0/0 must not render as a green success.
+	if (total === 0) {
+		return {
+			label: 'VPS actifs',
+			value: '0/0',
+			hint: 'aucun VPS découvert',
+			tone: 'warning',
+			icon: 'server',
+		}
+	}
 	const onlineCount = servers.filter(server => server.isOnline).length
 	const allUp = onlineCount === total
 	return {

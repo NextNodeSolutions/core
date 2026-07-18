@@ -16,19 +16,16 @@ import {
 	loadHostFacts,
 } from '@/lib/adapters/victoria/fleet.ts'
 import { resolveEntityState } from '@/lib/domain/load-state.ts'
-import { bytesToWholeGb } from '@/lib/domain/monitoring/host-facts.ts'
-
-import type { HostFacts } from '@/lib/domain/monitoring/host-facts.ts'
+import {
+	bytesToWholeDecimalGb,
+	bytesToWholeGb,
+	NULL_HOST_FACTS,
+} from '@/lib/domain/monitoring/host-facts.ts'
 
 // oxlint-disable-next-line nextnode/boolean-naming -- prerender is Astro's required route export name
 export const prerender = false
 
 const FALLBACK_ROWS = 5
-const NULL_FACTS: HostFacts = {
-	cores: null,
-	memoryTotalBytes: null,
-	diskTotalBytes: null,
-}
 
 const { slug } = Astro.params
 if (!slug) {
@@ -42,15 +39,16 @@ const [headerState, factsState] = await Promise.all([
 	loadPageState(`vps.${slug}.facts`, () => loadHostFacts(slug)),
 ])
 // Classify the lookup once: a found VPS, a clean not-found (unknown slug),
-// or a genuine load failure. The island reuses this resolved `vps` so the
-// fleet is queried a single time per render, not twice.
+// or a genuine load failure. The island reuses this resolved `vps` for its
+// header data; its own fleet query (peer comparison) hits the adapter's 30s
+// discovery cache instead of a fresh upstream query.
 const outcome = resolveEntityState(headerState)
 const vps = outcome.status === 'present' ? outcome.data : null
-const facts = factsState.kind === 'ok' ? factsState.data : NULL_FACTS
+const facts = factsState.kind === 'ok' ? factsState.data : NULL_HOST_FACTS
 
 const presence = fleetPresence(vps?.isOnline ?? false)
 const memoryGb = bytesToWholeGb(facts.memoryTotalBytes)
-const diskGb = bytesToWholeGb(facts.diskTotalBytes)
+const diskGb = bytesToWholeDecimalGb(facts.diskTotalBytes)
 ---
 
 <DashboardLayout

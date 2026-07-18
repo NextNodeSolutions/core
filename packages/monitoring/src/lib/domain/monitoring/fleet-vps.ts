@@ -30,9 +30,24 @@ export const FLEET_DISCOVERY_EXPR =
 	'max by (vps_name, project) (up{job="node"})'
 
 /**
+ * Precedence between duplicate rows of one VPS (label churn keeps two
+ * (vps_name, project) series alive within the staleness window): online
+ * beats offline; on a presence tie a named project beats null, and between
+ * two named projects the lexicographically greater one wins - an arbitrary
+ * but DETERMINISTIC rule, so the rendered project cannot flip with the
+ * (unordered) instant-vector response order.
+ */
+const takesPrecedence = (candidate: FleetVps, existing: FleetVps): boolean => {
+	if (candidate.isOnline !== existing.isOnline) return candidate.isOnline
+	if (candidate.project === null) return false
+	if (existing.project === null) return true
+	return candidate.project.localeCompare(existing.project) > 0
+}
+
+/**
  * Shape the discovery query's samples into the fleet list: drop samples
- * without a `vps_name`, dedupe by name (an online sample wins over a
- * stale offline duplicate), sort by name for stable rendering.
+ * without a `vps_name`, dedupe by name (see `takesPrecedence`), sort by
+ * name for stable rendering.
  */
 export const parseFleetVps = (
 	samples: ReadonlyArray<InstantSample>,
@@ -47,10 +62,7 @@ export const parseFleetVps = (
 			project: sample.labels['project'] ?? null,
 		}
 		const existing = byName.get(name)
-		if (
-			existing === undefined ||
-			(!existing.isOnline && candidate.isOnline)
-		) {
+		if (existing === undefined || takesPrecedence(candidate, existing)) {
 			byName.set(name, candidate)
 		}
 	}

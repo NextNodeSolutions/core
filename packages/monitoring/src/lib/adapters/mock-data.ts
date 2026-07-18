@@ -2,6 +2,7 @@
 // the data. Naming every server spec, metric base and offset would bury the
 // shape it exists to show. Logic-bearing numbers stay named (see the constants).
 import { getEnv } from '@/lib/adapters/env.ts'
+import { NULL_HOST_FACTS } from '@/lib/domain/monitoring/host-facts.ts'
 import { MIN_WINDOW_HOURS } from '@/lib/domain/monitoring/vps-metrics.ts'
 
 import type { VpsGauges } from '@/lib/adapters/victoria/metrics.ts'
@@ -46,21 +47,23 @@ interface MockVpsSpec {
 	readonly facts: HostFacts
 }
 
+// Name-sorted, mirroring parseFleetVps's ordering contract - the mock fleet
+// must render in the same order the real discovery path would.
 const MOCK_FLEET_SPECS: ReadonlyArray<MockVpsSpec> = [
-	{
-		vps: { name: 'nn-prod', isOnline: true, project: 'stylot' },
-		facts: {
-			cores: 2,
-			memoryTotalBytes: 4 * GIB,
-			diskTotalBytes: 40 * GIB,
-		},
-	},
 	{
 		vps: { name: 'nn-internals', isOnline: true, project: 'monitoring' },
 		facts: {
 			cores: 4,
 			memoryTotalBytes: 8 * GIB,
 			diskTotalBytes: 80 * GIB,
+		},
+	},
+	{
+		vps: { name: 'nn-prod', isOnline: true, project: 'stylot' },
+		facts: {
+			cores: 2,
+			memoryTotalBytes: 4 * GIB,
+			diskTotalBytes: 40 * GIB,
 		},
 	},
 	{
@@ -79,15 +82,9 @@ export const mockFleet = (): ReadonlyArray<FleetVps> =>
 export const mockFleetVpsByName = (name: string): FleetVps | null =>
 	MOCK_FLEET_SPECS.find(spec => spec.vps.name === name)?.vps ?? null
 
-const NULL_FACTS: HostFacts = {
-	cores: null,
-	memoryTotalBytes: null,
-	diskTotalBytes: null,
-}
-
 export const mockHostFacts = (vpsName: string): HostFacts =>
 	MOCK_FLEET_SPECS.find(spec => spec.vps.name === vpsName)?.facts ??
-	NULL_FACTS
+	NULL_HOST_FACTS
 
 export const mockTrafficTotals = (
 	vpsName: string | null,
