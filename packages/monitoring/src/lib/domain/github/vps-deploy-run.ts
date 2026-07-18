@@ -1,13 +1,14 @@
+import { runPhase, shortSha } from '@/lib/domain/github/run-status.ts'
+
 import type { DeployDisplayStatus } from '@/lib/domain/cloudflare/deployment-summary.ts'
 import type { CloudflarePagesDeploymentEnvironment } from '@/lib/domain/cloudflare/pages-deployment.ts'
+import type { RunPhase } from '@/lib/domain/github/run-status.ts'
 
 /**
  * A GitHub Actions run of a VPS deploy workflow (a caller of the reusable
  * deploy.yml), shaped for the deployments activity feed. Field values come
  * verbatim from the runs API; only `environment` is derived (see below).
  */
-
-const SHORT_SHA_LENGTH = 7
 
 export interface VpsDeployRun {
 	readonly id: string
@@ -23,28 +24,21 @@ export interface VpsDeployRun {
 	readonly environment: CloudflarePagesDeploymentEnvironment
 }
 
-const FAILED_CONCLUSIONS = new Set(['failure', 'cancelled', 'timed_out'])
-const PENDING_STATUSES = new Set([
-	'queued',
-	'waiting',
-	'pending',
-	'requested',
-	'in_progress',
-])
+/** The feed collapses every not-yet-finished phase into "building". */
+const RUN_PHASE_DISPLAY = {
+	queued: 'building',
+	pending: 'building',
+	running: 'building',
+	succeeded: 'ready',
+	failed: 'error',
+	unknown: 'idle',
+} satisfies Record<RunPhase, DeployDisplayStatus>
 
 /** Map a run's status/conclusion pair onto the shared deploy display states. */
 export const vpsRunDisplayStatus = (run: {
 	readonly status: string
 	readonly conclusion: string | null
-}): DeployDisplayStatus => {
-	if (PENDING_STATUSES.has(run.status)) return 'building'
-	if (run.status !== 'completed') return 'idle'
-	if (run.conclusion === 'success') return 'ready'
-	if (run.conclusion !== null && FAILED_CONCLUSIONS.has(run.conclusion)) {
-		return 'error'
-	}
-	return 'idle'
-}
+}): DeployDisplayStatus => RUN_PHASE_DISPLAY[runPhase(run)]
 
 /**
  * Business rule: a deploy run on the repo's default branch is the production
@@ -59,4 +53,4 @@ export const vpsRunEnvironment = (
 	branch !== null && branch === defaultBranch ? 'production' : 'preview'
 
 export const vpsRunShortSha = (run: VpsDeployRun): string =>
-	run.headSha.slice(0, SHORT_SHA_LENGTH)
+	shortSha(run.headSha)

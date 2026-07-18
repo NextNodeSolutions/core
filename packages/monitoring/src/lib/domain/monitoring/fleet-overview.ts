@@ -98,13 +98,17 @@ const METRIC_LABELS: Record<AlertMetric, string> = {
 	disk: 'Disque',
 }
 
+const METRIC_FIELD: Record<AlertMetric, keyof ServerMetrics> = {
+	cpu: 'cpuPercent',
+	memory: 'memoryPercent',
+	disk: 'diskPercent',
+}
+
 function metricValue(
 	metrics: ServerMetrics,
 	metric: AlertMetric,
 ): number | null {
-	if (metric === 'cpu') return metrics.cpuPercent
-	if (metric === 'memory') return metrics.memoryPercent
-	return metrics.diskPercent
+	return metrics[METRIC_FIELD[metric]]
 }
 
 function worstLoad(metrics: ServerMetrics): number {

@@ -3,7 +3,9 @@ import { useState } from 'react'
 import { createStore, Provider } from 'jotai'
 
 import {
+	ALL_ENV,
 	envAtom,
+	isEnvFilter,
 	nowMsAtom,
 	projectAtom,
 	seedAtom,
@@ -45,7 +47,8 @@ export function Deployments({
 		const seeded = createStore()
 		seeded.set(seedAtom, data)
 		seeded.set(projectAtom, initialProject)
-		seeded.set(envAtom, initialEnv)
+		// The URL param is untrusted; an unknown env falls back to the full view.
+		seeded.set(envAtom, isEnvFilter(initialEnv) ? initialEnv : ALL_ENV)
 		seeded.set(selAtom, initialSel)
 		seeded.set(nowMsAtom, nowMs)
 		return seeded

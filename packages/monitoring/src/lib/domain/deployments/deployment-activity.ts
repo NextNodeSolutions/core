@@ -7,10 +7,6 @@ import type { VpsDeployRun } from '@/lib/domain/github/vps-deploy-run.ts'
  * the adapters load each source independently and hand both lists here.
  */
 
-export const ACTIVITY_SOURCE_FILTERS = ['all', 'pages', 'vps'] as const
-
-export type ActivitySourceFilter = (typeof ACTIVITY_SOURCE_FILTERS)[number]
-
 export type ActivityEntry =
 	| {
 			readonly kind: 'pages'
@@ -18,6 +14,9 @@ export type ActivityEntry =
 			readonly deployment: RecentDeployment['deployment']
 	  }
 	| { readonly kind: 'vps'; readonly run: VpsDeployRun }
+
+/** Derived from the entry union so a new source kind auto-extends the filter. */
+export type ActivitySourceFilter = 'all' | ActivityEntry['kind']
 
 export const activityCreatedAt = (entry: ActivityEntry): string =>
 	entry.kind === 'pages' ? entry.deployment.createdAt : entry.run.createdAt

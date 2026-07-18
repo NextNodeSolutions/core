@@ -1,17 +1,15 @@
 import { HTTP_STATUS } from '@/lib/adapters/http-status.ts'
-import { jsonResponse } from '@/lib/adapters/json-response.ts'
 import { loadPageState } from '@/lib/adapters/load-page-state.ts'
+import { loadStateErrorResponse } from '@/lib/adapters/load-state-response.ts'
 import {
 	loadFleetLogs,
 	loadFleetStats,
 	loadLogFacets,
 } from '@/lib/adapters/victoria/logs.ts'
-import { apiErr } from '@/lib/domain/api-result.ts'
 import { EMPTY_FLEET_STATS } from '@/lib/domain/monitoring/log-aggregates.ts'
 import { rangeToHours } from '@/lib/domain/monitoring/vps-metrics.ts'
 
 import type { APIRoute } from 'astro'
-import type { LoadState } from '@/lib/domain/load-state.ts'
 import type { FleetLogStats } from '@/lib/domain/monitoring/log-aggregates.ts'
 import type {
 	FleetLogFilter,
@@ -59,38 +57,6 @@ const okLogsResponse = (
 	})
 }
 
-const toResponse = (
-	state: LoadState<ReadonlyArray<LogLine>>,
-	stats: FleetLogStats,
-	facets: LogFacets,
-): Response => {
-	switch (state.kind) {
-		case 'ok':
-			return okLogsResponse(state.data, stats, facets)
-		case 'upstream_error':
-			return jsonResponse(
-				apiErr('upstream_error', state.message),
-				HTTP_STATUS.BAD_GATEWAY,
-			)
-		case 'missing_config':
-			return jsonResponse(
-				apiErr('missing_config', state.message),
-				HTTP_STATUS.INTERNAL_SERVER_ERROR,
-			)
-		case 'internal_error':
-			return jsonResponse(
-				apiErr('internal_error', state.message),
-				HTTP_STATUS.INTERNAL_SERVER_ERROR,
-			)
-		default:
-			return assertNeverState(state)
-	}
-}
-
-const assertNeverState = (state: never): never => {
-	throw new Error(`Unhandled load state: ${JSON.stringify(state)}`)
-}
-
 /**
  * The pure request handler, separated from the Astro `GET` wiring so it can be
  * driven by a plain `URL` in tests (no `APIContext` fake, no cast).
@@ -126,7 +92,9 @@ export const handleLogsRequest = async (url: URL): Promise<Response> => {
 	const stats = statsState.kind === 'ok' ? statsState.data : EMPTY_FLEET_STATS
 	const facets =
 		facetsState.kind === 'ok' ? facetsState.data : EMPTY_LOG_FACETS
-	return toResponse(logsState, stats, facets)
+	return logsState.kind === 'ok'
+		? okLogsResponse(logsState.data, stats, facets)
+		: loadStateErrorResponse(logsState)
 }
 
 export const GET: APIRoute = ({ url }) => handleLogsRequest(url)

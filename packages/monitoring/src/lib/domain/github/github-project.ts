@@ -5,7 +5,9 @@
  * Nothing is inferred that the API does not actually report.
  */
 
-const SHORT_SHA_LENGTH = 7
+import { runPhase, shortSha } from '@/lib/domain/github/run-status.ts'
+
+import type { RunPhase } from '@/lib/domain/github/run-status.ts'
 
 export interface GithubRepo {
 	readonly name: string
@@ -49,18 +51,19 @@ export interface GithubProjectSummary {
 	readonly vps: string | null
 }
 
-const FAILED_CONCLUSIONS = new Set(['failure', 'cancelled', 'timed_out'])
+// `pending` (pending/requested statuses) has never surfaced as queued on this
+// screen; it stays 'unknown' so the projection is a pure refactor.
+const RUN_PHASE_PROJECT = {
+	queued: 'queued',
+	pending: 'unknown',
+	running: 'building',
+	succeeded: 'ready',
+	failed: 'error',
+	unknown: 'unknown',
+} satisfies Record<RunPhase, ProjectDeployStatus>
 
-const runDeployStatus = (run: GithubRun): ProjectDeployStatus => {
-	if (run.status === 'waiting' || run.status === 'queued') return 'queued'
-	if (run.status === 'in_progress') return 'building'
-	if (run.status !== 'completed') return 'unknown'
-	if (run.conclusion === 'success') return 'ready'
-	if (run.conclusion !== null && FAILED_CONCLUSIONS.has(run.conclusion)) {
-		return 'error'
-	}
-	return 'unknown'
-}
+const runDeployStatus = (run: GithubRun): ProjectDeployStatus =>
+	RUN_PHASE_PROJECT[runPhase(run)]
 
 const resolveDeployStatus = (
 	repo: GithubRepo,
@@ -93,7 +96,7 @@ export const summarizeGithubProject = (
 	defaultBranch: repo.defaultBranch,
 	htmlUrl: repo.htmlUrl,
 	deployStatus: resolveDeployStatus(repo, run),
-	lastCommit: run === null ? null : run.headSha.slice(0, SHORT_SHA_LENGTH),
+	lastCommit: run === null ? null : shortSha(run.headSha),
 	lastDeployAt: run?.createdAt ?? null,
 	pendingApproval: run?.status === 'waiting',
 	vps: matchProjectVps(repo.name, serverNames),

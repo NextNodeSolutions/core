@@ -2,13 +2,16 @@ import { useAtomValue, useSetAtom } from 'jotai'
 
 import { DEPLOY_STATUS_COLOR } from '@/components/cloudflare/deploy-display.ts'
 import {
+	ENV_PILL_CLASS,
+	ENV_PILL_LABEL,
+} from '@/components/deployments/activity-display.ts'
+import {
 	isSelectedFamily,
 	nowMsAtom,
 	selAtom,
 } from '@/islands/deployments/atoms.ts'
 import {
 	durationLabel,
-	envPillClass,
 	statusIcon,
 } from '@/islands/deployments/deploy-styles.ts'
 import { DeployIcon } from '@/islands/deployments/DeployIcon.tsx'
@@ -37,7 +40,6 @@ export function DeploymentRow({
 	const nowMs = useAtomValue(nowMsAtom)
 	const setSel = useSetAtom(selAtom)
 	const display = deploymentDisplayStatus(deployment.status)
-	const isProd = deployment.environment === 'production'
 
 	return (
 		<tr
@@ -54,9 +56,9 @@ export function DeploymentRow({
 			<DeploymentRowCommit deployment={deployment} />
 			<td className="px-2 py-2.5">
 				<span
-					className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${envPillClass(deployment.environment)}`}
+					className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${ENV_PILL_CLASS[deployment.environment]}`}
 				>
-					{isProd ? 'prod' : 'preview'}
+					{ENV_PILL_LABEL[deployment.environment]}
 				</span>
 			</td>
 			<td className="text-base-500 px-2 py-2.5 font-mono text-[12.5px]">

@@ -5,6 +5,7 @@ import {
 	deploymentDisplayStatus,
 	summarizeProject,
 } from '@/lib/domain/cloudflare/deployment-summary.ts'
+import { CLOUDFLARE_PAGES_DEPLOYMENT_ENVIRONMENTS } from '@/lib/domain/cloudflare/pages-deployment.ts'
 import {
 	mergeActivity,
 	selectRecentActivity,
@@ -15,7 +16,10 @@ import type {
 	ProjectSummary,
 	RecentDeployment,
 } from '@/lib/domain/cloudflare/deployment-summary.ts'
-import type { CloudflarePagesDeployment } from '@/lib/domain/cloudflare/pages-deployment.ts'
+import type {
+	CloudflarePagesDeployment,
+	CloudflarePagesDeploymentEnvironment,
+} from '@/lib/domain/cloudflare/pages-deployment.ts'
 import type { CloudflarePagesProject } from '@/lib/domain/cloudflare/pages-project.ts'
 import type {
 	ActivityEntry,
@@ -59,8 +63,15 @@ const EMPTY_SEED: DeploymentsSeed = {
 /** The selected project's name; '' = the all-projects master view. */
 export const projectAtom = atom('')
 
-/** The history env filter: 'all' | 'production' | 'preview'. */
-export const envAtom = atom(ALL_ENV)
+/** The history env filter, typed off the domain env union - no stringly keys. */
+export type EnvFilter = typeof ALL_ENV | CloudflarePagesDeploymentEnvironment
+
+/** Narrow an untrusted string (the `env` URL param) onto the filter union. */
+export const isEnvFilter = (candidate: string): candidate is EnvFilter =>
+	candidate === ALL_ENV ||
+	CLOUDFLARE_PAGES_DEPLOYMENT_ENVIRONMENTS.some(env => env === candidate)
+
+export const envAtom = atom<EnvFilter>(ALL_ENV)
 
 /** The recent-activity source filter: 'all' | 'pages' | 'vps'. */
 export const sourceAtom = atom<ActivitySourceFilter>('all')

@@ -1,4 +1,5 @@
 ---
+import AlertRow from '@/components/dashboard/AlertRow.astro'
 import MultiLine from '@/components/charts/MultiLine.astro'
 import Icon from '@/components/foundations/Icon.astro'
 import RadialGauge from '@/components/charts/RadialGauge.astro'
@@ -239,50 +240,7 @@ const swapAmber =
 			{alerts.length > 0 && (
 				<section class="overflow-hidden rounded-xl border border-red-200 bg-white shadow-subtle">
 					{alerts.map((alert) => (
-						<div class="flex items-center gap-3.5 border-b border-base-100 px-4 py-3 last:border-b-0">
-							<span
-								class:list={[
-									'shrink-0',
-									alert.severity === 'critical'
-										? 'text-red-600'
-										: 'text-amber-500',
-								]}
-							>
-								<Icon name="alert" size={18} />
-							</span>
-							<div class="min-w-0 flex-1">
-								<div class="flex items-center gap-2">
-									<span class="text-[13.5px] font-semibold text-base-900">
-										{alert.label}
-									</span>
-									<span
-										class:list={[
-											'rounded-full border px-2 py-0.5 text-[11px] font-medium',
-											alert.severity === 'critical'
-												? 'border-red-200 bg-red-50 text-red-700'
-												: 'border-amber-200 bg-amber-50 text-amber-700',
-										]}
-									>
-										{alert.severity}
-									</span>
-								</div>
-							</div>
-							<div class="shrink-0 text-right">
-								<div
-									class:list={[
-										'font-mono text-sm font-bold',
-										alert.severity === 'critical'
-											? 'text-red-600'
-											: 'text-amber-600',
-									]}
-								>
-									{alert.valuePercent}%
-								</div>
-								<div class="font-mono text-[10.5px] text-base-500">
-									seuil {alert.thresholdPercent}%
-								</div>
-							</div>
-						</div>
+						<AlertRow alert={alert} />
 					))}
 				</section>
 			)}

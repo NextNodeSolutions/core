@@ -29,7 +29,7 @@ export function PipelineSteps({
 			<div className="text-base-400 mb-2 text-[11px]">Pipeline</div>
 			<div className="flex flex-col">
 				{steps.map(step => {
-					const dotIcon = stepDotIcon(step.state)
+					const dotIcon = stepDotIcon[step.state]
 					return (
 						<div
 							key={step.label}
