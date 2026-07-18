@@ -13,7 +13,10 @@ import { POSTGRES_SIDECAR_SERVICE_NAME } from '#/domain/services/postgres.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
 import { writeObservabilityFiles } from './observability-rollout.ts'
-import { writePostgresExporterFiles } from './postgres-exporter-rollout.ts'
+import {
+	ensurePostgresExporterRole,
+	writePostgresExporterFiles,
+} from './postgres-exporter-rollout.ts'
 import { writePostgresWalgBuildContext } from './postgres-walg-build-context.ts'
 import { shellEscape } from './ssh/shell-escape.ts'
 
@@ -220,6 +223,13 @@ export async function stageRollout(
 	)
 
 	await bringUpDb(session, {
+		projectName: input.projectName,
+		environment: input.environment,
+		postgres: input.postgres,
+	})
+	// The initdb.d mount only runs on a fresh volume - this exec is what
+	// creates/repairs the monitoring role on stacks that predate it.
+	await ensurePostgresExporterRole(session, {
 		projectName: input.projectName,
 		environment: input.environment,
 		postgres: input.postgres,

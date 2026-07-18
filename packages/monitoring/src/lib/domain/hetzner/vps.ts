@@ -24,7 +24,6 @@ export interface HetznerVpsLocation {
 	readonly name: string
 	readonly city: string | null
 	readonly country: string | null
-	readonly datacenter: string | null
 }
 
 export interface HetznerVpsServerType {

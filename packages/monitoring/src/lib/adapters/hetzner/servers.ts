@@ -82,22 +82,19 @@ const parseServerType = (
 	}
 }
 
+// Hetzner removed the nested `datacenter` object from the server payload;
+// `location` now lives at the server root.
 const parseLocation = (
-	datacenter: unknown,
+	location: unknown,
 	context: string,
 ): HetznerVpsLocation => {
-	if (!isRecord(datacenter)) {
-		throw new Error(`${context}: missing \`datacenter\``)
-	}
-	const { location } = datacenter
 	if (!isRecord(location) || typeof location.name !== 'string') {
-		throw new Error(`${context}: missing \`datacenter.location.name\``)
+		throw new Error(`${context}: missing \`location.name\``)
 	}
 	return {
 		name: location.name,
 		city: parseStringOrNull(location.city),
 		country: parseStringOrNull(location.country),
-		datacenter: parseStringOrNull(datacenter.name),
 	}
 }
 
@@ -150,7 +147,7 @@ const parseServer = (raw: unknown, index: number): HetznerVps => {
 		ipv4: parseIpv4(raw.public_net),
 		ipv6: parseIpv6(raw.public_net),
 		serverType: parseServerType(raw.server_type, context),
-		location: parseLocation(raw.datacenter, context),
+		location: parseLocation(raw.location, context),
 		image: parseImage(raw.image),
 		createdAt: raw.created,
 		labels: parseLabels(raw.labels, context),

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { writePostgresExporterFiles } from './postgres-exporter-rollout.ts'
+import {
+	ensurePostgresExporterRole,
+	writePostgresExporterFiles,
+} from './postgres-exporter-rollout.ts'
 
 import type { PostgresExporterRolloutInput } from './postgres-exporter-rollout.ts'
 import type { SshSession } from './ssh/session.types.ts'
@@ -75,7 +78,61 @@ describe('writePostgresExporterFiles', () => {
 		expect(writes).toHaveLength(1)
 		expect(writes[0]?.path).toBe(`${ENV_DIR}/00-pg-monitor.sql`)
 		expect(writes[0]?.content).toContain(
-			"CREATE ROLE postgres_exporter WITH LOGIN PASSWORD 'alnumPass123'",
+			"ALTER ROLE postgres_exporter WITH LOGIN PASSWORD 'alnumPass123'",
+		)
+	})
+})
+
+function execRecordingSession(execs: string[]): SshSession {
+	return {
+		exec: command => {
+			execs.push(command)
+			return Promise.resolve('')
+		},
+		execWithStdin: () => Promise.reject(new Error('unused')),
+		writeFile: () => Promise.reject(new Error('unused')),
+		readFile: () => Promise.resolve(null),
+		close: () => {},
+		hostKeyFingerprint: 'fp',
+	}
+}
+
+describe('ensurePostgresExporterRole', () => {
+	it('is a no-op when there is no postgres service', async () => {
+		const execs: string[] = []
+		await ensurePostgresExporterRole(execRecordingSession(execs), {
+			projectName: 'acme',
+			environment: 'production',
+			postgres: undefined,
+		})
+		expect(execs).toEqual([])
+	})
+
+	it('is a no-op for a non-embedded (external) postgres', async () => {
+		const execs: string[] = []
+		await ensurePostgresExporterRole(execRecordingSession(execs), {
+			projectName: 'acme',
+			environment: 'production',
+			postgres: { mode: 'external' },
+		})
+		expect(execs).toEqual([])
+	})
+
+	it('re-runs the mounted bootstrap SQL inside the postgres container', async () => {
+		const execs: string[] = []
+		await ensurePostgresExporterRole(execRecordingSession(execs), {
+			projectName: 'acme',
+			environment: 'production',
+			postgres: { mode: 'embedded' },
+		})
+
+		expect(execs).toHaveLength(1)
+		expect(execs[0]).toContain("docker compose -p 'acme-production'")
+		expect(execs[0]).toContain(
+			"-f '/opt/apps/acme/production/compose.yaml' exec -T postgres",
+		)
+		expect(execs[0]).toContain(
+			'-f /docker-entrypoint-initdb.d/00-pg-monitor.sql',
 		)
 	})
 })
