@@ -13,11 +13,6 @@ export const envSchema = {
 		access: 'secret',
 		optional: true,
 	}),
-	HETZNER_API_TOKEN: envField.string({
-		context: 'server',
-		access: 'secret',
-		optional: true,
-	}),
 	TS_OAUTH_SECRET: envField.string({
 		context: 'server',
 		access: 'secret',

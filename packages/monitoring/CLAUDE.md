@@ -11,7 +11,8 @@ Two responsibilities:
 
 1. **Manage GitHub projects** — trigger workflow dispatches, approve prod
    deploys, delete projects, destroy Hetzner VPS.
-2. **Monitor projects** — Hetzner VPS health (logs, CPU, memory, disk),
+2. **Monitor projects** — VPS health (logs, CPU, memory, disk) via the
+   metrics-discovered fleet (VictoriaMetrics, provider-agnostic),
    Cloudflare Pages / Workers stats via wrangler, clean data/stats views.
 
 **This package is NEVER published to npm.** It runs as a container on its
@@ -58,7 +59,7 @@ Caddy on monitoring VPS (Tailscale-only listener, internal cert)
 Astro node standalone server (PORT=3000, service name "app")
         │
         ├──► GitHub API (workflow dispatch, deploy approvals, repo delete)
-        ├──► Hetzner Cloud API (server describe, destroy)
+        ├──► VictoriaMetrics / VictoriaLogs (fleet discovery, metrics, logs)
         ├──► SSH to client VPSs (logs tail, metrics probe) — read-only
         └──► wrangler (Cloudflare Pages / Workers stats)
 ```
@@ -89,7 +90,7 @@ src/
     domain/           — PURE business logic. NO IO, NO env, NO logger
       project.ts      — ProjectSummary type (single source)
       api-result.ts   — NotImplementedResult + builders
-    adapters/         — IO boundary: HTTP responses, GitHub, Hetzner, SSH
+    adapters/         — IO boundary: HTTP responses, GitHub, Victoria, SSH
       json-response.ts — Response construction for API routes
       http-status.ts  — Named HTTP status constants
   styles/
@@ -121,7 +122,7 @@ src/
 - **Domain is 100% pure.** No `Date.now()` or `crypto.randomBytes()` in
   business functions — inject them as parameters so tests stay
   deterministic. Domain tests need no mocks beyond plain fixtures.
-- **Adapters never decide.** They translate IO (HTTP, GitHub API, Hetzner
+- **Adapters never decide.** They translate IO (HTTP, GitHub API, Victoria
   API, SSH, wrangler subprocess) to/from domain types. Conditionals
   beyond "did the IO succeed?" are a smell — push them into domain.
 - **HTTP status codes are constants.** See `lib/adapters/http-status.ts`.
@@ -238,7 +239,7 @@ Follow the global CLAUDE.md rules verbatim:
   are all injected by the infra pipeline at deploy time.
 - The container binds `$PORT=3000`; the VPS-side Caddy reverse-proxies
   `monitoring.nextnode.fr` to `127.0.0.1:<computeHostPort('production')>`.
-- **Runtime secrets** (`HETZNER_API_TOKEN`, `CLOUDFLARE_API_TOKEN`, etc.) are
+- **Runtime secrets** (`CLOUDFLARE_API_TOKEN`, `TS_OAUTH_SECRET`, etc.) are
   declared PER SERVICE in `[deploy.services.app].secrets` — names only; the
   values live in GitHub Secrets and the infra pulls exactly those into the
   service's `.env.app` at deploy (least privilege, no deploy-wide pool).

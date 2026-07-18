@@ -15,7 +15,7 @@ import type { CmpLine } from '@/lib/domain/monitoring/cmp-line.ts'
  * fetches this once per metric and swaps the chart client-side, so this route's
  * only job is: validate the metric, load that metric's per-peer series for the
  * range window, hand back `{ lines }`. An unknown metric is a client mistake ->
- * 400; an upstream VictoriaMetrics / Hetzner failure -> 502, never a silent
+ * 400; an upstream VictoriaMetrics failure -> 502, never a silent
  * empty 200. Mirrors the thin command pattern of api/logs.ts.
  */
 

@@ -5,14 +5,22 @@ import RangeControl from '@/components/layout/RangeControl.astro'
 import Skeleton from '@/components/dashboard/Skeleton.astro'
 import VpsMetrics from '@/components/vps/VpsMetrics.astro'
 import {
-	VPS_STATUS_BADGE,
-	VPS_STATUS_DOT,
-} from '@/components/vps/vps-status-display.ts'
+	FLEET_PRESENCE_BADGE,
+	FLEET_PRESENCE_DOT,
+	fleetPresence,
+} from '@/components/vps/fleet-status-display.ts'
 import DashboardLayout from '@/layouts/DashboardLayout.astro'
-import { ENV_KEYS, requireEnv } from '@/lib/adapters/env.ts'
-import { getServerByName } from '@/lib/adapters/hetzner/servers.ts'
 import { loadPageState } from '@/lib/adapters/load-page-state.ts'
+import {
+	getFleetVpsByName,
+	loadHostFacts,
+} from '@/lib/adapters/victoria/fleet.ts'
 import { resolveEntityState } from '@/lib/domain/load-state.ts'
+import {
+	bytesToWholeDecimalGb,
+	bytesToWholeGb,
+	NULL_HOST_FACTS,
+} from '@/lib/domain/monitoring/host-facts.ts'
 
 // oxlint-disable-next-line nextnode/boolean-naming -- prerender is Astro's required route export name
 export const prerender = false
@@ -26,23 +34,21 @@ if (!slug) {
 
 const range = Astro.url.searchParams.get('range') ?? 'live'
 
-const headerState = await loadPageState(`vps.${slug}.header`, () => {
-	const token = requireEnv(ENV_KEYS.HETZNER_API_TOKEN)
-	return getServerByName(token, slug)
-})
-// Classify the lookup once: a found server, a clean not-found (unknown slug),
-// or a genuine load failure. The island reuses this resolved `server` so the
-// VPS is fetched a single time per render, not twice.
+const [headerState, factsState] = await Promise.all([
+	loadPageState(`vps.${slug}.header`, () => getFleetVpsByName(slug)),
+	loadPageState(`vps.${slug}.facts`, () => loadHostFacts(slug)),
+])
+// Classify the lookup once: a found VPS, a clean not-found (unknown slug),
+// or a genuine load failure. The island reuses this resolved `vps` for its
+// header data; its own fleet query (peer comparison) hits the adapter's 30s
+// discovery cache instead of a fresh upstream query.
 const outcome = resolveEntityState(headerState)
-const server = outcome.status === 'present' ? outcome.data : null
+const vps = outcome.status === 'present' ? outcome.data : null
+const facts = factsState.kind === 'ok' ? factsState.data : NULL_HOST_FACTS
 
-const role = server
-	? (server.labels['role'] ?? server.serverType.description)
-	: ''
-const cpuType = server?.serverType.cpuType ?? ''
-const hetznerUrl = server
-	? `https://console.hetzner.cloud/servers/${server.id}`
-	: ''
+const presence = fleetPresence(vps?.isOnline ?? false)
+const memoryGb = bytesToWholeGb(facts.memoryTotalBytes)
+const diskGb = bytesToWholeDecimalGb(facts.diskTotalBytes)
 ---
 
 <DashboardLayout
@@ -52,7 +58,7 @@ const hetznerUrl = server
 	<RangeControl slot="actions" path={`/vps/${slug}`} value={range} />
 
 	{
-		server && (
+		vps && (
 			<div class="flex flex-col gap-[18px]">
 				<div class="overflow-hidden rounded-xl border border-base-200 bg-white shadow-subtle">
 					<div class="flex flex-wrap items-start justify-between gap-4 px-5 py-4.5">
@@ -61,35 +67,24 @@ const hetznerUrl = server
 								<span
 									class:list={[
 										'inline-block size-2.5 rounded-full',
-										VPS_STATUS_DOT[server.status] ?? 'bg-amber-500',
+										FLEET_PRESENCE_DOT[presence],
 									]}
 								/>
 								<h2 class="font-mono text-[22px] font-bold tracking-[-0.02em] whitespace-nowrap text-base-900">
-									{server.name}
+									{vps.name}
 								</h2>
 								<span
 									class:list={[
 										'rounded-full border px-2 py-0.5 text-[11px] font-medium',
-										VPS_STATUS_BADGE[server.status] ??
-											'border-amber-200 bg-amber-50 text-amber-700',
+										FLEET_PRESENCE_BADGE[presence],
 									]}
 								>
-									{server.status}
+									{presence}
 								</span>
-								{server.locked && (
-									<span class="inline-flex items-center gap-1 rounded-full border border-base-200 bg-base-100 px-2 py-0.5 text-[11px] font-medium text-base-700">
-										<Icon name="shield" size={12} />
-										locked
-									</span>
-								)}
-								{server.backupsEnabled && (
-									<span class="inline-flex items-center gap-1 rounded-full border border-accent-200 bg-accent-50 px-2 py-0.5 text-[11px] font-medium text-accent-800">
-										<span class="size-1.5 rounded-full bg-accent-600" />
-										backups
-									</span>
-								)}
 							</div>
-							<p class="mt-1.5 text-[13px] text-base-500">{role}</p>
+							<p class="mt-1.5 text-[13px] text-base-500">
+								{vps.project ?? 'aucun projet'}
+							</p>
 						</div>
 						<div class="flex gap-2">
 							<a
@@ -99,32 +94,15 @@ const hetznerUrl = server
 								<Icon name="logs" size={14} />
 								Logs
 							</a>
-							<a
-								href={hetznerUrl}
-								target="_blank"
-								rel="noreferrer"
-								class="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-b from-base-900 to-base-800 px-3.5 py-1.5 text-xs font-medium text-white hover:from-base-800"
-							>
-								<Icon name="external" size={14} />
-								Hetzner
-							</a>
 						</div>
 					</div>
 					<div class="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-4 border-t border-base-100 bg-base-50 px-5 py-3.5">
 						<div>
 							<div class="text-[10.5px] tracking-[0.04em] text-base-500 uppercase">
-								Type
-							</div>
-							<div class="mt-0.5 font-mono text-[13px] font-semibold text-base-900">
-								{server.serverType.name} · {cpuType}
-							</div>
-						</div>
-						<div>
-							<div class="text-[10.5px] tracking-[0.04em] text-base-500 uppercase">
 								vCPU
 							</div>
 							<div class="mt-0.5 font-mono text-[13px] font-semibold text-base-900">
-								{server.serverType.cores} cores {server.serverType.architecture}
+								{facts.cores === null ? '-' : `${facts.cores} cores`}
 							</div>
 						</div>
 						<div>
@@ -132,7 +110,7 @@ const hetznerUrl = server
 								RAM
 							</div>
 							<div class="mt-0.5 font-mono text-[13px] font-semibold text-base-900">
-								{server.serverType.memoryGb} GB
+								{memoryGb === null ? '-' : `${memoryGb} GB`}
 							</div>
 						</div>
 						<div>
@@ -140,31 +118,15 @@ const hetznerUrl = server
 								Disque
 							</div>
 							<div class="mt-0.5 font-mono text-[13px] font-semibold text-base-900">
-								{server.serverType.diskGb} GB
+								{diskGb === null ? '-' : `${diskGb} GB`}
 							</div>
 						</div>
 						<div>
 							<div class="text-[10.5px] tracking-[0.04em] text-base-500 uppercase">
-								IPv4
+								Projet
 							</div>
 							<div class="mt-0.5 font-mono text-[13px] font-semibold text-base-900">
-								{server.ipv4 ?? '-'}
-							</div>
-						</div>
-						<div>
-							<div class="text-[10.5px] tracking-[0.04em] text-base-500 uppercase">
-								Région
-							</div>
-							<div class="mt-0.5 font-mono text-[13px] font-semibold text-base-900">
-								{server.location.name}
-							</div>
-						</div>
-						<div>
-							<div class="text-[10.5px] tracking-[0.04em] text-base-500 uppercase">
-								Image
-							</div>
-							<div class="mt-0.5 text-[13px] font-semibold text-base-900">
-								{server.image ?? '-'}
+								{vps.project ?? '-'}
 							</div>
 						</div>
 					</div>
@@ -173,7 +135,8 @@ const hetznerUrl = server
 				<VpsMetrics
 					server:defer
 					slug={slug}
-					server={server}
+					vps={vps}
+					facts={facts}
 					range={range}
 				>
 					<Skeleton slot="fallback" rows={FALLBACK_ROWS} />
@@ -188,7 +151,7 @@ const hetznerUrl = server
 				<div class="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-amber-900">
 					<p class="font-display text-base font-semibold">VPS introuvable</p>
 					<p class="mt-1 font-mono text-xs">
-						Aucun serveur Hetzner ne correspond au nom <code>{slug}</code>.
+						Aucun VPS monitoré ne correspond au nom <code>{slug}</code>.
 					</p>
 				</div>
 			</div>
@@ -200,7 +163,7 @@ const hetznerUrl = server
 			<div>
 				<LoadStateBanner
 					state={outcome.state}
-					upstreamLabel="Hetzner API error"
+					upstreamLabel="VictoriaMetrics error"
 				/>
 			</div>
 		)

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { HetznerApiFailure } from '@/lib/adapters/hetzner/client.ts'
+import { VictoriaApiFailure } from '@/lib/adapters/victoria/client.ts'
 
 import type { CmpMetric } from '@/islands/fleet-cmp/metrics.ts'
 import type { CmpLine } from '@/lib/domain/monitoring/cmp-line.ts'
@@ -70,8 +70,8 @@ describe('GET /api/vps/[slug]/cmp', () => {
 
 	it('maps an upstream fan-out failure to 502, not a silent empty 200', async () => {
 		loadFleetCmpMock.mockRejectedValue(
-			new HetznerApiFailure(
-				'hetzner servers list',
+			new VictoriaApiFailure(
+				'victoria fleet discovery',
 				503,
 				'fleet list down',
 			),

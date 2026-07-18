@@ -1,6 +1,8 @@
-import { ENV_KEYS, requireEnv } from '@/lib/adapters/env.ts'
-import { listServers } from '@/lib/adapters/hetzner/servers.ts'
 import { loadPageState } from '@/lib/adapters/load-page-state.ts'
+import {
+	listFleetVps,
+	loadTrafficTotals,
+} from '@/lib/adapters/victoria/fleet.ts'
 import {
 	loadFleetErrorCount,
 	loadFleetLogs,
@@ -9,6 +11,7 @@ import {
 	loadHostMetrics,
 	loadVpsSeries,
 } from '@/lib/adapters/victoria/metrics.ts'
+import { NULL_TRAFFIC_TOTALS } from '@/lib/domain/monitoring/host-facts.ts'
 import { buildOverviewWindow } from '@/lib/domain/monitoring/overview.ts'
 import { rangeToHours } from '@/lib/domain/monitoring/vps-metrics.ts'
 
@@ -21,9 +24,10 @@ import type {
 
 /**
  * Adapter for the RANGE-DEPENDENT overview payload (the four fleet stats + the
- * recent-log preview). Loads the Hetzner inventory, each server's instant host
- * metrics and CPU range series, and the fleet log window - then hands the raw
- * data to the pure `buildOverviewWindow`. A single upstream failing degrades
+ * recent-log preview). Discovers the fleet from VictoriaMetrics, loads each
+ * server's instant host metrics and CPU range series, and the fleet log
+ * window - then hands the raw data to the pure `buildOverviewWindow`. A
+ * single upstream failing degrades
  * that section to a notice rather than failing the whole payload; the stats and
  * stream still render from whatever loaded (never a silent empty success).
  *
@@ -100,23 +104,28 @@ export const loadOverviewWindow = async (
 	const windowHours = rangeToHours(range)
 
 	const serversState = await loadPageState('overview.servers', () =>
-		listServers(requireEnv(ENV_KEYS.HETZNER_API_TOKEN)),
+		listFleetVps(),
 	)
 	const servers = serversState.kind === 'ok' ? serversState.data : []
 
-	// The fleet pass, the log preview window and the windowed error tally hit
-	// independent upstreams (and the tally is a separate VictoriaLogs aggregate,
-	// not derived from the capped preview list), so run them together and await
-	// once.
-	const [fleet, logsState, errorCountState] = await Promise.all([
-		loadFleetSnapshot(servers, windowHours),
-		loadPageState(`overview.logs.${String(windowHours)}`, () =>
-			loadFleetLogs(windowHours),
-		),
-		loadPageState(`overview.errors.${String(windowHours)}`, () =>
-			loadFleetErrorCount(windowHours),
-		),
-	])
+	// The fleet pass, the traffic totals, the log preview window and the
+	// windowed error tally hit independent upstream queries (and the tally is a
+	// separate VictoriaLogs aggregate, not derived from the capped preview
+	// list), so run them together and await once.
+	const [fleet, trafficState, logsState, errorCountState] = await Promise.all(
+		[
+			loadFleetSnapshot(servers, windowHours),
+			loadPageState(`overview.traffic.${String(windowHours)}`, () =>
+				loadTrafficTotals(null, windowHours),
+			),
+			loadPageState(`overview.logs.${String(windowHours)}`, () =>
+				loadFleetLogs(windowHours),
+			),
+			loadPageState(`overview.errors.${String(windowHours)}`, () =>
+				loadFleetErrorCount(windowHours),
+			),
+		],
+	)
 
 	const logs = logsState.kind === 'ok' ? logsState.data : []
 	const errorCount = errorCountState.kind === 'ok' ? errorCountState.data : 0
@@ -129,10 +138,14 @@ export const loadOverviewWindow = async (
 			? noticeFromState(errorCountState, 'logs', 'VictoriaLogs (erreurs)')
 			: null
 	const notices = [
-		noticeFromState(serversState, 'fleet', 'Hetzner API'),
+		noticeFromState(serversState, 'fleet', 'VictoriaMetrics (flotte)'),
+		noticeFromState(trafficState, 'fleet', 'VictoriaMetrics (trafic)'),
 		noticeFromState(logsState, 'logs', 'VictoriaLogs'),
 		errorCountNotice,
 	].filter((notice): notice is OverviewNotice => notice !== null)
+
+	const traffic =
+		trafficState.kind === 'ok' ? trafficState.data : NULL_TRAFFIC_TOTALS
 
 	return buildOverviewWindow({
 		range,
@@ -140,6 +153,7 @@ export const loadOverviewWindow = async (
 		servers,
 		metricsByName: fleet.metricsByName,
 		cpuSeriesByServer: fleet.cpuSeriesByServer,
+		traffic,
 		logs,
 		errorCount,
 		notices,

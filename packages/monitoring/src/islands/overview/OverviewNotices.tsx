@@ -1,7 +1,7 @@
 import type { OverviewNotice } from '@/lib/domain/monitoring/overview.ts'
 
 /**
- * Degraded-upstream banners for the overview window. A failed source (Hetzner,
+ * Degraded-upstream banners for the overview window. A failed source (VictoriaMetrics,
  * VictoriaLogs) surfaces here instead of silently showing zeroes - the same
  * "never a silent empty success" rule the API routes follow, ported to the
  * client so a range change that hits a degraded upstream still says so.

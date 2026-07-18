@@ -35,7 +35,7 @@ describe('resolveEntityState', () => {
 	it('reports failed for a missing-config state', () => {
 		const state: LoadState<{ id: number } | null> = {
 			kind: 'missing_config',
-			varName: 'HETZNER_API_TOKEN',
+			varName: 'CLOUDFLARE_API_TOKEN',
 			message: 'unset',
 		}
 		expect(resolveEntityState(state)).toEqual({ status: 'failed', state })

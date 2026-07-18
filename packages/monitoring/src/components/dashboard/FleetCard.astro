@@ -11,13 +11,13 @@ import { severityForPercent } from '@/lib/domain/monitoring/monitoring-threshold
 
 import type { ChartColor } from '@/components/charts/chart-color.ts'
 import type { IconName } from '@/components/foundations/Icon.astro'
-import type { HetznerVps } from '@/lib/domain/hetzner/vps.ts'
+import type { FleetVps } from '@/lib/domain/monitoring/fleet-vps.ts'
 import type { FleetHealth } from '@/lib/domain/monitoring/fleet-overview.ts'
 import type { HostMetrics } from '@/lib/domain/monitoring/host-metrics.ts'
 import type { MetricSeverity } from '@/lib/domain/monitoring/monitoring-thresholds.ts'
 
 interface Props {
-	server: HetznerVps
+	server: FleetVps
 	metrics: HostMetrics
 	health: FleetHealth
 	cpuTrend?: ReadonlyArray<number>
@@ -102,7 +102,7 @@ function barColor(percent: number | null): string {
 		: BAR_COLOR[severityForPercent(percent)]
 }
 
-const role = server.labels['role'] ?? server.serverType.description
+const role = server.project ?? 'aucun projet'
 const uptime =
 	metrics.uptimeSeconds === null
 		? EMPTY_LABEL
@@ -139,12 +139,6 @@ const sparkColor = healthChartColor[health]
 				<span class:list={['size-1.5 rounded-full', tone.dot]}></span>
 				{tone.label}
 			</span>
-			<p
-				class="mt-1.5 flex items-center justify-end gap-1 font-mono text-[10.5px] text-base-500"
-			>
-				<Icon name="location" size={11} />
-				{server.location.city ?? server.location.name}
-			</p>
 		</div>
 	</div>
 

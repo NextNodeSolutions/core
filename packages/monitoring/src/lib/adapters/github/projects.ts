@@ -12,7 +12,7 @@ const MAX_CONCURRENCY = 6
 
 /**
  * The org's GitHub projects, each enriched with its latest workflow run and
- * mapped to a hosting VPS by name. `serverNames` comes from the Hetzner fleet
+ * mapped to a hosting VPS by name. `serverNames` comes from the metrics-discovered fleet
  * (empty when unavailable, which simply leaves every `vps` null). One run
  * query per repo, in parallel.
  */
