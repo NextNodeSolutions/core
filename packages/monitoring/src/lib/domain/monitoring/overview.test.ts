@@ -2,44 +2,14 @@ import { describe, expect, it } from 'vitest'
 
 import { buildOverviewWindow, OVERVIEW_STREAM_COUNT } from './overview.ts'
 
-import type { HetznerVps } from '@/lib/domain/hetzner/vps.ts'
+import type { FleetVps } from '@/lib/domain/monitoring/fleet-vps.ts'
 import type { ServerMetrics } from './fleet-overview.ts'
 import type { LogLine } from './log-query.ts'
 
-const GB = 1_000_000_000
-
-const server = (name: string): HetznerVps => ({
-	id: 1,
+const server = (name: string): FleetVps => ({
 	name,
-	status: 'running',
-	ipv4: null,
-	ipv6: null,
-	serverType: {
-		name: 'cax21',
-		description: 'CAX21',
-		cores: 4,
-		memoryGb: 8,
-		diskGb: 80,
-		cpuType: 'shared',
-		architecture: 'arm',
-	},
-	location: {
-		name: 'fsn1',
-		city: 'Falkenstein',
-		country: 'DE',
-	},
-	image: 'debian-12',
-	createdAt: '2026-01-01T00:00:00Z',
-	labels: {},
-	traffic: {
-		ingoingBytes: 0,
-		outgoingBytes: 500 * GB,
-		includedBytes: 20_000 * GB,
-	},
-	protection: { delete: false, rebuild: false },
-	backupsEnabled: false,
-	locked: false,
-	volumeCount: 0,
+	isOnline: true,
+	project: 'stylot',
 })
 
 const metrics = (cpu: number | null): ServerMetrics => ({
@@ -75,6 +45,7 @@ describe('buildOverviewWindow', () => {
 			ServerMetrics
 		>,
 		cpuSeriesByServer: [[10, 30]], // mean 20
+		traffic: { inBytes: null, outBytes: null },
 		errorCount: 0,
 		notices: [],
 	}

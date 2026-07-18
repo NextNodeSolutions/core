@@ -1,9 +1,8 @@
-import { ENV_KEYS, requireEnv } from '@/lib/adapters/env.ts'
-import { getServerByName } from '@/lib/adapters/hetzner/servers.ts'
 import { HTTP_STATUS } from '@/lib/adapters/http-status.ts'
 import { jsonResponse } from '@/lib/adapters/json-response.ts'
 import { loadPageState } from '@/lib/adapters/load-page-state.ts'
 import { queryVictoriaMetricsRange } from '@/lib/adapters/victoria/client.ts'
+import { getFleetVpsByName } from '@/lib/adapters/victoria/fleet.ts'
 import { apiErr, apiOk } from '@/lib/domain/api-result.ts'
 import { parseMetricRangeRequest } from '@/lib/domain/monitoring/metric-range-request.ts'
 
@@ -22,11 +21,11 @@ const NOW_MS_DIVISOR = 1000
  * and the window is bounded - the endpoint is tailnet-only and read-only,
  * but the validation keeps the surface tight regardless.
  *
- * The slug is resolved against a real Hetzner server before it ever reaches
- * the PromQL label builder: an unknown slug is a 404, and a validated
- * Hetzner name (its charset excludes `"`) cannot rewrite the `vps_name`
- * matcher. This mirrors the page path, which only renders metrics for a
- * server `getServerByName` matched.
+ * The slug is resolved against the metrics-discovered fleet before it ever
+ * reaches the PromQL label builder: an unknown slug is a 404, and the label
+ * builder JSON-escapes the name, so a hostile slug cannot rewrite the
+ * `vps_name` matcher. This mirrors the page path, which only renders metrics
+ * for a VPS `getFleetVpsByName` matched.
  */
 export const GET: APIRoute = async ({ params, url }) => {
 	const { slug } = params
@@ -52,9 +51,8 @@ export const GET: APIRoute = async ({ params, url }) => {
 		)
 	}
 
-	const serverState = await loadPageState(
-		`hetzner.servers.${slug}.metrics`,
-		() => getServerByName(requireEnv(ENV_KEYS.HETZNER_API_TOKEN), slug),
+	const serverState = await loadPageState(`fleet.vps.${slug}.metrics`, () =>
+		getFleetVpsByName(slug),
 	)
 	if (serverState.kind !== 'ok') {
 		return loadStateErrorResponse(serverState)

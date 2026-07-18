@@ -3,7 +3,7 @@
  *
  * Thin wrapper over `@epic-web/cachified` (semantics) backed by `lru-cache`
  * (bounded memory). The monitoring app re-fetches the same upstream data on
- * every navigation (Hetzner servers, Cloudflare projects, Tailscale devices);
+ * every navigation (Cloudflare projects, Tailscale devices);
  * `cachified` collapses the redundant work:
  *
  * - **TTL cache**: a successful fetch is reused until `ttlMs` elapses. Failed

@@ -5,7 +5,11 @@ import { getEnv } from '@/lib/adapters/env.ts'
 import { MIN_WINDOW_HOURS } from '@/lib/domain/monitoring/vps-metrics.ts'
 
 import type { VpsGauges } from '@/lib/adapters/victoria/metrics.ts'
-import type { HetznerVps } from '@/lib/domain/hetzner/vps.ts'
+import type { FleetVps } from '@/lib/domain/monitoring/fleet-vps.ts'
+import type {
+	HostFacts,
+	TrafficTotals,
+} from '@/lib/domain/monitoring/host-facts.ts'
 import type { HostMetrics } from '@/lib/domain/monitoring/host-metrics.ts'
 import type { RangePoint } from '@/lib/domain/monitoring/promql-response.ts'
 import type { VpsSeriesMetric } from '@/lib/domain/monitoring/vps-metrics.ts'
@@ -35,81 +39,67 @@ const seedFromName = (name: string): number =>
 		0,
 	)
 
-interface MockServerSpec {
-	readonly id: number
-	readonly name: string
-	readonly type: {
-		name: string
-		cores: number
-		memoryGb: number
-		diskGb: number
-	}
-	readonly ipv4: string
-	readonly role: string
+const GIB = 2 ** 30
+
+interface MockVpsSpec {
+	readonly vps: FleetVps
+	readonly facts: HostFacts
 }
 
-const server = (spec: MockServerSpec): HetznerVps => ({
-	id: spec.id,
-	name: spec.name,
-	status: 'running',
-	ipv4: spec.ipv4,
-	ipv6: null,
-	serverType: {
-		name: spec.type.name,
-		description: spec.type.name.toUpperCase(),
-		cores: spec.type.cores,
-		memoryGb: spec.type.memoryGb,
-		diskGb: spec.type.diskGb,
-		cpuType: 'shared',
-		architecture: 'x86',
+const MOCK_FLEET_SPECS: ReadonlyArray<MockVpsSpec> = [
+	{
+		vps: { name: 'nn-prod', isOnline: true, project: 'stylot' },
+		facts: {
+			cores: 2,
+			memoryTotalBytes: 4 * GIB,
+			diskTotalBytes: 40 * GIB,
+		},
 	},
-	location: {
-		name: 'fsn1',
-		city: 'Falkenstein',
-		country: 'DE',
+	{
+		vps: { name: 'nn-internals', isOnline: true, project: 'monitoring' },
+		facts: {
+			cores: 4,
+			memoryTotalBytes: 8 * GIB,
+			diskTotalBytes: 80 * GIB,
+		},
 	},
-	image: 'nextnode-golden-5ff278206c07a66a',
-	createdAt: '2026-01-12T09:30:00Z',
-	labels: { role: spec.role },
-	traffic: {
-		ingoingBytes: 2_000 * GB,
-		outgoingBytes: (500 + spec.id * 90) * GB,
-		includedBytes: 20_000 * GB,
+	{
+		vps: { name: 'nn-staging', isOnline: false, project: null },
+		facts: {
+			cores: 2,
+			memoryTotalBytes: 4 * GIB,
+			diskTotalBytes: 40 * GIB,
+		},
 	},
-	protection: { delete: false, rebuild: false },
-	backupsEnabled: spec.id % 2 === 0,
-	locked: false,
-	volumeCount: 0,
-})
-
-const MOCK_SERVERS: ReadonlyArray<HetznerVps> = [
-	server({
-		id: 1,
-		name: 'nn-prod',
-		type: { name: 'cx23', cores: 2, memoryGb: 4, diskGb: 40 },
-		ipv4: '46.225.126.135',
-		role: 'prod',
-	}),
-	server({
-		id: 2,
-		name: 'nn-internals',
-		type: { name: 'cx33', cores: 4, memoryGb: 8, diskGb: 80 },
-		ipv4: '46.225.126.201',
-		role: 'internal',
-	}),
-	server({
-		id: 3,
-		name: 'nn-staging',
-		type: { name: 'cx23', cores: 2, memoryGb: 4, diskGb: 40 },
-		ipv4: '46.225.126.88',
-		role: 'staging',
-	}),
 ]
 
-export const mockServers = (): ReadonlyArray<HetznerVps> => MOCK_SERVERS
+export const mockFleet = (): ReadonlyArray<FleetVps> =>
+	MOCK_FLEET_SPECS.map(spec => spec.vps)
 
-export const mockServerByName = (name: string): HetznerVps | null =>
-	MOCK_SERVERS.find(vps => vps.name === name) ?? null
+export const mockFleetVpsByName = (name: string): FleetVps | null =>
+	MOCK_FLEET_SPECS.find(spec => spec.vps.name === name)?.vps ?? null
+
+const NULL_FACTS: HostFacts = {
+	cores: null,
+	memoryTotalBytes: null,
+	diskTotalBytes: null,
+}
+
+export const mockHostFacts = (vpsName: string): HostFacts =>
+	MOCK_FLEET_SPECS.find(spec => spec.vps.name === vpsName)?.facts ??
+	NULL_FACTS
+
+export const mockTrafficTotals = (
+	vpsName: string | null,
+	windowHours: number,
+): TrafficTotals => {
+	const seed = seedFromName(vpsName ?? 'fleet')
+	const scale = vpsName === null ? MOCK_FLEET_SPECS.length : 1
+	return {
+		inBytes: (2 + wobble(seed) * 6) * scale * windowHours * GB,
+		outBytes: (1 + wobble(seed + 1) * 4) * scale * windowHours * GB,
+	}
+}
 
 export const mockHostMetrics = (vpsName: string): HostMetrics => {
 	const seed = seedFromName(vpsName)

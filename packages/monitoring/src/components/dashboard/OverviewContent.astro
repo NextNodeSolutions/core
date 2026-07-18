@@ -4,10 +4,9 @@ import Icon from '@/components/foundations/Icon.astro'
 import type { IconName } from '@/components/foundations/Icon.astro'
 import LoadStateBanner from '@/components/dashboard/LoadStateBanner.astro'
 import { Overview } from '@/islands/overview/Overview.tsx'
-import { ENV_KEYS, requireEnv } from '@/lib/adapters/env.ts'
-import { listServers } from '@/lib/adapters/hetzner/servers.ts'
 import { loadPageState } from '@/lib/adapters/load-page-state.ts'
 import { loadOverviewWindow } from '@/lib/adapters/overview.ts'
+import { listFleetVps } from '@/lib/adapters/victoria/fleet.ts'
 import {
 	loadHostMetrics,
 	loadVpsGauges,
@@ -52,10 +51,9 @@ interface FleetExtra {
 	netOutMbps: number | null
 }
 
-const serversState = await loadPageState('overview.servers', () => {
-	const token = requireEnv(ENV_KEYS.HETZNER_API_TOKEN)
-	return listServers(token)
-})
+const serversState = await loadPageState('overview.servers', () =>
+	listFleetVps(),
+)
 const servers = serversState.kind === 'ok' ? serversState.data : []
 
 // The range-INDEPENDENT sections (fleet grid + alerts, recent deployments) are
@@ -196,7 +194,7 @@ const recentDeploys = (recentState.kind === 'ok' ? recentState.data : []).map(
 				class="inline-flex items-center gap-2 font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-base-700"
 			>
 				<span class="size-2.5 rounded-[2px] bg-base-900"></span>
-				Fleet Hetzner
+				Fleet VPS
 			</span>
 			<span class="text-xs text-base-500">
 				Cliquez un nœud pour les métriques détaillées
@@ -210,7 +208,7 @@ const recentDeploys = (recentState.kind === 'ok' ? recentState.data : []).map(
 							server={server}
 							metrics={metricsByName[server.name] ?? NULL_METRICS}
 							health={computeServerHealth(
-								server.status,
+								server.isOnline,
 								metricsByName[server.name] ?? NULL_METRICS,
 							)}
 							cpuTrend={fleetExtras[server.name]?.cpuTrend ?? []}
@@ -220,7 +218,7 @@ const recentDeploys = (recentState.kind === 'ok' ? recentState.data : []).map(
 					))}
 				</div>
 			) : (
-				<LoadStateBanner state={serversState} upstreamLabel="Hetzner API error" />
+				<LoadStateBanner state={serversState} upstreamLabel="VictoriaMetrics error" />
 			)
 		}
 	</section>

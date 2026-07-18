@@ -4,9 +4,10 @@ import {
 } from '@/lib/domain/monitoring/fleet-overview.ts'
 import { formatTime } from '@/lib/domain/monitoring/format.ts'
 
-import type { HetznerVps } from '@/lib/domain/hetzner/vps.ts'
 import type { ServerMetrics } from '@/lib/domain/monitoring/fleet-overview.ts'
 import type { FleetStat } from '@/lib/domain/monitoring/fleet-overview.ts'
+import type { FleetVps } from '@/lib/domain/monitoring/fleet-vps.ts'
+import type { TrafficTotals } from '@/lib/domain/monitoring/host-facts.ts'
 import type { LogLevel, LogLine } from '@/lib/domain/monitoring/log-query.ts'
 
 /**
@@ -52,9 +53,11 @@ export interface OverviewWindow {
 export interface BuildOverviewWindowInput {
 	readonly range: string
 	readonly windowHours: number
-	readonly servers: ReadonlyArray<HetznerVps>
+	readonly servers: ReadonlyArray<FleetVps>
 	readonly metricsByName: Readonly<Record<string, ServerMetrics>>
 	readonly cpuSeriesByServer: ReadonlyArray<ReadonlyArray<number>>
+	/** Fleet-wide network totals over the window. */
+	readonly traffic: TrafficTotals
 	/** Recent fleet lines for the preview stream (a display sample). */
 	readonly logs: ReadonlyArray<LogLine>
 	/**
@@ -90,6 +93,7 @@ export const buildOverviewWindow = (
 		windowHours: input.windowHours,
 		cpuWindowAverage: average,
 		cpuNodeCount: nodeCount,
+		traffic: input.traffic,
 	})
 	const stream = input.logs
 		.slice(0, OVERVIEW_STREAM_COUNT)

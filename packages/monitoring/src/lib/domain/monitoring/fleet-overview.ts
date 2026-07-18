@@ -11,14 +11,16 @@ import {
 } from '@/lib/domain/monitoring/monitoring-thresholds.ts'
 
 import type { Tone } from '@/lib/domain/badge-status.ts'
-import type { HetznerVps, VpsStatus } from '@/lib/domain/hetzner/vps.ts'
+import type { FleetVps } from '@/lib/domain/monitoring/fleet-vps.ts'
+import type { TrafficTotals } from '@/lib/domain/monitoring/host-facts.ts'
 
 /**
  * Overview aggregations for the fleet dashboard.
  *
- * Pure: callers pass the real Hetzner inventory, the VictoriaMetrics host
- * gauges keyed by server name, and the VictoriaLogs error count. Alerts are
- * derived from the live metric thresholds, not from a synthetic source.
+ * Pure: callers pass the metrics-discovered fleet, the VictoriaMetrics
+ * host gauges keyed by server name, and the VictoriaLogs error count.
+ * Alerts are derived from the live metric thresholds, not from a
+ * synthetic source.
  */
 
 const BYTES_PER_GB = 1_000_000_000
@@ -64,9 +66,11 @@ export interface FleetStat {
 }
 
 export interface FleetSummaryInput {
-	readonly servers: ReadonlyArray<HetznerVps>
+	readonly servers: ReadonlyArray<FleetVps>
 	readonly metricsByName: Readonly<Record<string, ServerMetrics>>
 	readonly errorCount: number
+	/** Fleet-wide network totals over the window (null fields render "-"). */
+	readonly traffic: TrafficTotals
 	/** Selected time window in hours - labels the windowed stats honestly. */
 	readonly windowHours: number
 	/**
@@ -124,11 +128,11 @@ function hasAnyMetric(metrics: ServerMetrics): boolean {
 }
 
 export function computeServerHealth(
-	status: VpsStatus,
+	isOnline: boolean,
 	metrics: ServerMetrics,
 ): FleetHealth {
-	if (status !== 'running') return 'down'
-	// A running VPS with no metric at all is a missing scrape, not a healthy
+	if (!isOnline) return 'down'
+	// An online VPS with no metric at all is a missing scrape, not a healthy
 	// idle host - treating absent metrics as 0 would mask the gap.
 	if (!hasAnyMetric(metrics)) return 'unknown'
 	const severity = severityForPercent(worstLoad(metrics))
@@ -160,17 +164,17 @@ function evaluateMetricAlert(
 }
 
 function collectServerAlerts(
-	server: HetznerVps,
+	server: FleetVps,
 	metrics: ServerMetrics | undefined,
 ): DerivedAlert[] {
-	if (server.status !== 'running' || metrics === undefined) return []
+	if (!server.isOnline || metrics === undefined) return []
 	return ALERT_METRICS.map(metric =>
 		evaluateMetricAlert(server.name, metrics, metric),
 	).filter((alert): alert is DerivedAlert => alert !== null)
 }
 
 export function deriveFleetAlerts(
-	servers: ReadonlyArray<HetznerVps>,
+	servers: ReadonlyArray<FleetVps>,
 	metricsByName: Readonly<Record<string, ServerMetrics>>,
 ): DerivedAlert[] {
 	return servers.flatMap(server =>
@@ -178,14 +182,16 @@ export function deriveFleetAlerts(
 	)
 }
 
-function activeStat(servers: ReadonlyArray<HetznerVps>): FleetStat {
+function activeStat(servers: ReadonlyArray<FleetVps>): FleetStat {
 	const total = servers.length
-	const running = servers.filter(server => server.status === 'running').length
-	const allUp = running === total
+	const onlineCount = servers.filter(server => server.isOnline).length
+	const allUp = onlineCount === total
 	return {
 		label: 'VPS actifs',
-		value: `${running}/${total}`,
-		hint: allUp ? 'Tous opérationnels' : `${total - running} hors service`,
+		value: `${onlineCount}/${total}`,
+		hint: allUp
+			? 'Tous opérationnels'
+			: `${total - onlineCount} hors ligne`,
 		tone: allUp ? 'positive' : 'warning',
 		icon: 'server',
 	}
@@ -236,17 +242,18 @@ function cpuStat(input: FleetSummaryInput): FleetStat {
 	}
 }
 
-function trafficStat(servers: ReadonlyArray<HetznerVps>): FleetStat {
-	const outgoingGb =
-		servers.reduce((sum, server) => sum + server.traffic.outgoingBytes, 0) /
-		BYTES_PER_GB
-	const includedGb =
-		servers.reduce((sum, server) => sum + server.traffic.includedBytes, 0) /
-		BYTES_PER_GB
+function trafficStat(input: FleetSummaryInput): FleetStat {
+	const { inBytes, outBytes } = input.traffic
 	return {
-		label: 'Trafic sortant (mois)',
-		value: formatTrafficGb(outgoingGb),
-		hint: `sur ${formatTrafficGb(includedGb)} inclus`,
+		label: `Trafic sortant (${windowLabel(input.windowHours)})`,
+		value:
+			outBytes === null
+				? EMPTY_LABEL
+				: formatTrafficGb(outBytes / BYTES_PER_GB),
+		hint:
+			inBytes === null
+				? 'entrant inconnu'
+				: `↓ ${formatTrafficGb(inBytes / BYTES_PER_GB)} entrant`,
 		tone: 'neutral',
 		icon: 'net',
 	}
@@ -270,7 +277,7 @@ export function summarizeFleet(input: FleetSummaryInput): FleetStat[] {
 	return [
 		activeStat(input.servers),
 		cpuStat(input),
-		trafficStat(input.servers),
+		trafficStat(input),
 		errorStat(input),
 	]
 }

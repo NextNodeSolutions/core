@@ -4,16 +4,19 @@ import Icon from '@/components/foundations/Icon.astro'
 import RadialGauge from '@/components/charts/RadialGauge.astro'
 import VpsMetricPanel from '@/components/vps/VpsMetricPanel.astro'
 import { FleetComparison } from '@/islands/fleet-cmp/FleetComparison.tsx'
-import { ENV_KEYS, requireEnv } from '@/lib/adapters/env.ts'
-import { listServers } from '@/lib/adapters/hetzner/servers.ts'
 import { loadPageState } from '@/lib/adapters/load-page-state.ts'
 import { mapWithConcurrency } from '@/lib/domain/concurrency.ts'
+import {
+	listFleetVps,
+	loadTrafficTotals,
+} from '@/lib/adapters/victoria/fleet.ts'
 import {
 	loadHostMetrics,
 	loadVpsGauges,
 	loadVpsSeries,
 } from '@/lib/adapters/victoria/metrics.ts'
 import { deriveFleetAlerts } from '@/lib/domain/monitoring/fleet-overview.ts'
+import { bytesToWholeGb } from '@/lib/domain/monitoring/host-facts.ts'
 import {
 	EMPTY_LABEL,
 	formatFixedOrDash,
@@ -29,7 +32,8 @@ import { summarizeSeries } from '@/lib/domain/monitoring/series-summary.ts'
 import { rangeToHours } from '@/lib/domain/monitoring/vps-metrics.ts'
 
 import type { VpsGauges } from '@/lib/adapters/victoria/metrics.ts'
-import type { HetznerVps } from '@/lib/domain/hetzner/vps.ts'
+import type { FleetVps } from '@/lib/domain/monitoring/fleet-vps.ts'
+import type { HostFacts } from '@/lib/domain/monitoring/host-facts.ts'
 import type { ServerMetrics } from '@/lib/domain/monitoring/fleet-overview.ts'
 import type { HostMetrics } from '@/lib/domain/monitoring/host-metrics.ts'
 import type { LoadState } from '@/lib/domain/load-state.ts'
@@ -38,7 +42,8 @@ import type { VpsSeriesMetric } from '@/lib/domain/monitoring/vps-metrics.ts'
 
 interface Props {
 	slug: string
-	server: HetznerVps | null
+	vps: FleetVps | null
+	facts: HostFacts
 	range: string
 }
 
@@ -54,7 +59,7 @@ const PCT_FULL = 100
 const BYTES_PER_GB = 1_000_000_000
 const LOAD_DECIMALS = 2
 const CMP_CONCURRENCY = 6
-const EMPTY_FLEET: ReadonlyArray<HetznerVps> = []
+const EMPTY_FLEET: ReadonlyArray<FleetVps> = []
 const PERCENT_THRESHOLDS: ReadonlyArray<Threshold> = [
 	{ value: FLEET_WARN_PERCENT, label: 'warning', severity: 'warning' },
 	{ value: FLEET_CRITICAL_PERCENT, label: 'critical', severity: 'critical' },
@@ -75,7 +80,7 @@ const NULL_GAUGES: VpsGauges = {
 	netOutMbps: null,
 }
 
-const { slug, server, range } = Astro.props
+const { slug, vps, facts, range } = Astro.props
 
 const hours = rangeToHours(range)
 
@@ -94,26 +99,28 @@ const seriesMetrics: ReadonlyArray<VpsSeriesMetric> = [
 	'netIn',
 ]
 
-// Host gauges, the Hetzner fleet list and every series share no data, so they
-// fire in one parallel wave instead of three serialized awaits.
-const [hostState, gaugesState, fleetState, seriesStates] = await Promise.all([
-	loadPageState(`vps.${slug}.host`, () => loadHostMetrics(slug)),
-	loadPageState(`vps.${slug}.gauges`, () => loadVpsGauges(slug)),
-	loadPageState(`vps.${slug}.fleet`, () => {
-		const token = requireEnv(ENV_KEYS.HETZNER_API_TOKEN)
-		return listServers(token)
-	}),
-	Promise.all(
-		seriesMetrics.map((metric) =>
-			loadPageState(`vps.${slug}.series.${metric}`, () =>
-				loadVpsSeries(slug, metric, hours),
+// Host gauges, the fleet list, the traffic totals and every series share no
+// data, so they fire in one parallel wave instead of serialized awaits.
+const [hostState, gaugesState, fleetState, trafficState, seriesStates] =
+	await Promise.all([
+		loadPageState(`vps.${slug}.host`, () => loadHostMetrics(slug)),
+		loadPageState(`vps.${slug}.gauges`, () => loadVpsGauges(slug)),
+		loadPageState(`vps.${slug}.fleet`, () => listFleetVps()),
+		loadPageState(`vps.${slug}.traffic.${String(hours)}`, () =>
+			loadTrafficTotals(slug, hours),
+		),
+		Promise.all(
+			seriesMetrics.map((metric) =>
+				loadPageState(`vps.${slug}.series.${metric}`, () =>
+					loadVpsSeries(slug, metric, hours),
+				),
 			),
 		),
-	),
-])
+	])
 const host = unwrap(hostState, NULL_HOST)
 const gauges = unwrap(gaugesState, NULL_GAUGES)
 const fleet = unwrap(fleetState, EMPTY_FLEET)
+const traffic = unwrap(trafficState, { inBytes: null, outBytes: null })
 
 const seriesAt = (metric: VpsSeriesMetric): ReadonlyArray<RangePoint> => {
 	const index = seriesMetrics.indexOf(metric)
@@ -150,20 +157,20 @@ const cpuCmpLines = await mapWithConcurrency(
 )
 
 const metricsByName: Record<string, ServerMetrics> =
-	server === null
+	vps === null
 		? {}
 		: {
-				[server.name]: {
+				[vps.name]: {
 					cpuPercent: host.cpuPercent,
 					memoryPercent: host.memoryPercent,
 					diskPercent: host.diskPercent,
 				},
 			}
-const alerts = server === null ? [] : deriveFleetAlerts([server], metricsByName)
+const alerts = vps === null ? [] : deriveFleetAlerts([vps], metricsByName)
 
-const cores = server?.serverType.cores ?? 0
-const memoryGb = server?.serverType.memoryGb ?? 0
-const diskGb = server?.serverType.diskGb ?? 0
+const cores = facts.cores ?? 0
+const memoryGb = bytesToWholeGb(facts.memoryTotalBytes) ?? 0
+const diskGb = bytesToWholeGb(facts.diskTotalBytes) ?? 0
 
 const summaryOf = (
 	points: ReadonlyArray<RangePoint>,
@@ -198,14 +205,14 @@ const diskSub =
 		? `${diskGb} GB`
 		: `${((host.diskPercent / PCT_FULL) * diskGb).toFixed(0)} / ${diskGb} GB`
 
-const monthIn =
-	server === null
+const windowIn =
+	traffic.inBytes === null
 		? EMPTY_LABEL
-		: formatTrafficGb(server.traffic.ingoingBytes / BYTES_PER_GB)
-const monthOut =
-	server === null
+		: formatTrafficGb(traffic.inBytes / BYTES_PER_GB)
+const windowOut =
+	traffic.outBytes === null
 		? EMPTY_LABEL
-		: formatTrafficGb(server.traffic.outgoingBytes / BYTES_PER_GB)
+		: formatTrafficGb(traffic.outBytes / BYTES_PER_GB)
 
 const latencyThresholds: ReadonlyArray<Threshold> = [
 	{ value: DISK_LATENCY_WARNING, label: 'lent', severity: 'warning' },
@@ -224,7 +231,7 @@ const swapAmber =
 ---
 
 {
-	server === null ? (
+	vps === null ? (
 		// The page only mounts this island for a resolved server, so a null prop
 		// here means the header lookup raced to empty - the page already owns the
 		// not-found / error banner, so the island stays silent rather than
@@ -362,12 +369,12 @@ const swapAmber =
 					</div>
 					<div class="my-0.5 border-t border-base-100" />
 					<div class="flex justify-between">
-						<span class="text-xs text-base-500">Mois ↓</span>
-						<span class="font-mono font-semibold text-base-900">{monthIn}</span>
+						<span class="text-xs text-base-500">Fenêtre ↓</span>
+						<span class="font-mono font-semibold text-base-900">{windowIn}</span>
 					</div>
 					<div class="flex justify-between">
-						<span class="text-xs text-base-500">Mois ↑</span>
-						<span class="font-mono font-semibold text-base-900">{monthOut}</span>
+						<span class="text-xs text-base-500">Fenêtre ↑</span>
+						<span class="font-mono font-semibold text-base-900">{windowOut}</span>
 					</div>
 				</div>
 			</div>

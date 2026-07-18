@@ -7,57 +7,22 @@ import {
 	summarizeFleet,
 } from './fleet-overview.ts'
 
-import type { HetznerVps, VpsStatus } from '@/lib/domain/hetzner/vps.ts'
+import type { FleetVps } from '@/lib/domain/monitoring/fleet-vps.ts'
 import type { FleetStat, ServerMetrics } from './fleet-overview.ts'
 
 const GB = 1_000_000_000
 
-function server(
-	name: string,
-	status: VpsStatus,
-	outgoingGb: number,
-	includedGb: number,
-): HetznerVps {
-	return {
-		id: 1,
-		name,
-		status,
-		ipv4: null,
-		ipv6: null,
-		serverType: {
-			name: 'cax21',
-			description: 'CAX21',
-			cores: 4,
-			memoryGb: 8,
-			diskGb: 80,
-			cpuType: 'shared',
-			architecture: 'arm',
-		},
-		location: {
-			name: 'fsn1',
-			city: 'Falkenstein',
-			country: 'DE',
-		},
-		image: 'debian-12',
-		createdAt: '2026-01-01T00:00:00Z',
-		labels: {},
-		traffic: {
-			ingoingBytes: 0,
-			outgoingBytes: outgoingGb * GB,
-			includedBytes: includedGb * GB,
-		},
-		protection: { delete: false, rebuild: false },
-		backupsEnabled: false,
-		locked: false,
-		volumeCount: 0,
-	}
+function server(name: string, isOnline: boolean): FleetVps {
+	return { name, isOnline, project: null }
 }
 
-const servers: HetznerVps[] = [
-	server('alpha', 'running', 500, 20_000),
-	server('beta', 'running', 1_500, 20_000),
-	server('gamma', 'off', 0, 20_000),
+const servers: FleetVps[] = [
+	server('alpha', true),
+	server('beta', true),
+	server('gamma', false),
 ]
+
+const NULL_TRAFFIC = { inBytes: null, outBytes: null }
 
 const metricsByName: Record<string, ServerMetrics> = {
 	alpha: { cpuPercent: 20, memoryPercent: 30, diskPercent: 40 },
@@ -66,9 +31,9 @@ const metricsByName: Record<string, ServerMetrics> = {
 }
 
 describe('computeServerHealth', () => {
-	it('reports down when the server is not running, ignoring metrics', () => {
+	it('reports down when the server is offline, ignoring metrics', () => {
 		expect(
-			computeServerHealth('off', {
+			computeServerHealth(false, {
 				cpuPercent: 5,
 				memoryPercent: 5,
 				diskPercent: 5,
@@ -77,30 +42,24 @@ describe('computeServerHealth', () => {
 	})
 
 	it('escalates to critical past 90% and warning past 75%', () => {
-		expect(computeServerHealth('running', metricsByName.beta!)).toBe(
-			'critical',
-		)
+		expect(computeServerHealth(true, metricsByName.beta!)).toBe('critical')
 		expect(
-			computeServerHealth('running', {
+			computeServerHealth(true, {
 				cpuPercent: 78,
 				memoryPercent: 10,
 				diskPercent: 10,
 			}),
 		).toBe('warning')
-		expect(computeServerHealth('running', metricsByName.alpha!)).toBe(
-			'running',
-		)
+		expect(computeServerHealth(true, metricsByName.alpha!)).toBe('running')
 	})
 
-	it('reports unknown when a running server has no metric at all', () => {
-		expect(computeServerHealth('running', metricsByName.gamma!)).toBe(
-			'unknown',
-		)
+	it('reports unknown when an online server has no metric at all', () => {
+		expect(computeServerHealth(true, metricsByName.gamma!)).toBe('unknown')
 	})
 
 	it('stays running when at least one metric is present and healthy', () => {
 		expect(
-			computeServerHealth('running', {
+			computeServerHealth(true, {
 				cpuPercent: 20,
 				memoryPercent: null,
 				diskPercent: null,
@@ -145,14 +104,15 @@ describe('summarizeFleet', () => {
 		windowHours: 6,
 		cpuWindowAverage: 50,
 		cpuNodeCount: 2,
+		traffic: { inBytes: 500 * GB, outBytes: 2_000 * GB },
 	})
 	const byLabel = (label: string): FleetStat | undefined =>
 		stats.find(s => s.label === label)
 
-	it('counts running servers out of the fleet', () => {
+	it('counts online servers out of the fleet', () => {
 		expect(byLabel('VPS actifs')).toMatchObject({
 			value: '2/3',
-			hint: '1 hors service',
+			hint: '1 hors ligne',
 			tone: 'warning',
 		})
 	})
@@ -173,6 +133,7 @@ describe('summarizeFleet', () => {
 			windowHours: 1,
 			cpuWindowAverage: 92,
 			cpuNodeCount: 2,
+			traffic: NULL_TRAFFIC,
 		})
 		expect(hot.find(s => s.label === 'CPU moyen (1 h)')).toMatchObject({
 			value: '92%',
@@ -180,10 +141,10 @@ describe('summarizeFleet', () => {
 		})
 	})
 
-	it('sums outgoing traffic against the included allowance', () => {
-		expect(byLabel('Trafic sortant (mois)')).toMatchObject({
+	it('renders the windowed traffic totals under a range-labelled title', () => {
+		expect(byLabel('Trafic sortant (6 h)')).toMatchObject({
 			value: '2.00 TB',
-			hint: 'sur 60.00 TB inclus',
+			hint: '\u2193 500.0 GB entrant',
 		})
 	})
 
@@ -203,6 +164,7 @@ describe('summarizeFleet', () => {
 			windowHours: 24,
 			cpuWindowAverage: 10,
 			cpuNodeCount: 2,
+			traffic: NULL_TRAFFIC,
 		})
 		expect(day.some(s => s.label === 'CPU moyen (24 h)')).toBe(true)
 		expect(day.some(s => s.label === 'Erreurs (24 h)')).toBe(true)
@@ -216,6 +178,7 @@ describe('summarizeFleet', () => {
 			windowHours: 6,
 			cpuWindowAverage: null,
 			cpuNodeCount: 0,
+			traffic: NULL_TRAFFIC,
 		})
 		expect(
 			blind.find(stat => stat.label === 'CPU moyen (6 h)'),

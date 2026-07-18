@@ -30,6 +30,9 @@ export const NODE_EXPORTER_METRICS = [
 	'load5',
 	'load15',
 	'swap',
+	'cores',
+	'memoryTotalBytes',
+	'diskTotalBytes',
 ] as const
 
 export type NodeExporterMetric = (typeof NODE_EXPORTER_METRICS)[number]
@@ -63,4 +66,36 @@ export const NODE_EXPORTER_EXPR: Record<
 	load15: vps => `node_load15{${selector(vps)}}`,
 	swap: vps =>
 		`100 * (1 - node_memory_SwapFree_bytes{${selector(vps)}} / node_memory_SwapTotal_bytes{${selector(vps)}})`,
+	cores: vps =>
+		`count(count by (cpu) (node_cpu_seconds_total{${selector(vps)},mode="idle"}))`,
+	memoryTotalBytes: vps => `node_memory_MemTotal_bytes{${selector(vps)}}`,
+	diskTotalBytes: vps =>
+		`node_filesystem_size_bytes{${selector(vps)},mountpoint="/",fstype!~"tmpfs|overlay"}`,
+}
+
+export type TrafficDirection = 'in' | 'out'
+
+const SECONDS_PER_HOUR = 3600
+
+const TRAFFIC_COUNTER: Record<TrafficDirection, string> = {
+	in: 'node_network_receive_bytes_total',
+	out: 'node_network_transmit_bytes_total',
+}
+
+/**
+ * Total bytes transferred over the last `windowHours`, from the network
+ * counters (loopback excluded). `vpsName` scopes to one VPS; `null` sums
+ * the whole fleet (`vps_name!=""` keeps only client-VPS series - the
+ * blackbox/backups jobs carry no `vps_name`).
+ */
+export const buildTrafficTotalExpr = (
+	vpsName: string | null,
+	direction: TrafficDirection,
+	windowHours: number,
+): string => {
+	const scope = vpsName === null ? 'vps_name!=""' : selector(vpsName)
+	// Integer seconds: the sub-hour live window would otherwise render a
+	// fractional duration, which classic PromQL rejects.
+	const window = `${String(Math.round(windowHours * SECONDS_PER_HOUR))}s`
+	return `sum(increase(${TRAFFIC_COUNTER[direction]}{${scope},device!~"lo"}[${window}]))`
 }

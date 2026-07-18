@@ -35,7 +35,6 @@ url = "monitoring.nextnode.fr"
 secrets = [
 	"CLOUDFLARE_API_TOKEN",
 	"CLOUDFLARE_ACCOUNT_ID",
-	"HETZNER_API_TOKEN",
 	"TS_OAUTH_SECRET",
 	# Read-only access to the nextnode-state bucket: the /api/sd/* service
 	# discovery endpoints join tailnet devices with hetzner/<vps>.json.
