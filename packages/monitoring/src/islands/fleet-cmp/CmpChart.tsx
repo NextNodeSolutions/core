@@ -1,7 +1,7 @@
 import { useAtomValue } from 'jotai'
 
 import { chartSeriesAtom, metricAtom } from '@/islands/fleet-cmp/atoms.ts'
-import { cmpIsPercent, cmpUnit } from '@/islands/fleet-cmp/metrics.ts'
+import { CMP_UNIT, cmpIsPercent } from '@/islands/fleet-cmp/metrics.ts'
 import { MultiLine } from '@/islands/fleet-cmp/MultiLine.tsx'
 
 /**
@@ -19,7 +19,7 @@ export function CmpChart(): React.ReactElement {
 
 	return (
 		<MultiLine
-			unit={cmpUnit(metric)}
+			unit={CMP_UNIT[metric]}
 			max={cmpIsPercent(metric) ? PERCENT_MAX : undefined}
 			series={series}
 		/>

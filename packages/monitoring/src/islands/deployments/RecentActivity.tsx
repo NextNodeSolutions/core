@@ -1,13 +1,15 @@
 import { useAtomValue } from 'jotai'
 
+import { ActivityRow } from '@/islands/deployments/ActivityRow.tsx'
 import { nowMsAtom, recentActivityAtom } from '@/islands/deployments/atoms.ts'
-import { RecentActivityRow } from '@/islands/deployments/RecentActivityRow.tsx'
+import { activityRowView } from '@/lib/domain/deployments/activity-view.ts'
 
 /**
  * The "Activité récente · tous projets" list on the master view. Reads the
- * seeded, capped recent-activity derivation and renders one row per entry (each
- * row owns its own click handler). Shows the empty state when there is nothing
- * to list. No fetch.
+ * seeded, merged (Pages + VPS) recent-activity derivation, maps each entry
+ * through the shared `activityRowView` builder and renders one `ActivityRow`
+ * per entry - the row itself decides link vs drawer from its target. Shows
+ * the empty state when there is nothing to list. No fetch.
  */
 
 export function RecentActivity(): React.ReactElement {
@@ -24,13 +26,10 @@ export function RecentActivity(): React.ReactElement {
 
 	return (
 		<div className="border-base-200 shadow-subtle overflow-hidden rounded-xl border bg-white">
-			{recent.map(entry => (
-				<RecentActivityRow
-					key={entry.deployment.id}
-					entry={entry}
-					nowMs={nowMs}
-				/>
-			))}
+			{recent.map(entry => {
+				const view = activityRowView(entry)
+				return <ActivityRow key={view.key} view={view} nowMs={nowMs} />
+			})}
 		</div>
 	)
 }

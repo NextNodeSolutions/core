@@ -7,7 +7,14 @@ export const ENV_KEYS = {
 	R2_ACCESS_KEY_ID: 'R2_ACCESS_KEY_ID',
 	R2_SECRET_ACCESS_KEY: 'R2_SECRET_ACCESS_KEY',
 	NN_CLIENT_ID: 'NN_CLIENT_ID',
-	GITHUB_TOKEN: 'GITHUB_TOKEN',
+	// Runtime GitHub auth: the NextNode GitHub App mints installation
+	// tokens (app-token.ts). The key travels base64-encoded because the
+	// deploy env writer rejects multiline values. GH_API_TOKEN is an
+	// optional local-dev PAT override (a GITHUB_-prefixed name is reserved
+	// in GitHub Secrets, hence no GITHUB_TOKEN).
+	NEXTNODE_APP_ID: 'NEXTNODE_APP_ID',
+	NEXTNODE_APP_PRIVATE_KEY_B64: 'NEXTNODE_APP_PRIVATE_KEY_B64',
+	GH_API_TOKEN: 'GH_API_TOKEN',
 } as const
 
 export class MissingEnvError extends Error {

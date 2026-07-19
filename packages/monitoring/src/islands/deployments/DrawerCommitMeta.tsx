@@ -1,7 +1,7 @@
+import { ENV_PILL_CLASS } from '@/components/deployments/activity-display.ts'
 import {
 	commitLabel,
 	EMPTY_VALUE,
-	envPillClass,
 } from '@/islands/deployments/deploy-styles.ts'
 import { DeployIcon } from '@/islands/deployments/DeployIcon.tsx'
 
@@ -27,7 +27,7 @@ export function DrawerCommitMeta({
 			</div>
 			<div className="flex flex-wrap gap-2">
 				<span
-					className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${envPillClass(deployment.environment)}`}
+					className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${ENV_PILL_CLASS[deployment.environment]}`}
 				>
 					{deployment.environment}
 				</span>

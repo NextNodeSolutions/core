@@ -1,4 +1,7 @@
-import { formatDurationSeconds } from '@/lib/domain/monitoring/format.ts'
+import {
+	EMPTY_LABEL,
+	formatDurationSeconds,
+} from '@/lib/domain/monitoring/format.ts'
 
 import type { DeployIconName } from '@/islands/deployments/DeployIcon.tsx'
 import type {
@@ -18,13 +21,14 @@ import type { CloudflarePagesDeployment } from '@/lib/domain/cloudflare/pages-de
  * overview screen); we reuse them rather than re-declare them here.
  */
 
-const COMMIT_LENGTH = 7
 const HIGH_SUCCESS_RATE = 90
 const MID_SUCCESS_RATE = 70
 const STRIP_BASE_OPACITY = 0.35
 const STRIP_GRADED_RANGE = 0.65
 
-export const EMPTY_VALUE = '-'
+// The island-local aliases for the shared domain display rules.
+export { EMPTY_LABEL as EMPTY_VALUE } from '@/lib/domain/monitoring/format.ts'
+export { deploymentCommitLabel as commitLabel } from '@/lib/domain/cloudflare/deployment-summary.ts'
 
 /**
  * The DeployIcon glyph per display status. Mirrors the shared
@@ -75,12 +79,6 @@ export const stepLabelClass: Record<StepState, string> = {
 	pending: 'font-medium text-base-500',
 }
 
-/** Tailwind text tint for an environment pill (prod = accent, preview = base). */
-export const envPillClass = (environment: string): string =>
-	environment === 'production'
-		? 'border-accent-200 bg-accent-50 text-accent-700'
-		: 'border-base-200 bg-base-100 text-base-600'
-
 export const successRateClass = (rate: number | null): string => {
 	if (rate === null) return 'text-base-400'
 	if (rate >= HIGH_SUCCESS_RATE) return 'text-emerald-600'
@@ -89,10 +87,7 @@ export const successRateClass = (rate: number | null): string => {
 }
 
 export const successRateLabel = (rate: number | null): string =>
-	rate === null ? EMPTY_VALUE : `${String(rate)}%`
-
-export const commitLabel = (deployment: CloudflarePagesDeployment): string =>
-	deployment.commitHash?.slice(0, COMMIT_LENGTH) ?? deployment.shortId
+	rate === null ? EMPTY_LABEL : `${String(rate)}%`
 
 export const durationLabel = (deployment: CloudflarePagesDeployment): string =>
 	formatDurationSeconds(
@@ -103,9 +98,9 @@ export const stripOpacity = (index: number, count: number): number =>
 	STRIP_BASE_OPACITY + (STRIP_GRADED_RANGE * (count - index)) / count
 
 /** The pipeline-step glyph for each state (null = the small neutral dot). */
-export const stepDotIcon = (state: StepState): DeployIconName | null => {
-	if (state === 'done') return 'check'
-	if (state === 'active') return 'refresh'
-	if (state === 'failed') return 'x'
-	return null
+export const stepDotIcon: Record<StepState, DeployIconName | null> = {
+	done: 'check',
+	active: 'refresh',
+	failed: 'x',
+	pending: null,
 }

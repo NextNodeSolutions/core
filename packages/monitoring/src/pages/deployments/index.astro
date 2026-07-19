@@ -5,6 +5,7 @@ import DashboardLayout from '@/layouts/DashboardLayout.astro'
 import { resolveCloudflareClient } from '@/lib/adapters/cloudflare/accounts.ts'
 import { listPagesDeployments } from '@/lib/adapters/cloudflare/pages-deployments.ts'
 import { listPagesProjects } from '@/lib/adapters/cloudflare/pages-projects.ts'
+import { loadVpsDeployRuns } from '@/lib/adapters/github/vps-deployments.ts'
 import { loadPageState } from '@/lib/adapters/load-page-state.ts'
 import { mapWithConcurrency } from '@/lib/domain/concurrency.ts'
 
@@ -12,11 +13,13 @@ import type { DeploymentsSeed } from '@/islands/deployments/atoms.ts'
 import type { CloudflareClient } from '@/lib/adapters/cloudflare/client.ts'
 import type { CloudflarePagesDeployment } from '@/lib/domain/cloudflare/pages-deployment.ts'
 import type { CloudflarePagesProject } from '@/lib/domain/cloudflare/pages-project.ts'
+import type { VpsDeployRun } from '@/lib/domain/github/vps-deploy-run.ts'
 
 // oxlint-disable-next-line nextnode/boolean-naming -- prerender is Astro's required route export name
 export const prerender = false
 
 const PER_PROJECT_LIMIT = 20
+const PER_WORKFLOW_RUN_LIMIT = 10
 const FAN_OUT_CONCURRENCY = 6
 const DEFAULT_ENV = 'all'
 
@@ -29,6 +32,14 @@ const sel = params.get('sel') ?? ''
 // assembled set to the island as a seed. The island does ALL selection /
 // filtering client-side from it - no refetch on an interaction. `nowMs` is
 // computed server-side so relative times stay deterministic in render.
+// The GitHub side of the feed (VPS deploy runs) is independent of the
+// Cloudflare client, so it loads in parallel with the Pages fan-out. A GitHub
+// failure degrades to an empty VPS list (logged by loadPageState) without
+// blanking the Pages data, and vice versa.
+const vpsRunsStatePromise = loadPageState('deployments.vpsRuns', () =>
+	loadVpsDeployRuns(PER_WORKFLOW_RUN_LIMIT),
+)
+
 const clientState = await loadPageState(
 	'deployments.client',
 	resolveCloudflareClient,
@@ -76,14 +87,18 @@ const deploymentsByProject: Record<
 	ReadonlyArray<CloudflarePagesDeployment>
 > = client === null ? {} : await loadProjectDeployments(client)
 
-const seed: DeploymentsSeed = { projects, deploymentsByProject }
+const vpsRunsState = await vpsRunsStatePromise
+const vpsRuns: ReadonlyArray<VpsDeployRun> =
+	vpsRunsState.kind === 'ok' ? vpsRunsState.data : []
+
+const seed: DeploymentsSeed = { projects, deploymentsByProject, vpsRuns }
 const clientFailed = clientState.kind !== 'ok'
 const nowMs = Date.now()
 ---
 
 <DashboardLayout
 	title="Déploiements"
-	breadcrumbs={[{ label: 'Cloudflare' }, { label: 'Pages' }]}
+	breadcrumbs={[{ label: 'Cloudflare Pages' }, { label: 'VPS' }]}
 >
 	{
 		clientFailed ? (

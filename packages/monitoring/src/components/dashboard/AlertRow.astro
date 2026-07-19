@@ -1,0 +1,89 @@
+---
+import Icon from '@/components/foundations/Icon.astro'
+import { vpsDetailPath } from '@/lib/domain/hetzner/vps-routes.ts'
+
+import type { DerivedAlert } from '@/lib/domain/monitoring/fleet-overview.ts'
+
+/**
+ * One derived-alert row, shared by the overview's "Alertes actives" section
+ * and the per-VPS metrics page (which hides the VPS pill + link - the page IS
+ * that VPS). The severity -> colour maps live here and nowhere else; they used
+ * to be six inline ternaries copied across the two screens.
+ */
+
+const SEVERITY_ICON_CLASS = {
+	critical: 'text-red-600',
+	warning: 'text-amber-500',
+} satisfies Record<DerivedAlert['severity'], string>
+
+const SEVERITY_BADGE_CLASS = {
+	critical: 'border-red-200 bg-red-50 text-red-700',
+	warning: 'border-amber-200 bg-amber-50 text-amber-700',
+} satisfies Record<DerivedAlert['severity'], string>
+
+const SEVERITY_VALUE_CLASS = {
+	critical: 'text-red-600',
+	warning: 'text-amber-600',
+} satisfies Record<DerivedAlert['severity'], string>
+
+interface Props {
+	alert: DerivedAlert
+	/** Show the VPS pill + "Voir" link (the fleet-wide overview list). */
+	withVpsLink?: boolean
+}
+
+const { alert, withVpsLink = false } = Astro.props
+---
+
+<div
+	class="flex items-center gap-3.5 border-b border-base-100 px-4 py-3 last:border-b-0"
+>
+	<span class:list={['shrink-0', SEVERITY_ICON_CLASS[alert.severity]]}>
+		<Icon name="alert" size={18} />
+	</span>
+	<div class="min-w-0 flex-1">
+		<div class="flex items-center gap-2">
+			<span class="text-[13.5px] font-semibold text-base-900">
+				{alert.label}
+			</span>
+			<span
+				class:list={[
+					'rounded-full border px-2 py-0.5 text-[11px] font-medium',
+					SEVERITY_BADGE_CLASS[alert.severity],
+				]}
+			>
+				{alert.severity}
+			</span>
+			{
+				withVpsLink && (
+					<span class="rounded-full border border-base-200 bg-base-100 px-2 py-0.5 font-mono text-[11px] text-base-700">
+						{alert.vpsName}
+					</span>
+				)
+			}
+		</div>
+	</div>
+	<div class="shrink-0 text-right">
+		<div
+			class:list={[
+				'font-mono text-sm font-bold',
+				SEVERITY_VALUE_CLASS[alert.severity],
+			]}
+		>
+			{alert.valuePercent}%
+		</div>
+		<div class="font-mono text-[10.5px] text-base-500">
+			seuil {alert.thresholdPercent}%
+		</div>
+	</div>
+	{
+		withVpsLink && (
+			<a
+				href={vpsDetailPath(alert.vpsName)}
+				class="shrink-0 rounded-full bg-base-50 px-3 py-1 text-xs font-medium text-base-800 hover:bg-base-100"
+			>
+				Voir
+			</a>
+		)
+	}
+</div>

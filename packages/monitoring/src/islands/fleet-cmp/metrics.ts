@@ -33,11 +33,12 @@ export const isCmpMetric = (candidate: string): candidate is CmpMetric =>
 	candidate === 'load' ||
 	candidate === 'netOut'
 
-/** Axis unit suffix for a comparison metric (percent, load is unitless). */
-export const cmpUnit = (metric: CmpMetric): string => {
-	if (metric === 'load') return ''
-	if (metric === 'netOut') return ' Mb/s'
-	return '%'
+/** Axis unit suffix per comparison metric (percent, load is unitless). */
+export const CMP_UNIT: Record<CmpMetric, string> = {
+	cpu: '%',
+	mem: '%',
+	load: '',
+	netOut: ' Mb/s',
 }
 
 /** Percent metrics pin the chart axis to 100; the others auto-scale. */

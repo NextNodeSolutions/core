@@ -1,13 +1,13 @@
 import { HTTP_STATUS } from '@/lib/adapters/http-status.ts'
 import { jsonResponse } from '@/lib/adapters/json-response.ts'
 import { loadPageState } from '@/lib/adapters/load-page-state.ts'
+import { loadStateErrorResponse } from '@/lib/adapters/load-state-response.ts'
 import { queryVictoriaMetricsRange } from '@/lib/adapters/victoria/client.ts'
 import { getFleetVpsByName } from '@/lib/adapters/victoria/fleet.ts'
 import { apiErr, apiOk } from '@/lib/domain/api-result.ts'
 import { parseMetricRangeRequest } from '@/lib/domain/monitoring/metric-range-request.ts'
 
 import type { APIRoute } from 'astro'
-import type { LoadState } from '@/lib/domain/load-state.ts'
 
 // oxlint-disable-next-line nextnode/boolean-naming -- prerender is Astro's required route export name
 export const prerender = false
@@ -78,23 +78,4 @@ const runRangeQuery = async (
 		return jsonResponse(apiOk(state.data), HTTP_STATUS.OK)
 	}
 	return loadStateErrorResponse(state)
-}
-
-/**
- * Map a non-ok load state to its API error response: an upstream failure is
- * a 502, every other non-ok kind (missing config, unexpected error) is a 500.
- */
-const loadStateErrorResponse = (
-	state: Exclude<LoadState<unknown>, { kind: 'ok' }>,
-): Response => {
-	if (state.kind === 'upstream_error') {
-		return jsonResponse(
-			apiErr('upstream_error', state.message),
-			HTTP_STATUS.BAD_GATEWAY,
-		)
-	}
-	return jsonResponse(
-		apiErr('internal_error', state.message),
-		HTTP_STATUS.INTERNAL_SERVER_ERROR,
-	)
 }

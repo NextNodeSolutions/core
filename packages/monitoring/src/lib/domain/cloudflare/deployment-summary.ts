@@ -32,6 +32,14 @@ export const deploymentDisplayStatus = (
 	status: CloudflarePagesDeploymentStatus,
 ): DeployDisplayStatus => DISPLAY_BY_STATUS[status]
 
+const COMMIT_LENGTH = 7
+
+/** The short commit hash a deployment displays, or its shortId without one. */
+export const deploymentCommitLabel = (
+	deployment: Pick<CloudflarePagesDeployment, 'commitHash' | 'shortId'>,
+): string =>
+	deployment.commitHash?.slice(0, COMMIT_LENGTH) ?? deployment.shortId
+
 export interface ProjectSummary {
 	readonly current: CloudflarePagesDeployment | null
 	readonly last: CloudflarePagesDeployment | null

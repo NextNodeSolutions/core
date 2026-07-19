@@ -3,17 +3,29 @@ import { atomFamily } from 'jotai/utils'
 
 import {
 	deploymentDisplayStatus,
-	selectRecentDeployments,
 	summarizeProject,
 } from '@/lib/domain/cloudflare/deployment-summary.ts'
+import { CLOUDFLARE_PAGES_DEPLOYMENT_ENVIRONMENTS } from '@/lib/domain/cloudflare/pages-deployment.ts'
+import {
+	mergeActivity,
+	selectRecentActivity,
+} from '@/lib/domain/deployments/deployment-activity.ts'
 
 import type {
 	DeployDisplayStatus,
 	ProjectSummary,
 	RecentDeployment,
 } from '@/lib/domain/cloudflare/deployment-summary.ts'
-import type { CloudflarePagesDeployment } from '@/lib/domain/cloudflare/pages-deployment.ts'
+import type {
+	CloudflarePagesDeployment,
+	CloudflarePagesDeploymentEnvironment,
+} from '@/lib/domain/cloudflare/pages-deployment.ts'
 import type { CloudflarePagesProject } from '@/lib/domain/cloudflare/pages-project.ts'
+import type {
+	ActivityEntry,
+	ActivitySourceFilter,
+} from '@/lib/domain/deployments/deployment-activity.ts'
+import type { VpsDeployRun } from '@/lib/domain/github/vps-deploy-run.ts'
 
 /**
  * State for the dynamic /deployments island. The server already fanned out and
@@ -37,17 +49,32 @@ export interface DeploymentsSeed {
 		string,
 		ReadonlyArray<CloudflarePagesDeployment>
 	>
+	readonly vpsRuns: ReadonlyArray<VpsDeployRun>
 }
 
-const EMPTY_SEED: DeploymentsSeed = { projects: [], deploymentsByProject: {} }
+const EMPTY_SEED: DeploymentsSeed = {
+	projects: [],
+	deploymentsByProject: {},
+	vpsRuns: [],
+}
 
 // --- Selection primitives (drive the always-interactive master/detail UI) ---
 
 /** The selected project's name; '' = the all-projects master view. */
 export const projectAtom = atom('')
 
-/** The history env filter: 'all' | 'production' | 'preview'. */
-export const envAtom = atom(ALL_ENV)
+/** The history env filter, typed off the domain env union - no stringly keys. */
+export type EnvFilter = typeof ALL_ENV | CloudflarePagesDeploymentEnvironment
+
+/** Narrow an untrusted string (the `env` URL param) onto the filter union. */
+export const isEnvFilter = (candidate: string): candidate is EnvFilter =>
+	candidate === ALL_ENV ||
+	CLOUDFLARE_PAGES_DEPLOYMENT_ENVIRONMENTS.some(env => env === candidate)
+
+export const envAtom = atom<EnvFilter>(ALL_ENV)
+
+/** The recent-activity source filter: 'all' | 'pages' | 'vps'. */
+export const sourceAtom = atom<ActivitySourceFilter>('all')
 
 /** The open deployment's id; '' = no drawer. */
 export const selAtom = atom('')
@@ -91,16 +118,23 @@ export const projectViewsAtom = atom<ReadonlyArray<ProjectView>>(get => {
 /** Project count, for the master-view header. */
 export const projectCountAtom = atom(get => get(seedAtom).projects.length)
 
-/** Newest-first deployments across all projects, capped for the activity list. */
-export const recentActivityAtom = atom<ReadonlyArray<RecentDeployment>>(get => {
+/**
+ * Newest-first activity across all sources (Cloudflare Pages deployments +
+ * GitHub VPS deploy runs), filtered by the source tab, capped for the list.
+ */
+export const recentActivityAtom = atom<ReadonlyArray<ActivityEntry>>(get => {
 	const seed = get(seedAtom)
-	const entries = seed.projects.flatMap(project =>
+	const pagesEntries = seed.projects.flatMap(project =>
 		deploymentsFor(seed, project.name).map(deployment => ({
 			projectName: project.name,
 			deployment,
 		})),
 	)
-	return selectRecentDeployments(entries, ACTIVITY_LIMIT)
+	return selectRecentActivity(
+		mergeActivity(pagesEntries, seed.vpsRuns),
+		get(sourceAtom),
+		ACTIVITY_LIMIT,
+	)
 })
 
 // --- Per-project detail derivations (selected project's header + history) ---

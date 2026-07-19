@@ -1,7 +1,7 @@
 ---
+import AlertRow from '@/components/dashboard/AlertRow.astro'
 import FleetCard from '@/components/dashboard/FleetCard.astro'
 import Icon from '@/components/foundations/Icon.astro'
-import type { IconName } from '@/components/foundations/Icon.astro'
 import LoadStateBanner from '@/components/dashboard/LoadStateBanner.astro'
 import { Overview } from '@/islands/overview/Overview.tsx'
 import { loadPageState } from '@/lib/adapters/load-page-state.ts'
@@ -13,21 +13,37 @@ import {
 	loadVpsSeries,
 } from '@/lib/adapters/victoria/metrics.ts'
 import { loadRecentDeployments } from '@/lib/adapters/cloudflare/recent-deployments.ts'
+import { loadVpsDeployRuns } from '@/lib/adapters/github/vps-deployments.ts'
 import {
 	DEPLOY_STATUS_COLOR,
 	DEPLOY_STATUS_ICON,
 } from '@/components/cloudflare/deploy-display.ts'
-import { deploymentDisplayStatus } from '@/lib/domain/cloudflare/deployment-summary.ts'
+import {
+	CONTEXT_PILL_CLASS,
+	ENV_PILL_CLASS,
+	ENV_PILL_LABEL,
+	SOURCE_PILL_CLASS,
+	SOURCE_PILL_LABEL,
+} from '@/components/deployments/activity-display.ts'
+import { activityRowView } from '@/lib/domain/deployments/activity-view.ts'
+import { deploymentSelectionHref } from '@/lib/domain/deployments/deployment-routes.ts'
+import {
+	mergeActivity,
+	selectRecentActivity,
+} from '@/lib/domain/deployments/deployment-activity.ts'
 import {
 	computeServerHealth,
 	deriveFleetAlerts,
 } from '@/lib/domain/monitoring/fleet-overview.ts'
 import { formatRelative } from '@/lib/domain/monitoring/format.ts'
 
+import type { ActivityTarget } from '@/lib/domain/deployments/activity-view.ts'
 import type { HostMetrics } from '@/lib/domain/monitoring/host-metrics.ts'
 
 const DEPLOY_COUNT = 4
-const COMMIT_LENGTH = 7
+// Per deploy workflow, a handful of latest runs is enough to fill a 4-row
+// merged feed (mirrors recent-deployments.ts' PER_PROJECT_LIMIT).
+const VPS_RUNS_PER_WORKFLOW = 5
 // The fleet card sparkline is a "now" glance, not a windowed series - it never
 // follows the island's range control, so it loads at a fixed short window.
 const SPARK_HOURS = 1
@@ -79,10 +95,14 @@ const fleetLoadsPromise = Promise.all(
 const recentStatePromise = loadPageState('overview.deployments', () =>
 	loadRecentDeployments(DEPLOY_COUNT),
 )
+const vpsRunsStatePromise = loadPageState('overview.vpsRuns', () =>
+	loadVpsDeployRuns(VPS_RUNS_PER_WORKFLOW),
+)
 const seedPromise = loadOverviewWindow(range)
-const [fleetLoads, recentState, seed] = await Promise.all([
+const [fleetLoads, recentState, vpsRunsState, seed] = await Promise.all([
 	fleetLoadsPromise,
 	recentStatePromise,
+	vpsRunsStatePromise,
 	seedPromise,
 ])
 
@@ -103,19 +123,24 @@ for (const load of fleetLoads) {
 const alerts = deriveFleetAlerts(servers, metricsByName)
 
 const nowMs = Date.now()
-const recentDeploys = (recentState.kind === 'ok' ? recentState.data : []).map(
-	(entry) => ({
-		href: `/deployments?project=${encodeURIComponent(entry.projectName)}&sel=${encodeURIComponent(entry.deployment.id)}`,
-		display: deploymentDisplayStatus(entry.deployment.status),
-		message: entry.deployment.commitMessage ?? '(sans message)',
-		branch: entry.deployment.branch ?? '-',
-		commit:
-			entry.deployment.commitHash?.slice(0, COMMIT_LENGTH) ??
-			entry.deployment.shortId,
-		isProd: entry.deployment.environment === 'production',
-		ago: formatRelative(Date.parse(entry.deployment.createdAt), nowMs),
-	}),
+// Merge both sources newest-first; each source degrades to [] independently
+// (its failure is logged by loadPageState), so one API down never blanks the
+// other's rows.
+const recentEntries = selectRecentActivity(
+	mergeActivity(
+		recentState.kind === 'ok' ? recentState.data : [],
+		vpsRunsState.kind === 'ok' ? vpsRunsState.data : [],
+	),
+	'all',
+	DEPLOY_COUNT,
 )
+const recentDeploys = recentEntries.map(activityRowView)
+// The SSR interpreter of a row's semantic target: everything is an anchor
+// here; the island renders the deployment case as a drawer-opening button.
+const targetHref = (target: ActivityTarget): string =>
+	target.kind === 'external'
+		? target.href
+		: deploymentSelectionHref(target.projectName, target.deploymentId)
 ---
 
 <div class="flex flex-col gap-5">
@@ -134,55 +159,7 @@ const recentDeploys = (recentState.kind === 'ok' ? recentState.data : []).map(
 					</div>
 				</header>
 				{alerts.map((alert) => (
-					<div class="flex items-center gap-3.5 border-b border-base-100 px-4 py-3 last:border-b-0">
-						<span
-							class:list={[
-								'shrink-0',
-								alert.severity === 'critical' ? 'text-red-600' : 'text-amber-500',
-							]}
-						>
-							<Icon name="alert" size={18} />
-						</span>
-						<div class="min-w-0 flex-1">
-							<div class="flex items-center gap-2">
-								<span class="text-[13.5px] font-semibold text-base-900">
-									{alert.label}
-								</span>
-								<span
-									class:list={[
-										'rounded-full border px-2 py-0.5 text-[11px] font-medium',
-										alert.severity === 'critical'
-											? 'border-red-200 bg-red-50 text-red-700'
-											: 'border-amber-200 bg-amber-50 text-amber-700',
-									]}
-								>
-									{alert.severity}
-								</span>
-								<span class="rounded-full border border-base-200 bg-base-100 px-2 py-0.5 font-mono text-[11px] text-base-700">
-									{alert.vpsName}
-								</span>
-							</div>
-						</div>
-						<div class="shrink-0 text-right">
-							<div
-								class:list={[
-									'font-mono text-sm font-bold',
-									alert.severity === 'critical' ? 'text-red-600' : 'text-amber-600',
-								]}
-							>
-								{alert.valuePercent}%
-							</div>
-							<div class="font-mono text-[10.5px] text-base-500">
-								seuil {alert.thresholdPercent}%
-							</div>
-						</div>
-						<a
-							href={`/vps/${alert.vpsName}`}
-							class="shrink-0 rounded-full bg-base-50 px-3 py-1 text-xs font-medium text-base-800 hover:bg-base-100"
-						>
-							Voir
-						</a>
-					</div>
+					<AlertRow alert={alert} withVpsLink />
 				))}
 			</section>
 		)
@@ -240,7 +217,9 @@ const recentDeploys = (recentState.kind === 'ok' ? recentState.data : []).map(
 				<div class="flex flex-col">
 					{recentDeploys.map((deploy) => (
 						<a
-							href={deploy.href}
+							href={targetHref(deploy.target)}
+							target={deploy.target.kind === 'external' ? '_blank' : undefined}
+							rel={deploy.target.kind === 'external' ? 'noreferrer' : undefined}
 							class="flex items-center gap-3 border-b border-base-100 px-4 py-3 last:border-b-0 hover:bg-base-50"
 						>
 							<span class:list={['shrink-0', DEPLOY_STATUS_COLOR[deploy.display]]}>
@@ -248,25 +227,29 @@ const recentDeploys = (recentState.kind === 'ok' ? recentState.data : []).map(
 							</span>
 							<div class="min-w-0 flex-1">
 								<div class="truncate text-[13px] font-medium text-base-900">
-									{deploy.message}
+									{deploy.title}
 								</div>
 								<div class="flex items-center gap-1.5 font-mono text-[11px] text-base-500">
 									<Icon name="branch" size={11} />
 									{deploy.branch} · {deploy.commit}
 								</div>
 							</div>
+							<span class:list={['shrink-0', CONTEXT_PILL_CLASS]}>
+								{deploy.contextLabel}
+							</span>
+							<span class:list={['shrink-0', SOURCE_PILL_CLASS]}>
+								{SOURCE_PILL_LABEL[deploy.source]}
+							</span>
 							<span
 								class:list={[
-									'shrink-0 rounded-full border px-2 py-0.5 text-[10.5px] font-medium',
-									deploy.isProd
-										? 'border-accent-200 bg-accent-50 text-accent-800'
-										: 'border-base-200 bg-base-100 text-base-600',
+									'shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium',
+									ENV_PILL_CLASS[deploy.environment],
 								]}
 							>
-								{deploy.isProd ? 'prod' : 'preview'}
+								{ENV_PILL_LABEL[deploy.environment]}
 							</span>
 							<span class="shrink-0 font-mono text-[11px] text-base-500">
-								{deploy.ago}
+								{formatRelative(deploy.createdAtMs, nowMs)}
 							</span>
 						</a>
 					))}

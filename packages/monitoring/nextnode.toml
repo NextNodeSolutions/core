@@ -40,6 +40,13 @@ secrets = [
 	# discovery endpoints join tailnet devices with hetzner/<vps>.json.
 	"R2_ACCESS_KEY_ID",
 	"R2_SECRET_ACCESS_KEY",
+	# Runtime GitHub auth (Projets page + VPS deployments feed): the app
+	# mints installation tokens itself from the SAME GitHub App the deploy
+	# pipeline uses (CI tokens expire in 1h, useless at runtime). The key is
+	# the base64 of NEXTNODE_APP_PRIVATE_KEY's PEM because the deploy env
+	# writer rejects multiline values.
+	"NEXTNODE_APP_ID",
+	"NEXTNODE_APP_PRIVATE_KEY_B64",
 ]
 
 # The self-hosted observability backend (PRD monitoring-vps, option A):

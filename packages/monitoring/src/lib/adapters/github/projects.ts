@@ -1,4 +1,4 @@
-import { ENV_KEYS, requireEnv } from '@/lib/adapters/env.ts'
+import { resolveGithubToken } from '@/lib/adapters/github/app-token.ts'
 import { listOrgRepos } from '@/lib/adapters/github/repos.ts'
 import { getLatestWorkflowRun } from '@/lib/adapters/github/workflow-runs.ts'
 import { mapWithConcurrency } from '@/lib/domain/concurrency.ts'
@@ -19,7 +19,7 @@ const MAX_CONCURRENCY = 6
 export const loadGithubProjects = async (
 	serverNames: ReadonlyArray<string>,
 ): Promise<ReadonlyArray<GithubProjectSummary>> => {
-	const token = requireEnv(ENV_KEYS.GITHUB_TOKEN)
+	const token = await resolveGithubToken()
 	const repos = await listOrgRepos(token)
 	return mapWithConcurrency(repos, MAX_CONCURRENCY, async repo => {
 		const run = await getLatestWorkflowRun(token, repo.fullName)
