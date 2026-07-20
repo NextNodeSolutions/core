@@ -11,7 +11,11 @@ import {
 
 const { utils: sshUtils } = ssh2
 
-import { APP_WITH_DOMAIN, STATIC_WITH_DOMAIN } from '#/cli/fixtures.ts'
+import {
+	APP_WITH_DOMAIN,
+	STATIC_WITH_DOMAIN,
+	WORKERS_APP_WITH_DOMAIN,
+} from '#/cli/fixtures.ts'
 
 import { buildRuntimeTarget } from './build-runtime-target.ts'
 
@@ -95,5 +99,13 @@ describe('buildRuntimeTarget', () => {
 		expect(HetznerVpsTarget).not.toHaveBeenCalled()
 		expect(CloudflarePagesTarget).toHaveBeenCalledTimes(1)
 		expect(target).toEqual({ name: 'cloudflare-pages' })
+	})
+
+	it('routes a cloudflare-workers config to its target definition', () => {
+		expect(() =>
+			buildRuntimeTarget(WORKERS_APP_WITH_DOMAIN, 'production', null),
+		).toThrow(
+			'cloudflare-workers target: provisioning and deploy land with the Terraform/wrangler implementation - not wired yet',
+		)
 	})
 })

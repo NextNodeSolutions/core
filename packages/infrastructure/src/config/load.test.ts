@@ -144,6 +144,60 @@ describe('parseConfig', () => {
 			})
 		})
 
+		it('parses a cloudflare-workers app with a service and domain', () => {
+			const parsed = parseConfig({
+				project: {
+					name: 'my-worker',
+					type: 'app',
+					domain: 'example.com',
+				},
+				deploy: {
+					target: 'cloudflare-workers',
+					services: { web: { url: 'example.com' } },
+				},
+			})
+
+			expect(parsed.ok).toBe(true)
+			if (!parsed.ok) return
+
+			expect(parsed.config.deploy).toEqual({
+				target: 'cloudflare-workers',
+				secrets: [],
+				generatedSecrets: [],
+				vps: null,
+				volumes: [],
+				cron: [],
+				services: {
+					web: {
+						url: 'example.com',
+						secrets: [],
+						needs: [],
+						dependsOn: [],
+						entry: 'dist/_worker.js/index.js',
+					},
+				},
+			})
+		})
+
+		it('still infers hetzner-vps for an app with no explicit target', () => {
+			const parsed = parseConfig({
+				project: {
+					name: 'my-app',
+					type: 'app',
+					domain: 'example.com',
+				},
+				deploy: { services: { app: { source: 'build' } } },
+			})
+
+			expect(parsed.ok).toBe(true)
+			if (!parsed.ok) return
+			if (parsed.config.deploy === false) {
+				expect.unreachable('expected a deploy section')
+				return
+			}
+			expect(parsed.config.deploy.target).toBe('hetzner-vps')
+		})
+
 		it('parses a valid package config', () => {
 			const parsed = parseConfig({
 				project: { name: 'my-lib', type: 'package' },
@@ -2013,7 +2067,7 @@ describe('parseConfig', () => {
 			if (parsed.ok) return
 
 			expect(parsed.errors).toContain(
-				'deploy.target must be one of: hetzner-vps, cloudflare-pages',
+				'deploy.target must be one of: hetzner-vps, cloudflare-pages, cloudflare-workers',
 			)
 		})
 

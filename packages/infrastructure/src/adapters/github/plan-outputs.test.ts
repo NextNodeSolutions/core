@@ -329,6 +329,42 @@ describe('writePlanOutputs', () => {
 		expect(output).toContain('upstream_image_refs=\n')
 	})
 
+	it('writes empty image outputs for cloudflare-workers deploys', () => {
+		const config: NextNodeConfig = {
+			...APP_CONFIG,
+			project: { ...APP_CONFIG.project, domain: 'example.com' },
+			deploy: {
+				target: 'cloudflare-workers',
+				secrets: [],
+				generatedSecrets: [],
+				vps: null,
+				volumes: [],
+				cron: [],
+				services: {
+					web: {
+						url: 'example.com',
+						secrets: [],
+						needs: [],
+						dependsOn: [],
+						entry: 'dist/_worker.js/index.js',
+					},
+				},
+			},
+		}
+
+		writePlanOutputs({
+			config,
+			pagesProjectName: 'my-worker',
+			tasks: [],
+			buildDirectory: 'dist',
+			packageDir: '.',
+		})
+
+		const output = readFileSync(outputFile, 'utf-8')
+		expect(output).toContain('image_source=\n')
+		expect(output).toContain('upstream_image_refs=\n')
+	})
+
 	it('uses pagesProjectName as the project_name output (dev env)', () => {
 		writePlanOutputs({
 			config: APP_CONFIG,

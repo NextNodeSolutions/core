@@ -20,9 +20,18 @@ export interface CloudflarePagesDeployableConfig extends NextNodeConfig {
 	readonly deploy: CloudflarePagesDeploySection
 }
 
+export interface CloudflareWorkersDeployableConfig extends NextNodeConfig {
+	readonly project: ProjectSection & {
+		readonly type: DeployableProjectType
+		readonly domain: string
+	}
+	readonly deploy: CloudflareWorkersDeploySection
+}
+
 export type DeployableConfig =
 	| HetznerDeployableConfig
 	| CloudflarePagesDeployableConfig
+	| CloudflareWorkersDeployableConfig
 
 export function isHetznerDeployableConfig(
 	config: DeployableConfig,
@@ -34,6 +43,12 @@ export function isCloudflarePagesDeployableConfig(
 	config: DeployableConfig,
 ): config is CloudflarePagesDeployableConfig {
 	return config.deploy.target === 'cloudflare-pages'
+}
+
+export function isCloudflareWorkersDeployableConfig(
+	config: DeployableConfig,
+): config is CloudflareWorkersDeployableConfig {
+	return config.deploy.target === 'cloudflare-workers'
 }
 
 export const DEPLOYABLE_PROJECT_TYPES = ['app', 'static'] as const
@@ -50,8 +65,17 @@ export const PROJECT_TYPES = [
 	...NON_DEPLOYABLE_PROJECT_TYPES,
 ] as const
 
-export const DEPLOY_TARGETS = ['hetzner-vps', 'cloudflare-pages'] as const
+export const DEPLOY_TARGETS = [
+	'hetzner-vps',
+	'cloudflare-pages',
+	'cloudflare-workers',
+] as const
 export type DeployTargetType = (typeof DEPLOY_TARGETS)[number]
+
+// Default `main` for a generated wrangler config: the entry a Worker exposing
+// static assets ships at, matching @astrojs/cloudflare's `dist/_worker.js/`
+// output. Overridable per service once US-1.2 lands the workers service schema.
+export const DEFAULT_WORKER_ENTRY = 'dist/_worker.js/index.js'
 
 export interface HetznerDeployConfig {
 	readonly serverType: string
@@ -233,9 +257,30 @@ export interface CloudflarePagesDeploySection extends BaseDeploySection {
 	readonly secrets: ReadonlyArray<string>
 }
 
+// A single Worker declared under [deploy.services.<name>] for the
+// cloudflare-workers target. A Worker is not a container - no port, image
+// source, or build args - so the shape is the runtime-wiring subset plus the
+// bundle `entry` wrangler deploys. The strict field-level validation (rejecting
+// container-only fields, custom entry/cron) lands in US-1.2.
+export interface WorkerServiceConfig {
+	readonly url?: string
+	readonly secrets: ReadonlyArray<string>
+	readonly needs: ReadonlyArray<string>
+	readonly dependsOn: ReadonlyArray<string>
+	readonly entry: string
+}
+
+export interface CloudflareWorkersDeploySection extends BaseDeploySection {
+	readonly target: 'cloudflare-workers'
+	readonly secrets: ReadonlyArray<string>
+	readonly services: Readonly<Record<string, WorkerServiceConfig>>
+	readonly cron: ReadonlyArray<CronJobConfig>
+}
+
 export type DeploySection =
 	| HetznerVpsDeploySection
 	| CloudflarePagesDeploySection
+	| CloudflareWorkersDeploySection
 
 export interface R2BucketConfig {
 	// Bucket alias declared by the dev (kebab). Materialised as the real
@@ -374,36 +419,3 @@ export const DEFAULT_DEPLOY_TARGETS: Record<
 export type ParseConfigResult =
 	| { readonly ok: true; readonly config: NextNodeConfig }
 	| { readonly ok: false; readonly errors: readonly string[] }
-
-const PROJECT_TYPE_SET: ReadonlySet<string> = new Set(PROJECT_TYPES)
-const DEPLOY_TARGET_SET: ReadonlySet<string> = new Set(DEPLOY_TARGETS)
-const POSTGRES_MODE_SET: ReadonlySet<string> = new Set(POSTGRES_MODES)
-const SECRET_GENERATOR_SET: ReadonlySet<string> = new Set(SECRET_GENERATORS)
-
-export function isPostgresMode(candidate: unknown): candidate is PostgresMode {
-	return typeof candidate === 'string' && POSTGRES_MODE_SET.has(candidate)
-}
-
-export function isBoolean(candidate: unknown): candidate is boolean {
-	return typeof candidate === 'boolean'
-}
-
-export function isProjectType(candidate: unknown): candidate is ProjectType {
-	return typeof candidate === 'string' && PROJECT_TYPE_SET.has(candidate)
-}
-
-export function isScriptValue(candidate: unknown): candidate is string | false {
-	return typeof candidate === 'string' || candidate === false
-}
-
-export function isDeployTarget(
-	candidate: unknown,
-): candidate is DeployTargetType {
-	return typeof candidate === 'string' && DEPLOY_TARGET_SET.has(candidate)
-}
-
-export function isSecretGenerator(
-	candidate: unknown,
-): candidate is SecretGenerator {
-	return typeof candidate === 'string' && SECRET_GENERATOR_SET.has(candidate)
-}

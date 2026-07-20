@@ -1,7 +1,7 @@
+import { isDeployTarget } from '#/config/predicates.ts'
 import {
 	DEFAULT_DEPLOY_TARGETS,
 	DEPLOY_TARGETS,
-	isDeployTarget,
 	KEBAB_IDENTIFIER_PATTERN,
 } from '#/config/types.ts'
 import { isRecord } from '#/kernel/guards.ts'
@@ -159,13 +159,14 @@ function legacyImageFieldErrors(
 // they already explain why the table is unusable.
 function providerRequirementErrors(
 	provider: DeployProviderValidator,
+	target: DeployTargetType,
 	domain: string | undefined,
 	servicesResult: ResolvedSecrets,
 ): string[] {
 	const errors: string[] = []
 	if (provider.requiresDomain && domain === undefined) {
 		errors.push(
-			'project.domain is required when deploy target is "hetzner-vps"',
+			`project.domain is required when deploy target is "${target}"`,
 		)
 	}
 	if (
@@ -219,7 +220,12 @@ export function validateDeploySection(
 		...legacyImageFieldErrors(deployRecord),
 		...fields.errors,
 		...providerResult.errors,
-		...providerRequirementErrors(provider, domain, fields.servicesResult),
+		...providerRequirementErrors(
+			provider,
+			target,
+			domain,
+			fields.servicesResult,
+		),
 	]
 
 	if (errors.length > 0) return { ok: false, errors }

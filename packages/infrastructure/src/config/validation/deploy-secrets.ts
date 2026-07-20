@@ -1,4 +1,5 @@
-import { isSecretGenerator, SECRET_GENERATORS } from '#/config/types.ts'
+import { isSecretGenerator } from '#/config/predicates.ts'
+import { SECRET_GENERATORS } from '#/config/types.ts'
 import { isRecord } from '#/kernel/guards.ts'
 
 import type {

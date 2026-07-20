@@ -1,4 +1,5 @@
 import { cloudflarePages } from './cloudflare-pages.ts'
+import { cloudflareWorkers } from './cloudflare-workers.ts'
 import { hetznerVps } from './hetzner.ts'
 
 import type {
@@ -43,4 +44,5 @@ export const DEPLOY_PROVIDER_VALIDATORS: Record<
 > = {
 	'hetzner-vps': hetznerVps,
 	'cloudflare-pages': cloudflarePages,
+	'cloudflare-workers': cloudflareWorkers,
 }
