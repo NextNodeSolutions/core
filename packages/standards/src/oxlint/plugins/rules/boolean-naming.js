@@ -7,11 +7,20 @@
  * Detection is purely syntactic: boolean literal initializers and explicit
  * `: boolean` annotations on variables and parameters.
  *
- * Framework-imposed export names (Astro route exports like `prerender` and
- * `partial`) are exempt - the name is the framework's contract, not ours.
- * Only the `export const` form is exempt; a local variable keeps the rule.
+ * Framework-imposed export names are exempt - the name is the framework's
+ * contract, not ours. Only the `export const` form is exempt; a local
+ * variable keeps the rule. React, Hono and Express impose no boolean export
+ * names - nothing to allowlist for them.
  */
-const FRAMEWORK_BOOLEAN_EXPORTS = new Set(['prerender', 'partial'])
+const FRAMEWORK_BOOLEAN_EXPORTS = new Set([
+	// Astro route exports
+	'prerender',
+	'partial',
+	// Next.js route segment config
+	'dynamicParams',
+	'revalidate', // number | false - the `false` form trips the rule
+	'experimental_ppr',
+])
 
 const QUESTION_PREFIX =
 	/^_?(is|has|had|can|could|should|was|will|did|does|do|needs|allows|supports|includes)([A-Z0-9_]|$)/
