@@ -11,7 +11,11 @@ import {
 
 const { utils: sshUtils } = ssh2
 
-import { APP_WITH_DOMAIN, STATIC_WITH_DOMAIN } from '#/cli/fixtures.ts'
+import {
+	APP_WITH_DOMAIN,
+	STATIC_WITH_DOMAIN,
+	WORKERS_APP_WITH_DOMAIN,
+} from '#/cli/fixtures.ts'
 
 import { teardownCommand } from './teardown.command.ts'
 
@@ -93,6 +97,22 @@ vi.mock('../../adapters/cloudflare/target.ts', () => ({
 		contributeEnv: vi.fn(),
 		deploy: vi.fn(),
 		reconcileDns: vi.fn(),
+	})),
+}))
+
+// Mock CloudflareWorkersTarget class (network boundary: terraform + wrangler)
+const { mockWorkersTeardown } = vi.hoisted(() => ({
+	mockWorkersTeardown: vi.fn(),
+}))
+vi.mock('../../adapters/cloudflare/workers/target.ts', () => ({
+	CloudflareWorkersTarget: vi.fn(() => ({
+		name: 'cloudflare-workers',
+		teardown: mockWorkersTeardown,
+		ensureInfra: vi.fn(),
+		contributeEnv: vi.fn(),
+		deploy: vi.fn(),
+		reconcileDns: vi.fn(),
+		recover: vi.fn(),
 	})),
 }))
 
@@ -262,6 +282,85 @@ describe('teardownCommand - cloudflare pages dispatch', () => {
 			'project',
 			false,
 		)
+	})
+})
+
+describe('teardownCommand - cloudflare workers dispatch', () => {
+	const WORKERS_WITH_D1: DeployableConfig = {
+		...WORKERS_APP_WITH_DOMAIN,
+		services: { d1: { migrationsFolder: 'drizzle' } },
+	}
+	const workersResult = {
+		kind: 'workers',
+		scope: 'project',
+		outcome: {
+			workers: {
+				handled: true,
+				detail: 'deleted "my-worker-production-web"',
+			},
+			terraform: { handled: true, detail: 'destroyed' },
+		},
+		durationMs: 10,
+	}
+
+	beforeEach(() => {
+		vi.stubEnv('PIPELINE_ENVIRONMENT', 'production')
+		vi.stubEnv('CLOUDFLARE_API_TOKEN', 'cf-token')
+		vi.stubEnv('CLOUDFLARE_ACCOUNT_ID', 'acct-123')
+		vi.stubEnv('TF_TOKEN_app_terraform_io', 'tf-token')
+		vi.stubEnv('GITHUB_STEP_SUMMARY', tmpSummaryFile())
+	})
+
+	afterEach(() => {
+		vi.unstubAllEnvs()
+		vi.unstubAllGlobals()
+		vi.restoreAllMocks()
+		mockWorkersTeardown.mockReset()
+	})
+
+	it('runs the full teardown when TEARDOWN_WIPE_DATA is set and D1 is declared', async () => {
+		vi.stubEnv('TEARDOWN_WIPE_DATA', '1')
+		mockWorkersTeardown.mockResolvedValue(workersResult)
+
+		await teardownCommand(WORKERS_WITH_D1)
+
+		expect(mockWorkersTeardown).toHaveBeenCalledWith(
+			'my-worker',
+			'example.com',
+			'project',
+			false,
+		)
+	})
+
+	it('refuses to run when D1 is declared and TEARDOWN_WIPE_DATA is unset (no destruction)', async () => {
+		mockWorkersTeardown.mockResolvedValue(workersResult)
+
+		await expect(teardownCommand(WORKERS_WITH_D1)).rejects.toThrow(
+			/teardown would destroy D1 data for "my-worker"/,
+		)
+		expect(mockWorkersTeardown).not.toHaveBeenCalled()
+	})
+
+	it('tears down a workers project with no stateful data without the flag', async () => {
+		mockWorkersTeardown.mockResolvedValue(workersResult)
+
+		await teardownCommand(WORKERS_APP_WITH_DOMAIN)
+
+		expect(mockWorkersTeardown).toHaveBeenCalledWith(
+			'my-worker',
+			'example.com',
+			'project',
+			false,
+		)
+	})
+
+	it('rejects TEARDOWN_TARGET=vps for a workers project before any destruction', async () => {
+		vi.stubEnv('TEARDOWN_TARGET', 'vps')
+
+		await expect(teardownCommand(WORKERS_APP_WITH_DOMAIN)).rejects.toThrow(
+			/TEARDOWN_TARGET="vps" is not supported for "cloudflare-workers"/,
+		)
+		expect(mockWorkersTeardown).not.toHaveBeenCalled()
 	})
 })
 

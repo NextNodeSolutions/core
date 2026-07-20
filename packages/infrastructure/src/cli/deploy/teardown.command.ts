@@ -2,7 +2,9 @@ import { deleteR2CustomDomain } from '#/adapters/cloudflare/r2/domains.ts'
 import { writeSummary } from '#/adapters/github/output.ts'
 import { wipePostgresBackups } from '#/adapters/r2/backup-store.ts'
 import { getEnumEnv, getEnv, isEnvSet, requireEnv } from '#/cli/env.ts'
+import { isCloudflareWorkersDeployableConfig } from '#/config/types.ts'
 import { computeR2CustomDomainHostname } from '#/domain/cloudflare/r2/custom-domain.ts'
+import { assertWipeDataAllowed } from '#/domain/cloudflare/workers/teardown.ts'
 import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
 import { buildTeardownSummary } from '#/domain/deploy/teardown-summary.ts'
 import {
@@ -19,7 +21,7 @@ import { createLogger } from '@nextnode-solutions/logger'
 import { buildRuntimeTarget } from './build-runtime-target.ts'
 import { loadInfraStorageForConfig } from './load-infra-storage.ts'
 
-import type { DeployableConfig, DeployableProjectType } from '#/config/types.ts'
+import type { DeployableConfig, DeployTargetType } from '#/config/types.ts'
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import type { DeployTarget } from '#/domain/deploy/target.ts'
 import type { TeardownTarget } from '#/domain/deploy/teardown-target.ts'
@@ -124,6 +126,11 @@ async function teardownR2CustomDomains(
 	infraStorage: InfraStorageRuntimeConfig | null,
 	teardownTarget: TeardownTarget,
 ): Promise<void> {
+	// A cloudflare-workers project declares its R2 custom domains as
+	// `cloudflare_r2_custom_domain` Terraform resources; `terraform destroy` in
+	// the workers target removes them. The CF-API detach path here is only for
+	// the R2 *service* used by Pages/Hetzner projects.
+	if (isCloudflareWorkersDeployableConfig(config)) return
 	if (teardownTarget !== 'project') return
 	if (infraStorage === null) return
 	const { domain } = config.project
@@ -163,13 +170,12 @@ interface TeardownOptions {
 	readonly shouldWipeVolumes: boolean
 	readonly wipeBackups: boolean
 	readonly skipFinalBackup: boolean
+	readonly wipeData: boolean
 }
 
 // Read + validate the teardown opt-ins from the environment. Extracted to keep
 // teardownCommand a thin orchestrator.
-function readTeardownOptions(
-	projectType: DeployableProjectType,
-): TeardownOptions {
+function readTeardownOptions(deployTarget: DeployTargetType): TeardownOptions {
 	const teardownTarget = getEnumEnv(
 		'TEARDOWN_TARGET',
 		TEARDOWN_TARGETS,
@@ -178,8 +184,15 @@ function readTeardownOptions(
 	const shouldWipeVolumes = isEnvSet('TEARDOWN_WITH_VOLUMES')
 	const wipeBackups = isEnvSet('TEARDOWN_WIPE_BACKUPS')
 	const skipFinalBackup = isEnvSet('TEARDOWN_SKIP_FINAL_BACKUP')
-	validateTeardownOptions(projectType, teardownTarget, shouldWipeVolumes)
-	return { teardownTarget, shouldWipeVolumes, wipeBackups, skipFinalBackup }
+	const wipeData = isEnvSet('TEARDOWN_WIPE_DATA')
+	validateTeardownOptions(deployTarget, teardownTarget, shouldWipeVolumes)
+	return {
+		teardownTarget,
+		shouldWipeVolumes,
+		wipeBackups,
+		skipFinalBackup,
+		wipeData,
+	}
 }
 
 export async function teardownCommand(config: DeployableConfig): Promise<void> {
@@ -187,16 +200,27 @@ export async function teardownCommand(config: DeployableConfig): Promise<void> {
 		config.project.type,
 		getEnv('PIPELINE_ENVIRONMENT'),
 	)
-	const { teardownTarget, shouldWipeVolumes, wipeBackups, skipFinalBackup } =
-		readTeardownOptions(config.project.type)
+	const {
+		teardownTarget,
+		shouldWipeVolumes,
+		wipeBackups,
+		skipFinalBackup,
+		wipeData,
+	} = readTeardownOptions(config.deploy.target)
 	const infraStorage = await loadInfraStorageForConfig(config)
 	const target = buildRuntimeTarget(config, environment, infraStorage)
+
+	// Refuse to destroy D1/R2 data on a cloudflare-workers project unless the
+	// operator explicitly opted in - asserted BEFORE any destructive step.
+	if (isCloudflareWorkersDeployableConfig(config)) {
+		assertWipeDataAllowed(config.project.name, config.services, wipeData)
+	}
 
 	// Audit line - emitted BEFORE any destructive call so CI log readers can
 	// reconstruct the exact scope of the teardown (project, env, target type,
 	// domain) even if a later step fails mid-flight.
 	logger.info(
-		`Teardown starting: project="${config.project.name}" env="${environment}" target="${target.name}" scope="${teardownTarget}" shouldWipeVolumes=${String(shouldWipeVolumes)} wipeBackups=${String(wipeBackups)} skipFinalBackup=${String(skipFinalBackup)} domain="${config.project.domain ?? '(none)'}"`,
+		`Teardown starting: project="${config.project.name}" env="${environment}" target="${target.name}" scope="${teardownTarget}" shouldWipeVolumes=${String(shouldWipeVolumes)} wipeBackups=${String(wipeBackups)} skipFinalBackup=${String(skipFinalBackup)} wipeData=${String(wipeData)} domain="${config.project.domain ?? '(none)'}"`,
 	)
 
 	// Final backup BEFORE the destructive teardown. Aborts the teardown on

@@ -9,6 +9,7 @@ import type {
 	ExecResult,
 	TerraformRunner,
 } from '#/adapters/terraform/runner.ts'
+import type { WranglerRunner } from '#/adapters/wrangler/runner.ts'
 import type { CloudflareWorkersDeployableConfig } from '#/config/types.ts'
 import type { ServicesConfig } from '#/config/types.ts'
 import type { FetchImpl } from '#/test-fetch.ts'
@@ -92,6 +93,45 @@ function cwdOf(call: Parameters<TerraformRunner>): string {
 	const cwd = call[1]?.cwd
 	if (cwd === undefined) throw new Error('runner called without a cwd')
 	return cwd
+}
+
+// A wrangler runner keyed by worker name (args are ['delete','--name',<name>,'--force']).
+function makeWrangler(
+	behavior: Partial<Record<string, ExecResult>> = {},
+): ReturnType<typeof vi.fn<WranglerRunner>> {
+	return vi.fn<WranglerRunner>(async args => {
+		const name = args[2] ?? ''
+		return behavior[name] ?? ok()
+	})
+}
+
+function buildTeardownTarget(input: {
+	readonly services?: ServicesConfig
+	readonly workers?: ReadonlyArray<string>
+	readonly terraform: TerraformRunner
+	readonly wrangler: WranglerRunner
+}): CloudflareWorkersTarget {
+	const base = buildConfig(input.services ?? {})
+	const workerNames = input.workers ?? ['web']
+	const services = Object.fromEntries(
+		workerNames.map(name => [
+			name,
+			{
+				secrets: [],
+				needs: [],
+				dependsOn: [],
+				entry: 'dist/_worker.js/index.js',
+			},
+		]),
+	)
+	return new CloudflareWorkersTarget({
+		accountId: 'acct-123',
+		hcpToken: 'tf-token',
+		environment: 'production',
+		config: { ...base, deploy: { ...base.deploy, services } },
+		terraformRunner: input.terraform,
+		wranglerRunner: input.wrangler,
+	})
 }
 
 // The HCP workspace probe GETs (404 = absent) then POSTs to create; route by
@@ -297,10 +337,142 @@ describe('CloudflareWorkersTarget non-applicable methods', () => {
 			'runFinalBackup is not applicable to cloudflare-workers',
 		)
 	})
+})
 
-	it('throws a provisional error for teardown', () => {
-		expect(() =>
+describe('CloudflareWorkersTarget.teardown', () => {
+	it('deletes every worker script, then runs terraform destroy', async () => {
+		const terraform = makeRunner()
+		const wrangler = makeWrangler()
+		const target = buildTeardownTarget({
+			services: BACKING_SERVICES,
+			workers: ['web', 'api'],
+			terraform,
+			wrangler,
+		})
+
+		const teardownResult = await target.teardown(
+			'my-worker',
+			'example.com',
+			'project',
+			false,
+		)
+
+		expect(teardownResult).toMatchObject({
+			kind: 'workers',
+			scope: 'project',
+			outcome: {
+				workers: { handled: true },
+				terraform: { handled: true, detail: 'destroyed' },
+			},
+		})
+		expect(wrangler.mock.calls.map(call => call[0][2])).toEqual([
+			'my-worker-production-web',
+			'my-worker-production-api',
+		])
+		expect(terraform.mock.calls.map(call => call[0][0])).toEqual([
+			'init',
+			'destroy',
+		])
+		const lastDeleteOrder = wrangler.mock.invocationCallOrder.at(-1) ?? 0
+		const destroyOrder = terraform.mock.invocationCallOrder.at(-1) ?? 0
+		expect(lastDeleteOrder).toBeLessThan(destroyOrder)
+	})
+
+	it('maps an already-gone worker to handled:false without throwing', async () => {
+		const terraform = makeRunner()
+		const wrangler = makeWrangler({
+			'my-worker-production-web': {
+				exitCode: 1,
+				stdout: '',
+				stderr: 'workers.api.error.script_not_found',
+			},
+		})
+		const target = buildTeardownTarget({ terraform, wrangler })
+
+		const teardownResult = await target.teardown(
+			'my-worker',
+			'example.com',
+			'project',
+			false,
+		)
+
+		if (teardownResult.kind !== 'workers') {
+			expect.unreachable('expected a workers teardown result')
+		}
+		expect(teardownResult.outcome.workers).toEqual({
+			handled: false,
+			detail: 'already gone "my-worker-production-web"',
+		})
+		expect(terraform.mock.calls.map(call => call[0][0])).toEqual([
+			'init',
+			'destroy',
+		])
+	})
+
+	it('throws and never runs terraform destroy when a wrangler delete fails', async () => {
+		const terraform = makeRunner()
+		const wrangler = makeWrangler({
+			'my-worker-production-web': {
+				exitCode: 1,
+				stdout: '',
+				stderr: 'Authentication error [code: 10000]',
+			},
+		})
+		const target = buildTeardownTarget({ terraform, wrangler })
+
+		await expect(
 			target.teardown('my-worker', 'example.com', 'project', false),
-		).toThrow('teardown is not wired yet for cloudflare-workers')
+		).rejects.toThrow(
+			'wrangler delete --name my-worker-production-web failed',
+		)
+		expect(terraform).not.toHaveBeenCalled()
+	})
+
+	it('removes the scratch workdir even when terraform destroy throws', async () => {
+		const terraform = makeRunner({
+			destroy: { exitCode: 1, stdout: '', stderr: 'boom' },
+		})
+		const wrangler = makeWrangler()
+		const target = buildTeardownTarget({
+			services: BACKING_SERVICES,
+			terraform,
+			wrangler,
+		})
+
+		await expect(
+			target.teardown('my-worker', 'example.com', 'project', false),
+		).rejects.toThrow('terraform destroy failed')
+
+		const destroyCall = terraform.mock.calls.find(
+			call => call[0][0] === 'destroy',
+		)
+		expect(destroyCall).toBeDefined()
+		if (destroyCall) expect(existsSync(cwdOf(destroyCall))).toBe(false)
+	})
+
+	it('never deletes the HCP workspace (makes no fetch call)', async () => {
+		const fetchMock = vi.fn()
+		vi.stubGlobal('fetch', fetchMock)
+		const target = buildTeardownTarget({
+			services: BACKING_SERVICES,
+			terraform: makeRunner(),
+			wrangler: makeWrangler(),
+		})
+
+		await target.teardown('my-worker', 'example.com', 'project', false)
+
+		expect(fetchMock).not.toHaveBeenCalled()
+	})
+})
+
+describe('CloudflareWorkersTarget.recover', () => {
+	it('is a logged no-op that resolves without terraform or wrangler', async () => {
+		const terraform = makeRunner()
+		const wrangler = makeWrangler()
+		const target = buildTeardownTarget({ terraform, wrangler })
+
+		await expect(target.recover('my-worker')).resolves.toBeUndefined()
+		expect(terraform).not.toHaveBeenCalled()
+		expect(wrangler).not.toHaveBeenCalled()
 	})
 })

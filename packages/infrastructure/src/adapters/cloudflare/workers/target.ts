@@ -10,6 +10,7 @@ import { ensureHcpWorkspace } from '#/adapters/hcp/workspaces.ts'
 import {
 	defaultTerraformRunner,
 	terraformApply,
+	terraformDestroy,
 	terraformInit,
 	terraformOutputJson,
 	writeTerraformConfig,
@@ -27,6 +28,8 @@ import {
 	buildTerraformMainConfig,
 	HCP_TERRAFORM_ORGANIZATION,
 } from '#/domain/deploy/terraform-config.ts'
+
+import { teardownWorkers } from './teardown-workers.ts'
 
 import type { TerraformRunner } from '#/adapters/terraform/runner.ts'
 import type { CloudflareWorkersDeployableConfig } from '#/config/types.ts'
@@ -51,6 +54,7 @@ import type { TeardownResult } from '#/domain/deploy/teardown-result.ts'
 import type { TeardownTarget } from '#/domain/deploy/teardown-target.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 import type { ServiceEnv } from '#/domain/services/service.ts'
+import type { WranglerRunner } from './teardown-workers.ts'
 
 export interface CloudflareWorkersTargetConfig {
 	readonly accountId: string
@@ -59,6 +63,8 @@ export interface CloudflareWorkersTargetConfig {
 	readonly config: CloudflareWorkersDeployableConfig
 	// Injection point for tests; production shells out to the `terraform` binary.
 	readonly terraformRunner?: TerraformRunner
+	// Injection point for tests; production shells out to `npx wrangler`.
+	readonly wranglerRunner?: WranglerRunner
 }
 
 const WORKDIR_PREFIX = 'nn-workers-tf-'
@@ -70,6 +76,7 @@ export class CloudflareWorkersTarget implements DeployTarget {
 	private readonly environment: AppEnvironment
 	private readonly config: CloudflareWorkersDeployableConfig
 	private readonly runner: TerraformRunner
+	private readonly wrangler: WranglerRunner | undefined
 
 	constructor(config: CloudflareWorkersTargetConfig) {
 		this.accountId = config.accountId
@@ -77,6 +84,7 @@ export class CloudflareWorkersTarget implements DeployTarget {
 		this.environment = config.environment
 		this.config = config.config
 		this.runner = config.terraformRunner ?? defaultTerraformRunner
+		this.wrangler = config.wranglerRunner
 	}
 
 	contributeEnv(projectName: string): TargetEnv {
@@ -198,19 +206,43 @@ export class CloudflareWorkersTarget implements DeployTarget {
 		)
 	}
 
+	// The wipe-data gate (D1/R2 data loss) is a domain decision the CLI asserts
+	// before calling teardown; scope/volumes are Hetzner-only, so they are unused
+	// here. The workers-are-deleted-then-Terraform-destroyed sequence lives in
+	// `teardownWorkers`; the HCP workspace is never deleted (state stays
+	// historised) and the zone + other pipelines' records are data-sourced, never
+	// owned, so they survive untouched.
 	teardown(
 		projectName: string,
 		domain: string | undefined,
 		target: TeardownTarget,
 		shouldWipeVolumes: boolean,
 	): Promise<TeardownResult> {
-		void projectName
 		void domain
 		void target
 		void shouldWipeVolumes
-		throw new Error(
-			`teardown is not wired yet for ${this.name}: the Terraform destroy + wrangler delete implementation lands in US-2.4.`,
+		return teardownWorkers({
+			projectName,
+			environment: this.environment,
+			serviceNames: Object.keys(this.config.deploy.services),
+			wranglerRunner: this.wrangler,
+			destroyTerraform: () => this.destroyTerraform(),
+		})
+	}
+
+	recover(projectName: string): Promise<void> {
+		logger.info(
+			`recover is a no-op on ${this.name} for "${projectName}": the Terraform state is the source of truth, so there is nothing to reconcile.`,
 		)
+		return Promise.resolve()
+	}
+
+	private async destroyTerraform(): Promise<ResourceOutcome> {
+		await this.withTerraformWorkdir(async workdir => {
+			await terraformInit(workdir, this.runner)
+			await terraformDestroy(workdir, this.runner, this.terraformVars())
+		})
+		return { handled: true, detail: 'destroyed' }
 	}
 
 	private async applyTerraform(): Promise<ResourceOutcome> {

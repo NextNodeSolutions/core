@@ -265,6 +265,14 @@ export interface DeployTarget {
 	): Promise<TeardownResult>
 	describe?(projectName: string): Promise<TargetState | null>
 	/**
+	 * Reconcile the target back to its declared state after an interrupted or
+	 * partial operation. Optional: only targets whose source of truth can drift
+	 * from reality implement it. The cloudflare-workers target implements it as a
+	 * documented no-op - the Terraform state IS the source of truth, so there is
+	 * nothing to reconcile.
+	 */
+	recover?(projectName: string): Promise<void>
+	/**
 	 * Load the env a target's backing infrastructure contributes when it is
 	 * realised OUTSIDE the CLI `Service` registry - the cloudflare-workers
 	 * target maps its Terraform outputs (D1/KV/Queue ids, R2 bucket names +

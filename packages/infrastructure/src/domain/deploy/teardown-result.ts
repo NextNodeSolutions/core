@@ -2,6 +2,7 @@ import type {
 	PagesResourceOutcome,
 	VpsProjectResourceOutcome,
 	VpsResourceOutcome,
+	WorkersTeardownResourceOutcome,
 } from './resource-outcome.ts'
 
 export interface VpsFullTeardownResult {
@@ -28,4 +29,14 @@ export interface StaticTeardownResult {
 	readonly durationMs: number
 }
 
-export type TeardownResult = VpsTeardownResult | StaticTeardownResult
+export interface WorkersTeardownResult {
+	readonly kind: 'workers'
+	readonly scope: 'project'
+	readonly outcome: WorkersTeardownResourceOutcome
+	readonly durationMs: number
+}
+
+export type TeardownResult =
+	| VpsTeardownResult
+	| StaticTeardownResult
+	| WorkersTeardownResult
