@@ -4,6 +4,7 @@ import type { AutoRestoreInput, AutoRestoreResult } from './auto-restore.ts'
 import type {
 	PagesResourceOutcome,
 	VpsResourceOutcome,
+	WorkersResourceOutcome,
 } from './resource-outcome.ts'
 import type { TeardownResult } from './teardown-result.ts'
 import type { TeardownTarget } from './teardown-target.ts'
@@ -110,7 +111,17 @@ export interface StaticProvisionResult {
 	readonly durationMs: number
 }
 
-export type ProvisionResult = VpsProvisionResult | StaticProvisionResult
+export interface WorkersProvisionResult {
+	readonly kind: 'workers'
+	readonly outcome: WorkersResourceOutcome
+	readonly workspaceName: string
+	readonly durationMs: number
+}
+
+export type ProvisionResult =
+	| VpsProvisionResult
+	| StaticProvisionResult
+	| WorkersProvisionResult
 
 export interface TargetState {
 	readonly projectName: string
@@ -253,4 +264,15 @@ export interface DeployTarget {
 		shouldWipeVolumes: boolean,
 	): Promise<TeardownResult>
 	describe?(projectName: string): Promise<TargetState | null>
+	/**
+	 * Load the env a target's backing infrastructure contributes when it is
+	 * realised OUTSIDE the CLI `Service` registry - the cloudflare-workers
+	 * target maps its Terraform outputs (D1/KV/Queue ids, R2 bucket names +
+	 * CDN URLs, endpoint) into a `ServiceEnv` here, since its backing services
+	 * are inert on the CLI side. Optional: targets whose backing env already
+	 * flows through `resolveServices` (Hetzner, Pages) omit it. When present it
+	 * merges through the same `mergeServiceEnvs` as target + services + secrets,
+	 * so a key collision fails loud exactly like any other service's would.
+	 */
+	loadBackingEnv?(projectName: string): Promise<ServiceEnv>
 }

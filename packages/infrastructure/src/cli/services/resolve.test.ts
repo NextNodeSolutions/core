@@ -1,4 +1,8 @@
-import { APP_WITH_DOMAIN, STATIC_WITH_DOMAIN } from '#/cli/fixtures.ts'
+import {
+	APP_WITH_DOMAIN,
+	STATIC_WITH_DOMAIN,
+	WORKERS_APP_WITH_DOMAIN,
+} from '#/cli/fixtures.ts'
 import { describe, expect, it } from 'vitest'
 
 import { resolveServices } from './resolve.ts'
@@ -66,6 +70,33 @@ describe('resolveServices', () => {
 
 		expect(services).toHaveLength(1)
 		expect(services[0]?.name).toBe('r2')
+	})
+
+	it('builds the R2 service for a Hetzner config declaring [services.r2] (non-regression)', () => {
+		const services = resolveServices({
+			config: withR2Service(APP_WITH_DOMAIN, ['uploads']),
+			environment: 'production',
+			repository: { owner: 'NextNodeSolutions', name: 'core' },
+			cfToken: 'cf-token',
+			infraStorage: INFRA_STORAGE,
+			repoSecrets: {},
+		})
+
+		expect(services).toHaveLength(1)
+		expect(services[0]?.name).toBe('r2')
+	})
+
+	it('builds no CLI service for a cloudflare-workers config declaring [services.r2] - R2 is realised by the target Terraform apply', () => {
+		expect(
+			resolveServices({
+				config: withR2Service(WORKERS_APP_WITH_DOMAIN, ['uploads']),
+				environment: 'production',
+				repository: { owner: 'NextNodeSolutions', name: 'core' },
+				cfToken: 'cf-token',
+				infraStorage: INFRA_STORAGE,
+				repoSecrets: {},
+			}),
+		).toEqual([])
 	})
 
 	it('throws when [services.r2] is declared but infra storage is missing - invariant broken upstream', () => {

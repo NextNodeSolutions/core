@@ -35,6 +35,9 @@ vi.mock('../../adapters/hetzner/target.ts', () => ({
 vi.mock('../../adapters/cloudflare/target.ts', () => ({
 	CloudflarePagesTarget: vi.fn(() => ({ name: 'cloudflare-pages' })),
 }))
+vi.mock('../../adapters/cloudflare/workers/target.ts', () => ({
+	CloudflareWorkersTarget: vi.fn(() => ({ name: 'cloudflare-workers' })),
+}))
 
 describe('buildRuntimeTarget', () => {
 	let testPrivateKey: string
@@ -52,6 +55,7 @@ describe('buildRuntimeTarget', () => {
 			Buffer.from(testPrivateKey).toString('base64'),
 		)
 		vi.stubEnv('TAILSCALE_AUTH_KEY', 'tskey-auth-test')
+		vi.stubEnv('TF_TOKEN_app_terraform_io', 'tf-token')
 	})
 
 	afterEach(() => {
@@ -101,11 +105,17 @@ describe('buildRuntimeTarget', () => {
 		expect(target).toEqual({ name: 'cloudflare-pages' })
 	})
 
-	it('routes a cloudflare-workers config to its target definition', () => {
-		expect(() =>
-			buildRuntimeTarget(WORKERS_APP_WITH_DOMAIN, 'production', null),
-		).toThrow(
-			'cloudflare-workers target: provisioning and deploy land with the Terraform/wrangler implementation - not wired yet',
+	it('builds a Cloudflare Workers target without needing infra storage', async () => {
+		const { CloudflareWorkersTarget } =
+			await import('#/adapters/cloudflare/workers/target.ts')
+
+		const target = buildRuntimeTarget(
+			WORKERS_APP_WITH_DOMAIN,
+			'production',
+			null,
 		)
+
+		expect(CloudflareWorkersTarget).toHaveBeenCalledTimes(1)
+		expect(target).toEqual({ name: 'cloudflare-workers' })
 	})
 })

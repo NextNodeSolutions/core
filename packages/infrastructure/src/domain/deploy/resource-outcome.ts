@@ -1,4 +1,5 @@
 import type { PagesManagedResource } from '#/domain/cloudflare/managed-resources.ts'
+import type { WorkersManagedResource } from '#/domain/cloudflare/workers/managed-resources.ts'
 import type {
 	VpsManagedResource,
 	VpsProjectManagedResource,
@@ -23,4 +24,8 @@ export type VpsProjectResourceOutcome = Readonly<
 
 export type PagesResourceOutcome = Readonly<
 	Record<PagesManagedResource, ResourceOutcome>
+>
+
+export type WorkersResourceOutcome = Readonly<
+	Record<WorkersManagedResource, ResourceOutcome>
 >

@@ -1,3 +1,4 @@
+import { TARGET_REALISES_BACKING_SERVICES } from '#/config/types.ts'
 import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
 
 import { SERVICE_DEFINITIONS } from './registry.ts'
@@ -20,6 +21,8 @@ export interface ResolveServicesInput {
 export function resolveServices(
 	input: ResolveServicesInput,
 ): ReadonlyArray<Service> {
+	if (TARGET_REALISES_BACKING_SERVICES[input.config.deploy.target]) return []
+
 	const deployDomain = input.config.project.domain
 		? resolveDeployDomain(input.config.project.domain, input.environment)
 		: null

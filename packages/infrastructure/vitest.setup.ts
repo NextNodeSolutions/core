@@ -49,6 +49,7 @@ const CLI_ENV_VARS = [
 	'TEARDOWN_TARGET',
 	'TEARDOWN_WIPE_BACKUPS',
 	'TEARDOWN_WITH_VOLUMES',
+	'TF_TOKEN_app_terraform_io',
 ] as const
 
 for (const name of CLI_ENV_VARS) {

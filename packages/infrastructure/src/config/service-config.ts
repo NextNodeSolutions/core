@@ -163,3 +163,23 @@ export const SERVICE_SUPPORTED_TARGETS: {
 	kv: ['cloudflare-workers'],
 	queues: ['cloudflare-workers'],
 }
+
+/**
+ * Which deploy targets realise their declared backing services THEMSELVES -
+ * outside the CLI `Service` registry - rather than through the per-service CLI
+ * factories. A target flagged `true` provisions every backing service inside
+ * `DeployTarget.ensureInfra` (cloudflare-workers: R2/D1/KV/queues via a single
+ * Terraform apply) and projects their env via `DeployTarget.loadBackingEnv`, so
+ * `resolveServices` builds nothing for it: also building the CLI R2 `Service`
+ * would double-provision the buckets and collide on `R2_ENDPOINT` /
+ * `R2_BUCKET_*` in `mergeServiceEnvs`. The mapped type forces every
+ * `DEPLOY_TARGETS` entry to answer, so a new target can never silently fall
+ * back to the CLI registry for services it means to realise itself.
+ */
+export const TARGET_REALISES_BACKING_SERVICES: {
+	readonly [K in DeployTargetType]: boolean
+} = {
+	'hetzner-vps': false,
+	'cloudflare-pages': false,
+	'cloudflare-workers': true,
+}
