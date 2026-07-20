@@ -1,3 +1,12 @@
+import {
+	SERVICE_NAMES,
+	SERVICE_REQUIRES_INFRA_STORAGE,
+} from './service-config.ts'
+
+import type { ServicesConfig } from './service-config.ts'
+
+export * from './service-config.ts'
+
 export interface NextNodeConfig {
 	readonly project: ProjectSection
 	readonly scripts: ScriptsSection
@@ -281,95 +290,6 @@ export type DeploySection =
 	| HetznerVpsDeploySection
 	| CloudflarePagesDeploySection
 	| CloudflareWorkersDeploySection
-
-export interface R2BucketConfig {
-	// Bucket alias declared by the dev (kebab). Materialised as the real
-	// Cloudflare bucket `<project>-<env>-<name>` via `computeR2BucketName`.
-	readonly name: string
-	// When true, the infra attaches a public custom domain
-	// (`<name>.cdn.<domain>`) to the bucket and injects its URL as
-	// `R2_BUCKET_<NAME>_URL`. Buckets default to private (cdn = false).
-	readonly cdn: boolean
-}
-
-export interface R2ServiceConfig {
-	readonly buckets: ReadonlyArray<R2BucketConfig>
-}
-
-export const POSTGRES_MODES = ['embedded', 'external'] as const
-export type PostgresMode = (typeof POSTGRES_MODES)[number]
-
-// `[services.observability]` opts the project into the self-hosted
-// observability backend (VictoriaLogs + VictoriaMetrics + vmagent +
-// vmalert + Alertmanager + blackbox_exporter) injected into the generated
-// compose file. Declared once, by the monitoring project - the stack is
-// itself a NextNode app deployed by the standard pipeline. Retentions are
-// passed verbatim to the Victoria* `-retentionPeriod` flags; vhosts are
-// the tailnet hostnames Caddy fronts VictoriaLogs (log ingestion +
-// LogsQL) and vmui (ad-hoc metrics exploration) with.
-export interface ObservabilityServiceConfig {
-	// VictoriaLogs `-retentionPeriod` (e.g. "30d").
-	readonly logsRetention: string
-	// VictoriaMetrics `-retentionPeriod`, in months (e.g. 12).
-	readonly metricsRetentionMonths: number
-	// Tailnet vhost fronting VictoriaLogs - the URL NN_VL_URL points at.
-	readonly logsVhost: string
-	// Tailnet vhost fronting VictoriaMetrics/vmui.
-	readonly metricsVhost: string
-}
-
-export interface PostgresServiceConfig {
-	readonly mode: PostgresMode
-	// Drizzle migrations folder relative to nextnode.toml. Defaults to
-	// "drizzle" (drizzle-kit's own default `out` value) when omitted.
-	readonly migrationsFolder?: string
-	// Shell command run inside the ephemeral migrate container on the VPS.
-	// Defaults to `pnpm drizzle-kit migrate` (platform-native runner that
-	// reads `drizzle.config.ts` for dialect + `dbCredentials.url`, the app's
-	// config picks up the injected `DATABASE_URL`). Override for non-Drizzle
-	// stacks (e.g. `pnpm prisma migrate deploy`).
-	readonly migrateCommand?: string
-	// Shell command run on the GH runner during the quality stage to
-	// validate the local migrations folder (no DB, pure filesystem check).
-	// CLI default is `pnpm drizzle-kit check`; override for non-Drizzle
-	// stacks (e.g. `pnpm prisma migrate diff --exit-code`).
-	readonly checkCommand?: string
-}
-
-/**
- * Single source of truth for the set of supported backing services. Adding
- * a new service means appending its name here AND adding its config type
- * to `ServiceConfigByName` - TypeScript will then force every service-aware
- * site (validators, `hasAnyService`, future routers) to handle it.
- */
-export const SERVICE_NAMES = ['r2', 'postgres', 'observability'] as const
-export type ServiceName = (typeof SERVICE_NAMES)[number]
-
-export interface ServiceConfigByName {
-	readonly r2: R2ServiceConfig
-	readonly postgres: PostgresServiceConfig
-	readonly observability: ObservabilityServiceConfig
-}
-
-export type ServicesConfig = {
-	readonly [K in ServiceName]?: ServiceConfigByName[K]
-}
-
-/**
- * Per-service flag declaring whether opting into the service requires the
- * infra storage runtime (state + certs buckets) to be loaded. The mapped
- * type forces every entry in `SERVICE_NAMES` to set this flag - adding a
- * new service is a TypeScript error until it answers the question.
- */
-export const SERVICE_REQUIRES_INFRA_STORAGE: {
-	readonly [K in ServiceName]: boolean
-} = {
-	r2: true,
-	postgres: true,
-	// The observability stack provisions nothing outside the VPS compose
-	// project itself - no buckets, no external state.
-	observability: false,
-}
 
 export const KEBAB_IDENTIFIER_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/
 

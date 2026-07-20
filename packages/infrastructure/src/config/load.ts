@@ -2,7 +2,11 @@ import { readFileSync } from 'node:fs'
 
 import { parse as parseTOML } from 'smol-toml'
 
-import { isDeployable } from './types.ts'
+import {
+	SERVICE_NAMES,
+	SERVICE_SUPPORTED_TARGETS,
+	isDeployable,
+} from './types.ts'
 import { validateDeploySection } from './validation/deploy.ts'
 import {
 	validateEnvironmentSection,
@@ -23,6 +27,7 @@ import type {
 	NextNodeConfig,
 	ParseConfigResult,
 	ProjectSection,
+	ServicesConfig,
 } from './types.ts'
 
 export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
@@ -105,13 +110,36 @@ function assembleDeployable({
 	)
 	if (!deployResult.ok) return { ok: false, errors: deployResult.errors }
 
-	const internalError = checkInternalCompatibility(
-		project,
-		deployResult.section,
-	)
-	if (internalError) return { ok: false, errors: [internalError] }
+	const compatibilityErrors = [
+		...checkServicesTargetCompatibility(
+			base.services,
+			deployResult.section,
+		),
+		...checkInternalCompatibility(project, deployResult.section),
+	]
+	if (compatibilityErrors.length > 0) {
+		return { ok: false, errors: compatibilityErrors }
+	}
 
 	return { ok: true, config: { ...base, deploy: deployResult.section } }
+}
+
+// A backing service only validates against the deploy targets that can realise
+// it (SERVICE_SUPPORTED_TARGETS): D1/KV/Queues are Cloudflare-Workers-only,
+// postgres/observability are VPS-only, R2 spans both. Declaring one under a
+// target that cannot provision it fails loud rather than silently ignoring it.
+function checkServicesTargetCompatibility(
+	services: ServicesConfig,
+	deploy: DeploySection,
+): string[] {
+	return SERVICE_NAMES.filter(
+		name =>
+			services[name] !== undefined &&
+			!SERVICE_SUPPORTED_TARGETS[name].includes(deploy.target),
+	).map(
+		name =>
+			`[services.${name}] is not supported with deploy target "${deploy.target}" (supported: ${SERVICE_SUPPORTED_TARGETS[name].join(', ')})`,
+	)
 }
 
 // A non-deployable project (package/lib) must not carry a [deploy] section;
@@ -135,15 +163,24 @@ function parseNonDeployable(
 function checkInternalCompatibility(
 	project: ProjectSection,
 	deploy: DeploySection,
-): string | null {
-	if (!project.internal) return null
+): string[] {
+	if (!project.internal) return []
 	if (deploy.target === 'cloudflare-pages') {
-		return 'project.internal is not supported with deploy target "cloudflare-pages"'
+		return [
+			'project.internal is not supported with deploy target "cloudflare-pages"',
+		]
+	}
+	if (deploy.target === 'cloudflare-workers') {
+		return [
+			'project.internal is not supported with deploy target "cloudflare-workers" (a Worker runs on Cloudflare\'s edge with no tailnet to join - pin an internal project to a dedicated VPS with deploy target "hetzner-vps")',
+		]
 	}
 	if (deploy.target === 'hetzner-vps' && deploy.vps === null) {
-		return 'deploy.vps is required when project.internal = true (internal projects must pin to a dedicated VPS so they never share with public projects)'
+		return [
+			'deploy.vps is required when project.internal = true (internal projects must pin to a dedicated VPS so they never share with public projects)',
+		]
 	}
-	return null
+	return []
 }
 
 export function loadConfig(configPath: string): NextNodeConfig {

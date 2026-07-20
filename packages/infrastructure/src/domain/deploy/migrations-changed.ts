@@ -1,8 +1,6 @@
-import type { PostgresServiceConfig } from '#/config/types.ts'
+import { DEFAULT_MIGRATIONS_FOLDER } from '#/config/types.ts'
 
-// drizzle-kit's own default `out` directory. A postgres project that does not
-// override `migrations_folder` ships its generated SQL here.
-const DEFAULT_MIGRATIONS_FOLDER = 'drizzle'
+import type { PostgresServiceConfig } from '#/config/types.ts'
 
 /**
  * The directory (relative to the project root) holding generated migration

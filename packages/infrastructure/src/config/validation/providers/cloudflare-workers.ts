@@ -44,6 +44,32 @@ function validateWorkerServiceUrls(
 	return errors
 }
 
+// Fields a VPS deploy carries that a Worker cannot honour: there is no host to
+// pin (`vps`), no filesystem to mount (`[[deploy.volumes]]`), and no server to
+// size (`[deploy.hetzner]`). Reject them explicitly rather than parse-and-ignore,
+// mirroring how cloudflare-pages rejects `[deploy.services]`/`[[deploy.cron]]`.
+function unsupportedContainerFieldErrors(
+	deployRecord: Record<string, unknown>,
+): string[] {
+	const errors: string[] = []
+	if (deployRecord['vps'] !== undefined) {
+		errors.push(
+			'deploy.vps is not supported with deploy target "cloudflare-workers" (a Worker runs on Cloudflare\'s edge, not a pinned VPS)',
+		)
+	}
+	if (deployRecord['volumes'] !== undefined) {
+		errors.push(
+			'[[deploy.volumes]] is not supported with deploy target "cloudflare-workers" (a Worker has no host filesystem - use [services.kv]/[services.d1]/[services.r2] for state)',
+		)
+	}
+	if (deployRecord['hetzner'] !== undefined) {
+		errors.push(
+			'[deploy.hetzner] is not supported with deploy target "cloudflare-workers" (server sizing is meaningless on Cloudflare\'s edge)',
+		)
+	}
+	return errors
+}
+
 export const cloudflareWorkers: DeployProviderValidator = {
 	requiresDomain: true,
 	requiresServices: true,
@@ -61,6 +87,7 @@ export const cloudflareWorkers: DeployProviderValidator = {
 			new Set(Object.keys(workerServices)),
 		)
 		const serviceErrors = [
+			...unsupportedContainerFieldErrors(deployRecord),
 			...validateWorkerServiceUrls(workerServices, domain),
 			...(cronResult.ok ? [] : cronResult.errors),
 		]

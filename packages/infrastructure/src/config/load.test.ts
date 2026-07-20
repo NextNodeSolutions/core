@@ -21,6 +21,7 @@ const appConfig = (
 const workersConfig = (
 	services: Record<string, unknown>,
 	deployExtra: Record<string, unknown> = {},
+	backingServices?: Record<string, unknown>,
 ): Record<string, unknown> => ({
 	project: { name: 'my-worker', type: 'app', domain: 'example.com' },
 	deploy: {
@@ -28,6 +29,7 @@ const workersConfig = (
 		services,
 		...deployExtra,
 	},
+	...(backingServices ? { services: backingServices } : {}),
 })
 
 describe('loadConfig', () => {
@@ -2052,6 +2054,218 @@ describe('parseConfig', () => {
 
 			expect(parsed.errors).toContain(
 				'deploy.cron job "nightly" service "ghost" must reference a declared [deploy.services.<name>]',
+			)
+		})
+	})
+
+	describe('cloudflare-workers backing services', () => {
+		it('accepts [services.d1] with default migrations folder', () => {
+			const parsed = parseConfig(
+				workersConfig({ web: { url: 'example.com' } }, {}, { d1: {} }),
+			)
+
+			expect(parsed.ok).toBe(true)
+			if (!parsed.ok) return
+			expect(parsed.config.services.d1).toEqual({
+				migrationsFolder: 'drizzle',
+			})
+		})
+
+		it('accepts [[services.kv.namespaces]] and [[services.queues]]', () => {
+			const parsed = parseConfig(
+				workersConfig(
+					{ web: { url: 'example.com' } },
+					{},
+					{
+						kv: { namespaces: [{ name: 'sessions' }] },
+						queues: [{ name: 'emails' }],
+					},
+				),
+			)
+
+			expect(parsed.ok).toBe(true)
+			if (!parsed.ok) return
+			expect(parsed.config.services.kv).toEqual({
+				namespaces: [{ name: 'sessions' }],
+			})
+			expect(parsed.config.services.queues).toEqual({
+				queues: [{ name: 'emails' }],
+			})
+		})
+
+		it('accepts a worker that needs d1, kv, queues and r2 together', () => {
+			const parsed = parseConfig(
+				workersConfig(
+					{
+						web: {
+							url: 'example.com',
+							needs: ['d1', 'kv', 'queues', 'r2'],
+						},
+					},
+					{},
+					{
+						d1: {},
+						kv: { namespaces: [{ name: 'sessions' }] },
+						queues: [{ name: 'emails' }],
+						r2: { buckets: [{ name: 'assets' }] },
+					},
+				),
+			)
+
+			expect(parsed.ok).toBe(true)
+			if (!parsed.ok) return
+			if (parsed.config.deploy === false) return
+			if (parsed.config.deploy.target !== 'cloudflare-workers') return
+			expect(parsed.config.deploy.services['web']?.needs).toEqual([
+				'd1',
+				'kv',
+				'queues',
+				'r2',
+			])
+		})
+
+		it('accepts [[services.r2.buckets]] on cloudflare-workers', () => {
+			const parsed = parseConfig(
+				workersConfig(
+					{ web: { url: 'example.com' } },
+					{},
+					{
+						r2: { buckets: [{ name: 'assets', cdn: true }] },
+					},
+				),
+			)
+
+			expect(parsed.ok).toBe(true)
+			if (!parsed.ok) return
+			expect(parsed.config.services.r2).toEqual({
+				buckets: [{ name: 'assets', cdn: true }],
+			})
+		})
+
+		it.each([
+			['postgres', { mode: 'embedded' }],
+			[
+				'observability',
+				{
+					logs_retention: '30d',
+					metrics_retention_months: 12,
+					logs_vhost: 'logs.internal',
+					metrics_vhost: 'metrics.internal',
+				},
+			],
+		])(
+			'rejects VPS-only [services.%s] on cloudflare-workers',
+			(name, config) => {
+				const parsed = parseConfig(
+					workersConfig(
+						{ web: { url: 'example.com' } },
+						{},
+						{
+							[name]: config,
+						},
+					),
+				)
+
+				expect(parsed.ok).toBe(false)
+				if (parsed.ok) return
+				expect(parsed.errors).toContain(
+					`[services.${name}] is not supported with deploy target "cloudflare-workers" (supported: hetzner-vps)`,
+				)
+			},
+		)
+
+		it.each(['d1', 'kv', 'queues'])(
+			'rejects Cloudflare-only [services.%s] on hetzner-vps',
+			name => {
+				const backing =
+					name === 'kv'
+						? { namespaces: [{ name: 'sessions' }] }
+						: name === 'queues'
+							? [{ name: 'emails' }]
+							: {}
+				const parsed = parseConfig({
+					project: {
+						name: 'my-app',
+						type: 'app',
+						domain: 'example.com',
+					},
+					deploy: { services: { app: { source: 'build' } } },
+					services: { [name]: backing },
+				})
+
+				expect(parsed.ok).toBe(false)
+				if (parsed.ok) return
+				expect(parsed.errors).toContain(
+					`[services.${name}] is not supported with deploy target "hetzner-vps" (supported: cloudflare-workers)`,
+				)
+			},
+		)
+	})
+
+	describe('cloudflare-workers deploy field rejections', () => {
+		it('rejects deploy.vps', () => {
+			const parsed = parseConfig(
+				workersConfig(
+					{ web: { url: 'example.com' } },
+					{ vps: 'my-vps' },
+				),
+			)
+
+			expect(parsed.ok).toBe(false)
+			if (parsed.ok) return
+			expect(parsed.errors).toContain(
+				'deploy.vps is not supported with deploy target "cloudflare-workers" (a Worker runs on Cloudflare\'s edge, not a pinned VPS)',
+			)
+		})
+
+		it('rejects [[deploy.volumes]]', () => {
+			const parsed = parseConfig(
+				workersConfig(
+					{ web: { url: 'example.com' } },
+					{ volumes: [{ name: 'data', mount: '/data' }] },
+				),
+			)
+
+			expect(parsed.ok).toBe(false)
+			if (parsed.ok) return
+			expect(parsed.errors).toContain(
+				'[[deploy.volumes]] is not supported with deploy target "cloudflare-workers" (a Worker has no host filesystem - use [services.kv]/[services.d1]/[services.r2] for state)',
+			)
+		})
+
+		it('rejects [deploy.hetzner]', () => {
+			const parsed = parseConfig(
+				workersConfig(
+					{ web: { url: 'example.com' } },
+					{ hetzner: { server_type: 'cx23', location: 'nbg1' } },
+				),
+			)
+
+			expect(parsed.ok).toBe(false)
+			if (parsed.ok) return
+			expect(parsed.errors).toContain(
+				'[deploy.hetzner] is not supported with deploy target "cloudflare-workers" (server sizing is meaningless on Cloudflare\'s edge)',
+			)
+		})
+
+		it('rejects project.internal', () => {
+			const parsed = parseConfig({
+				project: {
+					name: 'my-worker',
+					type: 'app',
+					domain: 'example.com',
+					internal: true,
+				},
+				deploy: {
+					target: 'cloudflare-workers',
+					services: { web: { url: 'example.com' } },
+				},
+			})
+
+			expect(parsed.ok).toBe(false)
+			if (parsed.ok) return
+			expect(parsed.errors).toContain(
+				'project.internal is not supported with deploy target "cloudflare-workers" (a Worker runs on Cloudflare\'s edge with no tailnet to join - pin an internal project to a dedicated VPS with deploy target "hetzner-vps")',
 			)
 		})
 	})
