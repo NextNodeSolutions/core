@@ -109,48 +109,53 @@ function parseSecretEntries(raw: unknown): {
 // `service-env.ts` - which keys off `service.secrets` - injects a global secret
 // into every `.env.<service>` without any further wiring. No-op when there are
 // no globals.
-function expandServiceSecrets(
-	services: Record<string, UserServiceConfig>,
+function expandServiceSecrets<T extends { secrets: ReadonlyArray<string> }>(
+	services: Record<string, T>,
 	globalNames: ReadonlyArray<string>,
-): Record<string, UserServiceConfig> {
+): Record<string, T> {
 	if (globalNames.length === 0) return services
 	return Object.fromEntries(
-		Object.entries(services).map(
-			([name, service]): [string, UserServiceConfig] => [
-				name,
-				{
-					...service,
-					secrets: [...new Set([...globalNames, ...service.secrets])],
-				},
-			],
-		),
+		Object.entries(services).map(([name, service]): [string, T] => [
+			name,
+			{
+				...service,
+				secrets: [...new Set([...globalNames, ...service.secrets])],
+			},
+		]),
 	)
 }
 
-export interface ResolvedSecrets {
+export interface ResolvedSecrets<T = UserServiceConfig> {
 	errors: string[]
 	secrets: ReadonlyArray<string>
 	generatedSecrets: ReadonlyArray<GeneratedSecretConfig>
-	services: Record<string, UserServiceConfig>
+	services: Record<string, T>
 }
+
+// Targets that split a global secret pool across per-service `.env` files
+// (`expandServiceSecrets`); cloudflare-pages has no services so its pool is the
+// declared list verbatim.
+const POOLED_SECRET_TARGETS: ReadonlySet<DeployTargetType> =
+	new Set<DeployTargetType>(['hetzner-vps', 'cloudflare-workers'])
 
 // Resolve the secret pool - the set of GitHub Secret NAMES the pipeline pulls
 // for this deploy - and the generation specs, per target:
 //   - cloudflare-pages parses [deploy].secrets directly: one deployable unit,
 //     no per-service split, so the pool IS the declared list.
-//   - hetzner-vps treats [deploy].secrets as the GLOBAL pool (injected into
-//     every service via `expandServiceSecrets`) and the pool is that union with
-//     each service's own per-service (least-privilege) secrets.
+//   - hetzner-vps and cloudflare-workers treat [deploy].secrets as the GLOBAL
+//     pool (injected into every service via `expandServiceSecrets`) and the pool
+//     is that union with each service's own per-service (least-privilege)
+//     secrets.
 // Either way a `{ name, generate, length }` entry contributes its name to the
 // pool and its spec to `generatedSecrets`. A name declared but absent from
 // GitHub Secrets still fails loud at deploy time in `pickSecrets`.
-export function resolveSecrets(
+export function resolveSecrets<T extends { secrets: ReadonlyArray<string> }>(
 	target: DeployTargetType,
 	deployRecord: Record<string, unknown>,
-	services: Record<string, UserServiceConfig>,
-): ResolvedSecrets {
+	services: Record<string, T>,
+): ResolvedSecrets<T> {
 	const parsed = parseSecretEntries(deployRecord['secrets'])
-	if (target !== 'hetzner-vps') {
+	if (!POOLED_SECRET_TARGETS.has(target)) {
 		return {
 			errors: parsed.errors,
 			secrets: parsed.names,

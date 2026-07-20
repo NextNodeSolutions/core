@@ -1,11 +1,6 @@
 import { isDeployTarget } from '#/config/predicates.ts'
-import {
-	DEFAULT_DEPLOY_TARGETS,
-	DEPLOY_TARGETS,
-	KEBAB_IDENTIFIER_PATTERN,
-} from '#/config/types.ts'
+import { DEFAULT_DEPLOY_TARGETS, DEPLOY_TARGETS } from '#/config/types.ts'
 import { isRecord } from '#/kernel/guards.ts'
-import { pipe, regex } from 'valibot'
 
 import { resolveSecrets } from './deploy-secrets.ts'
 import {
@@ -13,17 +8,18 @@ import {
 	validateServiceNeedsRefs,
 	validateServices,
 } from './deploy-services.ts'
+import { validateVolumes } from './deploy-volumes.ts'
+import { validateWorkerServices } from './deploy-worker-services.ts'
 import { DEPLOY_PROVIDER_VALIDATORS } from './providers/registry.ts'
-import { nonEmptyString, optionalNonEmpty, runSchema } from './valibot.ts'
+import { optionalNonEmpty, runSchema } from './valibot.ts'
 
 import type {
 	DeploySection,
 	DeployTargetType,
-	DeployVolume,
 	DeployableProjectType,
 } from '#/config/types.ts'
-import type { GenericSchema } from 'valibot'
 import type { ResolvedSecrets } from './deploy-secrets.ts'
+import type { ServiceRefs } from './deploy-services.ts'
 import type {
 	DeployProviderValidator,
 	ParsedDeployInputs,
@@ -45,49 +41,6 @@ function validateVps(deployRecord: Record<string, unknown>): {
 	return { errors: [], vps: validation.section ?? null }
 }
 
-// --- volumes -------------------------------------------------------------
-
-const VOLUMES_NOT_TABLE =
-	'[deploy.volumes] must be a table mapping alias to mount path'
-
-const volumeMountSchema = (name: string): GenericSchema<unknown, string> =>
-	pipe(
-		nonEmptyString(
-			`deploy.volumes.${name} must be a non-empty absolute mount path`,
-		),
-		regex(/^\//, issue => {
-			const mountPath = typeof issue.input === 'string' ? issue.input : ''
-			return `deploy.volumes.${name} must be an absolute path (got "${mountPath}")`
-		}),
-	)
-
-function validateVolumes(deployRecord: Record<string, unknown>): {
-	errors: string[]
-	volumes: ReadonlyArray<DeployVolume>
-} {
-	const raw = deployRecord['volumes']
-	if (raw === undefined) return { errors: [], volumes: [] }
-	if (!isRecord(raw)) return { errors: [VOLUMES_NOT_TABLE], volumes: [] }
-
-	const errors: string[] = []
-	const volumes: DeployVolume[] = []
-	for (const [name, rawMount] of Object.entries(raw)) {
-		if (!KEBAB_IDENTIFIER_PATTERN.test(name)) {
-			errors.push(
-				`deploy.volumes alias "${name}" must be lowercase alphanumeric with dashes only (pattern: ${KEBAB_IDENTIFIER_PATTERN.source})`,
-			)
-			continue
-		}
-		const validation = runSchema(volumeMountSchema(name), rawMount)
-		if (!validation.ok) {
-			errors.push(...validation.errors)
-			continue
-		}
-		volumes.push({ name, mount: validation.section })
-	}
-	return { errors, volumes }
-}
-
 // --- deploy section --------------------------------------------------------
 
 interface DeployFieldsOptions {
@@ -96,48 +49,106 @@ interface DeployFieldsOptions {
 	readonly declaredServices: ReadonlySet<string>
 }
 
+interface ServiceCheck {
+	readonly errors: ReadonlyArray<string>
+	readonly count: number
+}
+
+interface DeployFields {
+	errors: string[]
+	providerInputs: ParsedDeployInputs
+	serviceCheck: ServiceCheck
+}
+
+interface ResolvedServices<T> {
+	errors: string[]
+	serviceCheck: ServiceCheck
+	secretsResult: ResolvedSecrets<T>
+}
+
+// Parse [deploy.services], cross-validate `needs`/`depends_on`, then fold the
+// global [deploy].secrets pool into each service - in THAT order, since the fold
+// needs the validated services. The `parse` strategy is the only difference
+// between the container and Worker targets (a Worker is not a container).
+function resolveServices<
+	T extends ServiceRefs & { secrets: ReadonlyArray<string> },
+>(
+	deployRecord: Record<string, unknown>,
+	target: DeployTargetType,
+	declaredServices: ReadonlySet<string>,
+	parse: (record: Record<string, unknown>) => {
+		errors: string[]
+		services: Record<string, T>
+	},
+): ResolvedServices<T> {
+	const parsed = parse(deployRecord)
+	const errors = [
+		...parsed.errors,
+		...validateServiceDependsOnRefs(parsed),
+		...validateServiceNeedsRefs(parsed, declaredServices),
+	]
+	const secretsResult = resolveSecrets(target, deployRecord, parsed.services)
+	errors.push(...secretsResult.errors)
+	return {
+		errors,
+		serviceCheck: {
+			errors: parsed.errors,
+			count: Object.keys(secretsResult.services).length,
+		},
+		secretsResult,
+	}
+}
+
 // Run the per-field validators (vps, volumes, services, secrets) and assemble
 // the inputs the provider validator needs, collecting every error.
 function validateDeployFields(
 	deployRecord: Record<string, unknown>,
 	{ target, domain, declaredServices }: DeployFieldsOptions,
-): {
-	errors: string[]
-	providerInputs: ParsedDeployInputs
-	servicesResult: ResolvedSecrets
-} {
-	const errors: string[] = []
+): DeployFields {
 	const vpsResult = validateVps(deployRecord)
-	errors.push(...vpsResult.errors)
-
 	const volumesResult = validateVolumes(deployRecord)
-	errors.push(...volumesResult.errors)
+	const shared = {
+		vps: vpsResult.vps,
+		volumes: volumesResult.volumes,
+		domain,
+	}
+	const fieldErrors = [...vpsResult.errors, ...volumesResult.errors]
 
-	const servicesResult = validateServices(deployRecord)
-	errors.push(...servicesResult.errors)
-	errors.push(...validateServiceDependsOnRefs(servicesResult))
-	errors.push(...validateServiceNeedsRefs(servicesResult, declaredServices))
+	if (target === 'cloudflare-workers') {
+		const { errors, serviceCheck, secretsResult } = resolveServices(
+			deployRecord,
+			target,
+			declaredServices,
+			validateWorkerServices,
+		)
+		return {
+			errors: [...fieldErrors, ...errors],
+			serviceCheck,
+			providerInputs: {
+				...shared,
+				secrets: secretsResult.secrets,
+				generatedSecrets: secretsResult.generatedSecrets,
+				services: {},
+				workerServices: secretsResult.services,
+			},
+		}
+	}
 
-	// Pool resolution folds the global [deploy].secrets into each service, so it
-	// runs AFTER services are validated and yields the EXPANDED services the
-	// provider then assembles into the section.
-	const secretsResult = resolveSecrets(
-		target,
+	const { errors, serviceCheck, secretsResult } = resolveServices(
 		deployRecord,
-		servicesResult.services,
+		target,
+		declaredServices,
+		validateServices,
 	)
-	errors.push(...secretsResult.errors)
-
 	return {
-		errors,
-		servicesResult: secretsResult,
+		errors: [...fieldErrors, ...errors],
+		serviceCheck,
 		providerInputs: {
+			...shared,
 			secrets: secretsResult.secrets,
 			generatedSecrets: secretsResult.generatedSecrets,
-			vps: vpsResult.vps,
-			volumes: volumesResult.volumes,
 			services: secretsResult.services,
-			domain,
+			workerServices: {},
 		},
 	}
 }
@@ -161,7 +172,7 @@ function providerRequirementErrors(
 	provider: DeployProviderValidator,
 	target: DeployTargetType,
 	domain: string | undefined,
-	servicesResult: ResolvedSecrets,
+	serviceCheck: ServiceCheck,
 ): string[] {
 	const errors: string[] = []
 	if (provider.requiresDomain && domain === undefined) {
@@ -171,8 +182,8 @@ function providerRequirementErrors(
 	}
 	if (
 		provider.requiresServices &&
-		servicesResult.errors.length === 0 &&
-		Object.keys(servicesResult.services).length === 0
+		serviceCheck.errors.length === 0 &&
+		serviceCheck.count === 0
 	) {
 		errors.push('at least one [deploy.services.<name>] is required')
 	}
@@ -224,7 +235,7 @@ export function validateDeploySection(
 			provider,
 			target,
 			domain,
-			fields.servicesResult,
+			fields.serviceCheck,
 		),
 	]
 

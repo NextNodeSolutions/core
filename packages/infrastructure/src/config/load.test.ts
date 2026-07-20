@@ -18,6 +18,18 @@ const appConfig = (
 	deploy: { services },
 })
 
+const workersConfig = (
+	services: Record<string, unknown>,
+	deployExtra: Record<string, unknown> = {},
+): Record<string, unknown> => ({
+	project: { name: 'my-worker', type: 'app', domain: 'example.com' },
+	deploy: {
+		target: 'cloudflare-workers',
+		services,
+		...deployExtra,
+	},
+})
+
 describe('loadConfig', () => {
 	it('loads a minimal valid config with defaults', () => {
 		const config = loadConfig(fixture('valid.toml'))
@@ -1782,6 +1794,264 @@ describe('parseConfig', () => {
 
 			expect(parsed.errors).toContain(
 				'[deploy.services] is not supported with deploy target "cloudflare-pages"',
+			)
+		})
+	})
+
+	describe('deploy target cloudflare-workers services', () => {
+		it.each([
+			[
+				'port',
+				8080,
+				'deploy.services.web.port is not supported with deploy target "cloudflare-workers" (a Worker is not a container: it has no listening port - drop `port`)',
+			],
+			[
+				'source',
+				'build',
+				'deploy.services.web.source is not supported with deploy target "cloudflare-workers" (a Worker is not a container: it is not built or pulled as an image - drop `source`)',
+			],
+			[
+				'ref',
+				'docker.io/acme/app:1.0',
+				'deploy.services.web.ref is not supported with deploy target "cloudflare-workers" (a Worker is not a container: there is no image to pull - drop `ref`)',
+			],
+			[
+				'registry_auth_secret',
+				'REGISTRY_TOKEN',
+				'deploy.services.web.registry_auth_secret is not supported with deploy target "cloudflare-workers" (a Worker is not a container: there is no registry to authenticate against - drop `registry_auth_secret`)',
+			],
+			[
+				'context',
+				'.',
+				'deploy.services.web.context is not supported with deploy target "cloudflare-workers" (a Worker is not a container: it has no Docker build context - drop `context`)',
+			],
+			[
+				'dockerfile',
+				'Dockerfile',
+				'deploy.services.web.dockerfile is not supported with deploy target "cloudflare-workers" (a Worker is not a container: it has no Dockerfile - drop `dockerfile`)',
+			],
+			[
+				'target',
+				'runtime',
+				'deploy.services.web.target is not supported with deploy target "cloudflare-workers" (a Worker is not a container: it has no Docker build stage - drop `target`)',
+			],
+			[
+				'build_args',
+				['SITE_URL'],
+				'deploy.services.web.build_args is not supported with deploy target "cloudflare-workers" (a Worker is not a container: it has no Docker build - point `entry` at the bundle and drop `build_args`)',
+			],
+		])(
+			'rejects the container-only field %s',
+			(field, fieldValue, message) => {
+				const parsed = parseConfig(
+					workersConfig({
+						web: { url: 'example.com', [field]: fieldValue },
+					}),
+				)
+
+				expect(parsed.ok).toBe(false)
+				if (parsed.ok) return
+
+				expect(parsed.errors).toContain(message)
+			},
+		)
+
+		it('defaults entry to the Astro worker bundle path', () => {
+			const parsed = parseConfig(
+				workersConfig({ web: { url: 'example.com' } }),
+			)
+
+			expect(parsed.ok).toBe(true)
+			if (!parsed.ok || parsed.config.deploy === false) return
+			if (parsed.config.deploy.target !== 'cloudflare-workers') return
+
+			expect(parsed.config.deploy.services['web']?.entry).toBe(
+				'dist/_worker.js/index.js',
+			)
+		})
+
+		it('honors an explicit entry override', () => {
+			const parsed = parseConfig(
+				workersConfig({
+					web: { url: 'example.com', entry: 'dist/server/index.js' },
+				}),
+			)
+
+			expect(parsed.ok).toBe(true)
+			if (!parsed.ok || parsed.config.deploy === false) return
+			if (parsed.config.deploy.target !== 'cloudflare-workers') return
+
+			expect(parsed.config.deploy.services['web']).toEqual({
+				url: 'example.com',
+				secrets: [],
+				needs: [],
+				dependsOn: [],
+				entry: 'dist/server/index.js',
+			})
+		})
+
+		it('accepts an internal worker with no url', () => {
+			const parsed = parseConfig(workersConfig({ api: {} }))
+
+			expect(parsed.ok).toBe(true)
+			if (!parsed.ok || parsed.config.deploy === false) return
+			if (parsed.config.deploy.target !== 'cloudflare-workers') return
+
+			expect(parsed.config.deploy.services['api']).toEqual({
+				secrets: [],
+				needs: [],
+				dependsOn: [],
+				entry: 'dist/_worker.js/index.js',
+			})
+		})
+
+		it('rejects a routed url outside project.domain', () => {
+			const parsed = parseConfig(
+				workersConfig({ web: { url: 'other.com' } }),
+			)
+
+			expect(parsed.ok).toBe(false)
+			if (parsed.ok) return
+
+			expect(parsed.errors).toContain(
+				'deploy.services.web.url "other.com" must belong to project.domain "example.com" (equal to it or a sub-domain)',
+			)
+		})
+
+		it('rejects two workers sharing the same url', () => {
+			const parsed = parseConfig(
+				workersConfig({
+					web: { url: 'example.com' },
+					api: { url: 'example.com' },
+				}),
+			)
+
+			expect(parsed.ok).toBe(false)
+			if (parsed.ok) return
+
+			expect(parsed.errors).toContain(
+				'deploy.services.api.url "example.com" duplicates deploy.services.web.url - each routed worker needs a distinct url',
+			)
+		})
+
+		it('rejects a needs referencing an undeclared backing service', () => {
+			const parsed = parseConfig(
+				workersConfig({ web: { url: 'example.com', needs: ['d1'] } }),
+			)
+
+			expect(parsed.ok).toBe(false)
+			if (parsed.ok) return
+
+			expect(parsed.errors).toContain(
+				'deploy.services.web.needs references "d1" but no [services.d1] is declared',
+			)
+		})
+
+		it('rejects a depends_on referencing an unknown worker', () => {
+			const parsed = parseConfig(
+				workersConfig({
+					web: { url: 'example.com', depends_on: ['ghost'] },
+				}),
+			)
+
+			expect(parsed.ok).toBe(false)
+			if (parsed.ok) return
+
+			expect(parsed.errors).toContain(
+				'deploy.services.web.depends_on references unknown service "ghost" - declare it in [deploy.services]',
+			)
+		})
+
+		it('folds the global secret pool into every worker service', () => {
+			const parsed = parseConfig(
+				workersConfig(
+					{
+						web: { url: 'example.com', secrets: ['WEB_KEY'] },
+						api: {},
+					},
+					{ secrets: ['GLOBAL_TOKEN'] },
+				),
+			)
+
+			expect(parsed.ok).toBe(true)
+			if (!parsed.ok || parsed.config.deploy === false) {
+				expect.unreachable(
+					'expected a successful cloudflare-workers parse',
+				)
+			}
+			if (parsed.config.deploy.target !== 'cloudflare-workers') {
+				expect.unreachable(
+					'expected the cloudflare-workers deploy target',
+				)
+			}
+
+			expect(parsed.config.deploy.services['web']?.secrets).toEqual([
+				'GLOBAL_TOKEN',
+				'WEB_KEY',
+			])
+			expect(parsed.config.deploy.services['api']?.secrets).toEqual([
+				'GLOBAL_TOKEN',
+			])
+			expect(parsed.config.deploy.secrets).toEqual([
+				'GLOBAL_TOKEN',
+				'WEB_KEY',
+			])
+		})
+
+		it('accepts a valid [[deploy.cron]] job as a Workers cron trigger', () => {
+			const parsed = parseConfig(
+				workersConfig(
+					{ web: { url: 'example.com' } },
+					{
+						cron: [
+							{
+								name: 'nightly',
+								schedule: '0 3 * * *',
+								path: '/api/cron',
+								service: 'web',
+							},
+						],
+					},
+				),
+			)
+
+			expect(parsed.ok).toBe(true)
+			if (!parsed.ok || parsed.config.deploy === false) return
+			if (parsed.config.deploy.target !== 'cloudflare-workers') return
+
+			expect(parsed.config.deploy.cron).toEqual([
+				{
+					name: 'nightly',
+					schedule: '0 3 * * *',
+					path: '/api/cron',
+					method: 'POST',
+					service: 'web',
+				},
+			])
+		})
+
+		it('rejects a cron job targeting an undeclared worker', () => {
+			const parsed = parseConfig(
+				workersConfig(
+					{ web: { url: 'example.com' } },
+					{
+						cron: [
+							{
+								name: 'nightly',
+								schedule: '0 3 * * *',
+								path: '/api/cron',
+								service: 'ghost',
+							},
+						],
+					},
+				),
+			)
+
+			expect(parsed.ok).toBe(false)
+			if (parsed.ok) return
+
+			expect(parsed.errors).toContain(
+				'deploy.cron job "nightly" service "ghost" must reference a declared [deploy.services.<name>]',
 			)
 		})
 	})

@@ -11,6 +11,18 @@ export interface ServicesValidation {
 	services: Record<string, UserServiceConfig>
 }
 
+// The cross-reference checks below key only off `needs`/`dependsOn`, so they
+// accept both container (UserServiceConfig) and Worker (WorkerServiceConfig)
+// service tables through this structural minimum.
+export interface ServiceRefs {
+	readonly needs: ReadonlyArray<string>
+	readonly dependsOn: ReadonlyArray<string>
+}
+export interface ServiceRefsValidation {
+	readonly errors: ReadonlyArray<string>
+	readonly services: Record<string, ServiceRefs>
+}
+
 // Resolve [deploy.services.<name>] into a typed Record. Returns an empty Record
 // when the table is absent - whether at least one service is *required* is a
 // provider decision (see `requiresServices`). N services are accepted; each
@@ -58,7 +70,7 @@ export function validateServices(
 // would never be produced and the workload would start against nothing. Skipped
 // when any service failed to parse (the declared set would be incomplete).
 export function validateServiceNeedsRefs(
-	servicesResult: ServicesValidation,
+	servicesResult: ServiceRefsValidation,
 	declaredServices: ReadonlySet<string>,
 ): string[] {
 	if (servicesResult.errors.length > 0) return []
@@ -80,7 +92,7 @@ export function validateServiceNeedsRefs(
 // Skipped when any service failed to parse: the declared-name pool would be
 // incomplete, turning a sibling's parse error into a spurious "unknown service".
 export function validateServiceDependsOnRefs(
-	servicesResult: ServicesValidation,
+	servicesResult: ServiceRefsValidation,
 ): string[] {
 	if (servicesResult.errors.length > 0) return []
 

@@ -8,6 +8,7 @@ import type {
 	DeployVolume,
 	GeneratedSecretConfig,
 	UserServiceConfig,
+	WorkerServiceConfig,
 } from '#/config/types.ts'
 
 export interface DeployProviderResult {
@@ -23,6 +24,10 @@ export interface ParsedDeployInputs {
 	readonly vps: string | null
 	readonly volumes: ReadonlyArray<DeployVolume>
 	readonly services: Record<string, UserServiceConfig>
+	// The cloudflare-workers service table, parsed against the Worker schema and
+	// with the global secret pool already folded in. Empty for every other
+	// target, which read `services` instead.
+	readonly workerServices: Record<string, WorkerServiceConfig>
 	// project.domain (undefined when unset) - the ACME/Caddy ownership root
 	// each routed service `url` must belong to. See validateServiceUrls.
 	readonly domain: string | undefined
