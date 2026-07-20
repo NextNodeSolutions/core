@@ -59,6 +59,9 @@ export function formatDate(date: Date, options: FormatOptions): string {
 export const hasAccess = false
 export const canRetry = true
 export const shouldNotify = false
+// framework-imposed export names (Astro route exports) are exempt
+export const prerender = false
+export const partial = true
 `,
 	},
 

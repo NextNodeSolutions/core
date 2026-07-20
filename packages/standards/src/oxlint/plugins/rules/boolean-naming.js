@@ -6,7 +6,13 @@
  *
  * Detection is purely syntactic: boolean literal initializers and explicit
  * `: boolean` annotations on variables and parameters.
+ *
+ * Framework-imposed export names (Astro route exports like `prerender` and
+ * `partial`) are exempt - the name is the framework's contract, not ours.
+ * Only the `export const` form is exempt; a local variable keeps the rule.
  */
+const FRAMEWORK_BOOLEAN_EXPORTS = new Set(['prerender', 'partial'])
+
 const QUESTION_PREFIX =
 	/^_?(is|has|had|can|could|should|was|will|did|does|do|needs|allows|supports|includes)([A-Z0-9_]|$)/
 const NEGATED_PREFIX =
@@ -67,9 +73,26 @@ export const booleanNaming = {
 	},
 	create(context) {
 		const checkParams = checkFunctionParams(context)
+		const frameworkExportDeclarators = new Set()
 		return {
+			ExportNamedDeclaration(node) {
+				if (node.declaration?.type !== 'VariableDeclaration') {
+					return
+				}
+				for (const declarator of node.declaration.declarations) {
+					if (
+						declarator.id.type === 'Identifier' &&
+						FRAMEWORK_BOOLEAN_EXPORTS.has(declarator.id.name)
+					) {
+						frameworkExportDeclarators.add(declarator)
+					}
+				}
+			},
 			VariableDeclarator(node) {
 				if (node.id.type !== 'Identifier') {
+					return
+				}
+				if (frameworkExportDeclarators.has(node)) {
 					return
 				}
 
