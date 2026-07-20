@@ -111,6 +111,65 @@ describe('loadConfig', () => {
 			},
 		})
 	})
+
+	it('parses the 3-worker cloudflare-workers example end-to-end from TOML', () => {
+		const config = loadConfig(fixture('cloudflare-workers-app.toml'))
+
+		expect(config.project).toEqual({
+			name: 'studiobymina',
+			type: 'app',
+			domain: 'studiobymina.com',
+			redirectDomains: ['studiobymina.fr'],
+			filter: false,
+			internal: false,
+		})
+
+		if (
+			config.deploy === false ||
+			config.deploy.target !== 'cloudflare-workers'
+		) {
+			throw new Error('expected a cloudflare-workers deploy section')
+		}
+
+		// Each service defaults `entry` to the Astro worker bundle path; the
+		// global generated JWT_SECRET is folded into every service, back keeps
+		// its own least-privilege RESEND_API_KEY on top.
+		expect(config.deploy).toEqual({
+			target: 'cloudflare-workers',
+			secrets: ['JWT_SECRET', 'RESEND_API_KEY'],
+			generatedSecrets: [
+				{ name: 'JWT_SECRET', generate: 'token', length: 43 },
+			],
+			vps: null,
+			volumes: [],
+			cron: [],
+			services: {
+				web: {
+					url: 'studiobymina.com',
+					secrets: ['JWT_SECRET'],
+					needs: [],
+					dependsOn: [],
+					entry: 'dist/_worker.js/index.js',
+				},
+				back: {
+					url: 'api.studiobymina.com',
+					secrets: ['JWT_SECRET', 'RESEND_API_KEY'],
+					needs: ['d1'],
+					dependsOn: [],
+					entry: 'dist/_worker.js/index.js',
+				},
+				admin: {
+					url: 'admin.studiobymina.com',
+					secrets: ['JWT_SECRET'],
+					needs: [],
+					dependsOn: [],
+					entry: 'dist/_worker.js/index.js',
+				},
+			},
+		})
+
+		expect(config.services).toEqual({ d1: { migrationsFolder: 'drizzle' } })
+	})
 })
 
 describe('parseConfig', () => {
@@ -2266,6 +2325,120 @@ describe('parseConfig', () => {
 			if (parsed.ok) return
 			expect(parsed.errors).toContain(
 				'project.internal is not supported with deploy target "cloudflare-workers" (a Worker runs on Cloudflare\'s edge with no tailnet to join - pin an internal project to a dedicated VPS with deploy target "hetzner-vps")',
+			)
+		})
+
+		it('requires project.domain for a cloudflare-workers target', () => {
+			const parsed = parseConfig({
+				project: { name: 'my-worker', type: 'app' },
+				deploy: {
+					target: 'cloudflare-workers',
+					services: { web: {} },
+				},
+			})
+
+			expect(parsed.ok).toBe(false)
+			if (parsed.ok) return
+			expect(parsed.errors).toContain(
+				'project.domain is required when deploy target is "cloudflare-workers"',
+			)
+		})
+
+		it('requires at least one service for a cloudflare-workers target', () => {
+			const parsed = parseConfig({
+				project: {
+					name: 'my-worker',
+					type: 'app',
+					domain: 'example.com',
+				},
+				deploy: { target: 'cloudflare-workers' },
+			})
+
+			expect(parsed.ok).toBe(false)
+			if (parsed.ok) return
+			expect(parsed.errors).toContain(
+				'at least one [deploy.services.<name>] is required',
+			)
+		})
+	})
+
+	describe('cloudflare-workers deploy secrets pool', () => {
+		it('captures a generated secret and folds it into the pool', () => {
+			const parsed = parseConfig(
+				workersConfig(
+					{ web: { url: 'example.com' } },
+					{
+						secrets: [
+							'RESEND_API_KEY',
+							{
+								name: 'JWT_SECRET',
+								generate: 'token',
+								length: 43,
+							},
+						],
+					},
+				),
+			)
+
+			expect(parsed.ok).toBe(true)
+			if (!parsed.ok || parsed.config.deploy === false) return
+			if (parsed.config.deploy.target !== 'cloudflare-workers') return
+
+			expect(parsed.config.deploy.secrets).toEqual([
+				'RESEND_API_KEY',
+				'JWT_SECRET',
+			])
+			expect(parsed.config.deploy.generatedSecrets).toEqual([
+				{ name: 'JWT_SECRET', generate: 'token', length: 43 },
+			])
+			expect(parsed.config.deploy.services['web']?.secrets).toEqual([
+				'RESEND_API_KEY',
+				'JWT_SECRET',
+			])
+		})
+
+		it('rejects a duplicate secret name', () => {
+			const parsed = parseConfig(
+				workersConfig(
+					{ web: { url: 'example.com' } },
+					{ secrets: ['DUP', 'DUP'] },
+				),
+			)
+
+			expect(parsed.ok).toBe(false)
+			if (parsed.ok) return
+			expect(parsed.errors).toContain(
+				'deploy.secrets declares "DUP" more than once',
+			)
+		})
+
+		it('rejects an unknown generator', () => {
+			const parsed = parseConfig(
+				workersConfig(
+					{ web: { url: 'example.com' } },
+					{ secrets: [{ name: 'X', generate: 'rsa', length: 32 }] },
+				),
+			)
+
+			expect(parsed.ok).toBe(false)
+			if (parsed.ok) return
+			expect(parsed.errors).toContain(
+				'deploy.secrets entry "X" `generate` must be one of: token, password',
+			)
+		})
+
+		it('rejects a generated secret with an out-of-range length', () => {
+			const parsed = parseConfig(
+				workersConfig(
+					{ web: { url: 'example.com' } },
+					{ secrets: [{ name: 'X', generate: 'token', length: 4 }] },
+				),
+			)
+
+			expect(parsed.ok).toBe(false)
+			if (parsed.ok) return
+			expect(parsed.errors).toContain(
+				'deploy.secrets entry "X" `length` must be an integer between 16 and 256',
 			)
 		})
 	})

@@ -2,7 +2,7 @@ import { readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { STATIC_WITH_DOMAIN } from '#/cli/fixtures.ts'
+import { STATIC_WITH_DOMAIN, WORKERS_APP_WITH_DOMAIN } from '#/cli/fixtures.ts'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { planCommand } from './plan.command.ts'
@@ -88,6 +88,18 @@ describe('planCommand', () => {
 		expect(output).toContain('domain=example.com\n')
 		expect(output).toContain('build_directory=apps/landing/dist\n')
 		expect(output).toContain('package_dir=apps/landing\n')
+	})
+
+	it('emits empty image outputs and a routed domain for a cloudflare-workers app', () => {
+		planCommand(WORKERS_APP_WITH_DOMAIN)
+
+		const output = readFileSync(outputFile, 'utf-8')
+		expect(output).toContain('project_type=app\n')
+		expect(output).toContain('project_name=my-worker\n')
+		expect(output).toContain('has_domain=true\n')
+		expect(output).toContain('domain=example.com\n')
+		expect(output).toContain('image_source=\n')
+		expect(output).toContain('upstream_image_refs=\n')
 	})
 
 	it('writes plan outputs for a package project', () => {
