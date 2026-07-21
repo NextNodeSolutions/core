@@ -1,0 +1,234 @@
+name: Deploy Workers
+
+on:
+    workflow_call:
+        inputs:
+            environment:
+                type: string
+                required: true
+                description: 'development or production'
+            config_file:
+                type: string
+                default: 'nextnode.toml'
+                description: 'Path to nextnode.toml in the calling repo'
+            dev_workflow_file:
+                type: string
+                default: 'deploy-dev.yml'
+                description: 'Filename of the dev workflow (for prod gate)'
+
+permissions:
+    contents: read
+    actions: read
+
+# Serialise deploys per (config, environment). Two pushes to the same
+# project's environment queue rather than racing - protects the shared
+# Terraform workspace state and the D1 migration roundtrip from concurrent
+# runs (Terraform holds its own lock, but serialising here avoids a run
+# failing on a held lock instead of queueing).
+concurrency:
+    group: deploy-${{ inputs.config_file }}-${{ inputs.environment }}
+    cancel-in-progress: false
+
+jobs:
+    plan:
+        name: Plan
+        runs-on: ubuntu-latest
+        outputs:
+            quality_matrix: ${{ steps.plan.outputs.quality_matrix }}
+            project_name: ${{ steps.plan.outputs.project_name }}
+            has_prod_gate: ${{ steps.plan.outputs.has_prod_gate }}
+            has_domain: ${{ steps.plan.outputs.has_domain }}
+            has_d1: ${{ steps.plan.outputs.has_d1 }}
+            build_directory: ${{ steps.plan.outputs.build_directory }}
+            package_dir: ${{ steps.plan.outputs.package_dir }}
+        steps:
+            - uses: NextNodeSolutions/core/.github/actions/setup@main
+              with:
+                  infra: 'true'
+                  deps: 'false'
+
+            - name: Plan pipeline
+              id: plan
+              run: node src/index.ts plan
+              working-directory: .infra/packages/infrastructure
+              env:
+                  PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
+                  PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
+
+    quality:
+        name: ${{ matrix.task.name }}
+        needs: plan
+        runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                task: ${{ fromJSON(needs.plan.outputs.quality_matrix) }}
+        steps:
+            - uses: NextNodeSolutions/core/.github/actions/setup@main
+              with:
+                  infra: ${{ needs.plan.outputs.has_prod_gate }}
+
+            - name: ${{ matrix.task.name }}
+              run: ${{ matrix.task.cmd }}
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  DEV_WORKFLOW_FILE: ${{ inputs.dev_workflow_file }}
+
+    provision:
+        name: Provision
+        needs: [plan, quality]
+        runs-on: ubuntu-latest
+        # `ensureGeneratedSecrets` skips regeneration only when the secret is
+        # already present in `ALL_SECRETS` (toJSON(secrets) of THIS job). The
+        # generated values are pushed as env-scoped secrets, so provision must
+        # bind to the environment AND receive ALL_SECRETS to see them on a
+        # re-run - otherwise it regenerates and re-pushes every generated
+        # secret on every provision, rotating e.g. BETTER_AUTH_SECRET and
+        # invalidating live sessions (the opposite of the idempotent,
+        # non-rotating contract `ensureGeneratedSecrets` documents).
+        environment:
+            name: ${{ inputs.environment }}
+        steps:
+            - uses: NextNodeSolutions/core/.github/actions/setup@main
+              with:
+                  infra: 'true'
+                  deps: 'false'
+
+            - name: Setup Terraform
+              uses: hashicorp/setup-terraform@v3
+              with:
+                  terraform_version: '~> 1.9'
+                  terraform_wrapper: false
+
+            - name: Generate GitHub App token
+              id: app-token
+              uses: actions/create-github-app-token@v2
+              with:
+                  app-id: ${{ secrets.NEXTNODE_APP_ID }}
+                  private-key: ${{ secrets.NEXTNODE_APP_PRIVATE_KEY }}
+                  owner: NextNodeSolutions
+
+            - name: Provision infrastructure
+              id: provision
+              run: node src/index.ts provision
+              working-directory: .infra/packages/infrastructure
+              env:
+                  PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
+                  PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
+                  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+                  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+                  TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+                  GH_TOKEN: ${{ steps.app-token.outputs.token }}
+                  # Lets ensureGeneratedSecrets see already-generated secrets
+                  # and skip regeneration (idempotent, non-rotating).
+                  ALL_SECRETS: ${{ toJSON(secrets) }}
+
+    detect-migrations:
+        name: Detect migrations
+        needs: plan
+        # `wrangler d1 migrations apply --remote` is the per-deploy hotspot on
+        # the Workers path. Skip it when the push changed no migration file. The
+        # git-diff + fail-safe decision is a TS command (no decision logic in
+        # YAML); it fails safe to migrations_changed=true on any range it cannot
+        # diff (manual dispatch, first push, shallow clone), so a real migration
+        # is never skipped.
+        if: needs.plan.outputs.has_d1 == 'true'
+        runs-on: ubuntu-latest
+        outputs:
+            migrations_changed: ${{ steps.detect.outputs.migrations_changed }}
+        steps:
+            - uses: NextNodeSolutions/core/.github/actions/setup@main
+              with:
+                  infra: 'true'
+                  deps: 'false'
+                  # Full history so `git diff <before> <sha>` can resolve the base.
+                  fetch-depth: '0'
+
+            - name: Detect migration changes
+              id: detect
+              run: node src/index.ts detect-migration-changes
+              working-directory: .infra/packages/infrastructure
+              env:
+                  PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
+                  PIPELINE_BASE_SHA: ${{ github.event.before }}
+
+    migrate:
+        name: Migrate
+        needs: [plan, provision, detect-migrations]
+        # Applies pending D1 migrations. Skipped when the project has no
+        # `[services.d1]`, OR when this push changed no migration file (see
+        # detect-migrations) - so the wrangler roundtrip is only paid where a
+        # schema actually changed.
+        if: ${{ !cancelled() && !failure() && needs.plan.outputs.has_d1 == 'true' && needs.detect-migrations.outputs.migrations_changed == 'true' }}
+        runs-on: ubuntu-latest
+        # migrate-remote resolves the deploy context (resolveDeployContext reads
+        # ALL_SECRETS for the per-service secret pool) exactly like deploy, so it
+        # needs the project's Environment secrets in `toJSON(secrets)`. GitHub
+        # only injects env-scoped secrets into a job that declares `environment:`.
+        environment:
+            name: ${{ inputs.environment }}
+        steps:
+            - uses: NextNodeSolutions/core/.github/actions/setup@main
+              with:
+                  infra: 'true'
+                  deps: 'false'
+
+            - name: Setup Terraform
+              uses: hashicorp/setup-terraform@v3
+              with:
+                  terraform_version: '~> 1.9'
+                  terraform_wrapper: false
+
+            - name: Migrate remote
+              run: node src/index.ts migrate-remote
+              working-directory: .infra/packages/infrastructure
+              env:
+                  PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
+                  PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
+                  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+                  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+                  TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+                  ALL_SECRETS: ${{ toJSON(secrets) }}
+
+    deploy:
+        name: Deploy
+        needs: [plan, quality, provision, migrate]
+        if: ${{ !cancelled() && !failure() }}
+        runs-on: ubuntu-latest
+        environment:
+            name: ${{ inputs.environment }}
+        steps:
+            - uses: NextNodeSolutions/core/.github/actions/setup@main
+              with:
+                  infra: 'true'
+                  # deps left at its default 'true' - the caller's site builds
+                  # here (pnpm build) before `wrangler deploy` uploads the bundle.
+
+            - name: Setup Terraform
+              uses: hashicorp/setup-terraform@v3
+              with:
+                  terraform_version: '~> 1.9'
+                  terraform_wrapper: false
+
+            - name: Build
+              run: pnpm build
+
+            - name: SEO guard
+              if: needs.plan.outputs.build_directory != ''
+              run: node src/index.ts seo-guard
+              working-directory: .infra/packages/infrastructure
+              env:
+                  PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
+                  PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
+                  BUILD_DIRECTORY: ${{ github.workspace }}/${{ needs.plan.outputs.build_directory }}
+
+            - name: Deploy
+              run: node src/index.ts deploy
+              working-directory: .infra/packages/infrastructure
+              env:
+                  PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
+                  PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
+                  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+                  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+                  TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+                  ALL_SECRETS: ${{ toJSON(secrets) }}
