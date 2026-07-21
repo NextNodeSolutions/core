@@ -21,6 +21,7 @@ import { teardownWorkers } from './teardown-workers.ts'
 import {
 	applyWorkersTerraform,
 	destroyWorkersTerraform,
+	memoizeOutputsReader,
 	planWorkersTerraform,
 	readWorkersTerraformOutputs,
 } from './terraform-ops.ts'
@@ -28,7 +29,6 @@ import {
 import type { TerraformRunner } from '#/adapters/terraform/runner.ts'
 import type { WranglerRunner } from '#/adapters/wrangler/runner.ts'
 import type { CloudflareWorkersDeployableConfig } from '#/config/types.ts'
-import type { WorkersTerraformOutputs } from '#/domain/cloudflare/workers/outputs-env.ts'
 import type {
 	AutoRestoreInput,
 	AutoRestoreResult,
@@ -49,7 +49,7 @@ import type { TeardownResult } from '#/domain/deploy/teardown-result.ts'
 import type { TeardownTarget } from '#/domain/deploy/teardown-target.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 import type { ServiceEnv } from '#/domain/services/service.ts'
-import type { WorkersTerraformContext } from './terraform-ops.ts'
+import type { OutputsReader, WorkersTerraformContext } from './terraform-ops.ts'
 
 export interface CloudflareWorkersTargetConfig {
 	readonly accountId: string
@@ -77,6 +77,10 @@ export class CloudflareWorkersTarget implements DeployTarget {
 	private readonly projectDir: string | undefined
 	private readonly runner: TerraformRunner
 	private readonly wrangler: WranglerRunner | undefined
+	// Memoised across loadBackingEnv, deploy and runMigrate so one deploy/migrate
+	// flow reads the provision outputs once. Skips terraform entirely (EMPTY) when
+	// no backing service is declared - the only Terraform-emitted ids live there.
+	private readonly loadTerraformOutputs: OutputsReader
 
 	constructor(config: CloudflareWorkersTargetConfig) {
 		this.accountId = config.accountId
@@ -86,6 +90,11 @@ export class CloudflareWorkersTarget implements DeployTarget {
 		this.projectDir = config.projectDir
 		this.runner = config.terraformRunner ?? defaultTerraformRunner
 		this.wrangler = config.wranglerRunner
+		this.loadTerraformOutputs = memoizeOutputsReader(() =>
+			hasWorkersBacking(deriveWorkersBackingConfig(this.config.services))
+				? readWorkersTerraformOutputs(this.terraformContext())
+				: Promise.resolve(EMPTY_WORKERS_TERRAFORM_OUTPUTS),
+		)
 	}
 
 	contributeEnv(projectName: string): TargetEnv {
@@ -133,9 +142,7 @@ export class CloudflareWorkersTarget implements DeployTarget {
 		if (!hasWorkersBacking(backing)) {
 			return { public: {}, secret: {} }
 		}
-		const outputs = await readWorkersTerraformOutputs(
-			this.terraformContext(),
-		)
+		const outputs = await this.loadTerraformOutputs()
 		return buildWorkersBackingEnv(outputs, this.accountId, backing)
 	}
 
@@ -157,7 +164,7 @@ export class CloudflareWorkersTarget implements DeployTarget {
 		env: DeployEnv,
 	): Promise<DeployResult> {
 		void env
-		const outputs = await this.loadDeployOutputs()
+		const outputs = await this.loadTerraformOutputs()
 		return deployWorkers({
 			projectName,
 			environment: this.environment,
@@ -181,14 +188,6 @@ export class CloudflareWorkersTarget implements DeployTarget {
 			)
 		}
 		return this.projectDir
-	}
-
-	private async loadDeployOutputs(): Promise<WorkersTerraformOutputs> {
-		const backing = deriveWorkersBackingConfig(this.config.services)
-		if (!hasWorkersBacking(backing)) {
-			return EMPTY_WORKERS_TERRAFORM_OUTPUTS
-		}
-		return readWorkersTerraformOutputs(this.terraformContext())
 	}
 
 	private terraformContext(): WorkersTerraformContext {
@@ -219,7 +218,7 @@ export class CloudflareWorkersTarget implements DeployTarget {
 				`runMigrate on ${this.name} expects a d1 migrate input but received "${input.kind}" - a container migrate was routed to the Workers target, which is a wiring bug.`,
 			)
 		}
-		const outputs = await this.loadDeployOutputs()
+		const outputs = await this.loadTerraformOutputs()
 		return migrateWorkers({
 			projectName: input.projectName,
 			environment: this.environment,

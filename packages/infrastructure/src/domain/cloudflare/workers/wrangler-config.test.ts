@@ -95,11 +95,11 @@ describe('buildWranglerConfig', () => {
 		])
 	})
 
-	it('omits routes and workers_dev for an internal worker (no url)', () => {
+	it('forces workers_dev:false and omits routes for an internal worker (no url)', () => {
 		const document = buildWranglerConfig(input())
 
 		expect(document.routes).toBeUndefined()
-		expect(document.workers_dev).toBeUndefined()
+		expect(document.workers_dev).toBe(false)
 	})
 
 	it('derives the assets directory from the _worker.js entry convention', () => {

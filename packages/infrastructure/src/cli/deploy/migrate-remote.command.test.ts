@@ -133,13 +133,17 @@ vi.mock('../../adapters/hetzner/target.ts', () => ({
 	})),
 }))
 
-// Mock CloudflareWorkersTarget (network boundary: terraform + wrangler). Only
-// runMigrate is exercised here; contributeEnv is enough for resolveDeployContext
-// to build the merged env (no loadBackingEnv, so no terraform output read).
-const { mockRunMigrateWorkers, mockPrepareRolloutWorkers } = vi.hoisted(() => ({
-	mockRunMigrateWorkers: vi.fn(),
-	mockPrepareRolloutWorkers: vi.fn(),
-}))
+// Mock CloudflareWorkersTarget (network boundary: terraform + wrangler).
+// resolveDeployContext calls loadBackingEnv (which, on the real target, memoises
+// the single terraform outputs read shared with runMigrate); it is stubbed here
+// so the merged env is built without touching terraform. runMigrate is the method
+// under test.
+const { mockRunMigrateWorkers, mockPrepareRolloutWorkers, mockLoadBackingEnv } =
+	vi.hoisted(() => ({
+		mockRunMigrateWorkers: vi.fn(),
+		mockPrepareRolloutWorkers: vi.fn(),
+		mockLoadBackingEnv: vi.fn(),
+	}))
 
 vi.mock('../../adapters/cloudflare/workers/target.ts', () => ({
 	CloudflareWorkersTarget: vi.fn(() => ({
@@ -148,6 +152,7 @@ vi.mock('../../adapters/cloudflare/workers/target.ts', () => ({
 			public: { SITE_URL: 'https://example.com' },
 			secret: {},
 		}),
+		loadBackingEnv: mockLoadBackingEnv,
 		runMigrate: mockRunMigrateWorkers,
 		prepareRollout: mockPrepareRolloutWorkers,
 		deploy: vi.fn(),
@@ -462,6 +467,7 @@ describe('migrateRemoteCommand (cloudflare-workers D1)', () => {
 		vi.stubEnv('GITHUB_STEP_SUMMARY', summaryFile)
 		vi.stubEnv('ALL_SECRETS', JSON.stringify({}))
 		mockRunMigrateWorkers.mockResolvedValue(MIGRATE_RESULT)
+		mockLoadBackingEnv.mockResolvedValue({ public: {}, secret: {} })
 	})
 
 	afterEach(() => {
@@ -469,6 +475,7 @@ describe('migrateRemoteCommand (cloudflare-workers D1)', () => {
 		vi.unstubAllEnvs()
 		mockRunMigrateWorkers.mockReset()
 		mockPrepareRolloutWorkers.mockReset()
+		mockLoadBackingEnv.mockReset()
 	})
 
 	it('runs the D1 migrate without staging a rollout when [services.d1] is set', async () => {

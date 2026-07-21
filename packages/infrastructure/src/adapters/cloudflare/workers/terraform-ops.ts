@@ -100,3 +100,23 @@ export function readWorkersTerraformOutputs(
 		return parseTerraformOutputs(raw)
 	})
 }
+
+export type OutputsReader = () => Promise<WorkersTerraformOutputs>
+
+// Memoise a single provision-outputs read so one deploy/migrate flow pays the
+// `terraform init`+`output` roundtrip once (loadBackingEnv, then
+// loadDeployOutputs/runMigrate share it). Concurrent and later callers reuse the
+// in-flight Promise; a rejection clears the cache so a retry re-reads instead of
+// replaying the failure.
+export function memoizeOutputsReader(read: OutputsReader): OutputsReader {
+	let cached: Promise<WorkersTerraformOutputs> | undefined
+	const run = async (): Promise<WorkersTerraformOutputs> => {
+		try {
+			return await read()
+		} catch (error) {
+			cached = undefined
+			throw error
+		}
+	}
+	return () => (cached ??= run())
+}

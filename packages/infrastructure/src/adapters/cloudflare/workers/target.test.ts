@@ -919,6 +919,64 @@ describe('CloudflareWorkersTarget.deploy env & secrets', () => {
 	})
 })
 
+describe('CloudflareWorkersTarget terraform outputs memoisation', () => {
+	beforeEach(() => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn<FetchImpl>(() => Promise.resolve(okEmpty())),
+		)
+	})
+
+	it('reads the terraform outputs once across loadBackingEnv then deploy', async () => {
+		const terraform = makeRunner()
+		const { runner } = makeDeployWrangler()
+		const target = buildDeployTarget({
+			services: { web: worker({ url: 'example.com', needs: ['d1'] }) },
+			backing: BACKING_SERVICES,
+			terraform,
+			wrangler: runner,
+		})
+
+		await target.loadBackingEnv('my-worker')
+		await target.deploy('my-worker', DEPLOY_INPUT, DEPLOY_ENV)
+
+		expect(terraform.mock.calls.map(call => call[0][0])).toEqual([
+			'init',
+			'output',
+		])
+	})
+
+	it('re-reads after a failed read so a retry is not stuck on the error', async () => {
+		let outputCalls = 0
+		const terraform = vi.fn<TerraformRunner>(async args => {
+			const command = args[0] ?? ''
+			if (command === 'output') {
+				outputCalls += 1
+				if (outputCalls === 1) {
+					return { exitCode: 1, stdout: '', stderr: 'backend locked' }
+				}
+				return ok(OUTPUTS_JSON)
+			}
+			return ok()
+		})
+		const { runner } = makeDeployWrangler()
+		const target = buildDeployTarget({
+			services: { web: worker({ url: 'example.com', needs: ['d1'] }) },
+			backing: BACKING_SERVICES,
+			terraform,
+			wrangler: runner,
+		})
+
+		await expect(target.loadBackingEnv('my-worker')).rejects.toThrow(
+			'terraform output failed',
+		)
+		await expect(
+			target.deploy('my-worker', DEPLOY_INPUT, DEPLOY_ENV),
+		).resolves.toBeDefined()
+		expect(outputCalls).toBe(2)
+	})
+})
+
 describe('CloudflareWorkersTarget.teardown', () => {
 	it('deletes every worker script, then runs terraform destroy', async () => {
 		const terraform = makeRunner()

@@ -163,10 +163,12 @@ function queueProducers(
 /**
  * Build the wrangler configuration document for one service. Pure: the caller
  * (adapter) writes it to an ephemeral file and runs `wrangler deploy`. Name is
- * `<project>-<env>-<service>`; a routed service (declaring `url`) gets a Custom
- * Domain (`workers_dev: false`), an internal one gets neither. Bindings are
- * filtered by the service's `needs` (a service that does not `need` a resource
- * never binds it); crons targeting this service become `triggers.crons`.
+ * `<project>-<env>-<service>`; `workers_dev: false` is emitted unconditionally so
+ * NO worker is reachable on `<name>.workers.dev` - a routed service (declaring
+ * `url`) answers only on its Custom Domain, an internal one only through service
+ * bindings. Bindings are filtered by the service's `needs` (a service that does
+ * not `need` a resource never binds it); crons targeting this service become
+ * `triggers.crons`.
  */
 export function buildWranglerConfig(
 	input: WranglerConfigInput,
@@ -189,7 +191,8 @@ export function buildWranglerConfig(
 		main: input.service.entry,
 		compatibility_date: DEFAULT_WORKERS_COMPATIBILITY_DATE,
 		compatibility_flags: [...WORKERS_COMPATIBILITY_FLAGS],
-		...(routes === undefined ? {} : { workers_dev: false, routes }),
+		workers_dev: false,
+		...(routes === undefined ? {} : { routes }),
 		...(assets === undefined ? {} : { assets }),
 		...(Object.keys(input.vars).length === 0 ? {} : { vars: input.vars }),
 		...(d1 === undefined ? {} : { d1_databases: d1 }),

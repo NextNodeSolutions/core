@@ -85,8 +85,9 @@ export interface WranglerDocument {
 	readonly main: string
 	readonly compatibility_date: string
 	readonly compatibility_flags: ReadonlyArray<string>
-	// Omitted for an internal worker (kept on wrangler's default); forced to
-	// `false` for a Custom-Domain worker so it never also answers on workers.dev.
+	// Always emitted `false`: no worker (routed or internal) may answer on
+	// `<name>.workers.dev`. A routed worker reaches users on its Custom Domain; an
+	// internal worker is reachable only through service bindings.
 	readonly workers_dev?: boolean
 	readonly routes?: ReadonlyArray<WranglerRoute>
 	readonly assets?: WranglerAssets
