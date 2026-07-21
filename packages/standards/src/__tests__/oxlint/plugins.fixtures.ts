@@ -314,9 +314,37 @@ export { Modal }
 	skip ? {} : { retries: 3 }
 `,
 		edgeExpect: 'fire',
-		good: `export function bindings(token: string | undefined): object {
-	return { ...(token !== undefined && { planetscaleServiceToken: token }) }
+		good: `function planetscaleCredentials(
+	token: string | undefined,
+): { planetscaleServiceToken: string } | undefined {
+	if (!token) return undefined
+	return { planetscaleServiceToken: token }
 }
+
+export function bindings(token: string | undefined): object {
+	return { ...planetscaleCredentials(token) }
+}
+`,
+	},
+
+	// coding RULE 1 - the empty/absent branch of a ternary must be the alternate, not the consequent
+	{
+		rule: 'nextnode(no-sentinel-consequent)',
+		severity: 'error',
+		bad: `export const wrap = (dir: string | undefined): object => ({
+	...(!dir ? undefined : { dir }),
+})
+`,
+		// void in the consequent counts as a sentinel too
+		edge: `export function first(skip: boolean): string | undefined {
+	return skip ? void 0 : 'x'
+}
+`,
+		edgeExpect: 'fire',
+		// sentinel parked in the alternate, value in the consequent
+		good: `export const wrap = (dir: string | undefined): object => ({
+	...(dir ? { dir } : undefined),
+})
 `,
 	},
 ]
