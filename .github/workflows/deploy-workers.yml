@@ -116,7 +116,7 @@ jobs:
                   PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
                   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
                   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-                  TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+                  TF_TOKEN_app_terraform_io: ${{ secrets.TF_CLOUD_TOKEN }}
                   GH_TOKEN: ${{ steps.app-token.outputs.token }}
                   # Lets ensureGeneratedSecrets see already-generated secrets
                   # and skip regeneration (idempotent, non-rotating).
@@ -186,7 +186,7 @@ jobs:
                   PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
                   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
                   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-                  TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+                  TF_TOKEN_app_terraform_io: ${{ secrets.TF_CLOUD_TOKEN }}
                   ALL_SECRETS: ${{ toJSON(secrets) }}
 
     deploy:
@@ -222,5 +222,5 @@ jobs:
                   PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
                   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
                   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-                  TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+                  TF_TOKEN_app_terraform_io: ${{ secrets.TF_CLOUD_TOKEN }}
                   ALL_SECRETS: ${{ toJSON(secrets) }}
