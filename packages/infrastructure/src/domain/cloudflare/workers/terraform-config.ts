@@ -35,7 +35,13 @@ export function buildTerraformMainConfig(
 ): TerraformMainConfig {
 	const derived = deriveWorkersResources(config, environment)
 
-	const mainConfig: TerraformMainConfig = {
+	const resource = buildResourceBlock(derived)
+	const output = buildOutputs(derived)
+
+	// Terraform reads a top-level `resource`/`output`/`variable` key as a block
+	// needing labels; an empty `{}` fails init with "Missing block label". Emit
+	// each only when it carries entries.
+	return {
 		terraform: {
 			cloud: {
 				organization: HCP_TERRAFORM_ORGANIZATION,
@@ -52,12 +58,10 @@ export function buildTerraformMainConfig(
 		},
 		provider: { cloudflare: {} },
 		data: { cloudflare_zone: buildZoneData(derived) },
-		resource: buildResourceBlock(derived),
-		output: buildOutputs(derived),
+		...(Object.keys(resource).length > 0 ? { resource } : {}),
+		...(Object.keys(output).length > 0 ? { output } : {}),
+		...(derived.hasAccountResource
+			? { variable: { account_id: { type: 'string' } } }
+			: {}),
 	}
-
-	if (derived.hasAccountResource) {
-		return { ...mainConfig, variable: { account_id: { type: 'string' } } }
-	}
-	return mainConfig
 }

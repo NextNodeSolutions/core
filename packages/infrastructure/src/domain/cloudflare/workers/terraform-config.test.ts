@@ -261,9 +261,14 @@ describe('buildTerraformMainConfig', () => {
 					zone_main: { filter: { name: 'minimal.com' } },
 				},
 			},
-			resource: {},
-			output: {},
 		})
+	})
+
+	it('omits empty resource and output blocks so terraform init does not fail on "Missing block label"', () => {
+		const tfConfig = build('minimal.com', 'production')
+
+		expect(tfConfig.resource).toBeUndefined()
+		expect(tfConfig.output).toBeUndefined()
 	})
 
 	it('resolves the dev subdomain everywhere and omits redirect rules in development', () => {
