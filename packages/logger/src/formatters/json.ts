@@ -39,7 +39,8 @@ const safeObjectEntries = (
 ): Record<string, unknown> => {
 	const safe: Record<string, unknown> = {}
 	for (const [key, fieldValue] of Object.entries(object)) {
-		if (fieldValue === undefined || DANGEROUS_KEYS.has(key)) continue
+		if (typeof fieldValue === 'undefined' || DANGEROUS_KEYS.has(key))
+			continue
 		safe[key] = fieldValue
 	}
 	return safe

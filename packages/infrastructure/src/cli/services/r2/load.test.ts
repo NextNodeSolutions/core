@@ -9,7 +9,8 @@ vi.mock('#/adapters/r2/client.ts', () => ({
 	R2Client: vi.fn(() => ({
 		get: vi.fn(async (key: string) => {
 			const body = fakeR2State.get(key)
-			return body === undefined ? null : { body, etag: 'etag' }
+			if (typeof body === 'undefined') return null
+			return { body, etag: 'etag' }
 		}),
 		put: vi.fn(async (key: string, body: string) => {
 			fakeR2State.set(key, body)

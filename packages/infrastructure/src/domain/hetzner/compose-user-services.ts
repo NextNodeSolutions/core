@@ -62,8 +62,8 @@ function buildPortMapping(
 ): { ports?: ReadonlyArray<string> } {
 	// Only `url` services face the reverse proxy, so only they publish a host
 	// port; internal services are reached by siblings over the compose network.
-	if (service.url === undefined) return {}
-	if (hostPort === undefined) {
+	if (typeof service.url === 'undefined') return {}
+	if (typeof hostPort === 'undefined') {
 		throw new Error(
 			`renderComposeFile: service "${name}" declares a url but has no allocated host port`,
 		)

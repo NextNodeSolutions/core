@@ -94,7 +94,7 @@ export const defaultWranglerRunner: WranglerRunner = (args, options) =>
 				resolve({ exitCode: error.code, stdout, stderr })
 			},
 		)
-		if (options?.stdin !== undefined) {
+		if (typeof options?.stdin !== 'undefined') {
 			child.stdin?.end(options.stdin)
 		}
 	})

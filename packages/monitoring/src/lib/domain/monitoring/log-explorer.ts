@@ -195,7 +195,7 @@ export const bucketLogs = (
 			Math.floor((at - start) / bucketMs),
 		)
 		const bucket = buckets[index]
-		if (bucket === undefined) continue
+		if (!bucket) continue
 		bucket.total += 1
 		if (line.level !== null) bucket[line.level] += 1
 	}

@@ -121,9 +121,14 @@ const fetchDeployWorkflows = async (input: {
 				input.fullName,
 				workflow.path,
 			)
-			return text !== null && referencesReusableDeployWorkflow(text)
-				? { id: workflow.id, name: workflow.name, path: workflow.path }
-				: null
+			if (text !== null && referencesReusableDeployWorkflow(text)) {
+				return {
+					id: workflow.id,
+					name: workflow.name,
+					path: workflow.path,
+				}
+			}
+			return null
 		},
 	)
 	return flagged.filter(

@@ -63,8 +63,13 @@ function resolveCronTarget(
 ): CronTarget {
 	const [primary] = Object.keys(services)
 	const name = job.service ?? primary
-	const service = name === undefined ? undefined : services[name]
-	if (name === undefined || service === undefined) {
+	if (typeof name === 'undefined') {
+		throw new Error(
+			`buildCronScheduler: cron job "${job.name}" has no resolvable target service`,
+		)
+	}
+	const service = services[name]
+	if (!service) {
 		throw new Error(
 			`buildCronScheduler: cron job "${job.name}" has no resolvable target service`,
 		)

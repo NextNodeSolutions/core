@@ -56,8 +56,8 @@ export function parsePostgresBackupStateKey(
 	if (match === null) return null
 	const [, projectName, environment] = match
 	if (
-		projectName === undefined ||
-		environment === undefined ||
+		typeof projectName === 'undefined' ||
+		typeof environment === 'undefined' ||
 		!isAppEnvironment(environment)
 	) {
 		return null

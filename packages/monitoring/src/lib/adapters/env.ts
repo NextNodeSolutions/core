@@ -26,7 +26,8 @@ export class MissingEnvError extends Error {
 
 export const getEnv = (name: string): string | undefined => {
 	const secret = getSecret(name)
-	return secret && secret.length > 0 ? secret : undefined
+	if (secret && secret.length > 0) return secret
+	return undefined
 }
 
 export const requireEnv = (name: string): string => {

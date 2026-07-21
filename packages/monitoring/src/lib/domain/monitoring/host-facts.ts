@@ -36,8 +36,10 @@ const BYTES_PER_GB = 1_000_000_000
  * sizes are GiB-denominated, so GiB rounding recovers the nominal size a
  * decimal division would undershoot (4 GiB / 1e9 = 4.29).
  */
-export const bytesToWholeGb = (bytes: number | null): number | null =>
-	bytes === null ? null : Math.round(bytes / BYTES_PER_GIB)
+export const bytesToWholeGb = (bytes: number | null): number | null => {
+	if (bytes === null) return null
+	return Math.round(bytes / BYTES_PER_GIB)
+}
 
 /**
  * Bytes -> whole decimal gigabytes for DISK display: block devices are sold
@@ -45,8 +47,10 @@ export const bytesToWholeGb = (bytes: number | null): number | null =>
  * size where GiB rounding would undershoot (a ~39e9-byte root fs reads
  * "39 GB", not "36 GB").
  */
-export const bytesToWholeDecimalGb = (bytes: number | null): number | null =>
-	bytes === null ? null : Math.round(bytes / BYTES_PER_GB)
+export const bytesToWholeDecimalGb = (bytes: number | null): number | null => {
+	if (bytes === null) return null
+	return Math.round(bytes / BYTES_PER_GB)
+}
 
 /** Bytes moved in each direction over a time window. */
 export interface TrafficTotals {

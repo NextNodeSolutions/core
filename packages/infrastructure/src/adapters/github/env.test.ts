@@ -19,7 +19,7 @@ describe('writeEnvVar', () => {
 	})
 
 	afterEach(() => {
-		if (originalEnv === undefined) {
+		if (typeof originalEnv === 'undefined') {
 			delete process.env['GITHUB_ENV']
 		} else {
 			process.env['GITHUB_ENV'] = originalEnv
@@ -77,7 +77,7 @@ describe('writeSecret', () => {
 	})
 
 	afterEach(() => {
-		if (originalEnv === undefined) {
+		if (typeof originalEnv === 'undefined') {
 			delete process.env['GITHUB_ENV']
 		} else {
 			process.env['GITHUB_ENV'] = originalEnv

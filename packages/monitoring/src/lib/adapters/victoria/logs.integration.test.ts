@@ -110,7 +110,7 @@ const RETRY_LIMIT = 20
 const RETRY_DELAY_MS = 500
 const SEEDED_LINES = 7
 
-describe.skipIf(VL_URL === undefined || VL_URL === '')(
+describe.skipIf(typeof VL_URL === 'undefined' || VL_URL === '')(
 	'VictoriaLogs LogsQL (real engine)',
 	() => {
 		beforeAll(async () => {

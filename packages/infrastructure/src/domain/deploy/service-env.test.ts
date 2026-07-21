@@ -6,7 +6,7 @@ import type { UserServiceConfig } from '#/config/types.ts'
 
 const buildService = (url?: string): UserServiceConfig => ({
 	port: 3000,
-	...(url !== undefined && { url }),
+	...(typeof url !== 'undefined' && { url }),
 	secrets: [],
 	needs: [],
 	dependsOn: [],

@@ -86,7 +86,7 @@ describe('writePlanOutputs', () => {
 	})
 
 	afterEach(() => {
-		if (originalEnv === undefined) {
+		if (typeof originalEnv === 'undefined') {
 			delete process.env['GITHUB_OUTPUT']
 		} else {
 			process.env['GITHUB_OUTPUT'] = originalEnv

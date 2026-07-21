@@ -106,11 +106,9 @@ function buildBakeTarget(name: string, input: RenderBakeFileInput): BakeTarget {
 	const ghaCacheScope = `type=gha,scope=${name}`
 	const registryCacheRef = `type=registry,ref=${ref.registry}/${ref.repository}:buildcache`
 	const args = input.buildArgs[name]
-	return {
+	const target: BakeTargetDraft = {
 		context: service.context ?? DEFAULT_BUILD_CONTEXT,
 		dockerfile: service.dockerfile ?? defaultDockerfile(input.packageDir),
-		...(service.target === undefined ? {} : { target: service.target }),
-		...(args && Object.keys(args).length > 0 ? { args } : {}),
 		tags: [formatImageRef(ref)],
 		'cache-from': [ghaCacheScope, registryCacheRef],
 		'cache-to': [
@@ -118,6 +116,13 @@ function buildBakeTarget(name: string, input: RenderBakeFileInput): BakeTarget {
 			`${registryCacheRef},mode=max,ignore-error=true`,
 		],
 	}
+	if (typeof service.target !== 'undefined') target.target = service.target
+	if (args && Object.keys(args).length > 0) target.args = args
+	return target
+}
+
+type BakeTargetDraft = {
+	-readonly [K in keyof BakeTarget]: BakeTarget[K]
 }
 
 // `<packageDir>/Dockerfile`, or just `Dockerfile` when the project lives at the

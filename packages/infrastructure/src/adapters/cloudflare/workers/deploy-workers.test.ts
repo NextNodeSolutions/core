@@ -140,9 +140,10 @@ describe('deployWorkers SEO guard injection', () => {
 				JSON.parse(readFileSync(args[2] ?? '', 'utf8'))
 			guardExistsAtDeploy.push({
 				name: document.name,
-				present:
-					document.assets !== undefined &&
+				present: Boolean(
+					document.assets &&
 					existsSync(join(document.assets.directory, '_headers')),
+				),
 			})
 			return ok
 		})

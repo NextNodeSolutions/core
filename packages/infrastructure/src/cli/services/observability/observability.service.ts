@@ -19,7 +19,7 @@ export const observabilityServiceDefinition: ServiceDefinition<'observability'> 
 	{
 		name: 'observability',
 		build(services): Service | null {
-			if (services.observability === undefined) return null
+			if (!services.observability) return null
 			return {
 				name: 'observability',
 				provision: async (): Promise<void> => {},

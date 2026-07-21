@@ -60,7 +60,7 @@ export function deriveWorkersResources(
 	const queueNames = (config.services.queues?.queues ?? []).map(
 		queue => queue.name,
 	)
-	const hasD1 = config.services.d1 !== undefined
+	const hasD1 = Boolean(config.services.d1)
 
 	return {
 		projectName,

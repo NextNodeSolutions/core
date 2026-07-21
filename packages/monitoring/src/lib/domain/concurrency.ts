@@ -27,7 +27,7 @@ export const mapWithConcurrency = async <Element, Result>(
 		while (cursor < queue.length) {
 			const entry = queue[cursor]
 			cursor++
-			if (entry === undefined) continue
+			if (!entry) continue
 			// Sequential by design: each worker drains one element at a time,
 			// and the pool of workers bounds how many run in parallel.
 			// oxlint-disable-next-line eslint/no-await-in-loop -- the bounded pool is the point

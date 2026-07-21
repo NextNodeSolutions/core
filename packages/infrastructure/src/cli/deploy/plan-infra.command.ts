@@ -44,7 +44,7 @@ export async function planInfraCommand(
 	writeSummary(report)
 
 	const prNumber = getEnv('PIPELINE_PR_NUMBER')
-	if (prNumber === undefined || prNumber === '') {
+	if (!prNumber) {
 		logger.info(
 			'plan-infra: PIPELINE_PR_NUMBER is not set; wrote the plan to the step summary only',
 		)

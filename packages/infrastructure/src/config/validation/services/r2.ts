@@ -49,7 +49,7 @@ const bucketsSchema = pipe(
 				continue
 			}
 			const { cdn } = entry
-			if (cdn !== undefined && typeof cdn !== 'boolean') {
+			if (typeof cdn !== 'undefined' && typeof cdn !== 'boolean') {
 				addIssue({
 					message: `services.r2.buckets entry "${name}" \`cdn\` must be a boolean`,
 				})

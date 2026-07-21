@@ -113,7 +113,7 @@ async function loadEmbeddedPostgresEnv(
 	infraStorage: InfraStorageRuntimeConfig,
 ): Promise<ServiceEnv> {
 	const password = ctx.repoSecrets[POSTGRES_PASSWORD_SECRET]
-	if (password === undefined || password === '') {
+	if (!password) {
 		throw new Error(
 			`postgres service (embedded mode): "${POSTGRES_PASSWORD_SECRET}" is missing from ALL_SECRETS. It is auto-generated at provision (alphanumeric, safe to interpolate into the initdb SQL + DATABASE_URL), but GitHub freezes secrets at job start - run "provision" first so it is pushed, then re-trigger the deploy workflow so ALL_SECRETS picks it up`,
 		)
@@ -131,7 +131,7 @@ async function loadEmbeddedPostgresEnv(
 
 function loadExternalPostgresEnv(ctx: ServiceFactoryContext): ServiceEnv {
 	const databaseUrl = ctx.repoSecrets[POSTGRES_DATABASE_URL_SECRET]
-	if (databaseUrl === undefined || databaseUrl === '') {
+	if (!databaseUrl) {
 		throw new Error(
 			`postgres service (external mode): "${POSTGRES_DATABASE_URL_SECRET}" must be defined in repository secrets pointing at the managed database`,
 		)
@@ -143,7 +143,7 @@ export const postgresServiceDefinition: ServiceDefinition<'postgres'> = {
 	name: 'postgres',
 	build(services, ctx) {
 		const config = services.postgres
-		if (config === undefined) return null
+		if (!config) return null
 		return createPostgresService(ctx, config)
 	},
 }

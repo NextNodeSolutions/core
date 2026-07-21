@@ -97,7 +97,7 @@ export async function listPostgresBackupSnapshots(
 		)
 		snapshots.push(...collectBackupSnapshots(response.Contents ?? []))
 		continuationToken = response.NextContinuationToken
-	} while (continuationToken !== undefined)
+	} while (typeof continuationToken !== 'undefined')
 	/* eslint-enable no-await-in-loop */
 
 	return snapshots
@@ -129,7 +129,7 @@ export async function downloadPostgresBackup(
 	)
 	const body = response.Body
 	if (!(body instanceof Readable)) {
-		if (body !== undefined && 'cancel' in body) {
+		if (body && 'cancel' in body) {
 			await body.cancel()
 		}
 		throw new Error(
@@ -170,7 +170,7 @@ export async function wipePostgresBackups(
 		)
 
 		continuationToken = listResponse.NextContinuationToken
-	} while (continuationToken !== undefined)
+	} while (typeof continuationToken !== 'undefined')
 	/* eslint-enable no-await-in-loop */
 
 	await s3.send(new DeleteBucketCommand({ Bucket: bucket }))

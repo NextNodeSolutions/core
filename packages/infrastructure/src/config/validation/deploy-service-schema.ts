@@ -19,7 +19,12 @@ import {
 	stringArray,
 } from './valibot.ts'
 
-import type { UserServiceConfig } from '#/config/types.ts'
+import type {
+	BuildServiceConfig,
+	ServiceCommon,
+	UpstreamServiceConfig,
+	UserServiceConfig,
+} from '#/config/types.ts'
 import type { GenericSchema } from 'valibot'
 
 const MIN_TCP_PORT = 1
@@ -99,44 +104,50 @@ const serviceCommonEntries = (name: string): ServiceCommonEntries => ({
 // successful parse, so the upstream `ref` is guaranteed present by the variant's
 // `check`; the absent branch is an invariant violation, not a value to paper
 // over (no `?? ''` placeholder).
+type MutableServiceCommon = {
+	-readonly [K in keyof ServiceCommon]: ServiceCommon[K]
+}
+type MutableBuildServiceConfig = {
+	-readonly [K in keyof BuildServiceConfig]: BuildServiceConfig[K]
+}
+type MutableUpstreamServiceConfig = {
+	-readonly [K in keyof UpstreamServiceConfig]: UpstreamServiceConfig[K]
+}
+
 export function toUserService(
 	name: string,
 	parsed: ParsedService,
 ): UserServiceConfig {
-	const common = {
+	const common: MutableServiceCommon = {
 		port: parsed.port,
 		secrets: parsed.secrets,
 		needs: parsed.needs,
 		dependsOn: parsed.depends_on,
-		...(parsed.url === undefined ? {} : { url: parsed.url }),
 	}
+	if (parsed.url) common.url = parsed.url
+
 	if (parsed.source === 'upstream') {
-		if (parsed.ref === undefined) {
+		if (typeof parsed.ref === 'undefined') {
 			throw new Error(
 				`deploy.services.${name}: upstream ref absent after validation - schema invariant broken`,
 			)
 		}
-		return {
-			...common,
+		const upstream: MutableUpstreamServiceConfig = {
 			source: 'upstream',
 			ref: parsed.ref,
-			...(parsed.registry_auth_secret === undefined
-				? {}
-				: { registryAuthSecret: parsed.registry_auth_secret }),
 		}
+		if (parsed.registry_auth_secret) {
+			upstream.registryAuthSecret = parsed.registry_auth_secret
+		}
+		return { ...common, ...upstream }
 	}
-	return {
-		...common,
-		source: 'build',
-		...(parsed.context === undefined ? {} : { context: parsed.context }),
-		...(parsed.dockerfile === undefined
-			? {}
-			: { dockerfile: parsed.dockerfile }),
-		...(parsed.target === undefined ? {} : { target: parsed.target }),
-		...(parsed.build_args.length > 0
-			? { buildArgs: parsed.build_args }
-			: {}),
-	}
+
+	const build: MutableBuildServiceConfig = { source: 'build' }
+	if (parsed.context) build.context = parsed.context
+	if (parsed.dockerfile) build.dockerfile = parsed.dockerfile
+	if (parsed.target) build.target = parsed.target
+	if (parsed.build_args.length > 0) build.buildArgs = parsed.build_args
+	return { ...common, ...build }
 }
 
 type BuildServiceEntries = ServiceCommonEntries & {

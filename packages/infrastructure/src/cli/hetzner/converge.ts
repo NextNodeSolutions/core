@@ -118,7 +118,10 @@ export async function converge(
 ): Promise<void> {
 	// Vector config - skipped when log sink (NN_VL_URL) is unknown at provision time.
 	// Re-run convergence once VL is reachable; this is the hot-update path.
-	if (input.vectorToml !== undefined && input.vectorEnv !== undefined) {
+	if (
+		typeof input.vectorToml !== 'undefined' &&
+		typeof input.vectorEnv !== 'undefined'
+	) {
 		const vectorChanged = await ensureVectorRuntime(session)
 		const vectorTomlChanged = await pushFileIfChanged(
 			session,

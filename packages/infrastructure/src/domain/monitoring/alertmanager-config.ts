@@ -49,7 +49,7 @@ function buildRoutes(
 	healthchecksPingUrl: string | undefined,
 ): ReadonlyArray<Record<string, unknown>> {
 	const deadmansswitchRoute =
-		healthchecksPingUrl === undefined
+		typeof healthchecksPingUrl === 'undefined'
 			? []
 			: [
 					{
@@ -75,7 +75,7 @@ function buildReceivers(
 	input: AlertmanagerConfigInput,
 ): ReadonlyArray<Record<string, unknown>> {
 	const emailReceiver =
-		input.resendApiKey === undefined
+		typeof input.resendApiKey === 'undefined'
 			? []
 			: [
 					{
@@ -93,7 +93,7 @@ function buildReceivers(
 					},
 				]
 	const deadmansswitchReceiver =
-		input.healthchecksPingUrl === undefined
+		typeof input.healthchecksPingUrl === 'undefined'
 			? []
 			: [
 					{
@@ -121,7 +121,8 @@ export function renderAlertmanagerConfig(
 		route: {
 			// No email channel yet (RESEND_API_KEY unset) → default to the sink so
 			// the config stays valid; turns into `email` once the key is set.
-			receiver: input.resendApiKey === undefined ? 'devnull' : 'email',
+			receiver:
+				typeof input.resendApiKey === 'undefined' ? 'devnull' : 'email',
 			group_by: ['alertname', 'vps_name', 'project'],
 			group_wait: '30s',
 			group_interval: '5m',

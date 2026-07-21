@@ -40,13 +40,18 @@ export const effectiveFilter = (raw: string): string | undefined =>
 	raw !== ALL && raw.length > 0 ? raw : undefined
 
 /** Deterministic fetch key; only the SET filters appear (stable JSON order). */
-export const keyOf = (params: WindowParams): string =>
-	JSON.stringify({
-		range: params.range,
-		...(params.service ? { service: params.service } : {}),
-		...(params.vps ? { vps: params.vps } : {}),
-		...(params.query ? { query: params.query } : {}),
-	})
+export const keyOf = (params: WindowParams): string => {
+	const key: {
+		range: string
+		service?: string
+		vps?: string
+		query?: string
+	} = { range: params.range }
+	if (params.service) key.service = params.service
+	if (params.vps) key.vps = params.vps
+	if (params.query) key.query = params.query
+	return JSON.stringify(key)
+}
 
 const toStringList = (raw: unknown): ReadonlyArray<string> =>
 	Array.isArray(raw)
@@ -55,10 +60,10 @@ const toStringList = (raw: unknown): ReadonlyArray<string> =>
 
 /** Client trust boundary for the `facets` field of /api/logs. */
 const coerceFacets = (raw: unknown): LogFacets => {
-	const record = isRecord(raw) ? raw : {}
+	if (!isRecord(raw)) return EMPTY_FACETS
 	return {
-		services: toStringList(record.services),
-		vps: toStringList(record.vps),
+		services: toStringList(raw.services),
+		vps: toStringList(raw.vps),
 	}
 }
 

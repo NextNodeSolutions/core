@@ -56,7 +56,8 @@ export function areaChartGeometry(input: AreaChartInput): AreaGeometry {
 	const samples = finiteSamples(input.values)
 	const headroomMax = Math.max(...samples, 0) * MAX_HEADROOM
 	const autoMax = headroomMax > 0 ? headroomMax : FALLBACK_MAX
-	const domainMax = input.max === undefined ? autoMax : safeAxisMax(input.max)
+	const domainMax =
+		typeof input.max === 'undefined' ? autoMax : safeAxisMax(input.max)
 	const span = spanned(domainMin, domainMax)
 	const count = samples.length
 
@@ -73,7 +74,7 @@ export function areaChartGeometry(input: AreaChartInput): AreaGeometry {
 	const [firstPoint] = points
 	const lastPoint = points.at(-1)
 	const areaPath =
-		firstPoint === undefined || lastPoint === undefined
+		!firstPoint || !lastPoint
 			? ''
 			: `${linePath} L${coord(lastPoint.x)} ${coord(baseline)} L${coord(firstPoint.x)} ${coord(baseline)} Z`
 

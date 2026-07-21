@@ -17,12 +17,19 @@ import type { TargetDefinition } from './target.ts'
 // fails loud if it is genuinely missing, while provision/teardown never need it.
 function resolveProjectDir(): string | undefined {
 	const configFile = getEnv('PIPELINE_CONFIG_FILE')
-	if (configFile === undefined || configFile === '') return undefined
+	if (!configFile) return undefined
 	const workspace = getEnv('GITHUB_WORKSPACE') ?? process.cwd()
 	const absoluteConfig = isAbsolute(configFile)
 		? configFile
 		: resolve(workspace, configFile)
 	return dirname(absoluteConfig)
+}
+
+function projectDirOption(
+	projectDir: string | undefined,
+): { projectDir: string } | undefined {
+	if (!projectDir) return undefined
+	return { projectDir }
 }
 
 export function createCloudflareWorkersTarget(
@@ -33,11 +40,10 @@ export function createCloudflareWorkersTarget(
 	// CLOUDFLARE_API_TOKEN (defaultTerraformRunner forwards process.env); require
 	// it here so a missing token fails fast at factory time, not mid-apply.
 	requireEnv('CLOUDFLARE_API_TOKEN')
-	const projectDir = resolveProjectDir()
 	return new CloudflareWorkersTarget({
 		accountId: requireEnv('CLOUDFLARE_ACCOUNT_ID'),
 		hcpToken: requireEnv('TF_TOKEN_app_terraform_io'),
-		...(projectDir === undefined ? {} : { projectDir }),
+		...projectDirOption(resolveProjectDir()),
 		environment,
 		config,
 	})

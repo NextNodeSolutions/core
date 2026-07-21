@@ -210,7 +210,7 @@ async function teardownProjectWithSession(
 	// cert subjects, DNS records). Deleting from this set keeps teardown
 	// symmetric with deploy; a url-less project routes nothing and gets none.
 	const projectHostnames = Object.values(ctx.services).flatMap(service =>
-		service.url === undefined
+		typeof service.url === 'undefined'
 			? []
 			: [resolveDeployDomain(service.url, ctx.environment)],
 	)

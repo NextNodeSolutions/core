@@ -8,7 +8,7 @@ function bytesFrom(bytes: ReadonlyArray<number>): () => number {
 	let index = 0
 	return () => {
 		const byte = bytes[index]
-		if (byte === undefined) {
+		if (typeof byte === 'undefined') {
 			throw new Error('byte source exhausted - test fed too few bytes')
 		}
 		index += 1

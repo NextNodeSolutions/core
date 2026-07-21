@@ -26,7 +26,8 @@ function parseGroups(yaml: string): ReadonlyArray<ParsedGroup> {
 }
 
 function severityOf(rule: Record<string, unknown>): unknown {
-	return isRecord(rule.labels) ? rule.labels.severity : undefined
+	if (!isRecord(rule.labels)) return undefined
+	return rule.labels.severity
 }
 
 describe('renderVmalertMetricRulesYaml', () => {
@@ -112,7 +113,9 @@ describe('renderVmalertMetricRulesYaml', () => {
 	})
 
 	it('contains no vlogs group - LogsQL evaluation lives in the dedicated file', () => {
-		expect(groups.every(group => group.type === undefined)).toBe(true)
+		expect(groups.every(group => typeof group.type === 'undefined')).toBe(
+			true,
+		)
 	})
 })
 

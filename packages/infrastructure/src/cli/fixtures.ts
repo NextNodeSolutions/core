@@ -11,6 +11,20 @@ import type {
 // its deploy services, secret pool, or backing services. The builders keep
 // each fixture's DELTA visible instead of repeating the full config.
 
+function postgresServices(
+	postgres: PostgresServiceConfig | undefined,
+): { postgres: PostgresServiceConfig } | undefined {
+	if (!postgres) return undefined
+	return { postgres }
+}
+
+function domainField(
+	domain: string | undefined,
+): { domain: string } | undefined {
+	if (!domain) return undefined
+	return { domain }
+}
+
 interface HetznerAppFixture {
 	readonly appService: UserServiceConfig
 	readonly secrets?: ReadonlyArray<string>
@@ -34,7 +48,7 @@ function hetznerApp({
 		scripts: { lint: 'lint', test: 'test', build: 'build' },
 		package: false,
 		environment: { development: true },
-		services: postgres === undefined ? {} : { postgres },
+		services: { ...postgresServices(postgres) },
 		deploy: {
 			target: 'hetzner-vps',
 			hetzner: { serverType: 'cx23', location: 'nbg1' },
@@ -61,7 +75,7 @@ function staticSite({
 		project: {
 			type: 'static',
 			name: 'my-site',
-			...(domain === undefined ? {} : { domain }),
+			...domainField(domain),
 			redirectDomains: [],
 			filter: false,
 			internal: false,

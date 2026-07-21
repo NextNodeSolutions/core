@@ -6,6 +6,36 @@ function absolutise(path: string, cwd: string): string {
 	return isAbsolute(path) ? path : resolve(cwd, path)
 }
 
+function resolveAssetsPath(
+	assets: WranglerDocument['assets'],
+	cwd: string,
+): Pick<WranglerDocument, 'assets'> | undefined {
+	if (!assets) return undefined
+	return {
+		assets: { ...assets, directory: absolutise(assets.directory, cwd) },
+	}
+}
+
+function resolveD1Paths(
+	databases: WranglerDocument['d1_databases'],
+	cwd: string,
+): Pick<WranglerDocument, 'd1_databases'> | undefined {
+	if (!databases) return undefined
+	return {
+		d1_databases: databases.map(database =>
+			typeof database.migrations_dir === 'undefined'
+				? database
+				: {
+						...database,
+						migrations_dir: absolutise(
+							database.migrations_dir,
+							cwd,
+						),
+					},
+		),
+	}
+}
+
 /**
  * Absolutise every filesystem path a generated wrangler config carries (`main`,
  * `assets.directory`, each `d1_databases[].migrations_dir`) against the project
@@ -21,28 +51,7 @@ export function resolveDocumentPaths(
 	return {
 		...document,
 		main: absolutise(document.main, cwd),
-		...(document.assets === undefined
-			? {}
-			: {
-					assets: {
-						...document.assets,
-						directory: absolutise(document.assets.directory, cwd),
-					},
-				}),
-		...(document.d1_databases === undefined
-			? {}
-			: {
-					d1_databases: document.d1_databases.map(database =>
-						database.migrations_dir === undefined
-							? database
-							: {
-									...database,
-									migrations_dir: absolutise(
-										database.migrations_dir,
-										cwd,
-									),
-								},
-					),
-				}),
+		...resolveAssetsPath(document.assets, cwd),
+		...resolveD1Paths(document.d1_databases, cwd),
 	}
 }

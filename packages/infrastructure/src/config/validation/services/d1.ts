@@ -46,7 +46,7 @@ export function validateD1Service(
 		ok: true,
 		section: {
 			migrationsFolder: migrationsFolder.section,
-			...(checkCommand.section !== undefined && {
+			...(typeof checkCommand.section !== 'undefined' && {
 				checkCommand: checkCommand.section,
 			}),
 		},

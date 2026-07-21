@@ -91,9 +91,9 @@ const resolveConfig = (
 	flushInterval: config.flushInterval ?? DEFAULT_FLUSH_INTERVAL,
 	timeout: config.timeout ?? DEFAULT_TIMEOUT,
 	maxRetries: config.maxRetries ?? DEFAULT_MAX_RETRIES,
-	...(config.headers !== undefined && { headers: config.headers }),
-	...(config.onError !== undefined && { onError: config.onError }),
-	...(config.onSuccess !== undefined && { onSuccess: config.onSuccess }),
+	...(config.headers && { headers: config.headers }),
+	...(config.onError && { onError: config.onError }),
+	...(config.onSuccess && { onSuccess: config.onSuccess }),
 })
 
 export class HttpTransport implements Transport {

@@ -56,7 +56,7 @@ const buildUrl = (
 	const url = new URL(`${CLOUDFLARE_API_BASE}${path}`)
 	if (!query) return url.toString()
 	for (const [key, value] of Object.entries(query)) {
-		if (value === undefined) continue
+		if (typeof value === 'undefined') continue
 		url.searchParams.set(key, String(value))
 	}
 	return url.toString()

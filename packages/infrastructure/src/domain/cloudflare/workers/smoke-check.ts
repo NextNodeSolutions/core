@@ -23,7 +23,7 @@ export function computeSmokeCheckUrls(
 ): ReadonlyArray<SmokeCheckTarget> {
 	const targets: Array<SmokeCheckTarget> = []
 	for (const [service, config] of Object.entries(services)) {
-		if (config.url === undefined) continue
+		if (typeof config.url === 'undefined') continue
 		targets.push({
 			service,
 			url: `${computeSiteUrl(config.url, environment)}${HEALTHZ_PATH}`,

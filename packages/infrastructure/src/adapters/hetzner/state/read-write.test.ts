@@ -365,7 +365,7 @@ describe('hostPorts', () => {
 		})
 		vi.mocked(r2.get).mockImplementation(async key => {
 			const body = stored[key]
-			if (body === undefined) return null
+			if (typeof body === 'undefined') return null
 			return { body, etag: '"etag-2"' }
 		})
 

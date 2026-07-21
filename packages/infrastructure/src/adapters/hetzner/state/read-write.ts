@@ -77,7 +77,8 @@ export function vpsNameFromStateKey(key: string): string | null {
 		return null
 	}
 	const name = key.slice(STATE_KEY_PREFIX.length, -STATE_KEY_SUFFIX.length)
-	return name.length > 0 ? name : null
+	if (name.length > 0) return name
+	return null
 }
 
 function requireBase(
@@ -98,7 +99,7 @@ function parseHostPorts(
 	key: string,
 ): Readonly<Record<string, Readonly<Record<string, number>>>> {
 	const raw = stateRecord.hostPorts
-	if (raw === undefined) return {}
+	if (typeof raw === 'undefined') return {}
 	if (!isRecord(raw)) {
 		throw new Error(
 			`Invalid state at "${key}": hostPorts must be an object`,

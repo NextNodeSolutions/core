@@ -59,8 +59,9 @@ const projects: ReadonlyArray<CloudflarePagesProject> =
 	client === null ? [] : await loadProjects(client)
 
 const loadProjectDeployments = async (
-	resolved: CloudflareClient,
+	resolved: CloudflareClient | null,
 ): Promise<Record<string, ReadonlyArray<CloudflarePagesDeployment>>> => {
+	if (resolved === null) return {}
 	const states = await mapWithConcurrency(
 		projects,
 		FAN_OUT_CONCURRENCY,
@@ -77,7 +78,7 @@ const loadProjectDeployments = async (
 	projects.forEach((currentProject, index) => {
 		const state = states[index]
 		grouped[currentProject.name] =
-			state !== undefined && state.kind === 'ok' ? state.data : []
+			state && state.kind === 'ok' ? state.data : []
 	})
 	return grouped
 }
@@ -85,7 +86,7 @@ const loadProjectDeployments = async (
 const deploymentsByProject: Record<
 	string,
 	ReadonlyArray<CloudflarePagesDeployment>
-> = client === null ? {} : await loadProjectDeployments(client)
+> = await loadProjectDeployments(client)
 
 const vpsRunsState = await vpsRunsStatePromise
 const vpsRuns: ReadonlyArray<VpsDeployRun> =

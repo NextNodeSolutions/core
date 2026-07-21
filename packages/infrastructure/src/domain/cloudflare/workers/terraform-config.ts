@@ -41,7 +41,7 @@ export function buildTerraformMainConfig(
 	// Terraform reads a top-level `resource`/`output`/`variable` key as a block
 	// needing labels; an empty `{}` fails init with "Missing block label". Emit
 	// each only when it carries entries.
-	return {
+	const mainConfig: TerraformMainConfigDraft = {
 		terraform: {
 			cloud: {
 				organization: HCP_TERRAFORM_ORGANIZATION,
@@ -58,10 +58,15 @@ export function buildTerraformMainConfig(
 		},
 		provider: { cloudflare: {} },
 		data: { cloudflare_zone: buildZoneData(derived) },
-		...(Object.keys(resource).length > 0 ? { resource } : {}),
-		...(Object.keys(output).length > 0 ? { output } : {}),
-		...(derived.hasAccountResource
-			? { variable: { account_id: { type: 'string' } } }
-			: {}),
 	}
+	if (Object.keys(resource).length > 0) mainConfig.resource = resource
+	if (Object.keys(output).length > 0) mainConfig.output = output
+	if (derived.hasAccountResource) {
+		mainConfig.variable = { account_id: { type: 'string' } }
+	}
+	return mainConfig
+}
+
+type TerraformMainConfigDraft = {
+	-readonly [K in keyof TerraformMainConfig]: TerraformMainConfig[K]
 }

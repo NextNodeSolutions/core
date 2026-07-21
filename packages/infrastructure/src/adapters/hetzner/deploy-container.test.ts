@@ -30,7 +30,7 @@ const POSTGRES_CONFIG: PostgresServiceConfig = {
 
 const buildService = (port: number, url?: string): UserServiceConfig => ({
 	port,
-	...(url !== undefined && { url }),
+	...(typeof url !== 'undefined' && { url }),
 	secrets: [],
 	needs: [],
 	dependsOn: [],
@@ -62,7 +62,7 @@ const upstreamService = (
 	dependsOn: [],
 	source: 'upstream',
 	ref,
-	...(registryAuthSecret !== undefined && { registryAuthSecret }),
+	...(typeof registryAuthSecret !== 'undefined' && { registryAuthSecret }),
 })
 
 const BASE_INPUT: BringUpInput = {

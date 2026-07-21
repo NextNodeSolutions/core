@@ -64,6 +64,15 @@ const listClientProjects = async (
 	return [...projects].toSorted((a, b) => a.localeCompare(b))
 }
 
+const listObjectsOrNull = async <T>(
+	backupClient: R2StateClient | null,
+	project: string,
+	lister: (client: R2StateClient, project: string) => Promise<T>,
+): Promise<T | null> => {
+	if (backupClient === null) return null
+	return lister(backupClient, project)
+}
+
 /**
  * Prometheus exposition of backup freshness per project, scraped by the
  * vmagent `backups` job. The "push" sample the PRD describes is realised
@@ -95,13 +104,11 @@ export const GET: APIRoute = () =>
 					const backupClient = backupClients.get(project) ?? null
 					return {
 						project,
-						objects:
-							backupClient === null
-								? null
-								: await listBackupObjects(
-										backupClient,
-										project,
-									),
+						objects: await listObjectsOrNull(
+							backupClient,
+							project,
+							listBackupObjects,
+						),
 					}
 				}),
 			),
@@ -110,13 +117,11 @@ export const GET: APIRoute = () =>
 					const backupClient = backupClients.get(project) ?? null
 					return {
 						project,
-						objects:
-							backupClient === null
-								? null
-								: await listWalgBaseBackupObjects(
-										backupClient,
-										project,
-									),
+						objects: await listObjectsOrNull(
+							backupClient,
+							project,
+							listWalgBaseBackupObjects,
+						),
 					}
 				}),
 			),

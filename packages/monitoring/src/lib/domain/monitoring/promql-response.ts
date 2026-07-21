@@ -30,7 +30,8 @@ const parseValueTuple = (tuple: unknown): number | null => {
 	const [, raw] = tuple
 	if (typeof raw !== 'string') return null
 	const num = Number(raw)
-	return Number.isFinite(num) ? num : null
+	if (Number.isFinite(num)) return num
+	return null
 }
 
 const SECONDS_TO_MS = 1000
@@ -46,7 +47,8 @@ const parseRangeTuple = (tuple: unknown): RangePoint | null => {
 	const [seconds, raw] = tuple
 	if (typeof seconds !== 'number' || typeof raw !== 'string') return null
 	const num = Number(raw)
-	return Number.isFinite(num) ? { t: seconds * SECONDS_TO_MS, v: num } : null
+	if (Number.isFinite(num)) return { t: seconds * SECONDS_TO_MS, v: num }
+	return null
 }
 
 /**

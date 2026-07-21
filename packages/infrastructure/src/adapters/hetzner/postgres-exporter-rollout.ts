@@ -35,7 +35,7 @@ export async function writePostgresExporterFiles(
 	if (input.postgres?.mode !== 'embedded') return
 
 	const password = input.secrets['POSTGRES_PASSWORD']
-	if (password === undefined || password === '') {
+	if (typeof password === 'undefined' || password === '') {
 		throw new Error(
 			'postgres-exporter: "POSTGRES_PASSWORD" must be present in the secret pool to bootstrap the monitoring role',
 		)

@@ -51,7 +51,7 @@ export interface WranglerConfigInput {
 }
 
 function requireOutput(emitted: string | undefined, what: string): string {
-	if (emitted === undefined) {
+	if (typeof emitted === 'undefined') {
 		throw new Error(
 			`${what} is missing from the provision outputs but a service declares it in \`needs\` - run \`infrastructure provision\` before deploy so Terraform creates the resource and emits its output.`,
 		)
@@ -61,7 +61,7 @@ function requireOutput(emitted: string | undefined, what: string): string {
 
 function detectAssets(entry: string): WranglerAssets | undefined {
 	const directory = deriveWorkerAssetsDirectory(entry)
-	if (directory === undefined) return undefined
+	if (typeof directory === 'undefined') return undefined
 	return { directory, binding: WORKERS_ASSETS_BINDING }
 }
 
@@ -69,7 +69,7 @@ function buildRoutes(
 	service: WorkerServiceConfig,
 	environment: AppEnvironment,
 ): ReadonlyArray<WranglerRoute> | undefined {
-	if (service.url === undefined) return undefined
+	if (typeof service.url === 'undefined') return undefined
 	return [
 		{
 			pattern: resolveDeployDomain(service.url, environment),
@@ -89,21 +89,23 @@ function d1Databases(
 	input: WranglerConfigInput,
 ): ReadonlyArray<WranglerD1Database> | undefined {
 	const { d1 } = input.services
-	if (d1 === undefined || !input.service.needs.includes('d1'))
-		return undefined
-	return [
-		{
-			binding: WORKERS_D1_BINDING,
-			database_name: `${input.projectName}-${input.environment}-d1`,
-			database_id: requireOutput(
-				input.outputs.d1DatabaseId,
-				'd1_database_id',
-			),
-			...(d1.migrationsFolder === undefined
-				? {}
-				: { migrations_dir: d1.migrationsFolder }),
-		},
-	]
+	if (!d1 || !input.service.needs.includes('d1')) return undefined
+	const database: WranglerD1DatabaseDraft = {
+		binding: WORKERS_D1_BINDING,
+		database_name: `${input.projectName}-${input.environment}-d1`,
+		database_id: requireOutput(
+			input.outputs.d1DatabaseId,
+			'd1_database_id',
+		),
+	}
+	if (typeof d1.migrationsFolder !== 'undefined') {
+		database.migrations_dir = d1.migrationsFolder
+	}
+	return [database]
+}
+
+type WranglerD1DatabaseDraft = {
+	-readonly [K in keyof WranglerD1Database]: WranglerD1Database[K]
 }
 
 function kvNamespaces(
@@ -207,7 +209,7 @@ export function buildWranglerConfig(
 	const r2 = r2Buckets(input, backing)
 	const queues = queueProducers(input, backing)
 
-	return {
+	const document: WranglerDocumentDraft = {
 		name: computeWorkerScriptName(
 			input.projectName,
 			input.environment,
@@ -217,14 +219,19 @@ export function buildWranglerConfig(
 		compatibility_date: DEFAULT_WORKERS_COMPATIBILITY_DATE,
 		compatibility_flags: [...WORKERS_COMPATIBILITY_FLAGS],
 		workers_dev: false,
-		...(routes === undefined ? {} : { routes }),
-		...(assets === undefined ? {} : { assets }),
-		...(Object.keys(input.vars).length === 0 ? {} : { vars: input.vars }),
-		...(services === undefined ? {} : { services }),
-		...(d1 === undefined ? {} : { d1_databases: d1 }),
-		...(kv === undefined ? {} : { kv_namespaces: kv }),
-		...(r2 === undefined ? {} : { r2_buckets: r2 }),
-		...(queues === undefined ? {} : { queues: { producers: queues } }),
-		...(crons.length === 0 ? {} : { triggers: { crons } }),
 	}
+	if (routes) document.routes = routes
+	if (assets) document.assets = assets
+	if (Object.keys(input.vars).length > 0) document.vars = input.vars
+	if (services) document.services = services
+	if (d1) document.d1_databases = d1
+	if (kv) document.kv_namespaces = kv
+	if (r2) document.r2_buckets = r2
+	if (queues) document.queues = { producers: queues }
+	if (crons.length > 0) document.triggers = { crons }
+	return document
+}
+
+type WranglerDocumentDraft = {
+	-readonly [K in keyof WranglerDocument]: WranglerDocument[K]
 }

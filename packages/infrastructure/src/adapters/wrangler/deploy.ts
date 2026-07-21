@@ -47,7 +47,7 @@ export async function wranglerDeploy(
 				`deploy (worker "${input.document.name}")`,
 			)
 			logger.info(`wrangler deploy "${input.document.name}" completed`)
-			if (input.secretsJson !== undefined) {
+			if (typeof input.secretsJson !== 'undefined') {
 				await wranglerSecretBulk(
 					configPath,
 					input.secretsJson,

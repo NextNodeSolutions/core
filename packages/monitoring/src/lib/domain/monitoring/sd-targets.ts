@@ -48,24 +48,30 @@ export interface SdTargetsInput {
 	readonly clientId: string | undefined
 }
 
+const projectLabel = (
+	state: VpsStateSlice | null,
+	hostname: string,
+): { readonly __meta_nextnode_project: string } | undefined => {
+	if (state === null) return undefined
+	const ownerProject = selectOwnerProject(state, hostname)
+	if (ownerProject === null) return undefined
+	return { __meta_nextnode_project: ownerProject }
+}
+
 const buildLabels = (
 	device: TaggedDevice,
 	exporter: string,
 	input: SdTargetsInput,
 ): Record<string, string> => {
 	const state = input.statesByHostname[device.hostname] ?? null
-	const ownerProject =
-		state === null ? null : selectOwnerProject(state, device.hostname)
 	return {
 		__meta_tailscale_device_tags: device.tags.join(','),
 		__meta_tailscale_device_hostname: device.hostname,
 		__meta_nextnode_exporter: exporter,
-		...(input.clientId !== undefined && {
+		...(typeof input.clientId !== 'undefined' && {
 			__meta_nextnode_client_id: input.clientId,
 		}),
-		...(ownerProject !== null && {
-			__meta_nextnode_project: ownerProject,
-		}),
+		...projectLabel(state, device.hostname),
 	}
 }
 

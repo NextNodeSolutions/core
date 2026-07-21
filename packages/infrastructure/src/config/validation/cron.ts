@@ -39,8 +39,8 @@ function isIntInRange(raw: string, min: number, max: number): boolean {
 function isValidCronBase(base: string, { min, max }: CronFieldRange): boolean {
 	if (base === '*') return true
 	const [low, high, ...rest] = base.split('-')
-	if (rest.length > 0 || low === undefined) return false
-	if (high === undefined) return isIntInRange(low, min, max)
+	if (rest.length > 0 || typeof low === 'undefined') return false
+	if (typeof high === 'undefined') return isIntInRange(low, min, max)
 	return (
 		isIntInRange(low, min, max) &&
 		isIntInRange(high, min, max) &&
@@ -53,8 +53,9 @@ function isValidCronBase(base: string, { min, max }: CronFieldRange): boolean {
 // job never fires.
 function isValidCronEntry(listEntry: string, range: CronFieldRange): boolean {
 	const [base, step, ...rest] = listEntry.split('/')
-	if (rest.length > 0 || base === undefined) return false
-	if (step !== undefined && !isIntInRange(step, 1, range.max)) return false
+	if (rest.length > 0 || typeof base === 'undefined') return false
+	if (typeof step !== 'undefined' && !isIntInRange(step, 1, range.max))
+		return false
 	return isValidCronBase(base, range)
 }
 
@@ -88,7 +89,7 @@ function isValidCronSchedule(schedule: string): boolean {
 	if (fields.length !== CRON_FIELD_COUNT) return false
 	return fields.every((field, index) => {
 		const range = CRON_FIELD_RANGES[index]
-		return range !== undefined && isValidCronField(field, range)
+		return range ? isValidCronField(field, range) : false
 	})
 }
 
@@ -210,7 +211,7 @@ function readCronMethod(
 	addIssue: AddCronIssue,
 ): CronMethod | null {
 	const { method } = entry
-	if (method === undefined) return DEFAULT_CRON_METHOD
+	if (typeof method === 'undefined') return DEFAULT_CRON_METHOD
 	if (!isCronMethod(method)) {
 		addIssue({
 			message: `deploy.cron job "${name}" method must be one of: ${CRON_METHODS.join(', ')}`,
@@ -227,7 +228,7 @@ function readCronService(
 	addIssue: AddCronIssue,
 ): { service?: string } | null {
 	const { service } = entry
-	if (service === undefined) return {}
+	if (typeof service === 'undefined') return {}
 	if (typeof service !== 'string' || !serviceNames.has(service)) {
 		const shown = typeof service === 'string' ? `"${service}" ` : ''
 		addIssue({
@@ -274,7 +275,7 @@ export function validateCronJobs(
 	raw: unknown,
 	serviceNames: ReadonlySet<string>,
 ): ValidationResult<CronJobConfig[]> {
-	if (raw === undefined) return { ok: true, section: [] }
+	if (typeof raw === 'undefined') return { ok: true, section: [] }
 	const jobs = runSchema(cronJobsSchema(serviceNames), raw)
 	if (serviceNames.has(RESERVED_CRON_SERVICE_NAME)) {
 		const reserved = `deploy.services name "${RESERVED_CRON_SERVICE_NAME}" is reserved for the cron sidecar - rename the service`

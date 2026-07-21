@@ -18,7 +18,8 @@ function fakeR2(state: Map<string, string>): ObjectStoreClient {
 	return {
 		get: vi.fn(async (key: string) => {
 			const body = state.get(key)
-			return body === undefined ? null : { body, etag: 'etag' }
+			if (typeof body === 'undefined') return null
+			return { body, etag: 'etag' }
 		}),
 		put: vi.fn(async (key: string, body: string) => {
 			state.set(key, body)

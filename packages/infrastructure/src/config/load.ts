@@ -134,7 +134,7 @@ function checkServicesTargetCompatibility(
 ): string[] {
 	return SERVICE_NAMES.filter(
 		name =>
-			services[name] !== undefined &&
+			services[name] &&
 			!SERVICE_SUPPORTED_TARGETS[name].includes(deploy.target),
 	).map(
 		name =>
@@ -149,7 +149,7 @@ function parseNonDeployable(
 	type: string,
 	base: Omit<NextNodeConfig, 'deploy'>,
 ): ParseConfigResult {
-	if (raw['deploy'] !== undefined) {
+	if (typeof raw['deploy'] !== 'undefined') {
 		return {
 			ok: false,
 			errors: [

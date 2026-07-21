@@ -50,7 +50,7 @@ export function deriveWorkersBackingConfig(
 ): WorkersBackingConfig {
 	const buckets = computeR2ServiceBuckets(services)
 	return {
-		hasD1: services.d1 !== undefined,
+		hasD1: Boolean(services.d1),
 		kvAliases: (services.kv?.namespaces ?? []).map(
 			namespace => namespace.name,
 		),
@@ -76,7 +76,7 @@ function extractValue(
 	name: string,
 ): unknown {
 	const entry = raw[name]
-	if (entry === undefined) return undefined
+	if (typeof entry === 'undefined') return undefined
 	if (!isRecord(entry) || !('value' in entry)) {
 		throw new Error(
 			`terraform output "${name}": entry is missing a "value" field`,
@@ -117,6 +117,18 @@ function asStringMap(
  * the "declared service missing its output" check lives in
  * `buildWorkersBackingEnv`, where the config says what MUST be present.
  */
+function optionalStringMap(
+	outputValue: unknown,
+	name: string,
+): Record<string, string> {
+	if (typeof outputValue === 'undefined') return {}
+	return asStringMap(outputValue, name)
+}
+
+type WorkersTerraformOutputsDraft = {
+	-readonly [K in keyof WorkersTerraformOutputs]: WorkersTerraformOutputs[K]
+}
+
 export function parseTerraformOutputs(
 	raw: Readonly<Record<string, unknown>>,
 ): WorkersTerraformOutputs {
@@ -125,17 +137,16 @@ export function parseTerraformOutputs(
 	const queues = extractValue(raw, 'queue_ids')
 	const buckets = extractValue(raw, 'r2_buckets')
 	const cdn = extractValue(raw, 'r2_cdn_urls')
-	return {
-		kvNamespaceIds:
-			kv === undefined ? {} : asStringMap(kv, 'kv_namespace_ids'),
-		queueIds: queues === undefined ? {} : asStringMap(queues, 'queue_ids'),
-		r2Buckets:
-			buckets === undefined ? {} : asStringMap(buckets, 'r2_buckets'),
-		r2CdnUrls: cdn === undefined ? {} : asStringMap(cdn, 'r2_cdn_urls'),
-		...(d1 === undefined
-			? {}
-			: { d1DatabaseId: asString(d1, 'd1_database_id') }),
+	const outputs: WorkersTerraformOutputsDraft = {
+		kvNamespaceIds: optionalStringMap(kv, 'kv_namespace_ids'),
+		queueIds: optionalStringMap(queues, 'queue_ids'),
+		r2Buckets: optionalStringMap(buckets, 'r2_buckets'),
+		r2CdnUrls: optionalStringMap(cdn, 'r2_cdn_urls'),
 	}
+	if (typeof d1 !== 'undefined') {
+		outputs.d1DatabaseId = asString(d1, 'd1_database_id')
+	}
+	return outputs
 }
 
 function envKeyFor(alias: string): string {
@@ -143,7 +154,7 @@ function envKeyFor(alias: string): string {
 }
 
 function requireScalar(scalar: string | undefined, output: string): string {
-	if (scalar === undefined) {
+	if (typeof scalar === 'undefined') {
 		throw new Error(
 			`terraform output "${output}" is missing but the service is declared - run \`infrastructure provision\` before deploy so Terraform creates the resource and emits its output.`,
 		)
@@ -157,7 +168,7 @@ function requireEntry(
 	output: string,
 ): string {
 	const entry = map[alias]
-	if (entry === undefined) {
+	if (typeof entry === 'undefined') {
 		throw new Error(
 			`terraform output "${output}" has no entry for "${alias}" but the service is declared - run \`infrastructure provision\` before deploy so Terraform creates the resource and emits its output.`,
 		)

@@ -11,6 +11,8 @@ export function selectBackingSecrets(
 	origins: Readonly<Record<string, string>>,
 ): Record<string, string> {
 	return Object.fromEntries(
-		Object.entries(secrets).filter(([key]) => origins[key] !== undefined),
+		Object.entries(secrets).filter(
+			([key]) => typeof origins[key] !== 'undefined',
+		),
 	)
 }

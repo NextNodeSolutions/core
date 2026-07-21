@@ -76,7 +76,7 @@ const formatObjectDetails = (object: LogEntry['object']): string[] => {
 		if (!entry) continue
 
 		const [key, value] = entry
-		if (value === undefined) continue
+		if (typeof value === 'undefined') continue
 
 		const isLast = i === entries.length - 1
 		const prefix = isLast ? '└─' : '├─'

@@ -28,7 +28,7 @@ function runService<T>(
 	validate: (raw: unknown) => ValidationResult<T>,
 	errors: string[],
 ): T | undefined {
-	if (raw === undefined) return undefined
+	if (typeof raw === 'undefined') return undefined
 	const validation = validate(raw)
 	if (validation.ok) return validation.section
 	errors.push(...validation.errors)
@@ -43,7 +43,7 @@ function runService<T>(
 export function validateServicesSection(
 	raw: unknown,
 ): ValidationResult<ServicesConfig> {
-	if (raw === undefined) return { ok: true, section: {} }
+	if (typeof raw === 'undefined') return { ok: true, section: {} }
 	if (!isRecord(raw)) {
 		return { ok: false, errors: ['[services] must be a table'] }
 	}
@@ -52,35 +52,35 @@ export function validateServicesSection(
 	const services: MutableServicesConfig = {}
 
 	const r2 = runService(raw['r2'], validateR2Service, errors)
-	if (r2 !== undefined) services.r2 = r2
+	if (r2) services.r2 = r2
 
 	const postgres = runService(
 		raw['postgres'],
 		validatePostgresService,
 		errors,
 	)
-	if (postgres !== undefined) services.postgres = postgres
+	if (postgres) services.postgres = postgres
 
 	const observability = runService(
 		raw['observability'],
 		validateObservabilityService,
 		errors,
 	)
-	if (observability !== undefined) services.observability = observability
+	if (observability) services.observability = observability
 
 	const d1 = runService(raw['d1'], validateD1Service, errors)
-	if (d1 !== undefined) services.d1 = d1
+	if (d1) services.d1 = d1
 
 	const kv = runService(raw['kv'], validateKvService, errors)
-	if (kv !== undefined) services.kv = kv
+	if (kv) services.kv = kv
 
 	const queues = runService(raw['queues'], validateQueuesService, errors)
-	if (queues !== undefined) services.queues = queues
+	if (queues) services.queues = queues
 
 	if (errors.length > 0) return { ok: false, errors }
 	return { ok: true, section: services }
 }
 
 export function hasAnyService(services: ServicesConfig): boolean {
-	return SERVICE_NAMES.some(name => services[name] !== undefined)
+	return SERVICE_NAMES.some(name => Boolean(services[name]))
 }

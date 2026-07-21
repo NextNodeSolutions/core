@@ -52,7 +52,7 @@ function workerUrl(
 	service: WorkerServiceConfig,
 	environment: AppEnvironment,
 ): string {
-	if (service.url === undefined) return ''
+	if (typeof service.url === 'undefined') return ''
 	return computeSiteUrl(service.url, environment)
 }
 
@@ -63,7 +63,7 @@ const SECRETS_JSON_INDENT = 2
 function secretsJsonFor(
 	secrets: Readonly<Record<string, string>> | undefined,
 ): string | undefined {
-	if (secrets === undefined || Object.keys(secrets).length === 0) {
+	if (!secrets || Object.keys(secrets).length === 0) {
 		return undefined
 	}
 	return JSON.stringify(secrets, null, SECRETS_JSON_INDENT)
@@ -94,6 +94,13 @@ function buildServiceDocument(
 	})
 }
 
+function secretsJsonArg(
+	secretsJson: string | undefined,
+): { secretsJson: string } | undefined {
+	if (typeof secretsJson === 'undefined') return undefined
+	return { secretsJson }
+}
+
 interface ServiceDeployJob {
 	readonly input: WorkersDeployInput
 	readonly runner: WranglerRunner
@@ -111,7 +118,7 @@ async function deployOneService(
 ): Promise<DeployedWorker> {
 	const { input, serviceName, service } = job
 	const document = buildServiceDocument(input, serviceName, service)
-	if (document.assets !== undefined) {
+	if (document.assets) {
 		injectSeoGuardAssets(
 			input.projectDir,
 			document.assets.directory,
@@ -122,9 +129,7 @@ async function deployOneService(
 		document,
 		runner: job.runner,
 		cwd: input.projectDir,
-		...(job.secretsJson === undefined
-			? {}
-			: { secretsJson: job.secretsJson }),
+		...secretsJsonArg(job.secretsJson),
 	})
 	return { name: serviceName, url: workerUrl(service, input.environment) }
 }
@@ -158,7 +163,7 @@ export async function deployWorkers(
 	const deployed: Array<DeployedWorker> = []
 	for (const serviceName of order) {
 		const service = input.services[serviceName]
-		if (service === undefined) continue
+		if (!service) continue
 		deployed.push(
 			// eslint-disable-next-line no-await-in-loop -- deploys are strictly sequential (depends_on order); parallelism would break the ordering contract
 			await deployOneService({

@@ -83,6 +83,11 @@ export const matchProjectVps = (
 		name => name === repoName || name.startsWith(`${repoName}-`),
 	) ?? null
 
+const lastCommitOf = (run: GithubRun | null): string | null => {
+	if (run === null) return null
+	return shortSha(run.headSha)
+}
+
 export const summarizeGithubProject = (
 	repo: GithubRepo,
 	run: GithubRun | null,
@@ -96,7 +101,7 @@ export const summarizeGithubProject = (
 	defaultBranch: repo.defaultBranch,
 	htmlUrl: repo.htmlUrl,
 	deployStatus: resolveDeployStatus(repo, run),
-	lastCommit: run === null ? null : shortSha(run.headSha),
+	lastCommit: lastCommitOf(run),
 	lastDeployAt: run?.createdAt ?? null,
 	pendingApproval: run?.status === 'waiting',
 	vps: matchProjectVps(repo.name, serverNames),

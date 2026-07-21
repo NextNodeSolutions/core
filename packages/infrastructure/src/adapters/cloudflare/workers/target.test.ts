@@ -95,7 +95,8 @@ function buildTarget(
 
 function cwdOf(call: Parameters<TerraformRunner>): string {
 	const cwd = call[1]?.cwd
-	if (cwd === undefined) throw new Error('runner called without a cwd')
+	if (typeof cwd === 'undefined')
+		throw new Error('runner called without a cwd')
 	return cwd
 }
 
@@ -635,8 +636,7 @@ describe('CloudflareWorkersTarget.runMigrate (D1)', () => {
 
 		expect(calls).toHaveLength(1)
 		const [call] = calls
-		if (call === undefined)
-			expect.unreachable('runner should be called once')
+		if (!call) expect.unreachable('runner should be called once')
 		expect(call.args).toEqual([
 			'd1',
 			'migrations',

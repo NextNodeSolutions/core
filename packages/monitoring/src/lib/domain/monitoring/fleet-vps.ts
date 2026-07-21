@@ -55,14 +55,14 @@ export const parseFleetVps = (
 	const byName = new Map<string, FleetVps>()
 	for (const sample of samples) {
 		const name = sample.labels['vps_name']
-		if (name === undefined || name === '') continue
+		if (typeof name === 'undefined' || name === '') continue
 		const candidate: FleetVps = {
 			name,
 			isOnline: sample.value > 0,
 			project: sample.labels['project'] ?? null,
 		}
 		const existing = byName.get(name)
-		if (existing === undefined || takesPrecedence(candidate, existing)) {
+		if (!existing || takesPrecedence(candidate, existing)) {
 			byName.set(name, candidate)
 		}
 	}

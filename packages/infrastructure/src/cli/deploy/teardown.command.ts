@@ -134,7 +134,7 @@ async function teardownR2CustomDomains(
 	if (teardownTarget !== 'project') return
 	if (infraStorage === null) return
 	const { domain } = config.project
-	if (domain === undefined) return
+	if (typeof domain === 'undefined') return
 	const cdnBuckets = (config.services.r2?.buckets ?? []).filter(
 		bucket => bucket.cdn,
 	)
@@ -240,7 +240,7 @@ export async function teardownCommand(config: DeployableConfig): Promise<void> {
 		shouldWipeVolumes,
 	)
 
-	if (config.services.postgres !== undefined && infraStorage !== null) {
+	if (config.services.postgres && infraStorage !== null) {
 		await reconcilePostgresBackups(
 			config.project.name,
 			infraStorage,
