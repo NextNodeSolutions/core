@@ -1,8 +1,10 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { isAbsolute, join, resolve } from 'node:path'
+import { join } from 'node:path'
 
 import { createLogger } from '@nextnode-solutions/logger'
+
+import { resolveDocumentPaths } from './config-paths.ts'
 
 import type { WranglerDocument } from '#/domain/cloudflare/workers/wrangler-document.ts'
 import type { WranglerRunner } from './runner.ts'
@@ -24,32 +26,6 @@ export interface WranglerDeployInput {
 	// deploy (the worker must exist first). Omitted when the worker declares no
 	// secrets, so no bulk call is made and no secret ever touches argv or disk.
 	readonly secretsJson?: string
-}
-
-function absolutise(path: string, cwd: string): string {
-	return isAbsolute(path) ? path : resolve(cwd, path)
-}
-
-// wrangler resolves `main` and `assets.directory` relative to the CONFIG file's
-// directory. The config is written to an ephemeral temp dir (so the dev never
-// commits one), which does not hold the built bundle - so absolutise both paths
-// against the project dir before writing. wrangler accepts absolute paths.
-function resolveDocumentPaths(
-	document: WranglerDocument,
-	cwd: string,
-): WranglerDocument {
-	return {
-		...document,
-		main: absolutise(document.main, cwd),
-		...(document.assets === undefined
-			? {}
-			: {
-					assets: {
-						...document.assets,
-						directory: absolutise(document.assets.directory, cwd),
-					},
-				}),
-	}
 }
 
 /**

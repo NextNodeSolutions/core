@@ -10,8 +10,8 @@ import { createLogger } from '@nextnode-solutions/logger'
 import { shellEscape } from './ssh/shell-escape.ts'
 
 import type {
+	ContainerMigrateInput,
 	ImageRef,
-	MigrateInput,
 	MigrateResult,
 	SnapshotInput,
 	SnapshotResult,
@@ -49,7 +49,7 @@ export interface BuildMigrateCommandResult {
  * service to `compose.yaml`. This is an SSH-orchestrated one-shot.
  */
 export function buildMigrateCommand(
-	input: MigrateInput,
+	input: ContainerMigrateInput,
 ): BuildMigrateCommandResult {
 	const silo = computeSilo(input.projectName, input.environment)
 	const network = `${silo.id}_default`
@@ -88,7 +88,7 @@ export function buildMigrateCommand(
  */
 export async function executeMigrate(
 	session: SshSession,
-	input: MigrateInput,
+	input: ContainerMigrateInput,
 ): Promise<MigrateResult> {
 	const start = Date.now()
 	const { command } = buildMigrateCommand(input)

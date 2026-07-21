@@ -23,7 +23,7 @@ const ZERO_SHA = /^0+$/
  * skipped. Any range we cannot diff fails safe and runs the migration.
  */
 export function detectMigrationChangesCommand(config: NextNodeConfig): void {
-	const migrationsFolder = resolveMigrationsFolder(config.services.postgres)
+	const migrationsFolder = resolveMigrationsFolder(config.services)
 	const decision = decideMigrationsChanged(
 		resolveMigrationsDiff(),
 		migrationsFolder,

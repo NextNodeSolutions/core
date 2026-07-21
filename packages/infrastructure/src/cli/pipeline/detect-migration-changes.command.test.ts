@@ -31,6 +31,11 @@ const POSTGRES_CONFIG: NextNodeConfig = {
 	services: { postgres: { mode: 'embedded' } },
 }
 
+const D1_CONFIG: NextNodeConfig = {
+	...POSTGRES_CONFIG,
+	services: { d1: { migrationsFolder: 'drizzle' } },
+}
+
 const gitEnv = {
 	...process.env,
 	GIT_AUTHOR_NAME: 't',
@@ -112,6 +117,16 @@ describe('detectMigrationChangesCommand', () => {
 		stubRange(makeRepo('migration'))
 
 		detectMigrationChangesCommand(POSTGRES_CONFIG)
+
+		expect(readFileSync(outputFile, 'utf-8')).toContain(
+			'migrations_changed=true\n',
+		)
+	})
+
+	it('reads the migrations folder from [services.d1] for a Workers project', () => {
+		stubRange(makeRepo('migration'))
+
+		detectMigrationChangesCommand(D1_CONFIG)
 
 		expect(readFileSync(outputFile, 'utf-8')).toContain(
 			'migrations_changed=true\n',

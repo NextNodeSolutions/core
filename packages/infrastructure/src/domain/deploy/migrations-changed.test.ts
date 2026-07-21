@@ -5,27 +5,33 @@ import {
 	resolveMigrationsFolder,
 } from './migrations-changed.ts'
 
-import type { PostgresServiceConfig } from '#/config/types.ts'
+import type { PostgresServiceConfig, ServicesConfig } from '#/config/types.ts'
 
 const embedded = (
 	extra: Partial<PostgresServiceConfig> = {},
-): PostgresServiceConfig => ({ mode: 'embedded', ...extra })
+): ServicesConfig => ({ postgres: { mode: 'embedded', ...extra } })
 
 describe('resolveMigrationsFolder', () => {
-	it('defaults to "drizzle" (drizzle-kit\'s own default) when no folder is declared', () => {
+	it('defaults to "drizzle" (drizzle-kit\'s own default) when postgres declares no folder', () => {
 		expect(resolveMigrationsFolder(embedded())).toBe('drizzle')
 	})
 
-	it('defaults to "drizzle" when there is no postgres service at all', () => {
-		expect(resolveMigrationsFolder(undefined)).toBe('drizzle')
+	it('defaults to "drizzle" when no database service is declared', () => {
+		expect(resolveMigrationsFolder({})).toBe('drizzle')
 	})
 
-	it('honors an explicit migrationsFolder override', () => {
+	it('honors an explicit postgres migrationsFolder override', () => {
 		expect(
 			resolveMigrationsFolder(
 				embedded({ migrationsFolder: 'src/db/migrations' }),
 			),
 		).toBe('src/db/migrations')
+	})
+
+	it('reads the folder from [services.d1] when the project declares D1', () => {
+		expect(
+			resolveMigrationsFolder({ d1: { migrationsFolder: 'drizzle/d1' } }),
+		).toBe('drizzle/d1')
 	})
 })
 

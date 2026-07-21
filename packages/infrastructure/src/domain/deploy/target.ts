@@ -155,17 +155,38 @@ export interface DeployResult {
 }
 
 /**
- * Inputs required to run schema migrations against the project's database
- * on the deploy target. The migrate runs in an ephemeral container built
- * from the same `image` as the app, joining the project's docker network
+ * Inputs to run schema migrations against the project's database. Discriminated
+ * by `kind` so each target consumes only the shape it understands: a container
+ * target reads `image`/`migrateCommand`, a D1 target reads neither (it drives
+ * `wrangler d1 migrations apply`, which resolves the database + migrations
+ * directory from the generated wrangler config, not a Docker image).
+ */
+export type MigrateInput = ContainerMigrateInput | D1MigrateInput
+
+/**
+ * Container (Hetzner VPS) migrate. The migrate runs in an ephemeral container
+ * built from the same `image` as the app, joining the project's docker network
  * so the embedded postgres sidecar resolves at its compose service name.
  * `migrateCommand` is the shell command the container executes (default
  * `pnpm drizzle-kit migrate`, overridable via `[services.postgres].migrate_command`).
  */
-export interface MigrateInput {
+export interface ContainerMigrateInput {
+	readonly kind: 'container'
 	readonly projectName: string
+	readonly environment: AppEnvironment
 	readonly image: ImageRef
 	readonly migrateCommand: string
+}
+
+/**
+ * D1 (Cloudflare Workers) migrate. Carries only project + environment: the D1
+ * database name (`<project>-<env>-d1`), its id, and the migrations directory are
+ * resolved from the provision outputs + the owning service's generated wrangler
+ * config, so no image or migrate command is needed.
+ */
+export interface D1MigrateInput {
+	readonly kind: 'd1'
+	readonly projectName: string
 	readonly environment: AppEnvironment
 }
 

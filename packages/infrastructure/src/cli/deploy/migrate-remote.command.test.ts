@@ -20,9 +20,13 @@ import {
 	APP_WITH_POSTGRES,
 	APP_WITH_POSTGRES_CUSTOM_MIGRATE,
 	APP_WITH_POSTGRES_EXTERNAL,
+	WORKERS_APP_WITH_DOMAIN,
 } from '#/cli/fixtures.ts'
 
-import type { DeployableConfig } from '#/config/types.ts'
+import type {
+	CloudflareWorkersDeployableConfig,
+	DeployableConfig,
+} from '#/config/types.ts'
 import type { MigrateResult } from '#/domain/deploy/target.ts'
 
 const MIGRATE_RESULT: MigrateResult = { durationMs: 1234 }
@@ -123,6 +127,29 @@ vi.mock('../../adapters/hetzner/target.ts', () => ({
 		}),
 		prepareRollout: mockPrepareRollout,
 		runMigrate: mockRunMigrate,
+		deploy: vi.fn(),
+		ensureInfra: vi.fn(),
+		reconcileDns: vi.fn(),
+	})),
+}))
+
+// Mock CloudflareWorkersTarget (network boundary: terraform + wrangler). Only
+// runMigrate is exercised here; contributeEnv is enough for resolveDeployContext
+// to build the merged env (no loadBackingEnv, so no terraform output read).
+const { mockRunMigrateWorkers, mockPrepareRolloutWorkers } = vi.hoisted(() => ({
+	mockRunMigrateWorkers: vi.fn(),
+	mockPrepareRolloutWorkers: vi.fn(),
+}))
+
+vi.mock('../../adapters/cloudflare/workers/target.ts', () => ({
+	CloudflareWorkersTarget: vi.fn(() => ({
+		name: 'cloudflare-workers',
+		contributeEnv: () => ({
+			public: { SITE_URL: 'https://example.com' },
+			secret: {},
+		}),
+		runMigrate: mockRunMigrateWorkers,
+		prepareRollout: mockPrepareRolloutWorkers,
 		deploy: vi.fn(),
 		ensureInfra: vi.fn(),
 		reconcileDns: vi.fn(),
@@ -242,6 +269,7 @@ describe('migrateRemoteCommand', () => {
 		await migrateRemoteCommand(APP_WITH_POSTGRES)
 
 		expect(mockRunMigrate).toHaveBeenCalledExactlyOnceWith({
+			kind: 'container',
 			projectName: 'my-app',
 			environment: 'production',
 			image: {
@@ -384,6 +412,106 @@ describe('migrateRemoteCommand', () => {
 		await migrateRemoteCommand(APP_WITH_POSTGRES)
 
 		expect(mockRunMigrate).toHaveBeenCalledExactlyOnceWith(
+			expect.objectContaining({ environment: 'development' }),
+		)
+	})
+})
+
+const WORKERS_APP_WITH_D1: CloudflareWorkersDeployableConfig = {
+	...WORKERS_APP_WITH_DOMAIN,
+	project: {
+		type: 'app',
+		name: 'my-worker',
+		domain: 'example.com',
+		redirectDomains: [],
+		filter: false,
+		internal: false,
+	},
+	services: { d1: { migrationsFolder: 'drizzle' } },
+	deploy: {
+		target: 'cloudflare-workers',
+		generatedSecrets: [],
+		secrets: [],
+		vps: null,
+		volumes: [],
+		cron: [],
+		services: {
+			web: {
+				url: 'example.com',
+				secrets: [],
+				needs: ['d1'],
+				dependsOn: [],
+				entry: 'dist/_worker.js/index.js',
+			},
+		},
+	},
+}
+
+describe('migrateRemoteCommand (cloudflare-workers D1)', () => {
+	let summaryFile: string
+
+	beforeEach(() => {
+		const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+		summaryFile = join(tmpdir(), `gh-summary-workers-${id}.txt`)
+		vi.stubEnv('PIPELINE_ENVIRONMENT', 'production')
+		vi.stubEnv('CLOUDFLARE_ACCOUNT_ID', 'acct-123')
+		vi.stubEnv('CLOUDFLARE_API_TOKEN', 'cf-token')
+		vi.stubEnv('TF_TOKEN_app_terraform_io', 'tf-token')
+		vi.stubEnv('GITHUB_REPOSITORY', 'NextNodeSolutions/core')
+		vi.stubEnv('LOG_LEVEL', 'silent')
+		vi.stubEnv('GITHUB_STEP_SUMMARY', summaryFile)
+		vi.stubEnv('ALL_SECRETS', JSON.stringify({}))
+		mockRunMigrateWorkers.mockResolvedValue(MIGRATE_RESULT)
+	})
+
+	afterEach(() => {
+		rmSync(summaryFile, { force: true })
+		vi.unstubAllEnvs()
+		mockRunMigrateWorkers.mockReset()
+		mockPrepareRolloutWorkers.mockReset()
+	})
+
+	it('runs the D1 migrate without staging a rollout when [services.d1] is set', async () => {
+		await migrateRemoteCommand(WORKERS_APP_WITH_D1)
+
+		expect(mockRunMigrateWorkers).toHaveBeenCalledExactlyOnceWith({
+			kind: 'd1',
+			projectName: 'my-worker',
+			environment: 'production',
+		})
+		expect(mockPrepareRolloutWorkers).not.toHaveBeenCalled()
+	})
+
+	it('does not require IMAGE_REFS for a D1 migrate', async () => {
+		vi.stubEnv('IMAGE_REFS', '')
+
+		await migrateRemoteCommand(WORKERS_APP_WITH_D1)
+
+		expect(mockRunMigrateWorkers).toHaveBeenCalledOnce()
+	})
+
+	it('writes a migrate step summary after a successful D1 apply', async () => {
+		await migrateRemoteCommand(WORKERS_APP_WITH_D1)
+
+		const summary = readFileSync(summaryFile, 'utf-8')
+		expect(summary).toContain('## Migrate')
+		expect(summary).toContain('| **Project** | my-worker |')
+		expect(summary).toContain('| **Migrate duration** | 1.2s |')
+		expect(summary).not.toContain('Pre-migrate snapshot')
+	})
+
+	it('is a no-op when the workers project declares no [services.d1]', async () => {
+		await migrateRemoteCommand(WORKERS_APP_WITH_DOMAIN)
+
+		expect(mockRunMigrateWorkers).not.toHaveBeenCalled()
+	})
+
+	it('targets the development environment when PIPELINE_ENVIRONMENT is development', async () => {
+		vi.stubEnv('PIPELINE_ENVIRONMENT', 'development')
+
+		await migrateRemoteCommand(WORKERS_APP_WITH_D1)
+
+		expect(mockRunMigrateWorkers).toHaveBeenCalledExactlyOnceWith(
 			expect.objectContaining({ environment: 'development' }),
 		)
 	})

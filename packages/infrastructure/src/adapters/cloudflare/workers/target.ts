@@ -15,6 +15,7 @@ import { executeHandlers } from '#/domain/deploy/execute-handlers.ts'
 import { HCP_TERRAFORM_ORGANIZATION } from '#/domain/deploy/terraform-config.ts'
 
 import { deployWorkers } from './deploy-workers.ts'
+import { migrateWorkers } from './migrate-workers.ts'
 import { teardownWorkers } from './teardown-workers.ts'
 import {
 	applyWorkersTerraform,
@@ -215,11 +216,23 @@ export class CloudflareWorkersTarget implements DeployTarget {
 		)
 	}
 
-	runMigrate(input: MigrateInput): Promise<MigrateResult> {
-		void input
-		throw new Error(
-			`runMigrate is not wired yet for ${this.name}: D1 migrations (\`wrangler d1 migrations apply\`) land in US-3.3.`,
-		)
+	async runMigrate(input: MigrateInput): Promise<MigrateResult> {
+		if (input.kind !== 'd1') {
+			throw new Error(
+				`runMigrate on ${this.name} expects a d1 migrate input but received "${input.kind}" - a container migrate was routed to the Workers target, which is a wiring bug.`,
+			)
+		}
+		const outputs = await this.loadDeployOutputs()
+		return migrateWorkers({
+			projectName: input.projectName,
+			environment: this.environment,
+			services: this.config.deploy.services,
+			backingServices: this.config.services,
+			cron: this.config.deploy.cron,
+			outputs,
+			wranglerRunner: this.wrangler,
+			projectDir: this.requireProjectDir(),
+		})
 	}
 
 	runPreMigrateSnapshot(input: SnapshotInput): Promise<SnapshotResult> {

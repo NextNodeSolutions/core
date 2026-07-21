@@ -283,12 +283,6 @@ describe('CloudflareWorkersTarget.reconcileDns', () => {
 
 describe('CloudflareWorkersTarget non-applicable methods', () => {
 	const target = buildTarget(BACKING_SERVICES, makeRunner())
-	const migrateInput = {
-		projectName: 'my-worker',
-		image: { registry: 'r', repository: 'x', tag: 't' },
-		migrateCommand: 'm',
-		environment: 'production' as const,
-	}
 	const snapshotInput = {
 		projectName: 'my-worker',
 		environment: 'production' as const,
@@ -304,9 +298,17 @@ describe('CloudflareWorkersTarget non-applicable methods', () => {
 		).toThrow('prepareRollout is not applicable to cloudflare-workers')
 	})
 
-	it('throws a provisional error for runMigrate', () => {
-		expect(() => target.runMigrate(migrateInput)).toThrow(
-			'runMigrate is not wired yet for cloudflare-workers',
+	it('rejects a container migrate input routed to the Workers target', async () => {
+		await expect(
+			target.runMigrate({
+				kind: 'container',
+				projectName: 'my-worker',
+				environment: 'production',
+				image: { registry: 'r', repository: 'x', tag: 't' },
+				migrateCommand: 'm',
+			}),
+		).rejects.toThrow(
+			'runMigrate on cloudflare-workers expects a d1 migrate input',
 		)
 	})
 
@@ -503,6 +505,146 @@ describe('CloudflareWorkersTarget.deploy', () => {
 		await expect(
 			target.deploy('my-worker', DEPLOY_INPUT, DEPLOY_ENV),
 		).rejects.toThrow('needs the project directory')
+	})
+})
+
+// A wrangler runner capturing `d1 migrations apply` calls: the positional
+// database name, the full args, and the generated config (read while the
+// ephemeral file still exists, deleted after the call).
+function makeMigrateWrangler(behavior: ExecResult = ok()): {
+	readonly runner: ReturnType<typeof vi.fn<WranglerRunner>>
+	readonly calls: Array<{
+		args: ReadonlyArray<string>
+		cwd: string | undefined
+		configPath: string
+		document: {
+			name: string
+			main: string
+			d1_databases?: ReadonlyArray<{
+				database_name: string
+				database_id: string
+				migrations_dir?: string
+			}>
+		}
+	}>
+} {
+	const calls: ReturnType<typeof makeMigrateWrangler>['calls'] = []
+	const runner = vi.fn<WranglerRunner>(async (args, options) => {
+		const configPath = args[args.indexOf('--config') + 1] ?? ''
+		calls.push({
+			args,
+			cwd: options?.cwd,
+			configPath,
+			document: JSON.parse(readFileSync(configPath, 'utf8')),
+		})
+		return behavior
+	})
+	return { runner, calls }
+}
+
+describe('CloudflareWorkersTarget.runMigrate (D1)', () => {
+	it('applies migrations against the owning service config, remote, and cleans up', async () => {
+		const terraform = makeRunner()
+		const { runner, calls } = makeMigrateWrangler()
+		const target = buildDeployTarget({
+			services: {
+				web: worker({ url: 'example.com' }),
+				api: worker({ needs: ['d1'] }),
+			},
+			backing: BACKING_SERVICES,
+			terraform,
+			wrangler: runner,
+		})
+
+		const migrateResult = await target.runMigrate({
+			kind: 'd1',
+			projectName: 'my-worker',
+			environment: 'production',
+		})
+
+		expect(calls).toHaveLength(1)
+		const [call] = calls
+		if (call === undefined)
+			expect.unreachable('runner should be called once')
+		expect(call.args).toEqual([
+			'd1',
+			'migrations',
+			'apply',
+			'my-worker-production-d1',
+			'--remote',
+			'--config',
+			call.configPath,
+		])
+		expect(call.cwd).toBe('/project/app')
+		expect(call.document.d1_databases?.[0]).toEqual({
+			binding: 'DB',
+			database_name: 'my-worker-production-d1',
+			database_id: 'db-uuid',
+			migrations_dir: '/project/app/drizzle',
+		})
+		expect(existsSync(call.configPath)).toBe(false)
+		expect(migrateResult.durationMs).toBeGreaterThanOrEqual(0)
+	})
+
+	it('reads the terraform outputs (init + output) to resolve the database id', async () => {
+		const terraform = makeRunner()
+		const { runner } = makeMigrateWrangler()
+		const target = buildDeployTarget({
+			services: { api: worker({ needs: ['d1'] }) },
+			backing: BACKING_SERVICES,
+			terraform,
+			wrangler: runner,
+		})
+
+		await target.runMigrate({
+			kind: 'd1',
+			projectName: 'my-worker',
+			environment: 'production',
+		})
+
+		expect(terraform.mock.calls.map(call => call[0][0])).toEqual([
+			'init',
+			'output',
+		])
+	})
+
+	it('throws the wrangler stderr verbatim when the apply fails', async () => {
+		const { runner } = makeMigrateWrangler({
+			exitCode: 1,
+			stdout: '',
+			stderr: 'migration 0003 failed',
+		})
+		const target = buildDeployTarget({
+			services: { api: worker({ needs: ['d1'] }) },
+			backing: BACKING_SERVICES,
+			terraform: makeRunner(),
+			wrangler: runner,
+		})
+
+		await expect(
+			target.runMigrate({
+				kind: 'd1',
+				projectName: 'my-worker',
+				environment: 'production',
+			}),
+		).rejects.toThrow('migration 0003 failed')
+	})
+
+	it('throws when no service declares needs = ["d1"]', async () => {
+		const target = buildDeployTarget({
+			services: { web: worker({ url: 'example.com' }) },
+			backing: BACKING_SERVICES,
+			terraform: makeRunner(),
+			wrangler: makeMigrateWrangler().runner,
+		})
+
+		await expect(
+			target.runMigrate({
+				kind: 'd1',
+				projectName: 'my-worker',
+				environment: 'production',
+			}),
+		).rejects.toThrow('No deploy service declares needs = ["d1"]')
 	})
 })
 

@@ -216,6 +216,11 @@ export class HetznerVpsTarget implements DeployTarget {
 	}
 
 	async runMigrate(input: MigrateInput): Promise<MigrateResult> {
+		if (input.kind !== 'container') {
+			throw new Error(
+				`runMigrate on ${this.name} expects a container migrate input but received "${input.kind}" - a D1 migrate was routed to the VPS target, which is a wiring bug.`,
+			)
+		}
 		const session = await openVpsSession(this.rolloutContext())
 		try {
 			return await executeMigrate(session, input)
