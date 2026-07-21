@@ -1,12 +1,12 @@
 import { selectServiceImage } from '#/domain/deploy/image-ref.ts'
-import { formatComposeEnv } from '#/domain/hetzner/compose-env.ts'
-import { renderComposeFile } from '#/domain/hetzner/compose-file.ts'
-import { computeSilo } from '#/domain/hetzner/env-silo.ts'
 import {
 	buildServiceSecretEnv,
 	buildServiceUrlEnv,
-	selectBackingSecrets,
-} from '#/domain/hetzner/service-env.ts'
+} from '#/domain/deploy/service-env.ts'
+import { formatComposeEnv } from '#/domain/hetzner/compose-env.ts'
+import { renderComposeFile } from '#/domain/hetzner/compose-file.ts'
+import { computeSilo } from '#/domain/hetzner/env-silo.ts'
+import { selectBackingSecrets } from '#/domain/hetzner/service-env.ts'
 import { buildServiceUpstreams } from '#/domain/hetzner/service-upstreams.ts'
 import { buildObservabilityUpstreams } from '#/domain/monitoring/observability-upstreams.ts'
 import { POSTGRES_SIDECAR_SERVICE_NAME } from '#/domain/services/postgres.ts'

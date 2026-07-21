@@ -1,5 +1,5 @@
 import { computeSiteUrl } from '#/domain/deploy/domain.ts'
-import { buildServiceUrlEnv } from '#/domain/hetzner/service-env.ts'
+import { buildServiceUrlEnv } from '#/domain/deploy/service-env.ts'
 
 import { buildWorkersBackingEnv } from './outputs-env.ts'
 

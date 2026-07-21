@@ -6,7 +6,7 @@ import { computeSmokeCheckUrls } from '#/domain/cloudflare/workers/smoke-check.t
 import { buildWorkerVars } from '#/domain/cloudflare/workers/worker-vars.ts'
 import { buildWranglerConfig } from '#/domain/cloudflare/workers/wrangler-config.ts'
 import { computeSiteUrl } from '#/domain/deploy/domain.ts'
-import { buildServiceSecretEnv } from '#/domain/hetzner/service-env.ts'
+import { buildServiceSecretEnv } from '#/domain/deploy/service-env.ts'
 
 import { injectSeoGuardAssets } from './seo-guard-assets.ts'
 import { smokeCheckWorkers } from './smoke-check.ts'
