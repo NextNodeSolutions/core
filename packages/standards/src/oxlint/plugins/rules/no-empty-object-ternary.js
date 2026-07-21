@@ -1,8 +1,8 @@
 /**
  * Forbid a ternary with an empty-object branch (`cond ? {} : {...}` or its
  * mirror). The `{}` exists only to spread nothing when the guard fails: it is
- * a conditional object spread written the long way. Fold it into the target
- * literal with `...(cond && { ... })` instead.
+ * a conditional object spread written the long way. Extract an early-return
+ * helper returning `T | undefined` and spread its result instead.
  */
 const isEmptyObject = node =>
 	node.type === 'ObjectExpression' && node.properties.length === 0
@@ -12,11 +12,11 @@ export const noEmptyObjectTernary = {
 		type: 'suggestion',
 		docs: {
 			description:
-				'Disallow a ternary with an empty-object branch; fold it into a conditional spread `...(cond && { ... })`',
+				'Disallow a ternary with an empty-object branch; extract an early-return helper returning `T | undefined` and spread it',
 		},
 		messages: {
 			emptyObjectTernary:
-				'A ternary with an empty-object branch is a conditional spread in disguise. Use `...(cond && { ... })` inside the object literal instead.',
+				'A ternary with an empty-object branch is a conditional spread in disguise. Extract an early-return helper returning `T | undefined` and spread its result instead.',
 		},
 		schema: [],
 	},

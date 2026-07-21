@@ -114,6 +114,7 @@ export default defineConfig({
 		'nextnode/no-grab-bag-files': 'error',
 		'nextnode/no-nullish-ternary-return': 'error',
 		'nextnode/no-empty-object-ternary': 'error',
+		'nextnode/no-sentinel-consequent': 'error',
 	},
 	overrides: [
 		{
