@@ -10,6 +10,7 @@ import { noEmDash } from './rules/no-em-dash.js'
 import { noEnum } from './rules/no-enum.js'
 import { noGenericNames } from './rules/no-generic-names.js'
 import { noGrabBagFiles } from './rules/no-grab-bag-files.js'
+import { noNullishTernaryReturn } from './rules/no-nullish-ternary-return.js'
 import { noTypeAssertion } from './rules/no-type-assertion.js'
 import { noUseEffect } from './rules/no-use-effect.js'
 
@@ -28,6 +29,7 @@ const plugin = {
 		'max-props': maxProps,
 		'component-filename-match': componentFilenameMatch,
 		'no-grab-bag-files': noGrabBagFiles,
+		'no-nullish-ternary-return': noNullishTernaryReturn,
 	},
 }
 

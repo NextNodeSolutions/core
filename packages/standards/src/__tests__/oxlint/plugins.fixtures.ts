@@ -277,4 +277,25 @@ export { Modal }
 `,
 		goodFile: 'tax.good.ts',
 	},
+
+	// coding RULE 1 - a ternary returning null/undefined is a guard clause in disguise
+	{
+		rule: 'nextnode(no-nullish-ternary-return)',
+		severity: 'error',
+		bad: `export function parse(row: string | undefined): string | null {
+	return row === undefined ? null : row.trim()
+}
+`,
+		// nullish on the other branch, spelled as \`undefined\`, still fires
+		edge: `export function pick(value: string): string | undefined {
+	return value ? value : undefined
+}
+`,
+		edgeExpect: 'fire',
+		good: `export function parse(row: string | undefined): string | null {
+	if (row === undefined) return null
+	return row.trim()
+}
+`,
+	},
 ]
