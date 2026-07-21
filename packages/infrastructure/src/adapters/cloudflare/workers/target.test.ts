@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 
 import { okEmpty, notFound } from '#/test-fetch.ts'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { CloudflareWorkersTarget } from './target.ts'
 
@@ -152,6 +152,7 @@ function stubHcp(): ReturnType<typeof vi.fn<FetchImpl>> {
 afterEach(() => {
 	vi.unstubAllGlobals()
 	vi.restoreAllMocks()
+	vi.useRealTimers()
 })
 
 describe('CloudflareWorkersTarget.contributeEnv', () => {
@@ -394,6 +395,14 @@ function makeDeployWrangler(
 }
 
 describe('CloudflareWorkersTarget.deploy', () => {
+	// Every routed service is smoke-checked on /healthz after deploy; stub it
+	// healthy by default so the deploy assertions below are not gated on it.
+	let healthzMock: ReturnType<typeof vi.fn<FetchImpl>>
+	beforeEach(() => {
+		healthzMock = vi.fn<FetchImpl>(() => Promise.resolve(okEmpty()))
+		vi.stubGlobal('fetch', healthzMock)
+	})
+
 	it('deploys services in depends_on order (dependency first)', async () => {
 		const terraform = makeRunner()
 		const { runner, deployed } = makeDeployWrangler()
@@ -505,6 +514,26 @@ describe('CloudflareWorkersTarget.deploy', () => {
 		await expect(
 			target.deploy('my-worker', DEPLOY_INPUT, DEPLOY_ENV),
 		).rejects.toThrow('needs the project directory')
+	})
+
+	it('smoke-checks each routed service on /healthz after deploying', async () => {
+		const { runner } = makeDeployWrangler()
+		const target = buildDeployTarget({
+			services: {
+				web: worker({ url: 'example.com' }),
+				queue: worker(),
+			},
+			terraform: makeRunner(),
+			wrangler: runner,
+		})
+
+		await target.deploy('my-worker', DEPLOY_INPUT, DEPLOY_ENV)
+
+		expect(healthzMock).toHaveBeenCalledTimes(1)
+		expect(healthzMock).toHaveBeenCalledWith(
+			'https://example.com/healthz',
+			expect.objectContaining({ method: 'GET' }),
+		)
 	})
 })
 
@@ -701,6 +730,13 @@ function makeEnvWrangler(): {
 }
 
 describe('CloudflareWorkersTarget.deploy env & secrets', () => {
+	beforeEach(() => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn<FetchImpl>(() => Promise.resolve(okEmpty())),
+		)
+	})
+
 	it('injects SITE_URL + peer URLs + needs-filtered backing vars into each config', async () => {
 		const { runner, deploys } = makeEnvWrangler()
 		const target = buildDeployTarget({

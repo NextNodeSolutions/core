@@ -1,5 +1,6 @@
 import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
 
+import { deriveWorkerAssetsDirectory } from './assets-directory.ts'
 import { deriveWorkersBackingConfig } from './outputs-env.ts'
 import { computeWorkerScriptName } from './worker-name.ts'
 import {
@@ -25,11 +26,6 @@ import type {
 	WranglerR2Bucket,
 	WranglerRoute,
 } from './wrangler-document.ts'
-
-// The segment @astrojs/cloudflare (and the wider _worker.js convention) emits:
-// the bundle lives at `<dir>/_worker.js/index.js` and the static assets at
-// `<dir>`. Splitting on it recovers the assets directory from the entry.
-const WORKER_ENTRY_MARKER = '/_worker.js/'
 
 export interface WranglerConfigInput {
 	readonly projectName: string
@@ -65,12 +61,9 @@ function requireOutput(emitted: string | undefined, what: string): string {
 }
 
 function detectAssets(entry: string): WranglerAssets | undefined {
-	const markerIndex = entry.indexOf(WORKER_ENTRY_MARKER)
-	if (markerIndex <= 0) return undefined
-	return {
-		directory: entry.slice(0, markerIndex),
-		binding: WORKERS_ASSETS_BINDING,
-	}
+	const directory = deriveWorkerAssetsDirectory(entry)
+	if (directory === undefined) return undefined
+	return { directory, binding: WORKERS_ASSETS_BINDING }
 }
 
 function buildRoutes(

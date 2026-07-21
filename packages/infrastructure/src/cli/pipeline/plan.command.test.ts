@@ -100,6 +100,46 @@ describe('planCommand', () => {
 		expect(output).toContain('domain=example.com\n')
 		expect(output).toContain('image_source=\n')
 		expect(output).toContain('upstream_image_refs=\n')
+		expect(output).toContain('build_directory=apps/landing/dist\n')
+	})
+
+	it('emits an empty build_directory when the routed worker ships no static assets', () => {
+		const config: NextNodeConfig = {
+			project: {
+				name: 'my-api',
+				type: 'app',
+				filter: false,
+				domain: 'example.com',
+				redirectDomains: [],
+				internal: false,
+			},
+			scripts: { lint: 'lint', test: 'test', build: 'build' },
+			package: false,
+			environment: { development: true },
+			services: {},
+			deploy: {
+				target: 'cloudflare-workers',
+				generatedSecrets: [],
+				secrets: [],
+				vps: null,
+				volumes: [],
+				services: {
+					api: {
+						url: 'api.example.com',
+						secrets: [],
+						needs: [],
+						dependsOn: [],
+						entry: 'src/index.ts',
+					},
+				},
+				cron: [],
+			},
+		}
+
+		planCommand(config)
+
+		const output = readFileSync(outputFile, 'utf-8')
+		expect(output).toContain('build_directory=\n')
 	})
 
 	it('writes plan outputs for a package project', () => {

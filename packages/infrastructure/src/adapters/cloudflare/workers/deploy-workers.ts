@@ -2,10 +2,13 @@ import { wranglerDeploy } from '#/adapters/wrangler/deploy.ts'
 import { defaultWranglerRunner } from '#/adapters/wrangler/runner.ts'
 import { orderServicesByDependsOn } from '#/domain/cloudflare/workers/depends-on-order.ts'
 import { deriveWorkersBackingConfig } from '#/domain/cloudflare/workers/outputs-env.ts'
+import { computeSmokeCheckUrls } from '#/domain/cloudflare/workers/smoke-check.ts'
 import { buildWorkerVars } from '#/domain/cloudflare/workers/worker-vars.ts'
 import { buildWranglerConfig } from '#/domain/cloudflare/workers/wrangler-config.ts'
 import { computeSiteUrl } from '#/domain/deploy/domain.ts'
 import { buildServiceSecretEnv } from '#/domain/hetzner/service-env.ts'
+
+import { smokeCheckWorkers } from './smoke-check.ts'
 
 import type { WranglerRunner } from '#/adapters/wrangler/runner.ts'
 import type {
@@ -39,6 +42,9 @@ export interface WorkersDeployInput {
 	readonly wranglerRunner: WranglerRunner | undefined
 	// The project package dir `wrangler deploy` runs from.
 	readonly projectDir: string
+	// Injection point for tests; production waits with a real timer between
+	// post-deploy smoke-check retries.
+	readonly smokeCheckSleep?: ((ms: number) => Promise<void>) | undefined
 }
 
 function workerUrl(
@@ -94,8 +100,10 @@ function buildServiceDocument(
  * service's ephemeral wrangler config is generated in the domain and written by
  * the adapter; its projected secrets are then bulk-uploaded against the same
  * config (worker must exist first). A failed deploy throws and stops the run
- * (later services are not deployed). Returns a single `worker`
- * deployed-environment carrying every service's resolved URL for the summary.
+ * (later services are not deployed). Once every service is deployed, each routed
+ * service is smoke-checked on `/healthz` (bounded retries); an unhealthy service
+ * throws so the deploy job fails. Returns a single `worker` deployed-environment
+ * carrying every service's resolved URL for the summary.
  */
 export async function deployWorkers(
 	input: WorkersDeployInput,
@@ -127,6 +135,11 @@ export async function deployWorkers(
 			url: workerUrl(service, input.environment),
 		})
 	}
+
+	await smokeCheckWorkers(
+		computeSmokeCheckUrls(input.services, input.environment),
+		{ sleep: input.smokeCheckSleep },
+	)
 
 	return {
 		projectName: input.projectName,

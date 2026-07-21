@@ -8,6 +8,7 @@ import { writePlanOutputs } from '#/adapters/github/plan-outputs.ts'
 import { getEnv, requireEnv } from '#/cli/env.ts'
 import { isDeployable } from '#/config/types.ts'
 import { computePagesProjectName } from '#/domain/cloudflare/pages-project-name.ts'
+import { computeWorkersBuildDirectory } from '#/domain/cloudflare/workers/assets-directory.ts'
 import { resolveEnvironment } from '#/domain/environment.ts'
 import { buildQualityMatrix } from '#/domain/pipeline/quality-matrix.ts'
 
@@ -33,7 +34,7 @@ export function planCommand(config: NextNodeConfig): void {
 	)
 
 	const packageDir = computePackageDir()
-	const buildDirectory = join(packageDir, DEFAULT_BUILD_OUTPUT)
+	const buildDirectory = resolveBuildDirectory(config, packageDir)
 
 	logger.info(`Project: ${config.project.name}`)
 	logger.info(`Environment: ${environment}`)
@@ -64,4 +65,22 @@ function computePackageDir(): string {
 	const configFilePath = requireEnv('PIPELINE_CONFIG_FILE')
 	const workspace = getEnv('GITHUB_WORKSPACE') ?? process.cwd()
 	return relative(workspace, dirname(configFilePath))
+}
+
+// A cloudflare-workers deploy serves `_headers`/`robots.txt` (the SEO guard)
+// from the primary routed service's static-assets directory, not the fixed
+// `dist`; an assets-less API Worker yields an empty directory so the CI SEO
+// step is skipped. Every other target keeps the conventional build output.
+function resolveBuildDirectory(
+	config: NextNodeConfig,
+	packageDir: string,
+): string {
+	if (
+		config.deploy !== false &&
+		config.deploy.target === 'cloudflare-workers'
+	) {
+		const assetsDir = computeWorkersBuildDirectory(config.deploy.services)
+		return assetsDir === '' ? '' : join(packageDir, assetsDir)
+	}
+	return join(packageDir, DEFAULT_BUILD_OUTPUT)
 }
