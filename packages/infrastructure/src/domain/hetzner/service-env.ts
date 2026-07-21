@@ -1,7 +1,17 @@
 import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
 
-import type { UserServiceConfig } from '#/config/types.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
+
+// Structural minima these projections need, so the same primitives drive both a
+// Hetzner `UserServiceConfig` (a container) and a `WorkerServiceConfig` (not a
+// container) without either layer depending on the other's full shape.
+interface UrlBearingService {
+	readonly url?: string
+}
+interface LeastPrivilegeService {
+	readonly secrets: ReadonlyArray<string>
+	readonly needs: ReadonlyArray<string>
+}
 
 const URL_ENV_SUFFIX = '_URL'
 // Service `url`s are bare hostnames (validated against project.domain). The
@@ -32,7 +42,7 @@ function toUrlEnvKey(serviceName: string): string {
  * symmetric injection removes the "who knows about whom" coupling.
  */
 export function buildServiceUrlEnv(
-	services: Readonly<Record<string, UserServiceConfig>>,
+	services: Readonly<Record<string, UrlBearingService>>,
 	environment: AppEnvironment,
 ): Record<string, string> {
 	const urlEnv: Record<string, string> = {}
@@ -56,7 +66,7 @@ export function buildServiceUrlEnv(
  * separately - see `selectBackingSecrets`.
  */
 export function buildServiceSecretEnv(
-	services: Readonly<Record<string, UserServiceConfig>>,
+	services: Readonly<Record<string, LeastPrivilegeService>>,
 	secrets: Readonly<Record<string, string>>,
 	origins: Readonly<Record<string, string>>,
 ): Record<string, Record<string, string>> {
@@ -84,7 +94,7 @@ export function buildServiceSecretEnv(
  * `needs = ["postgres"]`, never a front service that does not (no broadcast).
  */
 function projectSecretsForService(
-	service: UserServiceConfig,
+	service: LeastPrivilegeService,
 	secrets: Readonly<Record<string, string>>,
 	origins: Readonly<Record<string, string>>,
 ): Record<string, string> {

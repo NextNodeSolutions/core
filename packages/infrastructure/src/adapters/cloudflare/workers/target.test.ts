@@ -506,6 +506,199 @@ describe('CloudflareWorkersTarget.deploy', () => {
 	})
 })
 
+// A wrangler runner that records deploy calls (worker name + generated vars, read
+// while the ephemeral config still exists) and secret bulk calls (worker name +
+// stdin JSON), each tagged with its invocation order.
+function makeEnvWrangler(): {
+	readonly runner: ReturnType<typeof vi.fn<WranglerRunner>>
+	readonly deploys: Array<{
+		name: string
+		vars: Record<string, string>
+		order: number
+	}>
+	readonly bulks: Array<{
+		name: string
+		secrets: Record<string, string>
+		order: number
+	}>
+} {
+	const deploys: Array<{
+		name: string
+		vars: Record<string, string>
+		order: number
+	}> = []
+	const bulks: Array<{
+		name: string
+		secrets: Record<string, string>
+		order: number
+	}> = []
+	let order = 0
+	const runner = vi.fn<WranglerRunner>(async (args, options) => {
+		const current = order++
+		if (args[0] === 'secret') {
+			const document: { name: string } = JSON.parse(
+				readFileSync(args[3] ?? '', 'utf8'),
+			)
+			bulks.push({
+				name: document.name,
+				secrets: JSON.parse(options?.stdin ?? '{}'),
+				order: current,
+			})
+			return ok()
+		}
+		const document: { name: string; vars?: Record<string, string> } =
+			JSON.parse(readFileSync(args[2] ?? '', 'utf8'))
+		deploys.push({
+			name: document.name,
+			vars: document.vars ?? {},
+			order: current,
+		})
+		return ok()
+	})
+	return { runner, deploys, bulks }
+}
+
+describe('CloudflareWorkersTarget.deploy env & secrets', () => {
+	it('injects SITE_URL + peer URLs + needs-filtered backing vars into each config', async () => {
+		const { runner, deploys } = makeEnvWrangler()
+		const target = buildDeployTarget({
+			services: {
+				web: worker({ url: 'example.com', needs: ['d1'] }),
+				api: worker(),
+			},
+			backing: BACKING_SERVICES,
+			terraform: makeRunner(),
+			wrangler: runner,
+		})
+
+		await target.deploy('my-worker', DEPLOY_INPUT, DEPLOY_ENV)
+
+		const web = deploys.find(d => d.name === 'my-worker-production-web')
+		expect(web?.vars).toEqual({
+			SITE_URL: 'https://example.com',
+			WEB_URL: 'https://example.com',
+			D1_DATABASE_ID: 'db-uuid',
+		})
+		const api = deploys.find(d => d.name === 'my-worker-production-api')
+		// api needs nothing (no backing vars) but still sees the routed peer.
+		expect(api?.vars).toEqual({
+			SITE_URL: 'https://example.com',
+			WEB_URL: 'https://example.com',
+		})
+	})
+
+	it('runs secret bulk after the service deploy, with the projected secrets on stdin', async () => {
+		const { runner, deploys, bulks } = makeEnvWrangler()
+		const target = buildDeployTarget({
+			services: {
+				web: worker({ url: 'example.com', secrets: ['JWT_SECRET'] }),
+			},
+			terraform: makeRunner(),
+			wrangler: runner,
+		})
+
+		await target.deploy(
+			'my-worker',
+			{
+				secrets: { JWT_SECRET: 'jwt-val' },
+				secretOrigins: {},
+				registryToken: undefined,
+			},
+			DEPLOY_ENV,
+		)
+
+		expect(bulks).toEqual([
+			{
+				name: 'my-worker-production-web',
+				secrets: { JWT_SECRET: 'jwt-val' },
+				order: expect.any(Number),
+			},
+		])
+		const webDeploy = deploys.find(
+			d => d.name === 'my-worker-production-web',
+		)
+		expect(webDeploy?.order).toBeLessThan(bulks[0]?.order ?? -1)
+	})
+
+	it('projects each secret least-privilege: global to all, own only to its declarer', async () => {
+		const { runner, bulks } = makeEnvWrangler()
+		const target = buildDeployTarget({
+			services: {
+				// GLOBAL_SECRET is folded into every service upstream; RESEND is api-only.
+				web: worker({ url: 'example.com', secrets: ['GLOBAL_SECRET'] }),
+				api: worker({ secrets: ['GLOBAL_SECRET', 'RESEND_API_KEY'] }),
+			},
+			terraform: makeRunner(),
+			wrangler: runner,
+		})
+
+		await target.deploy(
+			'my-worker',
+			{
+				secrets: {
+					GLOBAL_SECRET: 'g-val',
+					RESEND_API_KEY: 'r-val',
+				},
+				secretOrigins: {},
+				registryToken: undefined,
+			},
+			DEPLOY_ENV,
+		)
+
+		const byName = Object.fromEntries(bulks.map(b => [b.name, b.secrets]))
+		expect(byName['my-worker-production-web']).toEqual({
+			GLOBAL_SECRET: 'g-val',
+		})
+		expect(byName['my-worker-production-api']).toEqual({
+			GLOBAL_SECRET: 'g-val',
+			RESEND_API_KEY: 'r-val',
+		})
+	})
+
+	it('makes no secret bulk call for a service that declares no secrets', async () => {
+		const { runner, bulks } = makeEnvWrangler()
+		const target = buildDeployTarget({
+			services: { web: worker({ url: 'example.com' }) },
+			terraform: makeRunner(),
+			wrangler: runner,
+		})
+
+		await target.deploy('my-worker', DEPLOY_INPUT, DEPLOY_ENV)
+
+		expect(bulks).toEqual([])
+	})
+
+	it('throws the wrangler secret bulk stderr when the bulk upload fails', async () => {
+		const runner = vi.fn<WranglerRunner>(async args => {
+			if (args[0] === 'secret') {
+				return { exitCode: 1, stdout: '', stderr: 'bulk-boom' }
+			}
+			return ok()
+		})
+		const target = buildDeployTarget({
+			services: {
+				web: worker({ url: 'example.com', secrets: ['JWT_SECRET'] }),
+			},
+			terraform: makeRunner(),
+			wrangler: runner,
+		})
+
+		await expect(
+			target.deploy(
+				'my-worker',
+				{
+					secrets: { JWT_SECRET: 'jwt-val' },
+					secretOrigins: {},
+					registryToken: undefined,
+				},
+				DEPLOY_ENV,
+			),
+		).rejects.toThrow(
+			'wrangler secret bulk (worker "my-worker-production-web") failed',
+		)
+	})
+})
+
 describe('CloudflareWorkersTarget.teardown', () => {
 	it('deletes every worker script, then runs terraform destroy', async () => {
 		const terraform = makeRunner()

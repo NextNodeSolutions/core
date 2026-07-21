@@ -19,6 +19,11 @@ export interface WranglerDeployInput {
 	// The project package directory (where the built bundle + assets live).
 	// wrangler runs here and the absolutised paths resolve against it.
 	readonly cwd: string
+	// This worker's secrets as a JSON object (name -> value), uploaded via
+	// `wrangler secret bulk` against the SAME ephemeral config right after the
+	// deploy (the worker must exist first). Omitted when the worker declares no
+	// secrets, so no bulk call is made and no secret ever touches argv or disk.
+	readonly secretsJson?: string
 }
 
 function absolutise(path: string, cwd: string): string {
@@ -78,7 +83,49 @@ export async function wranglerDeploy(
 			)
 		}
 		logger.info(`wrangler deploy "${input.document.name}" completed`)
+		if (input.secretsJson !== undefined) {
+			await wranglerSecretBulk(
+				configPath,
+				input.secretsJson,
+				input.runner,
+				{
+					cwd: input.cwd,
+					workerName: input.document.name,
+				},
+			)
+		}
 	} finally {
 		await rm(dir, { recursive: true, force: true })
 	}
+}
+
+export interface WranglerSecretBulkOptions {
+	readonly cwd: string
+	readonly workerName: string
+}
+
+/**
+ * Bulk-upload a worker's secrets with `wrangler secret bulk --config`, reading
+ * the JSON object (name -> value) from STDIN - never argv (a secret in argv
+ * leaks to `ps` and CI logs) and never a file. Runs against the same ephemeral
+ * config the deploy used, so the target worker is unambiguous. A non-zero exit
+ * throws the wrangler stderr verbatim.
+ */
+export async function wranglerSecretBulk(
+	configPath: string,
+	secretsJson: string,
+	runner: WranglerRunner,
+	options: WranglerSecretBulkOptions,
+): Promise<void> {
+	logger.info(`wrangler secret bulk "${options.workerName}" started`)
+	const bulkExec = await runner(['secret', 'bulk', '--config', configPath], {
+		cwd: options.cwd,
+		stdin: secretsJson,
+	})
+	if (bulkExec.exitCode !== 0) {
+		throw new Error(
+			`wrangler secret bulk (worker "${options.workerName}") failed (exit ${String(bulkExec.exitCode)}):\n${bulkExec.stderr}`,
+		)
+	}
+	logger.info(`wrangler secret bulk "${options.workerName}" completed`)
 }

@@ -153,7 +153,6 @@ export class CloudflareWorkersTarget implements DeployTarget {
 		input: DeployInput,
 		env: DeployEnv,
 	): Promise<DeployResult> {
-		void input
 		void env
 		const outputs = await this.loadDeployOutputs()
 		return deployWorkers({
@@ -164,6 +163,9 @@ export class CloudflareWorkersTarget implements DeployTarget {
 			backingServices: this.config.services,
 			cron: this.config.deploy.cron,
 			outputs,
+			secrets: input.secrets,
+			secretOrigins: input.secretOrigins,
+			accountId: this.accountId,
 			wranglerRunner: this.wrangler,
 			projectDir: this.requireProjectDir(),
 		})
