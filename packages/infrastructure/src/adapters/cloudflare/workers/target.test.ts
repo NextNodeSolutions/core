@@ -66,7 +66,7 @@ function buildConfig(
 					secrets: [],
 					needs: [],
 					dependsOn: [],
-					entry: 'dist/_worker.js/index.js',
+					entry: 'dist/server/entry.mjs',
 				},
 			},
 			cron: [],
@@ -124,7 +124,7 @@ function buildTeardownTarget(input: {
 				secrets: [],
 				needs: [],
 				dependsOn: [],
-				entry: 'dist/_worker.js/index.js',
+				entry: 'dist/server/entry.mjs',
 			},
 		]),
 	)
@@ -391,7 +391,7 @@ const worker = (
 	secrets: [],
 	needs: [],
 	dependsOn: [],
-	entry: 'dist/_worker.js/index.js',
+	entry: 'dist/server/entry.mjs',
 	...overrides,
 })
 

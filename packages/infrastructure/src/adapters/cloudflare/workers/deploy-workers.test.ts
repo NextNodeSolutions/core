@@ -27,7 +27,7 @@ const worker = (
 	secrets: [],
 	needs: [],
 	dependsOn: [],
-	entry: 'dist/_worker.js/index.js',
+	entry: 'dist/server/entry.mjs',
 	...overrides,
 })
 
@@ -100,8 +100,8 @@ describe('deployWorkers smoke check', () => {
 	})
 })
 
-const GUARD_HEADERS = join('dist', '_headers')
-const GUARD_ROBOTS = join('dist', 'robots.txt')
+const GUARD_HEADERS = join('dist', 'client', '_headers')
+const GUARD_ROBOTS = join('dist', 'client', 'robots.txt')
 
 describe('deployWorkers SEO guard injection', () => {
 	let projectDir: string
@@ -131,7 +131,7 @@ describe('deployWorkers SEO guard injection', () => {
 	}
 
 	it('injects _headers + robots.txt into each asset dir before the deploy in non-prod', async () => {
-		mkdirSync(join(projectDir, 'dist'), { recursive: true })
+		mkdirSync(join(projectDir, 'dist', 'client'), { recursive: true })
 		mkdirSync(join(projectDir, 'admin'), { recursive: true })
 		const guardExistsAtDeploy: Array<{ name: string; present: boolean }> =
 			[]

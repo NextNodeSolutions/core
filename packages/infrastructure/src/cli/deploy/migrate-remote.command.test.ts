@@ -446,7 +446,7 @@ const WORKERS_APP_WITH_D1: CloudflareWorkersDeployableConfig = {
 				secrets: [],
 				needs: ['d1'],
 				dependsOn: [],
-				entry: 'dist/_worker.js/index.js',
+				entry: 'dist/server/entry.mjs',
 			},
 		},
 	},

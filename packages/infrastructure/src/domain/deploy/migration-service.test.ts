@@ -20,7 +20,7 @@ const worker = (needs: string[]): WorkerServiceConfig => ({
 	secrets: [],
 	needs,
 	dependsOn: [],
-	entry: 'dist/_worker.js/index.js',
+	entry: 'dist/server/entry.mjs',
 })
 
 describe('resolveMigrationServiceName', () => {

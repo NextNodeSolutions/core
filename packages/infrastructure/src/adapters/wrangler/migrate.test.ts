@@ -9,7 +9,7 @@ import type { WranglerRunner } from './runner.ts'
 
 const DOCUMENT: WranglerDocument = {
 	name: 'proj-production-api',
-	main: 'dist/_worker.js/index.js',
+	main: 'dist/server/entry.mjs',
 	compatibility_date: '2026-06-01',
 	compatibility_flags: ['nodejs_compat'],
 	d1_databases: [
@@ -91,7 +91,7 @@ describe('wranglerD1MigrationsApply', () => {
 		})
 
 		const { written } = captured()
-		expect(written.main).toBe('/project/app/dist/_worker.js/index.js')
+		expect(written.main).toBe('/project/app/dist/server/entry.mjs')
 		expect(written.d1_databases?.[0]?.migrations_dir).toBe(
 			'/project/app/drizzle',
 		)

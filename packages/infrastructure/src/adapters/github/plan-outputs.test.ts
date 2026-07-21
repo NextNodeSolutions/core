@@ -370,7 +370,7 @@ describe('writePlanOutputs', () => {
 						secrets: [],
 						needs: [],
 						dependsOn: [],
-						entry: 'dist/_worker.js/index.js',
+						entry: 'dist/server/entry.mjs',
 					},
 				},
 			},

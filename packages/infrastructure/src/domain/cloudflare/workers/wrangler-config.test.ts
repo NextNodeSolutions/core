@@ -38,7 +38,7 @@ const service = (
 	secrets: [],
 	needs: [],
 	dependsOn: [],
-	entry: 'dist/_worker.js/index.js',
+	entry: 'dist/server/entry.mjs',
 	...overrides,
 })
 
@@ -62,7 +62,7 @@ describe('buildWranglerConfig', () => {
 		const document = buildWranglerConfig(input({ serviceName: 'api' }))
 
 		expect(document.name).toBe('proj-production-api')
-		expect(document.main).toBe('dist/_worker.js/index.js')
+		expect(document.main).toBe('dist/server/entry.mjs')
 		expect(document.compatibility_date).toBe(
 			DEFAULT_WORKERS_COMPATIBILITY_DATE,
 		)
@@ -102,8 +102,19 @@ describe('buildWranglerConfig', () => {
 		expect(document.workers_dev).toBe(false)
 	})
 
-	it('derives the assets directory from the _worker.js entry convention', () => {
+	it('derives the assets directory from the @astrojs/cloudflare v14 server entry', () => {
 		const document = buildWranglerConfig(input())
+
+		expect(document.assets).toEqual({
+			directory: 'dist/client',
+			binding: 'ASSETS',
+		})
+	})
+
+	it('derives the assets directory from the historic _worker.js entry convention', () => {
+		const document = buildWranglerConfig(
+			input({ service: service({ entry: 'dist/_worker.js/index.js' }) }),
+		)
 
 		expect(document.assets).toEqual({
 			directory: 'dist',
@@ -111,9 +122,9 @@ describe('buildWranglerConfig', () => {
 		})
 	})
 
-	it('emits no assets when the entry does not match the convention', () => {
+	it('emits no assets when the entry does not match a convention', () => {
 		const document = buildWranglerConfig(
-			input({ service: service({ entry: 'build/server.js' }) }),
+			input({ service: service({ entry: 'build/api.js' }) }),
 		)
 
 		expect(document.assets).toBeUndefined()

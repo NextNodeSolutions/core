@@ -81,10 +81,11 @@ export const DEPLOY_TARGETS = [
 ] as const
 export type DeployTargetType = (typeof DEPLOY_TARGETS)[number]
 
-// Default `main` for a generated wrangler config: the entry a Worker exposing
-// static assets ships at, matching @astrojs/cloudflare's `dist/_worker.js/`
-// output. Overridable per service once US-1.2 lands the workers service schema.
-export const DEFAULT_WORKER_ENTRY = 'dist/_worker.js/index.js'
+// Default `main` for a generated wrangler config: the entry @astrojs/cloudflare
+// v14 (the only major compatible with astro 7) emits, `dist/server/entry.mjs`,
+// with its twin static-assets directory at `dist/client`. Overridable per
+// service through the workers service schema.
+export const DEFAULT_WORKER_ENTRY = 'dist/server/entry.mjs'
 
 export interface HetznerDeployConfig {
 	readonly serverType: string

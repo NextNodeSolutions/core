@@ -149,21 +149,21 @@ describe('loadConfig', () => {
 					secrets: ['JWT_SECRET'],
 					needs: [],
 					dependsOn: [],
-					entry: 'dist/_worker.js/index.js',
+					entry: 'dist/server/entry.mjs',
 				},
 				back: {
 					url: 'api.studiobymina.com',
 					secrets: ['JWT_SECRET', 'RESEND_API_KEY'],
 					needs: ['d1'],
 					dependsOn: [],
-					entry: 'dist/_worker.js/index.js',
+					entry: 'dist/server/entry.mjs',
 				},
 				admin: {
 					url: 'admin.studiobymina.com',
 					secrets: ['JWT_SECRET'],
 					needs: [],
 					dependsOn: [],
-					entry: 'dist/_worker.js/index.js',
+					entry: 'dist/server/entry.mjs',
 				},
 			},
 		})
@@ -246,7 +246,7 @@ describe('parseConfig', () => {
 						secrets: [],
 						needs: [],
 						dependsOn: [],
-						entry: 'dist/_worker.js/index.js',
+						entry: 'dist/server/entry.mjs',
 					},
 				},
 			})
@@ -1927,7 +1927,7 @@ describe('parseConfig', () => {
 			if (parsed.config.deploy.target !== 'cloudflare-workers') return
 
 			expect(parsed.config.deploy.services['web']?.entry).toBe(
-				'dist/_worker.js/index.js',
+				'dist/server/entry.mjs',
 			)
 		})
 
@@ -1962,7 +1962,7 @@ describe('parseConfig', () => {
 				secrets: [],
 				needs: [],
 				dependsOn: [],
-				entry: 'dist/_worker.js/index.js',
+				entry: 'dist/server/entry.mjs',
 			})
 		})
 

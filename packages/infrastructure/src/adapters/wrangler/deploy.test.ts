@@ -9,10 +9,10 @@ import type { ExecResult, WranglerRunner } from './runner.ts'
 
 const DOCUMENT: WranglerDocument = {
 	name: 'proj-production-web',
-	main: 'dist/_worker.js/index.js',
+	main: 'dist/server/entry.mjs',
 	compatibility_date: '2026-06-01',
 	compatibility_flags: ['nodejs_compat'],
-	assets: { directory: 'dist', binding: 'ASSETS' },
+	assets: { directory: 'dist/client', binding: 'ASSETS' },
 }
 
 interface Captured {
@@ -62,8 +62,8 @@ describe('wranglerDeploy', () => {
 		const call = captured()
 		expect(call.args.slice(0, 2)).toEqual(['deploy', '--config'])
 		expect(call.cwd).toBe('/project/app')
-		expect(call.written.main).toBe('/project/app/dist/_worker.js/index.js')
-		expect(call.written.assets?.directory).toBe('/project/app/dist')
+		expect(call.written.main).toBe('/project/app/dist/server/entry.mjs')
+		expect(call.written.assets?.directory).toBe('/project/app/dist/client')
 	})
 
 	it('removes the ephemeral config file after a successful deploy', async () => {

@@ -16,8 +16,8 @@ export const WORKERS_COMPATIBILITY_FLAGS = ['nodejs_compat'] as const
 
 /**
  * The binding a Worker reads its static-asset fetcher under (`env.ASSETS`). Set
- * whenever the service ships assets (the @astrojs/cloudflare `_worker.js/`
- * convention).
+ * whenever the service ships assets (the @astrojs/cloudflare `server`/`client`
+ * convention, or the historic `_worker.js/` one).
  */
 export const WORKERS_ASSETS_BINDING = 'ASSETS'
 
