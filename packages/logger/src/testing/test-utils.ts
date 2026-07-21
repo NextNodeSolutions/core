@@ -88,9 +88,7 @@ export const createSpyLogger = (
 			message,
 			object,
 			defaultRequestId: instanceRequestId,
-			...(typeof parentScope !== 'undefined' && {
-				defaultScope: parentScope,
-			}),
+			...(parentScope && { defaultScope: parentScope }),
 		})
 		calls.push(entry)
 	}
