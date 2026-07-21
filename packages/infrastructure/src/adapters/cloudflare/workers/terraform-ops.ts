@@ -11,7 +11,7 @@ import {
 	writeTerraformConfig,
 } from '#/adapters/terraform/runner.ts'
 import { parseTerraformOutputs } from '#/domain/cloudflare/workers/outputs-env.ts'
-import { buildTerraformMainConfig } from '#/domain/deploy/terraform-config.ts'
+import { buildTerraformMainConfig } from '#/domain/cloudflare/workers/terraform-config.ts'
 
 import type { TerraformRunner } from '#/adapters/terraform/runner.ts'
 import type { CloudflareWorkersDeployableConfig } from '#/config/types.ts'

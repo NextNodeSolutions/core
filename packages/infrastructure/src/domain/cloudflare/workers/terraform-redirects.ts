@@ -1,4 +1,5 @@
-import { computeSiteUrl } from './domain.ts'
+import { computeSiteUrl } from '#/domain/deploy/domain.ts'
+
 import { redirectZoneLabel, toTerraformLabel } from './terraform-labels.ts'
 
 import type { AppEnvironment } from '#/domain/environment.ts'

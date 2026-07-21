@@ -7,7 +7,7 @@ import { parseJsonOrThrow } from '#/kernel/json.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
 import type { ExecFileException } from 'node:child_process'
-import type { TerraformMainConfig } from '#/domain/deploy/terraform-config.ts'
+import type { TerraformMainConfig } from '#/domain/cloudflare/workers/terraform-config.ts'
 
 const logger = createLogger()
 

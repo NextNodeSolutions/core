@@ -1,11 +1,11 @@
 import { R2_BUCKET_LOCATION_HINT } from '#/config/types.ts'
 import { computeR2CustomDomainHostname } from '#/domain/cloudflare/r2/custom-domain.ts'
+import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
 import {
 	computeR2BucketName,
 	computeR2ServiceBuckets,
 } from '#/domain/services/r2.ts'
 
-import { resolveDeployDomain } from './domain.ts'
 import {
 	indexBy,
 	redirectZoneLabel,

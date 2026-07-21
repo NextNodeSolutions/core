@@ -11,9 +11,9 @@ import {
 	deriveWorkersBackingConfig,
 	hasWorkersBacking,
 } from '#/domain/cloudflare/workers/outputs-env.ts'
+import { HCP_TERRAFORM_ORGANIZATION } from '#/domain/cloudflare/workers/terraform-config.ts'
 import { computeSiteUrl } from '#/domain/deploy/domain.ts'
 import { executeHandlers } from '#/domain/deploy/execute-handlers.ts'
-import { HCP_TERRAFORM_ORGANIZATION } from '#/domain/deploy/terraform-config.ts'
 
 import { deployWorkers } from './deploy-workers.ts'
 import { migrateWorkers } from './migrate-workers.ts'
