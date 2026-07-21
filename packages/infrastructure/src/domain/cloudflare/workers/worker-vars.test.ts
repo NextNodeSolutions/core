@@ -20,6 +20,7 @@ const worker = (
 
 const FULL_BACKING: WorkersBackingConfig = {
 	hasD1: true,
+	hasPlanetscale: false,
 	kvAliases: ['sessions'],
 	queueAliases: ['jobs'],
 	bucketAliases: ['assets'],
@@ -43,6 +44,7 @@ const EMPTY_OUTPUTS: WorkersTerraformOutputs = {
 
 const EMPTY_BACKING: WorkersBackingConfig = {
 	hasD1: false,
+	hasPlanetscale: false,
 	kvAliases: [],
 	queueAliases: [],
 	bucketAliases: [],

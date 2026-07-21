@@ -2185,6 +2185,59 @@ describe('parseConfig', () => {
 			})
 		})
 
+		it('summons planetscale from a worker `needs` alone (no table required)', () => {
+			const parsed = parseConfig(
+				workersConfig({
+					back: { url: 'api.example.com', needs: ['planetscale'] },
+				}),
+			)
+
+			expect(parsed.ok).toBe(true)
+			if (!parsed.ok) return
+			expect(parsed.config.services.planetscale).toEqual({})
+		})
+
+		it('keeps explicit [services.planetscale] cluster_size/region overrides', () => {
+			const parsed = parseConfig(
+				workersConfig(
+					{
+						back: {
+							url: 'api.example.com',
+							needs: ['planetscale'],
+						},
+					},
+					{},
+					{
+						planetscale: {
+							cluster_size: 'PS_10',
+							region: 'us-east',
+						},
+					},
+				),
+			)
+
+			expect(parsed.ok).toBe(true)
+			if (!parsed.ok) return
+			expect(parsed.config.services.planetscale).toEqual({
+				clusterSize: 'PS_10',
+				region: 'us-east',
+			})
+		})
+
+		it('provisions a declared [services.planetscale] even with no consumer', () => {
+			const parsed = parseConfig(
+				workersConfig(
+					{ web: { url: 'example.com' } },
+					{},
+					{ planetscale: {} },
+				),
+			)
+
+			expect(parsed.ok).toBe(true)
+			if (!parsed.ok) return
+			expect(parsed.config.services.planetscale).toEqual({})
+		})
+
 		it('accepts [[services.kv.namespaces]] and [[services.queues]]', () => {
 			const parsed = parseConfig(
 				workersConfig(

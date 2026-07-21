@@ -342,4 +342,42 @@ describe('buildWranglerConfig', () => {
 				.vars,
 		).toEqual({ SITE_URL: 'https://x' })
 	})
+
+	it('binds Hyperdrive when the worker needs planetscale', () => {
+		const document = buildWranglerConfig(
+			input({
+				service: service({ needs: ['planetscale'] }),
+				services: { planetscale: {} },
+				outputs: { ...EMPTY_OUTPUTS, hyperdriveConfigId: 'hd-uuid' },
+			}),
+		)
+
+		expect(document.hyperdrive).toEqual([
+			{ binding: 'HYPERDRIVE', id: 'hd-uuid' },
+		])
+	})
+
+	it('omits the Hyperdrive binding for a worker that does not need planetscale', () => {
+		const document = buildWranglerConfig(
+			input({
+				service: service({ needs: [] }),
+				services: { planetscale: {} },
+				outputs: { ...EMPTY_OUTPUTS, hyperdriveConfigId: 'hd-uuid' },
+			}),
+		)
+
+		expect(document.hyperdrive).toBeUndefined()
+	})
+
+	it('throws when planetscale is needed but the hyperdrive output is missing', () => {
+		expect(() =>
+			buildWranglerConfig(
+				input({
+					service: service({ needs: ['planetscale'] }),
+					services: { planetscale: {} },
+					outputs: EMPTY_OUTPUTS,
+				}),
+			),
+		).toThrow(/hyperdrive_config_id/)
+	})
 })

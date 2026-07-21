@@ -32,6 +32,9 @@ function backingForNeeds(
 	const wantsR2 = needs.includes('r2')
 	return {
 		hasD1: backing.hasD1 && needs.includes('d1'),
+		// PlanetScale projects no env var (the Hyperdrive binding, not a string,
+		// reaches Postgres); kept in the filtered shape for consistency.
+		hasPlanetscale: backing.hasPlanetscale && needs.includes('planetscale'),
 		kvAliases: needs.includes('kv') ? backing.kvAliases : [],
 		queueAliases: needs.includes('queues') ? backing.queueAliases : [],
 		bucketAliases: wantsR2 ? backing.bucketAliases : [],

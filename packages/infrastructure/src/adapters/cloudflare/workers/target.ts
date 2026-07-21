@@ -2,29 +2,25 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
 
-import { ensureHcpWorkspace } from '#/adapters/hcp/workspaces.ts'
 import { defaultTerraformRunner } from '#/adapters/terraform/runner.ts'
-import { WORKERS_MANAGED_RESOURCES } from '#/domain/cloudflare/workers/managed-resources.ts'
 import {
 	EMPTY_WORKERS_TERRAFORM_OUTPUTS,
 	buildWorkersBackingEnv,
 	deriveWorkersBackingConfig,
 	hasWorkersBacking,
 } from '#/domain/cloudflare/workers/outputs-env.ts'
-import { HCP_TERRAFORM_ORGANIZATION } from '#/domain/cloudflare/workers/terraform-config.ts'
 import { computeSiteUrl } from '#/domain/deploy/domain.ts'
-import { executeHandlers } from '#/domain/deploy/execute-handlers.ts'
 
 import { deployWorkers } from './deploy-workers.ts'
 import { migrateWorkers } from './migrate-workers.ts'
 import { teardownWorkers } from './teardown-workers.ts'
 import {
-	applyWorkersTerraform,
 	destroyWorkersTerraform,
 	memoizeOutputsReader,
 	planWorkersTerraform,
 	readWorkersTerraformOutputs,
 } from './terraform-ops.ts'
+import { runWorkersProvision } from './workers-provision.ts'
 
 import type { TerraformRunner } from '#/adapters/terraform/runner.ts'
 import type { WranglerRunner } from '#/adapters/wrangler/runner.ts'
@@ -54,6 +50,13 @@ import type { OutputsReader, WorkersTerraformContext } from './terraform-ops.ts'
 export interface CloudflareWorkersTargetConfig {
 	readonly accountId: string
 	readonly hcpToken: string
+	// PlanetScale service-token credentials, needed ONLY when the project
+	// declares (or a worker `needs`) planetscale - the create-if-absent DB
+	// adapter and the PlanetScale Terraform provider both authenticate with them.
+	// Optional so projects without Postgres need not supply them; the provision
+	// handler fails loud if planetscale is declared but they are absent.
+	readonly planetscaleServiceTokenId?: string
+	readonly planetscaleServiceToken?: string
 	readonly environment: AppEnvironment
 	readonly config: CloudflareWorkersDeployableConfig
 	// The project package directory `wrangler deploy` runs from - the built
@@ -72,6 +75,8 @@ export class CloudflareWorkersTarget implements DeployTarget {
 	readonly name = 'cloudflare-workers'
 	private readonly accountId: string
 	private readonly hcpToken: string
+	private readonly planetscaleServiceTokenId: string | undefined
+	private readonly planetscaleServiceToken: string | undefined
 	private readonly environment: AppEnvironment
 	private readonly config: CloudflareWorkersDeployableConfig
 	private readonly projectDir: string | undefined
@@ -85,6 +90,8 @@ export class CloudflareWorkersTarget implements DeployTarget {
 	constructor(config: CloudflareWorkersTargetConfig) {
 		this.accountId = config.accountId
 		this.hcpToken = config.hcpToken
+		this.planetscaleServiceTokenId = config.planetscaleServiceTokenId
+		this.planetscaleServiceToken = config.planetscaleServiceToken
 		this.environment = config.environment
 		this.config = config.config
 		this.projectDir = config.projectDir
@@ -114,14 +121,15 @@ export class CloudflareWorkersTarget implements DeployTarget {
 		const start = Date.now()
 		const workspaceName = `${projectName}-${this.environment}`
 
-		const outcome = await executeHandlers(WORKERS_MANAGED_RESOURCES, {
-			'hcp-workspace': () =>
-				ensureHcpWorkspace({
-					organization: HCP_TERRAFORM_ORGANIZATION,
-					workspaceName,
-					token: this.hcpToken,
-				}),
-			terraform: () => applyWorkersTerraform(this.terraformContext()),
+		const outcome = await runWorkersProvision({
+			workspaceName,
+			projectName,
+			hcpToken: this.hcpToken,
+			config: this.config,
+			environment: this.environment,
+			planetscaleServiceTokenId: this.planetscaleServiceTokenId,
+			planetscaleServiceToken: this.planetscaleServiceToken,
+			terraformContext: this.terraformContext(),
 		})
 
 		logger.info(

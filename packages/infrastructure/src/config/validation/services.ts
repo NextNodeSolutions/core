@@ -4,6 +4,7 @@ import { isRecord } from '#/kernel/guards.ts'
 import { validateD1Service } from './services/d1.ts'
 import { validateKvService } from './services/kv.ts'
 import { validateObservabilityService } from './services/observability.ts'
+import { validatePlanetscaleService } from './services/planetscale.ts'
 import { validatePostgresService } from './services/postgres.ts'
 import { validateQueuesService } from './services/queues.ts'
 import { validateR2Service } from './services/r2.ts'
@@ -76,6 +77,13 @@ export function validateServicesSection(
 
 	const queues = runService(raw['queues'], validateQueuesService, errors)
 	if (queues) services.queues = queues
+
+	const planetscale = runService(
+		raw['planetscale'],
+		validatePlanetscaleService,
+		errors,
+	)
+	if (planetscale) services.planetscale = planetscale
 
 	if (errors.length > 0) return { ok: false, errors }
 	return { ok: true, section: services }

@@ -77,6 +77,21 @@ export interface ObservabilityServiceConfig {
 	readonly metricsVhost: string
 }
 
+// `[services.planetscale]` opts the cloudflare-workers project into a managed
+// PlanetScale Postgres database, materialised as `<project>-<env>-planetscale`
+// and reached from every Worker that lists `needs = ["planetscale"]` through a
+// Cloudflare Hyperdrive binding (`env.HYPERDRIVE`). The database is created by
+// a create-if-absent API adapter (the PlanetScale Terraform provider has no
+// database resource); Terraform then owns the Postgres role + the Hyperdrive
+// config wired to it. `clusterSize` and `region` are OPTIONAL - PlanetScale
+// defaults them from the org when omitted; both are opaque PlanetScale values
+// (SKU / region slug) the dev supplies verbatim, never a fixed enum the infra
+// hardcodes.
+export interface PlanetscaleServiceConfig {
+	readonly clusterSize?: string
+	readonly region?: string
+}
+
 export interface PostgresServiceConfig {
 	readonly mode: PostgresMode
 	// Drizzle migrations folder relative to nextnode.toml. Defaults to
@@ -108,6 +123,7 @@ export const SERVICE_NAMES = [
 	'd1',
 	'kv',
 	'queues',
+	'planetscale',
 ] as const
 export type ServiceName = (typeof SERVICE_NAMES)[number]
 
@@ -118,6 +134,7 @@ export interface ServiceConfigByName {
 	readonly d1: D1ServiceConfig
 	readonly kv: KvServiceConfig
 	readonly queues: QueuesServiceConfig
+	readonly planetscale: PlanetscaleServiceConfig
 }
 
 export type ServicesConfig = {
@@ -143,6 +160,9 @@ export const SERVICE_REQUIRES_INFRA_STORAGE: {
 	d1: false,
 	kv: false,
 	queues: false,
+	// The Postgres DB lives on PlanetScale and the Hyperdrive config in the HCP
+	// Terraform workspace - no R2 state/certs bucket is involved.
+	planetscale: false,
 }
 
 /**
@@ -162,6 +182,39 @@ export const SERVICE_SUPPORTED_TARGETS: {
 	d1: ['cloudflare-workers'],
 	kv: ['cloudflare-workers'],
 	queues: ['cloudflare-workers'],
+	planetscale: ['cloudflare-workers'],
+}
+
+/**
+ * Per-service flag: can a service be summoned by a worker `needs` reference
+ * ALONE, with no `[services.<name>]` table? True only for services with no
+ * required config - a bare `needs = ["<name>"]` provisions it, `load.ts`
+ * synthesising an empty `{}` config so the invariant "provisioned iff
+ * `services.<name>` is present" holds downstream. The mapped type forces every
+ * `SERVICE_NAMES` entry to answer, so a new zero-config service can never
+ * silently miss the synthesis (and a config-requiring service can never be
+ * implied into an unvalidated empty table).
+ */
+export const SERVICE_IMPLIABLE_FROM_NEEDS: {
+	readonly [K in ServiceName]: boolean
+} = {
+	r2: false,
+	postgres: false,
+	observability: false,
+	d1: false,
+	kv: false,
+	queues: false,
+	planetscale: true,
+}
+
+export function impliableServiceNames(
+	target: DeployTargetType,
+): ReadonlyArray<ServiceName> {
+	return SERVICE_NAMES.filter(
+		name =>
+			SERVICE_IMPLIABLE_FROM_NEEDS[name] &&
+			SERVICE_SUPPORTED_TARGETS[name].includes(target),
+	)
 }
 
 /**

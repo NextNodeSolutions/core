@@ -10,11 +10,19 @@ interface RequiredProvider {
 
 interface TerraformBlock {
 	readonly cloud: TerraformCloudBlock
-	readonly required_providers: { readonly cloudflare: RequiredProvider }
+	readonly required_providers: {
+		readonly cloudflare: RequiredProvider
+		// Declared ONLY when [services.planetscale] is present, so a plain
+		// workers project never pulls the PlanetScale provider on `terraform init`.
+		readonly planetscale?: RequiredProvider
+	}
 }
 
 interface ProviderBlock {
 	readonly cloudflare: Record<string, never>
+	// Auth flows ambiently through PLANETSCALE_SERVICE_TOKEN_ID /
+	// PLANETSCALE_SERVICE_TOKEN in the process env - the block itself is empty.
+	readonly planetscale?: Record<string, never>
 }
 
 interface VariableDeclaration {
@@ -52,6 +60,37 @@ export interface R2CustomDomainResource {
 	readonly domain: string
 	readonly zone_id: string
 	readonly enabled: boolean
+}
+
+// A `planetscale_postgres_branch_role` on the auto-created `main` branch: it
+// produces the Postgres credentials (host/db/user/password) Hyperdrive's origin
+// consumes. The database itself is created out-of-band (create-if-absent API
+// adapter) because the PlanetScale provider has no database resource.
+export interface PlanetscaleBranchRoleResource {
+	readonly organization: string
+	readonly database: string
+	readonly branch: string
+	readonly name: string
+	readonly inherited_roles: ReadonlyArray<string>
+}
+
+// The Hyperdrive origin: discrete credentials, not a DSN. `host`/`database`/
+// `user`/`password` interpolate the branch-role outputs; `scheme`/`port` are the
+// fixed PlanetScale Postgres coordinates. `password` is sensitive - it lives only
+// in Terraform state, never in the Worker's env.
+export interface HyperdriveOrigin {
+	readonly scheme: string
+	readonly host: string
+	readonly port: number
+	readonly database: string
+	readonly user: string
+	readonly password: string
+}
+
+export interface HyperdriveConfigResource {
+	readonly account_id: string
+	readonly name: string
+	readonly origin: HyperdriveOrigin
 }
 
 export interface DnsRecordResource {
@@ -93,6 +132,12 @@ export interface TerraformResourceBlock {
 		Record<string, KvNamespaceResource>
 	>
 	readonly cloudflare_queue?: Readonly<Record<string, QueueResource>>
+	readonly planetscale_postgres_branch_role?: Readonly<
+		Record<string, PlanetscaleBranchRoleResource>
+	>
+	readonly cloudflare_hyperdrive_config?: Readonly<
+		Record<string, HyperdriveConfigResource>
+	>
 	readonly cloudflare_r2_bucket?: Readonly<Record<string, R2BucketResource>>
 	readonly cloudflare_r2_custom_domain?: Readonly<
 		Record<string, R2CustomDomainResource>

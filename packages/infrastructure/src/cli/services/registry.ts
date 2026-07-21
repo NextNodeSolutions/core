@@ -19,6 +19,7 @@ export const SERVICE_DEFINITIONS = {
 	d1: terraformBackedServiceDefinition('d1'),
 	kv: terraformBackedServiceDefinition('kv'),
 	queues: terraformBackedServiceDefinition('queues'),
+	planetscale: terraformBackedServiceDefinition('planetscale'),
 } as const satisfies {
 	readonly [K in ServiceName]: ServiceDefinition<K>
 }

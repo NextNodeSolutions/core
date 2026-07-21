@@ -83,6 +83,10 @@ describe('buildProvisionSummary', () => {
 					handled: true,
 					detail: 'created "my-worker-production"',
 				},
+				'planetscale-database': {
+					handled: false,
+					detail: 'no [services.planetscale] declared',
+				},
 				terraform: { handled: true, detail: 'applied' },
 			},
 			workspaceName: 'my-worker-production',

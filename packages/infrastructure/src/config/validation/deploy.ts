@@ -1,5 +1,9 @@
 import { isDeployTarget } from '#/config/predicates.ts'
-import { DEFAULT_DEPLOY_TARGETS, DEPLOY_TARGETS } from '#/config/types.ts'
+import {
+	DEFAULT_DEPLOY_TARGETS,
+	DEPLOY_TARGETS,
+	impliableServiceNames,
+} from '#/config/types.ts'
 import { isRecord } from '#/kernel/guards.ts'
 
 import { resolveSecrets } from './deploy-secrets.ts'
@@ -118,7 +122,7 @@ function validateDeployFields(
 		const { errors, serviceCheck, secretsResult } = resolveServices(
 			deployRecord,
 			target,
-			declaredServices,
+			new Set([...declaredServices, ...impliableServiceNames(target)]),
 			validateWorkerServices,
 		)
 		return {

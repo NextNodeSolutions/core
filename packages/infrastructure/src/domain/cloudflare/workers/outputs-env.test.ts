@@ -20,6 +20,7 @@ const FULL_RAW = {
 
 const FULL_BACKING: WorkersBackingConfig = {
 	hasD1: true,
+	hasPlanetscale: false,
 	kvAliases: ['sessions', 'edge-cache'],
 	queueAliases: ['jobs'],
 	bucketAliases: ['assets'],
@@ -73,6 +74,14 @@ describe('parseTerraformOutputs', () => {
 			parseTerraformOutputs({ queue_ids: { value: { jobs: 7 } } }),
 		).toThrow('terraform output "queue_ids": entry "jobs" is not a string')
 	})
+
+	it('narrows the hyperdrive config id when present', () => {
+		expect(
+			parseTerraformOutputs({
+				hyperdrive_config_id: { value: 'hd-uuid' },
+			}).hyperdriveConfigId,
+		).toBe('hd-uuid')
+	})
 })
 
 describe('deriveWorkersBackingConfig', () => {
@@ -91,6 +100,7 @@ describe('deriveWorkersBackingConfig', () => {
 
 		expect(deriveWorkersBackingConfig(services)).toEqual({
 			hasD1: true,
+			hasPlanetscale: false,
 			kvAliases: ['sessions'],
 			queueAliases: ['jobs'],
 			bucketAliases: ['assets', 'private-cache'],
@@ -102,12 +112,19 @@ describe('deriveWorkersBackingConfig', () => {
 		const backing = deriveWorkersBackingConfig({})
 		expect(backing).toEqual({
 			hasD1: false,
+			hasPlanetscale: false,
 			kvAliases: [],
 			queueAliases: [],
 			bucketAliases: [],
 			cdnBucketAliases: [],
 		})
 		expect(hasWorkersBacking(backing)).toBe(false)
+	})
+
+	it('flags planetscale and drives provisioning', () => {
+		const backing = deriveWorkersBackingConfig({ planetscale: {} })
+		expect(backing.hasPlanetscale).toBe(true)
+		expect(hasWorkersBacking(backing)).toBe(true)
 	})
 })
 
@@ -116,6 +133,7 @@ describe('hasWorkersBacking', () => {
 		expect(
 			hasWorkersBacking({
 				hasD1: false,
+				hasPlanetscale: false,
 				kvAliases: [],
 				queueAliases: ['jobs'],
 				bucketAliases: [],
@@ -162,6 +180,7 @@ describe('buildWorkersBackingEnv', () => {
 			'acct-123',
 			{
 				hasD1: true,
+				hasPlanetscale: false,
 				kvAliases: [],
 				queueAliases: [],
 				bucketAliases: [],
@@ -175,6 +194,7 @@ describe('buildWorkersBackingEnv', () => {
 		expect(() =>
 			buildWorkersBackingEnv(parseTerraformOutputs({}), 'acct-123', {
 				hasD1: true,
+				hasPlanetscale: false,
 				kvAliases: [],
 				queueAliases: [],
 				bucketAliases: [],
@@ -189,6 +209,7 @@ describe('buildWorkersBackingEnv', () => {
 		expect(() =>
 			buildWorkersBackingEnv(parseTerraformOutputs({}), 'acct-123', {
 				hasD1: false,
+				hasPlanetscale: false,
 				kvAliases: ['sessions'],
 				queueAliases: [],
 				bucketAliases: [],

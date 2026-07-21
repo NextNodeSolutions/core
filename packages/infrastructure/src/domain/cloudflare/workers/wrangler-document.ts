@@ -38,6 +38,16 @@ export function toBindingName(alias: string): string {
 	return alias.toUpperCase().replaceAll('-', '_')
 }
 
+/**
+ * The Hyperdrive binding name. A cloudflare-workers project with
+ * `[services.planetscale]` gets a single Hyperdrive config (pooling + query
+ * cache in front of the provisioned Postgres), bound as `env.HYPERDRIVE` into
+ * every Worker that declares `needs = ["planetscale"]`. The Worker connects
+ * through the binding's `connectionString`; the origin credentials live only in
+ * Terraform state, never in the Worker's env.
+ */
+export const WORKERS_HYPERDRIVE_BINDING = 'HYPERDRIVE'
+
 // A worker Custom Domain route: `custom_domain: true` distinguishes it from a
 // zone route (a wildcard pattern). The pattern is the resolved hostname the
 // Worker answers on.
@@ -85,6 +95,15 @@ export interface WranglerServiceBinding {
 	readonly service: string
 }
 
+// A Hyperdrive binding: `binding` is the env var name the Worker reads
+// (`env.HYPERDRIVE`), `id` is the `cloudflare_hyperdrive_config` UUID Terraform
+// emitted. No connection string travels here - the origin credentials are held
+// by the Hyperdrive config in Terraform state.
+export interface WranglerHyperdrive {
+	readonly binding: string
+	readonly id: string
+}
+
 export interface WranglerQueues {
 	readonly producers: ReadonlyArray<WranglerQueueProducer>
 }
@@ -116,6 +135,7 @@ export interface WranglerDocument {
 	readonly d1_databases?: ReadonlyArray<WranglerD1Database>
 	readonly kv_namespaces?: ReadonlyArray<WranglerKvNamespace>
 	readonly r2_buckets?: ReadonlyArray<WranglerR2Bucket>
+	readonly hyperdrive?: ReadonlyArray<WranglerHyperdrive>
 	readonly queues?: WranglerQueues
 	readonly triggers?: WranglerTriggers
 }

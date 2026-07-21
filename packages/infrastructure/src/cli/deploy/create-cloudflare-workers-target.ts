@@ -32,6 +32,24 @@ function projectDirOption(
 	return { projectDir }
 }
 
+type PlanetscaleCredentials = {
+	planetscaleServiceTokenId: string
+	planetscaleServiceToken: string
+}
+
+// PlanetScale credentials are required ONLY when the project provisions a
+// Postgres DB (the create-if-absent adapter + the Terraform provider both use
+// them); fail fast at factory time so a missing token surfaces before apply.
+function planetscaleCredentials(
+	config: CloudflareWorkersDeployableConfig,
+): PlanetscaleCredentials | undefined {
+	if (!config.services.planetscale) return undefined
+	return {
+		planetscaleServiceTokenId: requireEnv('PLANETSCALE_SERVICE_TOKEN_ID'),
+		planetscaleServiceToken: requireEnv('PLANETSCALE_SERVICE_TOKEN'),
+	}
+}
+
 export function createCloudflareWorkersTarget(
 	config: CloudflareWorkersDeployableConfig,
 	environment: AppEnvironment,
@@ -43,6 +61,7 @@ export function createCloudflareWorkersTarget(
 	return new CloudflareWorkersTarget({
 		accountId: requireEnv('CLOUDFLARE_ACCOUNT_ID'),
 		hcpToken: requireEnv('TF_TOKEN_app_terraform_io'),
+		...planetscaleCredentials(config),
 		...projectDirOption(resolveProjectDir()),
 		environment,
 		config,
