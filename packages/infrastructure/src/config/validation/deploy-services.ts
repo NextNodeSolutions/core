@@ -64,24 +64,32 @@ export function validateServices(
 	return { errors, services }
 }
 
-// Every backing service a workload lists in `needs` must be declared as a
-// top-level [services.<name>] - `needs = ["postgres"]` requires
-// [services.postgres], or the backing secrets it expects (e.g. `DATABASE_URL`)
-// would never be produced and the workload would start against nothing. Skipped
-// when any service failed to parse (the declared set would be incomplete).
+// Every entry a workload lists in `needs` must resolve to a declared dependency,
+// of one of two kinds: a backing service (`needs = ["postgres"]` requires
+// [services.postgres], so its backing secrets/bindings are produced) or a
+// sibling workload (`needs = ["api"]` on a Worker requires [deploy.services.api],
+// wiring the service binding it talks to it on). A self-reference is a bug (a
+// workload cannot depend on itself). Skipped when any service failed to parse
+// (the declared set would be incomplete).
 export function validateServiceNeedsRefs(
 	servicesResult: ServiceRefsValidation,
 	declaredServices: ReadonlySet<string>,
 ): string[] {
 	if (servicesResult.errors.length > 0) return []
 
+	const siblings = new Set(Object.keys(servicesResult.services))
 	return Object.entries(servicesResult.services).flatMap(([name, service]) =>
-		service.needs
-			.filter(need => !declaredServices.has(need))
-			.map(
-				need =>
-					`deploy.services.${name}.needs references "${need}" but no [services.${need}] is declared`,
-			),
+		service.needs.flatMap(need => {
+			if (need === name) {
+				return [
+					`deploy.services.${name}.needs references itself - a service cannot depend on itself`,
+				]
+			}
+			if (declaredServices.has(need) || siblings.has(need)) return []
+			return [
+				`deploy.services.${name}.needs references "${need}" but no [services.${need}] backing service or [deploy.services.${need}] sibling is declared`,
+			]
+		}),
 	)
 }
 

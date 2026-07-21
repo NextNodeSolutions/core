@@ -1,7 +1,7 @@
 import { wranglerDeploy } from '#/adapters/wrangler/deploy.ts'
 import { defaultWranglerRunner } from '#/adapters/wrangler/runner.ts'
-import { orderServicesByDependsOn } from '#/domain/cloudflare/workers/depends-on-order.ts'
 import { deriveWorkersBackingConfig } from '#/domain/cloudflare/workers/outputs-env.ts'
+import { orderWorkerDeploy } from '#/domain/cloudflare/workers/service-bindings.ts'
 import { computeSmokeCheckUrls } from '#/domain/cloudflare/workers/smoke-check.ts'
 import { buildWorkerVars } from '#/domain/cloudflare/workers/worker-vars.ts'
 import { buildWranglerConfig } from '#/domain/cloudflare/workers/wrangler-config.ts'
@@ -87,7 +87,6 @@ function buildServiceDocument(
 			projectDomain: input.domain,
 			environment: input.environment,
 			service,
-			services: input.services,
 			backing: deriveWorkersBackingConfig(input.backingServices),
 			outputs: input.outputs,
 			accountId: input.accountId,
@@ -132,7 +131,9 @@ async function deployOneService(
 
 /**
  * Deploy every Worker in the project, one `wrangler deploy` per service, in
- * `depends_on` order (a service deploys after every service it depends on). Each
+ * binding order (a service deploys after every sibling it binds via `needs`, so
+ * a service binding's target script always exists first) and after any explicit
+ * `depends_on`. Each
  * service's ephemeral wrangler config is generated in the domain and written by
  * the adapter; an asset-shipping service gets the non-prod SEO guard injected
  * into its assets directory before upload, and its projected secrets are
@@ -147,7 +148,7 @@ export async function deployWorkers(
 ): Promise<DeployResult> {
 	const start = Date.now()
 	const runner = input.wranglerRunner ?? defaultWranglerRunner
-	const order = orderServicesByDependsOn(input.services)
+	const order = orderWorkerDeploy(input.services)
 	const perServiceSecrets = buildServiceSecretEnv(
 		input.services,
 		input.secrets,

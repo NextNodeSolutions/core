@@ -1723,7 +1723,48 @@ describe('parseConfig', () => {
 			}
 
 			expect(parsed.errors).toContain(
-				'deploy.services.app.needs references "postgres" but no [services.postgres] is declared',
+				'deploy.services.app.needs references "postgres" but no [services.postgres] backing service or [deploy.services.postgres] sibling is declared',
+			)
+		})
+
+		it('accepts a needs referencing a declared sibling service', () => {
+			const parsed = parseConfig({
+				project: { name: 'my-app', type: 'app', domain: 'example.com' },
+				deploy: {
+					services: {
+						front: {
+							source: 'build',
+							url: 'example.com',
+							needs: ['api'],
+						},
+						api: { source: 'build', url: 'api.example.com' },
+					},
+				},
+			})
+
+			expect(parsed.ok).toBe(true)
+		})
+
+		it('rejects a needs referencing itself', () => {
+			const parsed = parseConfig({
+				project: { name: 'my-app', type: 'app', domain: 'example.com' },
+				deploy: {
+					services: {
+						app: {
+							source: 'build',
+							url: 'example.com',
+							needs: ['app'],
+						},
+					},
+				},
+			})
+
+			if (parsed.ok) {
+				expect.unreachable('expected a self-reference needs failure')
+			}
+
+			expect(parsed.errors).toContain(
+				'deploy.services.app.needs references itself - a service cannot depend on itself',
 			)
 		})
 
@@ -2004,8 +2045,19 @@ describe('parseConfig', () => {
 			if (parsed.ok) return
 
 			expect(parsed.errors).toContain(
-				'deploy.services.web.needs references "d1" but no [services.d1] is declared',
+				'deploy.services.web.needs references "d1" but no [services.d1] backing service or [deploy.services.d1] sibling is declared',
 			)
+		})
+
+		it('accepts a worker needs referencing a sibling worker (service binding)', () => {
+			const parsed = parseConfig(
+				workersConfig({
+					web: { url: 'example.com', needs: ['api'] },
+					api: { url: 'api.example.com' },
+				}),
+			)
+
+			expect(parsed.ok).toBe(true)
 		})
 
 		it('rejects a depends_on referencing an unknown worker', () => {

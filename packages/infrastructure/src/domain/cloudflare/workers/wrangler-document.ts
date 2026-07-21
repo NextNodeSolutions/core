@@ -28,6 +28,16 @@ export const WORKERS_ASSETS_BINDING = 'ASSETS'
  */
 export const WORKERS_D1_BINDING = 'DB'
 
+/**
+ * Turn a service or resource alias into the `env.<KEY>` binding name every
+ * generated config uses: uppercase, dashes to underscores (`admin-api` ->
+ * `ADMIN_API`). Shared by KV/R2/Queue backing bindings and worker-to-worker
+ * service bindings so a single rule governs every `env` key a Worker reads.
+ */
+export function toBindingName(alias: string): string {
+	return alias.toUpperCase().replaceAll('-', '_')
+}
+
 // A worker Custom Domain route: `custom_domain: true` distinguishes it from a
 // zone route (a wildcard pattern). The pattern is the resolved hostname the
 // Worker answers on.
@@ -65,6 +75,16 @@ export interface WranglerQueueProducer {
 	readonly queue: string
 }
 
+// A worker-to-worker service binding: `env.<binding>` exposes a `Fetcher` that
+// invokes the target Worker directly on Cloudflare's edge (no DNS, no TLS, no
+// public hostname) - the ONLY channel a Worker reaches another Worker on.
+// `service` is the target's deployed script name (`<project>-<env>-<name>`), so
+// the binding resolves to the exact script wrangler deploys and teardown deletes.
+export interface WranglerServiceBinding {
+	readonly binding: string
+	readonly service: string
+}
+
 export interface WranglerQueues {
 	readonly producers: ReadonlyArray<WranglerQueueProducer>
 }
@@ -92,6 +112,7 @@ export interface WranglerDocument {
 	readonly routes?: ReadonlyArray<WranglerRoute>
 	readonly assets?: WranglerAssets
 	readonly vars?: Readonly<Record<string, string>>
+	readonly services?: ReadonlyArray<WranglerServiceBinding>
 	readonly d1_databases?: ReadonlyArray<WranglerD1Database>
 	readonly kv_namespaces?: ReadonlyArray<WranglerKvNamespace>
 	readonly r2_buckets?: ReadonlyArray<WranglerR2Bucket>

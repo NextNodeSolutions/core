@@ -1,5 +1,4 @@
 import { computeSiteUrl } from '#/domain/deploy/domain.ts'
-import { buildServiceUrlEnv } from '#/domain/deploy/service-env.ts'
 
 import { buildWorkersBackingEnv } from './outputs-env.ts'
 
@@ -15,10 +14,6 @@ export interface WorkerVarsInput {
 	readonly environment: AppEnvironment
 	// The worker whose vars are built (its `needs` filter the backing env).
 	readonly service: WorkerServiceConfig
-	// Every declared worker, so the symmetric cross-service URL block is built the
-	// same way Hetzner builds it (each worker sees every routed peer, itself
-	// included).
-	readonly services: Readonly<Record<string, WorkerServiceConfig>>
 	readonly backing: WorkersBackingConfig
 	readonly outputs: WorkersTerraformOutputs
 	readonly accountId: string
@@ -46,18 +41,18 @@ function backingForNeeds(
 
 /**
  * Build the public `vars` block injected into one Worker's generated wrangler
- * config. Three sources, precedence low-to-high on the (pathological) key
+ * config. Two sources, precedence low-to-high on the (pathological) key
  * collision:
  *
  *   - the backing env (D1/KV/Queue ids, R2 bucket names + CDN URLs, endpoint)
  *     of the backing services THIS worker declares in `needs` - least-privilege,
  *     never the full backing surface;
- *   - the symmetric `<NAME>_URL` block (every routed peer, https-prefixed,
- *     itself included) - reusing the same primitive Hetzner services do;
  *   - `SITE_URL`, the project's canonical site URL, always authoritative.
  *
- * Secrets never travel here (they go through `wrangler secret bulk`); this block
- * is public and lands in the committed-shape wrangler config's `vars`.
+ * Worker-to-worker addressing is NOT here: a Worker reaches a sibling only
+ * through its service binding (`env.<NAME>`, see `wrangler-config.ts`), never a
+ * `<NAME>_URL`. Secrets never travel here either (they go through `wrangler
+ * secret bulk`); this block is public and lands in the generated config's `vars`.
  */
 export function buildWorkerVars(
 	input: WorkerVarsInput,
@@ -70,7 +65,6 @@ export function buildWorkerVars(
 
 	return {
 		...backingEnv,
-		...buildServiceUrlEnv(input.services, input.environment),
 		SITE_URL: computeSiteUrl(input.projectDomain, input.environment),
 	}
 }

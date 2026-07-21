@@ -52,7 +52,6 @@ const EMPTY_BACKING: WorkersBackingConfig = {
 const input = (
 	overrides: {
 		service?: WorkerServiceConfig
-		services?: Record<string, WorkerServiceConfig>
 		backing?: WorkersBackingConfig
 		outputs?: WorkersTerraformOutputs
 		environment?: 'production' | 'development'
@@ -63,7 +62,6 @@ const input = (
 	projectDomain: overrides.projectDomain ?? 'example.com',
 	environment: overrides.environment ?? 'production',
 	service: overrides.service ?? worker(),
-	services: overrides.services ?? { web: overrides.service ?? worker() },
 	backing: overrides.backing ?? EMPTY_BACKING,
 	outputs: overrides.outputs ?? EMPTY_OUTPUTS,
 	accountId: overrides.accountId ?? 'acct-123',
@@ -80,42 +78,10 @@ describe('buildWorkerVars', () => {
 		).toBe('https://dev.example.com')
 	})
 
-	it('injects the symmetric <NAME>_URL block for every routed peer, self included', () => {
-		const web = worker({ url: 'example.com' })
-		const api = worker({ url: 'api.example.com' })
+	it('never injects a peer <NAME>_URL - worker-to-worker goes through the service binding, not a URL', () => {
 		expect(
-			buildWorkerVars(input({ service: web, services: { web, api } })),
-		).toEqual({
-			SITE_URL: 'https://example.com',
-			WEB_URL: 'https://example.com',
-			API_URL: 'https://api.example.com',
-		})
-	})
-
-	it('omits the URL of an internal (non-routed) peer but still routes the routed ones', () => {
-		const web = worker({ url: 'example.com' })
-		const jobs = worker()
-		expect(
-			buildWorkerVars(input({ service: jobs, services: { web, jobs } })),
-		).toEqual({
-			SITE_URL: 'https://example.com',
-			WEB_URL: 'https://example.com',
-		})
-	})
-
-	it('gives a non-routed worker the same peer URL block (symmetry has no owner)', () => {
-		const web = worker({ url: 'example.com' })
-		const api = worker({ url: 'api.example.com' })
-		const jobs = worker()
-		expect(
-			buildWorkerVars(
-				input({ service: jobs, services: { web, api, jobs } }),
-			),
-		).toEqual({
-			SITE_URL: 'https://example.com',
-			WEB_URL: 'https://example.com',
-			API_URL: 'https://api.example.com',
-		})
+			buildWorkerVars(input({ service: worker({ url: 'example.com' }) })),
+		).toEqual({ SITE_URL: 'https://example.com' })
 	})
 
 	it('injects no backing env for a worker that declares no needs', () => {
@@ -123,24 +89,18 @@ describe('buildWorkerVars', () => {
 			buildWorkerVars(
 				input({
 					service: worker({ url: 'example.com' }),
-					services: { web: worker({ url: 'example.com' }) },
 					backing: FULL_BACKING,
 					outputs: FULL_OUTPUTS,
 				}),
 			),
-		).toEqual({
-			SITE_URL: 'https://example.com',
-			WEB_URL: 'https://example.com',
-		})
+		).toEqual({ SITE_URL: 'https://example.com' })
 	})
 
 	it('injects only the D1 backing env for a worker that needs d1', () => {
-		const svc = worker({ needs: ['d1'] })
 		expect(
 			buildWorkerVars(
 				input({
-					service: svc,
-					services: { web: svc },
+					service: worker({ needs: ['d1'] }),
 					backing: FULL_BACKING,
 					outputs: FULL_OUTPUTS,
 				}),
@@ -152,12 +112,10 @@ describe('buildWorkerVars', () => {
 	})
 
 	it('injects only the KV backing env for a worker that needs kv', () => {
-		const svc = worker({ needs: ['kv'] })
 		expect(
 			buildWorkerVars(
 				input({
-					service: svc,
-					services: { web: svc },
+					service: worker({ needs: ['kv'] }),
 					backing: FULL_BACKING,
 					outputs: FULL_OUTPUTS,
 				}),
@@ -169,12 +127,10 @@ describe('buildWorkerVars', () => {
 	})
 
 	it('injects the full R2 backing env (names, CDN URL, endpoint) for a worker that needs r2', () => {
-		const svc = worker({ needs: ['r2'] })
 		expect(
 			buildWorkerVars(
 				input({
-					service: svc,
-					services: { web: svc },
+					service: worker({ needs: ['r2'] }),
 					backing: FULL_BACKING,
 					outputs: FULL_OUTPUTS,
 				}),
@@ -188,12 +144,10 @@ describe('buildWorkerVars', () => {
 	})
 
 	it('withholds a backing resource a worker does not need while including one it does', () => {
-		const svc = worker({ needs: ['d1', 'queues'] })
 		expect(
 			buildWorkerVars(
 				input({
-					service: svc,
-					services: { web: svc },
+					service: worker({ needs: ['d1', 'queues'] }),
 					backing: FULL_BACKING,
 					outputs: FULL_OUTPUTS,
 				}),
@@ -205,14 +159,12 @@ describe('buildWorkerVars', () => {
 		})
 	})
 
-	it('keeps the project SITE_URL authoritative over a peer named "site"', () => {
-		const site = worker({ url: 'other.example.com' })
+	it('keeps SITE_URL from the project domain regardless of the service url', () => {
 		expect(
 			buildWorkerVars(
 				input({
 					projectDomain: 'example.com',
-					service: site,
-					services: { site },
+					service: worker({ url: 'other.example.com' }),
 				}),
 			)['SITE_URL'],
 		).toBe('https://example.com')
