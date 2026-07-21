@@ -98,7 +98,8 @@ function buildTopLevelVolumes(
 	if (hasObservability) {
 		for (const name of OBSERVABILITY_VOLUMES) volumes[name] = {}
 	}
-	return Object.keys(volumes).length ? volumes : undefined
+	if (Object.keys(volumes).length === 0) return undefined
+	return volumes
 }
 
 /**
@@ -138,16 +139,18 @@ function buildPostgresServiceGroup(
 		...sidecar,
 		volumes: [...sidecar.volumes, buildPostgresExporterInitMount()],
 	}
-	return {
+	const group: Record<string, ComposeServiceLike> = {
 		[POSTGRES_SIDECAR_SERVICE_NAME]: instrumentedSidecar,
-		...(walgBackup ? { [POSTGRES_WALG_SERVICE_NAME]: walgBackup } : {}),
-		...(dumpBackup ? { [POSTGRES_BACKUP_SERVICE_NAME]: dumpBackup } : {}),
-		[POSTGRES_EXPORTER_SERVICE_NAME]: buildEmbeddedPostgresExporterSidecar(
+	}
+	if (walgBackup) group[POSTGRES_WALG_SERVICE_NAME] = walgBackup
+	if (dumpBackup) group[POSTGRES_BACKUP_SERVICE_NAME] = dumpBackup
+	group[POSTGRES_EXPORTER_SERVICE_NAME] =
+		buildEmbeddedPostgresExporterSidecar(
 			POSTGRES_SIDECAR_SERVICE_NAME,
 			POSTGRES_SIDECAR_PORT,
 			postgresProjectIdentifier(projectName),
-		),
-	}
+		)
+	return group
 }
 
 export function renderComposeFile(input: ComposeFileInput): string {

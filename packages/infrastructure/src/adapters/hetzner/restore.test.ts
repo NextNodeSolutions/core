@@ -142,7 +142,7 @@ function scriptedSession(counts: ReadonlyArray<string>): {
 	const session = stubSession(command => {
 		if (command === probeCmd) {
 			const next = queue.shift()
-			if (next === undefined) {
+			if (typeof next === 'undefined') {
 				return Promise.reject(
 					new Error('probe called more than scripted'),
 				)

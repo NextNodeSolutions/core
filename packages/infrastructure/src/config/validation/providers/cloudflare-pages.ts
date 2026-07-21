@@ -4,7 +4,7 @@ export const cloudflarePages: DeployProviderValidator = {
 	requiresDomain: false,
 	requiresServices: false,
 	validate(deployRecord, inputs) {
-		if (deployRecord['services'] !== undefined) {
+		if (typeof deployRecord['services'] !== 'undefined') {
 			return {
 				errors: [
 					'[deploy.services] is not supported with deploy target "cloudflare-pages"',
@@ -12,7 +12,7 @@ export const cloudflarePages: DeployProviderValidator = {
 				deploy: undefined,
 			}
 		}
-		if (deployRecord['cron'] !== undefined) {
+		if (typeof deployRecord['cron'] !== 'undefined') {
 			return {
 				errors: [
 					'[[deploy.cron]] is not supported with deploy target "cloudflare-pages" (a static site has no always-on runtime to schedule against)',

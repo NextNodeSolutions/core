@@ -33,7 +33,7 @@ function parseJobs(yaml: string): ReadonlyArray<Record<string, unknown>> {
 function relabelRulesOf(
 	job: Record<string, unknown> | undefined,
 ): ReadonlyArray<unknown> {
-	if (job === undefined || !Array.isArray(job.relabel_configs)) {
+	if (!job || !Array.isArray(job.relabel_configs)) {
 		throw new Error('job has no relabel_configs array')
 	}
 	return job.relabel_configs

@@ -158,7 +158,7 @@ function validateDeployFields(
 function legacyImageFieldErrors(
 	deployRecord: Record<string, unknown>,
 ): string[] {
-	if (deployRecord['image'] === undefined) return []
+	if (typeof deployRecord['image'] === 'undefined') return []
 	return [
 		'deploy.image is an unknown field - migrate to [deploy.services.<name>]',
 	]
@@ -175,7 +175,7 @@ function providerRequirementErrors(
 	serviceCheck: ServiceCheck,
 ): string[] {
 	const errors: string[] = []
-	if (provider.requiresDomain && domain === undefined) {
+	if (provider.requiresDomain && typeof domain === 'undefined') {
 		errors.push(
 			`project.domain is required when deploy target is "${target}"`,
 		)
@@ -196,14 +196,15 @@ export function validateDeploySection(
 	domain: string | undefined,
 	declaredServices: ReadonlySet<string>,
 ): ValidationResult<DeploySection> {
-	if (raw !== undefined && !isRecord(raw)) {
+	if (typeof raw !== 'undefined' && !isRecord(raw)) {
 		return { ok: false, errors: ['[deploy] must be a table'] }
 	}
 
-	const deployRecord = isRecord(raw) ? raw : {}
+	let deployRecord: Record<string, unknown> = {}
+	if (isRecord(raw)) deployRecord = raw
 
 	const rawTarget = deployRecord['target']
-	if (rawTarget !== undefined && !isDeployTarget(rawTarget)) {
+	if (typeof rawTarget !== 'undefined' && !isDeployTarget(rawTarget)) {
 		return {
 			ok: false,
 			errors: [

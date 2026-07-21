@@ -89,7 +89,7 @@ export const keyedMemoizeAsync = <TArgs, TValue>(
 		})
 
 	const invalidate = (args?: TArgs): void => {
-		if (args === undefined) {
+		if (typeof args === 'undefined') {
 			clear()
 			return
 		}

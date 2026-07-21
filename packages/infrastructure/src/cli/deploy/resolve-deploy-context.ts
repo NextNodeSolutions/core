@@ -215,7 +215,7 @@ function resolveUpstreamRegistryToken(
 	for (const [name, service] of Object.entries(services)) {
 		if (service.source !== 'upstream') continue
 		const secret = service.registryAuthSecret
-		if (secret === undefined) continue
+		if (typeof secret === 'undefined') continue
 		if (!declaringBySecret.has(secret)) declaringBySecret.set(secret, name)
 	}
 
@@ -226,11 +226,11 @@ function resolveUpstreamRegistryToken(
 	}
 
 	const entry = declaringBySecret.entries().next().value
-	if (entry === undefined) return undefined
+	if (!entry) return undefined
 
 	const [secret, name] = entry
 	const secretValue = repoSecrets[secret]
-	if (secretValue === undefined) {
+	if (typeof secretValue === 'undefined') {
 		throw new Error(
 			`Secret "${secret}" declared in deploy.services.${name}.registry_auth_secret but not found in GitHub Secrets`,
 		)

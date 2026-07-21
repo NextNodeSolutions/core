@@ -4,6 +4,13 @@ import { computePublicBuildArgs, resolveBuildArgs } from './build-args.ts'
 
 import type { UserServiceConfig } from '#/config/types.ts'
 
+const optionalBuildArgs = (
+	buildArgs?: ReadonlyArray<string>,
+): { buildArgs: ReadonlyArray<string> } | undefined => {
+	if (!buildArgs) return undefined
+	return { buildArgs }
+}
+
 const buildService = (
 	buildArgs?: ReadonlyArray<string>,
 ): UserServiceConfig => ({
@@ -12,7 +19,7 @@ const buildService = (
 	needs: [],
 	dependsOn: [],
 	source: 'build',
-	...(buildArgs ? { buildArgs } : {}),
+	...optionalBuildArgs(buildArgs),
 })
 
 const upstreamService = (): UserServiceConfig => ({

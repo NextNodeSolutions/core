@@ -32,7 +32,7 @@ export function validateServices(
 	deployRecord: Record<string, unknown>,
 ): ServicesValidation {
 	const raw = deployRecord['services']
-	if (raw === undefined) {
+	if (typeof raw === 'undefined') {
 		return { errors: [], services: {} }
 	}
 	if (!isRecord(raw)) {

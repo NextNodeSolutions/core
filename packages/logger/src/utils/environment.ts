@@ -59,8 +59,11 @@ export const hasCryptoSupport = (): boolean => {
  * Defaults to 'development' when unset for safer (more verbose) logging.
  */
 export const detectEnvironment = (): Environment => {
-	const nodeEnv =
-		typeof process === 'undefined' ? undefined : process.env.NODE_ENV
+	if (typeof process === 'undefined') {
+		return 'development'
+	}
+
+	const nodeEnv = process.env.NODE_ENV
 
 	if (nodeEnv === 'production' || nodeEnv === 'prod') {
 		return 'production'

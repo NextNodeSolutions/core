@@ -56,7 +56,7 @@ function resolveDeclaredBuildArgs(
 	const args: Record<string, string> = {}
 	for (const key of names) {
 		const argValue = vars[key]
-		if (argValue === undefined) {
+		if (typeof argValue === 'undefined') {
 			throw new Error(
 				`service "${serviceName}" declares build_arg "${key}" but it is absent from GitHub Variables`,
 			)

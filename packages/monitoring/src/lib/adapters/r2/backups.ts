@@ -23,7 +23,7 @@ const parseListXml = (xml: string): ReadonlyArray<BackupObject> => {
 	const objects: Array<BackupObject> = []
 	for (const match of xml.matchAll(KEY_ENTRY_PATTERN)) {
 		const [, key, lastModified] = match
-		if (key !== undefined && lastModified !== undefined) {
+		if (typeof key !== 'undefined' && typeof lastModified !== 'undefined') {
 			objects.push({ key, lastModified })
 		}
 	}

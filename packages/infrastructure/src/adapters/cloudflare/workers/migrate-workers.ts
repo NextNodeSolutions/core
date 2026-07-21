@@ -44,7 +44,7 @@ export async function migrateWorkers(
 	const runner = input.wranglerRunner ?? defaultWranglerRunner
 	const ownerName = resolveD1MigrationServiceName(input.services)
 	const owner = input.services[ownerName]
-	if (owner === undefined) {
+	if (!owner) {
 		throw new Error(
 			`Resolved D1 migration owner "${ownerName}" is not a declared service - wiring bug`,
 		)
@@ -63,7 +63,7 @@ export async function migrateWorkers(
 	})
 
 	const databaseName = document.d1_databases?.[0]?.database_name
-	if (databaseName === undefined) {
+	if (typeof databaseName === 'undefined') {
 		throw new Error(
 			`Owning service "${ownerName}" produced no D1 binding while [services.d1] is set - wiring bug`,
 		)

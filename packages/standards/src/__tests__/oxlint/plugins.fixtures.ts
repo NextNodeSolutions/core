@@ -347,4 +347,48 @@ export function bindings(token: string | undefined): object {
 })
 `,
 	},
+
+	// coding RULE 1 - compare with a truthy check, not an explicit `=== undefined`
+	{
+		rule: 'nextnode(no-undefined-comparison)',
+		severity: 'error',
+		bad: `export function has(token: string | undefined): boolean {
+	return token !== undefined
+}
+`,
+		// the `void 0` spelling of undefined fires too
+		edge: `export function absent(token: string | undefined): boolean {
+	return token === void 0
+}
+`,
+		edgeExpect: 'fire',
+		// `=== null` stays legal: it distinguishes the null literal from other falsy values
+		good: `export function present(token: string | null): boolean {
+	return token !== null
+}
+`,
+	},
+
+	// coding RULE 1 - in a spread, `cond && value` beats `cond ? value : undefined`
+	{
+		rule: 'nextnode(no-ternary-spread)',
+		severity: 'error',
+		bad: `export const build = (retries: number | undefined): object => ({
+	...(retries ? { retries } : undefined),
+})
+`,
+		// a null alternate fires too
+		edge: `export const build = (
+	headers: Record<string, string> | undefined,
+): object => ({
+	...(headers ? { headers } : null),
+})
+`,
+		edgeExpect: 'fire',
+		// the short-circuit spread is the fix
+		good: `export const build = (retries: number | undefined): object => ({
+	...(retries && { retries }),
+})
+`,
+	},
 ]

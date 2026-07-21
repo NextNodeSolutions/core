@@ -453,7 +453,10 @@ describe('teardownCommand - postgres backup wipe', () => {
 		})
 		const [backupOrder] = mockRunFinalBackup.mock.invocationCallOrder
 		const [teardownOrder] = mockHetznerTeardown.mock.invocationCallOrder
-		if (backupOrder === undefined || teardownOrder === undefined) {
+		if (
+			typeof backupOrder === 'undefined' ||
+			typeof teardownOrder === 'undefined'
+		) {
 			expect.unreachable('both spies should have been called once')
 		}
 		expect(backupOrder).toBeLessThan(teardownOrder)

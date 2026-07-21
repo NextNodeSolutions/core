@@ -83,7 +83,8 @@ export class GithubRateLimitError extends UpstreamApiFailure {
 const parseHeaderInt = (raw: string | null): number | null => {
 	if (raw === null) return null
 	const parsed = Number(raw)
-	return Number.isInteger(parsed) ? parsed : null
+	if (Number.isInteger(parsed)) return parsed
+	return null
 }
 
 /**
@@ -179,7 +180,7 @@ const parseNextPath = (linkHeader: string | null): string | null => {
 	if (linkHeader === null) return null
 	const match = NEXT_LINK_PATTERN.exec(linkHeader)
 	const nextUrl = match?.groups?.nextUrl
-	if (nextUrl === undefined) return null
+	if (typeof nextUrl === 'undefined') return null
 	return nextUrl.startsWith(GITHUB_API_BASE)
 		? nextUrl.slice(GITHUB_API_BASE.length)
 		: nextUrl

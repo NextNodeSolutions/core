@@ -50,7 +50,7 @@ async function smokeCheckOne(
 		}
 		// eslint-disable-next-line no-await-in-loop -- one request per attempt, awaited before deciding to retry
 		failure = await attempt(target.url)
-		if (failure === undefined) return
+		if (typeof failure === 'undefined') return
 		logger.warn(
 			`Smoke check for "${target.service}" (${target.url}) failed on attempt ${String(tries)}/${String(SMOKE_CHECK_MAX_ATTEMPTS)}: ${failure}`,
 		)

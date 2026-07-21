@@ -77,7 +77,8 @@ function parseSecretEntries(raw: unknown): {
 	names: string[]
 	generated: GeneratedSecretConfig[]
 } {
-	if (raw === undefined) return { errors: [], names: [], generated: [] }
+	if (typeof raw === 'undefined')
+		return { errors: [], names: [], generated: [] }
 	if (!Array.isArray(raw)) {
 		return { errors: [SECRETS_NOT_ARRAY], names: [], generated: [] }
 	}

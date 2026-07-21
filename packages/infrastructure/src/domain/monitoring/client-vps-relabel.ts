@@ -133,7 +133,7 @@ export function buildClientVpsRelabelRules(
 	// One scrape job per exporter: when the caller names one, drop every
 	// target the SD layer attributed to another exporter port.
 	const keepExporter: ReadonlyArray<RelabelRule> =
-		exporter === undefined
+		typeof exporter === 'undefined'
 			? []
 			: [
 					{

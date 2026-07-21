@@ -202,7 +202,7 @@ export async function stageRollout(
 			environment: input.environment,
 		}),
 	)
-	if (input.observability !== undefined) {
+	if (input.observability) {
 		await writeObservabilityFiles(session, envDir, input)
 	}
 	await writePostgresExporterFiles(session, envDir, input)
@@ -212,7 +212,7 @@ export async function stageRollout(
 		await writePostgresWalgBuildContext(session, envDir)
 	}
 
-	if (input.registryToken !== undefined) {
+	if (typeof input.registryToken !== 'undefined') {
 		await loginToRegistries(session, input, input.registryToken)
 	}
 
@@ -322,7 +322,7 @@ async function loginToRegistries(
 // must never be logged into with another service's token.
 function requiresRegistryLogin(service: UserServiceConfig): boolean {
 	if (service.source === 'build') return true
-	return service.registryAuthSecret !== undefined
+	return typeof service.registryAuthSecret !== 'undefined'
 }
 
 /**

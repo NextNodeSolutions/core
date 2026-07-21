@@ -29,10 +29,10 @@ export function buildServiceUpstreams(
 
 	for (const [name, service] of Object.entries(services)) {
 		const { url } = service
-		if (url === undefined) continue
+		if (typeof url === 'undefined') continue
 
 		const port = hostPorts[name]
-		if (port === undefined) {
+		if (typeof port === 'undefined') {
 			throw new Error(
 				`No host port allocated for routed service "${name}" (url "${url}"); every service declaring a url needs an allocated host port`,
 			)

@@ -46,7 +46,7 @@ export async function renderTemplate<TProps>(
 
 		// Render to HTML using @react-email/render (FR-14)
 		const html = await render(element, {
-			...(config.pretty !== undefined && {
+			...(typeof config.pretty !== 'undefined' && {
 				pretty: config.pretty,
 			}),
 		})

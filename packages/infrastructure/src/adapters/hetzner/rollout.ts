@@ -82,7 +82,7 @@ export function requireImages(
 // `url`) and therefore need a host port. Internal-only services expose none.
 function urlServiceNames(ctx: RolloutContext): ReadonlyArray<string> {
 	return Object.entries(ctx.config.services)
-		.filter(([, service]) => service.url !== undefined)
+		.filter(([, service]) => typeof service.url !== 'undefined')
 		.map(([name]) => name)
 }
 

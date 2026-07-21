@@ -84,7 +84,9 @@ export function validateProjectSection(
 			name: name.section,
 			type: type.section,
 			filter: filter.section,
-			...(domain.section !== undefined && { domain: domain.section }),
+			...(typeof domain.section !== 'undefined' && {
+				domain: domain.section,
+			}),
 			redirectDomains: redirectDomains.section,
 			internal: internal.section,
 		},

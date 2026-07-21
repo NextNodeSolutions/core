@@ -14,12 +14,12 @@ export function assertWipeDataAllowed(
 ): void {
 	if (shouldWipeData) return
 
-	const hasD1 = services.d1 !== undefined
+	const hasD1 = Boolean(services.d1)
 	const hasR2 = (services.r2?.buckets ?? []).length > 0
 	if (!hasD1 && !hasR2) return
 
 	const kinds = [hasD1 ? 'D1' : undefined, hasR2 ? 'R2' : undefined]
-		.filter((kind): kind is string => kind !== undefined)
+		.filter((kind): kind is string => typeof kind !== 'undefined')
 		.join('/')
 	throw new Error(
 		`teardown would destroy ${kinds} data for "${projectName}" - re-run with wipe_data (TEARDOWN_WIPE_DATA=1) to confirm the irreversible deletion`,

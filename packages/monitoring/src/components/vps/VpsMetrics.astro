@@ -129,8 +129,9 @@ const traffic = unwrap(trafficState, NULL_TRAFFIC_TOTALS)
 
 const seriesAt = (metric: VpsSeriesMetric): ReadonlyArray<RangePoint> => {
 	const index = seriesMetrics.indexOf(metric)
-	const state = index === -1 ? undefined : seriesStates[index]
-	return state === undefined ? [] : seriesOf(state)
+	if (index === -1) return []
+	const state = seriesStates[index]
+	return state ? seriesOf(state) : []
 }
 const cpuSeries = seriesAt('cpu')
 const memSeries = seriesAt('mem')
@@ -161,16 +162,14 @@ const cpuCmpLines = await mapWithConcurrency(
 	},
 )
 
-const metricsByName: Record<string, ServerMetrics> =
-	vps === null
-		? {}
-		: {
-				[vps.name]: {
-					cpuPercent: host.cpuPercent,
-					memoryPercent: host.memoryPercent,
-					diskPercent: host.diskPercent,
-				},
-			}
+const metricsByName: Record<string, ServerMetrics> = {}
+if (vps !== null) {
+	metricsByName[vps.name] = {
+		cpuPercent: host.cpuPercent,
+		memoryPercent: host.memoryPercent,
+		diskPercent: host.diskPercent,
+	}
+}
 const alerts = vps === null ? [] : deriveFleetAlerts([vps], metricsByName)
 
 // Facts stay nullable end-to-end: a failed facts load must render "-", never
@@ -180,13 +179,17 @@ const memoryGb = bytesToWholeGb(facts.memoryTotalBytes)
 const diskGb = bytesToWholeDecimalGb(facts.diskTotalBytes)
 const coresLabel = cores === null ? EMPTY_LABEL : `${cores} cores`
 
+const formatSummaryStat = (stat: number | null): string | null => {
+	if (stat === null) return null
+	return stat.toFixed(1)
+}
 const summaryOf = (
 	points: ReadonlyArray<RangePoint>,
 ): { avg: string | null; peak: string | null } => {
 	const summary = summarizeSeries(points)
 	return {
-		avg: summary.average === null ? null : summary.average.toFixed(1),
-		peak: summary.peak === null ? null : summary.peak.toFixed(1),
+		avg: formatSummaryStat(summary.average),
+		peak: formatSummaryStat(summary.peak),
 	}
 }
 const lastValue = (points: ReadonlyArray<RangePoint>): number | null =>

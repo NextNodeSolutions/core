@@ -92,9 +92,9 @@ const windowFamily = atomFamily((key: string) =>
 		const params: WindowParams = JSON.parse(key)
 		const seed = get(seedAtom)
 		const unfiltered =
-			params.service === undefined &&
-			params.vps === undefined &&
-			params.query === undefined
+			typeof params.service === 'undefined' &&
+			typeof params.vps === 'undefined' &&
+			typeof params.query === 'undefined'
 		if (seed && unfiltered && seed.range === params.range) {
 			return { logs: seed.logs, stats: seed.stats, facets: seed.facets }
 		}

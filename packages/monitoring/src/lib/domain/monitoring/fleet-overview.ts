@@ -178,7 +178,7 @@ function collectServerAlerts(
 	server: FleetVps,
 	metrics: ServerMetrics | undefined,
 ): DerivedAlert[] {
-	if (!server.isOnline || metrics === undefined) return []
+	if (!server.isOnline || !metrics) return []
 	return ALERT_METRICS.map(metric =>
 		evaluateMetricAlert(server.name, metrics, metric),
 	).filter((alert): alert is DerivedAlert => alert !== null)

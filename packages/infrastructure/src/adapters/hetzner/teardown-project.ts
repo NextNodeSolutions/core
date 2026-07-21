@@ -181,7 +181,7 @@ export async function releaseProjectHostPort(
 	{ r2, vpsName, state, etag }: HostPortRelease,
 ): Promise<ResourceOutcome> {
 	const servicePorts = state.hostPorts[projectName]
-	if (servicePorts === undefined) {
+	if (!servicePorts) {
 		logger.info(
 			`No host port to release for "${projectName}" on VPS "${vpsName}" (already absent)`,
 		)

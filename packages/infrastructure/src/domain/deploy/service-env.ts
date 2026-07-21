@@ -49,7 +49,7 @@ export function buildServiceUrlEnv(
 
 	for (const [name, service] of Object.entries(services)) {
 		const { url } = service
-		if (url === undefined) continue
+		if (typeof url === 'undefined') continue
 		urlEnv[toUrlEnvKey(name)] =
 			`${URL_SCHEME}${resolveDeployDomain(url, environment)}`
 	}
@@ -102,7 +102,7 @@ function projectSecretsForService(
 	for (const [key, value] of Object.entries(secrets)) {
 		const producer = origins[key]
 		const included =
-			producer === undefined
+			typeof producer === 'undefined'
 				? service.secrets.includes(key)
 				: service.needs.includes(producer)
 		if (included) projected[key] = value

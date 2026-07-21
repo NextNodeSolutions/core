@@ -32,10 +32,10 @@ export class NextNodeLogger implements Logger {
 
 	constructor(config: LoggerConfig = {}) {
 		this.environment = config.environment ?? detectEnvironment()
-		if (config.prefix !== undefined) {
+		if (typeof config.prefix !== 'undefined') {
 			this.prefix = config.prefix
 		}
-		if (config.scope !== undefined) {
+		if (typeof config.scope !== 'undefined') {
 			this.scope = config.scope
 		}
 		this.includeLocation =
@@ -105,8 +105,8 @@ export class NextNodeLogger implements Logger {
 			silent: this.silent,
 			transports: this.transports,
 			requestId: config.requestId ?? this.requestId,
-			...(childPrefix !== undefined && { prefix: childPrefix }),
-			...(childScope !== undefined && { scope: childScope }),
+			...(typeof childPrefix !== 'undefined' && { prefix: childPrefix }),
+			...(typeof childScope !== 'undefined' && { scope: childScope }),
 		})
 	}
 

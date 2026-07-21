@@ -50,7 +50,7 @@ function capturingRunner(
 	return {
 		runner,
 		captured: () => {
-			if (captured === undefined) throw new Error('runner not called')
+			if (!captured) throw new Error('runner not called')
 			return captured
 		},
 	}

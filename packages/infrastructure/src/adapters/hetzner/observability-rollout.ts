@@ -10,6 +10,11 @@ import type { SshSession } from './ssh/session.types.ts'
 
 const logger = createLogger()
 
+function nonEmptySecret(secret: string | undefined): string | undefined {
+	if (!secret) return undefined
+	return secret
+}
+
 export interface ObservabilityRolloutInput {
 	readonly services: Readonly<Record<string, UserServiceConfig>>
 	readonly hostPorts: Readonly<Record<string, number>>
@@ -30,9 +35,9 @@ export interface ObservabilityRolloutInput {
  */
 function selectSdAppHostPort(input: ObservabilityRolloutInput): number {
 	for (const [name, service] of Object.entries(input.services)) {
-		if (service.url === undefined) continue
+		if (typeof service.url === 'undefined') continue
 		const port = input.hostPorts[name]
-		if (port === undefined) {
+		if (typeof port === 'undefined') {
 			throw new Error(
 				`observability: routed service "${name}" has no allocated host port`,
 			)
@@ -57,13 +62,6 @@ export async function writeObservabilityFiles(
 	envDir: string,
 	input: ObservabilityRolloutInput,
 ): Promise<void> {
-	const resendApiKeyRaw = input.secrets[RESEND_API_KEY_SECRET]
-	const resendApiKey =
-		resendApiKeyRaw === undefined || resendApiKeyRaw === ''
-			? undefined
-			: resendApiKeyRaw
-	const healthchecksPingUrl = input.secrets[HEALTHCHECKS_PING_URL_SECRET]
-
 	const files = buildObservabilityDeployFiles({
 		appHostPort: selectSdAppHostPort(input),
 		tailnetIp: input.tailnetIp,
@@ -71,9 +69,10 @@ export async function writeObservabilityFiles(
 		environment: input.environment,
 		vpsName: input.vpsName,
 		clientId: input.clientId,
-		resendApiKey,
-		healthchecksPingUrl:
-			healthchecksPingUrl === '' ? undefined : healthchecksPingUrl,
+		resendApiKey: nonEmptySecret(input.secrets[RESEND_API_KEY_SECRET]),
+		healthchecksPingUrl: nonEmptySecret(
+			input.secrets[HEALTHCHECKS_PING_URL_SECRET],
+		),
 	})
 
 	await Promise.all(

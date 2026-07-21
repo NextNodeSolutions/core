@@ -54,7 +54,7 @@ export class R2Client implements ObjectStoreClient {
 				new GetObjectCommand({ Bucket: this.bucket, Key: key }),
 			)
 			const body = await response.Body?.transformToString()
-			if (body === undefined) {
+			if (typeof body === 'undefined') {
 				throw new Error(`R2 get "${key}": empty body`)
 			}
 			return { body, etag: response.ETag ?? '' }
@@ -122,7 +122,7 @@ export class R2Client implements ObjectStoreClient {
 				.filter((key): key is string => typeof key === 'string')
 			keys.push(...pageKeys)
 			continuationToken = response.NextContinuationToken
-		} while (continuationToken !== undefined)
+		} while (typeof continuationToken !== 'undefined')
 		/* eslint-enable no-await-in-loop */
 
 		return keys
@@ -161,7 +161,7 @@ export class R2Client implements ObjectStoreClient {
 			}
 
 			continuationToken = listResponse.NextContinuationToken
-		} while (continuationToken !== undefined)
+		} while (typeof continuationToken !== 'undefined')
 		/* eslint-enable no-await-in-loop */
 
 		return deletedCount

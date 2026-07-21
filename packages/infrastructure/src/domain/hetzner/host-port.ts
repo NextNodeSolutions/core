@@ -35,7 +35,7 @@ export function allocateHostPort(
 	let hasAllocated = false
 	for (const service of urlServices) {
 		const current = existing[service]
-		if (current !== undefined) {
+		if (typeof current !== 'undefined') {
 			ports[service] = current
 			continue
 		}

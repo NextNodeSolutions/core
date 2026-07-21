@@ -64,7 +64,8 @@ const okLogsResponse = (
 /** Read a filter value, treating a missing/empty/`all` param as "no filter". */
 const filterParam = (url: URL, key: string): string | undefined => {
 	const param = url.searchParams.get(key)
-	return param && param.length > 0 && param !== 'all' ? param : undefined
+	if (param && param.length > 0 && param !== 'all') return param
+	return undefined
 }
 
 export const handleLogsRequest = async (url: URL): Promise<Response> => {

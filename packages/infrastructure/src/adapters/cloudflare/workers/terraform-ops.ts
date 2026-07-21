@@ -40,8 +40,8 @@ async function withWorkdir<T>(
 	run: (workdir: string, vars: Record<string, string>) => Promise<T>,
 ): Promise<T> {
 	const mainConfig = buildTerraformMainConfig(ctx.config, ctx.environment)
-	const vars =
-		mainConfig.variable === undefined ? {} : { account_id: ctx.accountId }
+	const vars: Record<string, string> = {}
+	if (mainConfig.variable) vars.account_id = ctx.accountId
 	const workdir = await mkdtemp(join(tmpdir(), WORKDIR_PREFIX))
 	try {
 		await writeTerraformConfig(workdir, mainConfig)

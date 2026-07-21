@@ -91,7 +91,7 @@ export function buildR2ServiceEnv(state: R2ServiceState): ServiceEnv {
 	for (const binding of state.buckets) {
 		const key = envKeyForAlias(binding.alias)
 		publicEnv[key] = binding.name
-		if (binding.publicUrl !== undefined) {
+		if (typeof binding.publicUrl !== 'undefined') {
 			publicEnv[`${key}_URL`] = binding.publicUrl
 		}
 	}

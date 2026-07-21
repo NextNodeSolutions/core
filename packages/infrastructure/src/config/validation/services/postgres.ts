@@ -64,13 +64,13 @@ export function validatePostgresService(
 		ok: true,
 		section: {
 			mode: mode.section,
-			...(migrationsFolder.section !== undefined && {
+			...(typeof migrationsFolder.section !== 'undefined' && {
 				migrationsFolder: migrationsFolder.section,
 			}),
-			...(migrateCommand.section !== undefined && {
+			...(typeof migrateCommand.section !== 'undefined' && {
 				migrateCommand: migrateCommand.section,
 			}),
-			...(checkCommand.section !== undefined && {
+			...(typeof checkCommand.section !== 'undefined' && {
 				checkCommand: checkCommand.section,
 			}),
 		},

@@ -28,7 +28,7 @@ const upstreamService = (
 	dependsOn: [],
 	source: 'upstream',
 	ref,
-	...(registryAuthSecret !== undefined && { registryAuthSecret }),
+	...(typeof registryAuthSecret !== 'undefined' && { registryAuthSecret }),
 })
 
 const hetznerConfig = (

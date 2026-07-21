@@ -29,7 +29,8 @@ const latestEpochSeconds = (
 		if (Number.isNaN(ms)) continue
 		if (latest === null || ms > latest) latest = ms
 	}
-	return latest === null ? null : Math.floor(latest / MS_PER_SECOND)
+	if (latest === null) return null
+	return Math.floor(latest / MS_PER_SECOND)
 }
 
 /**

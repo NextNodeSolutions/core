@@ -28,7 +28,7 @@ function isStringRecord(
 // a specific key it needs is missing). A present-but-malformed payload throws.
 export function readJsonRecordEnv(name: string): Record<string, string> {
 	const raw = getEnv(name)
-	if (raw === undefined || raw === '') return {}
+	if (!raw) return {}
 	const parsed: unknown = parseJsonOrThrow(raw, name)
 	if (!isStringRecord(parsed)) {
 		throw new Error(`${name} must be a JSON object with string values`)
@@ -61,7 +61,7 @@ export function requireGithubRepository(): GithubRepository {
 // unset to disable. Same convention as CI, DEBUG, FORCE_COLOR.
 export function isEnvSet(name: string): boolean {
 	const raw = process.env[name]
-	return raw !== undefined && raw !== ''
+	return Boolean(raw)
 }
 
 export function getEnumEnv<T extends string>(
@@ -70,11 +70,11 @@ export function getEnumEnv<T extends string>(
 	defaultValue: T,
 ): T {
 	const raw = process.env[name]
-	if (raw === undefined || raw === '') {
+	if (!raw) {
 		return defaultValue
 	}
 	const match = allowed.find(candidate => candidate === raw)
-	if (match === undefined) {
+	if (typeof match === 'undefined') {
 		throw new Error(
 			`Invalid ${name} "${raw}" - expected one of: ${allowed.join(', ')}`,
 		)

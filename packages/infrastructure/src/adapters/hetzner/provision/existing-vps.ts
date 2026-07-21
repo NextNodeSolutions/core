@@ -47,7 +47,7 @@ export function assertModeMatches(
 	isInternal: boolean,
 ): void {
 	const wantMode = isInternal ? 'internal' : 'public'
-	if (existing.mode === undefined) {
+	if (typeof existing.mode === 'undefined') {
 		throw new Error(
 			`VPS "${vpsName}" (server #${String(existing.serverId)}) has no \`mode\` label - refusing to attach. Re-provision the VPS or add label \`mode=${wantMode}\` manually.`,
 		)

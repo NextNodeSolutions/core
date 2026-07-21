@@ -6,7 +6,7 @@
 // Centralized string conversion for special types
 const typeToString = (subject: unknown): string | undefined => {
 	if (subject === null) return 'null'
-	if (subject === undefined) return 'undefined'
+	if (typeof subject === 'undefined') return 'undefined'
 	if (typeof subject === 'function')
 		return `[Function: ${subject.name || 'anonymous'}]`
 	if (typeof subject === 'symbol') return subject.toString()
@@ -18,7 +18,7 @@ export const safeStringify = (subject: unknown): string => {
 	try {
 		// Fast path for primitives
 		const primitiveString = typeToString(subject)
-		if (primitiveString !== undefined) return primitiveString
+		if (typeof primitiveString !== 'undefined') return primitiveString
 
 		// Direct string conversion for simple types
 		if (typeof subject === 'string') return subject

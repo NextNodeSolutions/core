@@ -19,10 +19,10 @@ function validateWorkerServiceUrls(
 
 	for (const [name, service] of Object.entries(services)) {
 		const { url } = service
-		if (url === undefined) continue
+		if (typeof url === 'undefined') continue
 
 		const owner = firstSeenBy.get(url)
-		if (owner === undefined) {
+		if (typeof owner === 'undefined') {
 			firstSeenBy.set(url, name)
 		} else {
 			errors.push(
@@ -31,7 +31,7 @@ function validateWorkerServiceUrls(
 		}
 
 		if (
-			domain !== undefined &&
+			typeof domain !== 'undefined' &&
 			url !== domain &&
 			!url.endsWith(`.${domain}`)
 		) {
@@ -52,17 +52,17 @@ function unsupportedContainerFieldErrors(
 	deployRecord: Record<string, unknown>,
 ): string[] {
 	const errors: string[] = []
-	if (deployRecord['vps'] !== undefined) {
+	if (typeof deployRecord['vps'] !== 'undefined') {
 		errors.push(
 			'deploy.vps is not supported with deploy target "cloudflare-workers" (a Worker runs on Cloudflare\'s edge, not a pinned VPS)',
 		)
 	}
-	if (deployRecord['volumes'] !== undefined) {
+	if (typeof deployRecord['volumes'] !== 'undefined') {
 		errors.push(
 			'[[deploy.volumes]] is not supported with deploy target "cloudflare-workers" (a Worker has no host filesystem - use [services.kv]/[services.d1]/[services.r2] for state)',
 		)
 	}
-	if (deployRecord['hetzner'] !== undefined) {
+	if (typeof deployRecord['hetzner'] !== 'undefined') {
 		errors.push(
 			'[deploy.hetzner] is not supported with deploy target "cloudflare-workers" (server sizing is meaningless on Cloudflare\'s edge)',
 		)

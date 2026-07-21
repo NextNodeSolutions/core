@@ -320,7 +320,8 @@ const firstField = (
 ): unknown => {
 	for (const key of keys) {
 		const candidate = parsed[key]
-		if (candidate !== undefined && candidate !== null) return candidate
+		if (typeof candidate !== 'undefined' && candidate !== null)
+			return candidate
 	}
 	return undefined
 }

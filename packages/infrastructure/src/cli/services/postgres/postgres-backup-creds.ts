@@ -75,7 +75,7 @@ export async function provisionPostgresBackupCreds(
 		input.environment,
 	)
 	const [probeBucket] = input.bucketNames
-	if (probeBucket === undefined) {
+	if (typeof probeBucket === 'undefined') {
 		throw new Error(
 			'provisionPostgresBackupCreds: bucketNames must not be empty',
 		)

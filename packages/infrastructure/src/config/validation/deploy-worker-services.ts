@@ -90,14 +90,19 @@ const workerServiceSchema = (
 		...containerFieldsForbidden(name),
 	})
 
+type MutableWorkerServiceConfig = {
+	-readonly [K in keyof WorkerServiceConfig]: WorkerServiceConfig[K]
+}
+
 function toWorkerService(parsed: ParsedWorkerService): WorkerServiceConfig {
-	return {
-		...(parsed.url === undefined ? {} : { url: parsed.url }),
+	const workerService: MutableWorkerServiceConfig = {
 		secrets: parsed.secrets,
 		needs: parsed.needs,
 		dependsOn: parsed.depends_on,
 		entry: parsed.entry,
 	}
+	if (parsed.url) workerService.url = parsed.url
+	return workerService
 }
 
 export interface WorkerServicesValidation {
@@ -109,7 +114,7 @@ export function validateWorkerServices(
 	deployRecord: Record<string, unknown>,
 ): WorkerServicesValidation {
 	const raw = deployRecord['services']
-	if (raw === undefined) return { errors: [], services: {} }
+	if (typeof raw === 'undefined') return { errors: [], services: {} }
 	if (!isRecord(raw)) {
 		return { errors: ['[deploy.services] must be a table'], services: {} }
 	}

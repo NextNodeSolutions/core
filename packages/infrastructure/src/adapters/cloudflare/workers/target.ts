@@ -182,7 +182,7 @@ export class CloudflareWorkersTarget implements DeployTarget {
 	}
 
 	private requireProjectDir(): string {
-		if (this.projectDir === undefined) {
+		if (typeof this.projectDir === 'undefined') {
 			throw new Error(
 				`${this.name} deploy needs the project directory (where the built bundle lives) but none was resolved - PIPELINE_CONFIG_FILE must point at the app's nextnode.toml.`,
 			)

@@ -31,7 +31,7 @@ export function resolveMigrationServiceName(
 		.map(([name]) => name)
 	const [owner, ...rest] = owners
 
-	if (owner === undefined) {
+	if (typeof owner === 'undefined') {
 		throw new Error(
 			'No deploy service declares needs = ["postgres"] while [services.postgres] is set - exactly one service must own the database schema and run its migration',
 		)

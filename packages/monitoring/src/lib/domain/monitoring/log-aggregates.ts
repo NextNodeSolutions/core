@@ -159,7 +159,7 @@ export const parseFleetStats = (
 			Math.max(0, Math.floor((at - start) / bucketMs)),
 		)
 		const bucket = buckets[index]
-		if (bucket === undefined) continue
+		if (!bucket) continue
 		total += hits
 		const level = parseLogLevel(parsed.level)
 		if (level !== null) levelCounts[level] += hits
@@ -196,24 +196,24 @@ const toCount = (raw: unknown): number =>
 	typeof raw === 'number' && Number.isFinite(raw) ? raw : 0
 
 const toLevelCounts = (raw: unknown): LevelCounts => {
-	const record = isRecord(raw) ? raw : {}
+	if (!isRecord(raw)) return emptyLevelCounts()
 	return {
-		debug: toCount(record.debug),
-		info: toCount(record.info),
-		warn: toCount(record.warn),
-		error: toCount(record.error),
+		debug: toCount(raw.debug),
+		info: toCount(raw.info),
+		warn: toCount(raw.warn),
+		error: toCount(raw.error),
 	}
 }
 
 const toBucket = (raw: unknown): LogBucket => {
-	const record = isRecord(raw) ? raw : {}
+	if (!isRecord(raw)) return emptyBucket(0)
 	return {
-		t: toCount(record.t),
-		debug: toCount(record.debug),
-		info: toCount(record.info),
-		warn: toCount(record.warn),
-		error: toCount(record.error),
-		total: toCount(record.total),
+		t: toCount(raw.t),
+		debug: toCount(raw.debug),
+		info: toCount(raw.info),
+		warn: toCount(raw.warn),
+		error: toCount(raw.error),
+		total: toCount(raw.total),
 	}
 }
 

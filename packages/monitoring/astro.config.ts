@@ -6,6 +6,11 @@ import tailwindcss from '@tailwindcss/vite'
 
 import { envSchema } from './src/config/env.schema.ts'
 
+const ssrConfig = (): { noExternal: true } | undefined => {
+	if (process.env.VITEST) return undefined
+	return { noExternal: true }
+}
+
 export default defineConfig({
 	output: 'server',
 	adapter: node({ mode: 'standalone' }),
@@ -25,6 +30,6 @@ export default defineConfig({
 	// and vite-node crashes on `noExternal: true`.
 	vite: {
 		plugins: [tailwindcss()],
-		ssr: process.env.VITEST ? undefined : { noExternal: true },
+		ssr: ssrConfig(),
 	},
 })

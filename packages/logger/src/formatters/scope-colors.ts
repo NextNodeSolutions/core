@@ -35,11 +35,11 @@ export const createScopeColorCache = <TColor>(
 
 	const resolve = (scope: string): TColor => {
 		const existing = cache.get(scope)
-		if (existing !== undefined) return existing
+		if (typeof existing !== 'undefined') return existing
 
 		if (cache.size >= maxSize) {
 			const oldestKey = cache.keys().next().value
-			if (oldestKey !== undefined) cache.delete(oldestKey)
+			if (typeof oldestKey !== 'undefined') cache.delete(oldestKey)
 		}
 
 		const color = palette[nextIndex % palette.length] ?? fallback

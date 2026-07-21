@@ -55,6 +55,13 @@ const FLEET_LOG_WINDOW_BOUNDS = {
 	fallback: 6,
 } as const
 
+const clampWindowHours = (
+	windowHours: number | undefined,
+): number | undefined => {
+	if (typeof windowHours === 'undefined') return undefined
+	return clampNumber(windowHours, FLEET_LOG_WINDOW_BOUNDS)
+}
+
 /** Most-recent log lines from a whole VPS (container + journald), newest first. */
 export const loadVpsLogs = async (
 	vpsName: string,
@@ -77,10 +84,7 @@ export const loadFleetLogs = async (
 	if (MOCK_DATA) return mockFleetLogs(windowHours, filter)
 	// Omitted window keeps the domain default; a provided one is clamped so a
 	// NaN/negative value never reaches the LogsQL `_time:` filter.
-	const safeWindowHours =
-		windowHours === undefined
-			? undefined
-			: clampNumber(windowHours, FLEET_LOG_WINDOW_BOUNDS)
+	const safeWindowHours = clampWindowHours(windowHours)
 	const body = await queryVictoriaLogs(
 		buildFleetLogsQuery(safeWindowHours, filter),
 	)
@@ -98,10 +102,7 @@ export const loadFleetErrorCount = async (
 	windowHours?: number,
 ): Promise<number> => {
 	if (MOCK_DATA) return mockFleetErrorCount(windowHours)
-	const safeWindowHours =
-		windowHours === undefined
-			? undefined
-			: clampNumber(windowHours, FLEET_LOG_WINDOW_BOUNDS)
+	const safeWindowHours = clampWindowHours(windowHours)
 	const body = await queryVictoriaLogs(
 		buildFleetErrorCountQuery(safeWindowHours),
 	)

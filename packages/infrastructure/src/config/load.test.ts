@@ -22,15 +22,18 @@ const workersConfig = (
 	services: Record<string, unknown>,
 	deployExtra: Record<string, unknown> = {},
 	backingServices?: Record<string, unknown>,
-): Record<string, unknown> => ({
-	project: { name: 'my-worker', type: 'app', domain: 'example.com' },
-	deploy: {
-		target: 'cloudflare-workers',
-		services,
-		...deployExtra,
-	},
-	...(backingServices ? { services: backingServices } : {}),
-})
+): Record<string, unknown> => {
+	const config: Record<string, unknown> = {
+		project: { name: 'my-worker', type: 'app', domain: 'example.com' },
+		deploy: {
+			target: 'cloudflare-workers',
+			services,
+			...deployExtra,
+		},
+	}
+	if (backingServices) config.services = backingServices
+	return config
+}
 
 describe('loadConfig', () => {
 	it('loads a minimal valid config with defaults', () => {
@@ -2288,12 +2291,10 @@ describe('parseConfig', () => {
 		it.each(['d1', 'kv', 'queues'])(
 			'rejects Cloudflare-only [services.%s] on hetzner-vps',
 			name => {
-				const backing =
-					name === 'kv'
-						? { namespaces: [{ name: 'sessions' }] }
-						: name === 'queues'
-							? [{ name: 'emails' }]
-							: {}
+				let backing: unknown = {}
+				if (name === 'kv')
+					backing = { namespaces: [{ name: 'sessions' }] }
+				if (name === 'queues') backing = [{ name: 'emails' }]
 				const parsed = parseConfig({
 					project: {
 						name: 'my-app',

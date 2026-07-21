@@ -6,7 +6,7 @@ export function pickSecrets(
 
 	for (const name of names) {
 		const secretValue = repoSecrets[name]
-		if (secretValue === undefined) {
+		if (typeof secretValue === 'undefined') {
 			throw new Error(
 				`Secret "${name}" declared in deploy.secrets but not found in GitHub Secrets`,
 			)

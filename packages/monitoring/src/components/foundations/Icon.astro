@@ -88,7 +88,11 @@ const DEFAULT_ICON_SIZE = 18
 const STROKE_WIDTH = 1.7
 
 const { name, size = DEFAULT_ICON_SIZE, class: className } = Astro.props
-const Glyph = name === 'github' ? null : GLYPHS[name]
+const resolveGlyph = () => {
+	if (name === 'github') return null
+	return GLYPHS[name]
+}
+const Glyph = resolveGlyph()
 ---
 
 {

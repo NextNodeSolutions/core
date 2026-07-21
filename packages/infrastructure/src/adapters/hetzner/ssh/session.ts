@@ -56,7 +56,7 @@ function establishConnection(
 	return new Promise<string>((resolve, reject) => {
 		let observedFingerprint: string | undefined
 		conn.on('ready', () => {
-			if (observedFingerprint === undefined) {
+			if (typeof observedFingerprint === 'undefined') {
 				reject(
 					new Error(
 						`SSH connection to ${config.host} completed without observing a host key`,
@@ -82,7 +82,8 @@ function establishConnection(
 			hostVerifier: (key: Buffer): boolean => {
 				const fingerprint = computeHostKeyFingerprint(key)
 				observedFingerprint = fingerprint
-				if (config.expectedHostKeyFingerprint === undefined) return true
+				if (typeof config.expectedHostKeyFingerprint === 'undefined')
+					return true
 				return fingerprintsMatch(
 					fingerprint,
 					config.expectedHostKeyFingerprint,

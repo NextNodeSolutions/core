@@ -159,7 +159,8 @@ export class HetznerVpsTarget implements DeployTarget {
 		// urls, not the bare project `domain`, so the records derive from them;
 		// internal-only services (no url) get no record.
 		const serviceDomains = Object.values(this.config.services).flatMap(
-			service => (service.url === undefined ? [] : [service.url]),
+			service =>
+				typeof service.url === 'undefined' ? [] : [service.url],
 		)
 		// The observability vhosts (logs./metrics.) route like any service
 		// url: they need their A records at the same per-environment

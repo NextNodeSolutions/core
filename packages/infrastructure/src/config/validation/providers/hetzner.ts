@@ -9,7 +9,7 @@ import type { DeployProviderValidator } from './registry.ts'
 type FieldResult = { error?: string; value?: string }
 
 function parseOptionalString(raw: unknown, path: string): FieldResult {
-	if (raw === undefined) return {}
+	if (typeof raw === 'undefined') return {}
 	if (typeof raw !== 'string' || raw === '') {
 		return { error: `${path} must be a non-empty string` }
 	}
@@ -20,7 +20,7 @@ function parseHetzner(rawHetzner: unknown): {
 	errors: string[]
 	hetzner?: HetznerDeployConfig
 } {
-	if (rawHetzner === undefined) {
+	if (typeof rawHetzner === 'undefined') {
 		return { errors: [], hetzner: DEFAULT_HETZNER_CONFIG }
 	}
 	if (!isRecord(rawHetzner)) {
@@ -36,7 +36,7 @@ function parseHetzner(rawHetzner: unknown): {
 		'deploy.hetzner.location',
 	)
 	const errors = [serverType.error, location.error].filter(
-		(e): e is string => e !== undefined,
+		(e): e is string => typeof e !== 'undefined',
 	)
 	if (errors.length > 0) return { errors }
 
@@ -65,10 +65,10 @@ function validateServiceUrls(
 
 	for (const [name, service] of Object.entries(services)) {
 		const { url } = service
-		if (url === undefined) continue
+		if (typeof url === 'undefined') continue
 
 		const owner = firstSeenBy.get(url)
-		if (owner === undefined) {
+		if (typeof owner === 'undefined') {
 			firstSeenBy.set(url, name)
 		} else {
 			errors.push(
@@ -77,7 +77,7 @@ function validateServiceUrls(
 		}
 
 		if (
-			domain !== undefined &&
+			typeof domain !== 'undefined' &&
 			url !== domain &&
 			!url.endsWith(`.${domain}`)
 		) {

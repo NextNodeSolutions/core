@@ -8,7 +8,8 @@ const ISO_DATE_LENGTH = 10
 
 const parseIsoMs = (isoString: string): number | null => {
 	const ms = Date.parse(isoString)
-	return Number.isFinite(ms) ? ms : null
+	if (Number.isFinite(ms)) return ms
+	return null
 }
 
 const toIsoDate = (ms: number): string =>

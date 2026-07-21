@@ -264,7 +264,10 @@ describe('migrateRemoteCommand', () => {
 
 		const [prepareOrder] = mockPrepareRollout.mock.invocationCallOrder
 		const [migrateOrder] = mockRunMigrate.mock.invocationCallOrder
-		if (prepareOrder === undefined || migrateOrder === undefined) {
+		if (
+			typeof prepareOrder === 'undefined' ||
+			typeof migrateOrder === 'undefined'
+		) {
 			expect.unreachable('both spies should have been called once')
 		}
 		expect(prepareOrder).toBeLessThan(migrateOrder)
@@ -343,7 +346,10 @@ describe('migrateRemoteCommand', () => {
 		)
 		const [migrateOrder] = mockRunMigrate.mock.invocationCallOrder
 		const [pruneOrder] = mockPruneProjectBackups.mock.invocationCallOrder
-		if (migrateOrder === undefined || pruneOrder === undefined) {
+		if (
+			typeof migrateOrder === 'undefined' ||
+			typeof pruneOrder === 'undefined'
+		) {
 			expect.unreachable('both spies should have been called once')
 		}
 		expect(pruneOrder).toBeGreaterThan(migrateOrder)

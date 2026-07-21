@@ -26,7 +26,7 @@ export function validateVolumes(deployRecord: Record<string, unknown>): {
 	volumes: ReadonlyArray<DeployVolume>
 } {
 	const raw = deployRecord['volumes']
-	if (raw === undefined) return { errors: [], volumes: [] }
+	if (typeof raw === 'undefined') return { errors: [], volumes: [] }
 	if (!isRecord(raw)) return { errors: [VOLUMES_NOT_TABLE], volumes: [] }
 
 	const errors: string[] = []

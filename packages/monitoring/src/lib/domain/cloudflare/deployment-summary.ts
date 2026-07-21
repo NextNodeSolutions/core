@@ -51,6 +51,16 @@ export interface ProjectSummary {
 	readonly lastStatuses: ReadonlyArray<DeployDisplayStatus>
 }
 
+const finishedSuccessRate = (
+	finished: ReadonlyArray<CloudflarePagesDeployment>,
+): number | null => {
+	if (finished.length === 0) return null
+	const succeeded = finished.filter(
+		deployment => deployment.status === 'success',
+	).length
+	return Math.round((succeeded / finished.length) * PERCENT_SCALE)
+}
+
 export const summarizeProject = (
 	deployments: ReadonlyArray<CloudflarePagesDeployment>,
 ): ProjectSummary => {
@@ -61,13 +71,7 @@ export const summarizeProject = (
 		deployment =>
 			deployment.status === 'success' || deployment.status === 'failure',
 	)
-	const succeeded = finished.filter(
-		deployment => deployment.status === 'success',
-	).length
-	const successRate =
-		finished.length === 0
-			? null
-			: Math.round((succeeded / finished.length) * PERCENT_SCALE)
+	const successRate = finishedSuccessRate(finished)
 	return {
 		current:
 			findCanonicalProductionDeployment(deployments) ??

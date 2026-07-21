@@ -297,10 +297,7 @@ export const KEBAB_IDENTIFIER_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/
 export function requiresInfraStorage(config: DeployableConfig): boolean {
 	if (isHetznerDeployableConfig(config)) return true
 	for (const name of SERVICE_NAMES) {
-		if (
-			config.services[name] !== undefined &&
-			SERVICE_REQUIRES_INFRA_STORAGE[name]
-		) {
+		if (config.services[name] && SERVICE_REQUIRES_INFRA_STORAGE[name]) {
 			return true
 		}
 	}
