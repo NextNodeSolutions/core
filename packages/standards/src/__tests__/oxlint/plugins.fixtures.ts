@@ -298,4 +298,53 @@ export { Modal }
 }
 `,
 	},
+
+	// coding RULE 1 - a ternary with an empty-object branch is a conditional spread in disguise
+	{
+		rule: 'nextnode(no-empty-object-ternary)',
+		severity: 'error',
+		bad: `export function bindings(token: string | undefined): object {
+	const planetscale =
+		token === undefined ? {} : { planetscaleServiceToken: token }
+	return { ...planetscale }
+}
+`,
+		// the empty object on the consequent branch still fires
+		edge: `export const overrides = (skip: boolean): object =>
+	skip ? {} : { retries: 3 }
+`,
+		edgeExpect: 'fire',
+		good: `function planetscaleCredentials(
+	token: string | undefined,
+): { planetscaleServiceToken: string } | undefined {
+	if (!token) return undefined
+	return { planetscaleServiceToken: token }
+}
+
+export function bindings(token: string | undefined): object {
+	return { ...planetscaleCredentials(token) }
+}
+`,
+	},
+
+	// coding RULE 1 - the empty/absent branch of a ternary must be the alternate, not the consequent
+	{
+		rule: 'nextnode(no-sentinel-consequent)',
+		severity: 'error',
+		bad: `export const wrap = (dir: string | undefined): object => ({
+	...(!dir ? undefined : { dir }),
+})
+`,
+		// void in the consequent counts as a sentinel too
+		edge: `export function first(skip: boolean): string | undefined {
+	return skip ? void 0 : 'x'
+}
+`,
+		edgeExpect: 'fire',
+		// sentinel parked in the alternate, value in the consequent
+		good: `export const wrap = (dir: string | undefined): object => ({
+	...(dir ? { dir } : undefined),
+})
+`,
+	},
 ]
