@@ -116,6 +116,7 @@ export default defineConfig({
 		'nextnode/no-empty-object-ternary': 'error',
 		'nextnode/no-sentinel-consequent': 'error',
 		'nextnode/no-undefined-comparison': 'error',
+		'nextnode/no-ternary-spread': 'error',
 	},
 	overrides: [
 		{

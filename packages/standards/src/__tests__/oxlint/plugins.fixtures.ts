@@ -368,4 +368,27 @@ export function bindings(token: string | undefined): object {
 }
 `,
 	},
+
+	// coding RULE 1 - in a spread, `cond && value` beats `cond ? value : undefined`
+	{
+		rule: 'nextnode(no-ternary-spread)',
+		severity: 'error',
+		bad: `export const build = (retries: number | undefined): object => ({
+	...(retries ? { retries } : undefined),
+})
+`,
+		// a null alternate fires too
+		edge: `export const build = (
+	headers: Record<string, string> | undefined,
+): object => ({
+	...(headers ? { headers } : null),
+})
+`,
+		edgeExpect: 'fire',
+		// the short-circuit spread is the fix
+		good: `export const build = (retries: number | undefined): object => ({
+	...(retries && { retries }),
+})
+`,
+	},
 ]
