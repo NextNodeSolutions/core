@@ -1,43 +1,35 @@
-import { mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-
 import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
 
 import { ensureHcpWorkspace } from '#/adapters/hcp/workspaces.ts'
-import {
-	defaultTerraformRunner,
-	terraformApply,
-	terraformDestroy,
-	terraformInit,
-	terraformOutputJson,
-	writeTerraformConfig,
-} from '#/adapters/terraform/runner.ts'
+import { defaultTerraformRunner } from '#/adapters/terraform/runner.ts'
 import { WORKERS_MANAGED_RESOURCES } from '#/domain/cloudflare/workers/managed-resources.ts'
 import {
 	buildWorkersBackingEnv,
 	deriveWorkersBackingConfig,
 	hasWorkersBacking,
-	parseTerraformOutputs,
 } from '#/domain/cloudflare/workers/outputs-env.ts'
 import { computeSiteUrl } from '#/domain/deploy/domain.ts'
 import { executeHandlers } from '#/domain/deploy/execute-handlers.ts'
-import {
-	buildTerraformMainConfig,
-	HCP_TERRAFORM_ORGANIZATION,
-} from '#/domain/deploy/terraform-config.ts'
+import { HCP_TERRAFORM_ORGANIZATION } from '#/domain/deploy/terraform-config.ts'
 
+import { deployWorkers } from './deploy-workers.ts'
 import { teardownWorkers } from './teardown-workers.ts'
+import {
+	applyWorkersTerraform,
+	destroyWorkersTerraform,
+	readWorkersTerraformOutputs,
+} from './terraform-ops.ts'
 
 import type { TerraformRunner } from '#/adapters/terraform/runner.ts'
+import type { WranglerRunner } from '#/adapters/wrangler/runner.ts'
 import type { CloudflareWorkersDeployableConfig } from '#/config/types.ts'
+import type { WorkersTerraformOutputs } from '#/domain/cloudflare/workers/outputs-env.ts'
 import type {
 	AutoRestoreInput,
 	AutoRestoreResult,
 } from '#/domain/deploy/auto-restore.ts'
-import type { ResourceOutcome } from '#/domain/deploy/resource-outcome.ts'
 import type {
 	DeployEnv,
 	DeployInput,
@@ -54,20 +46,24 @@ import type { TeardownResult } from '#/domain/deploy/teardown-result.ts'
 import type { TeardownTarget } from '#/domain/deploy/teardown-target.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 import type { ServiceEnv } from '#/domain/services/service.ts'
-import type { WranglerRunner } from './teardown-workers.ts'
+import type { WorkersTerraformContext } from './terraform-ops.ts'
 
 export interface CloudflareWorkersTargetConfig {
 	readonly accountId: string
 	readonly hcpToken: string
 	readonly environment: AppEnvironment
 	readonly config: CloudflareWorkersDeployableConfig
+	// The project package directory `wrangler deploy` runs from - the built
+	// bundle + assets (`main`, `assets.directory`) resolve against it. Resolved
+	// by the CLI factory from PIPELINE_CONFIG_FILE (mirrors plan's package dir).
+	// Optional so provision/teardown-only constructions (and tests) that never
+	// deploy need not supply it; `deploy` fails loud if it is missing.
+	readonly projectDir?: string
 	// Injection point for tests; production shells out to the `terraform` binary.
 	readonly terraformRunner?: TerraformRunner
 	// Injection point for tests; production shells out to `npx wrangler`.
 	readonly wranglerRunner?: WranglerRunner
 }
-
-const WORKDIR_PREFIX = 'nn-workers-tf-'
 
 export class CloudflareWorkersTarget implements DeployTarget {
 	readonly name = 'cloudflare-workers'
@@ -75,6 +71,7 @@ export class CloudflareWorkersTarget implements DeployTarget {
 	private readonly hcpToken: string
 	private readonly environment: AppEnvironment
 	private readonly config: CloudflareWorkersDeployableConfig
+	private readonly projectDir: string | undefined
 	private readonly runner: TerraformRunner
 	private readonly wrangler: WranglerRunner | undefined
 
@@ -83,6 +80,7 @@ export class CloudflareWorkersTarget implements DeployTarget {
 		this.hcpToken = config.hcpToken
 		this.environment = config.environment
 		this.config = config.config
+		this.projectDir = config.projectDir
 		this.runner = config.terraformRunner ?? defaultTerraformRunner
 		this.wrangler = config.wranglerRunner
 	}
@@ -111,7 +109,7 @@ export class CloudflareWorkersTarget implements DeployTarget {
 					workspaceName,
 					token: this.hcpToken,
 				}),
-			terraform: () => this.applyTerraform(),
+			terraform: () => applyWorkersTerraform(this.terraformContext()),
 		})
 
 		logger.info(
@@ -132,16 +130,10 @@ export class CloudflareWorkersTarget implements DeployTarget {
 		if (!hasWorkersBacking(backing)) {
 			return { public: {}, secret: {} }
 		}
-
-		return this.withTerraformWorkdir(async workdir => {
-			await terraformInit(workdir, this.runner)
-			const raw = await terraformOutputJson(workdir, this.runner)
-			return buildWorkersBackingEnv(
-				parseTerraformOutputs(raw),
-				this.accountId,
-				backing,
-			)
-		})
+		const outputs = await readWorkersTerraformOutputs(
+			this.terraformContext(),
+		)
+		return buildWorkersBackingEnv(outputs, this.accountId, backing)
 	}
 
 	async reconcileDns(projectName: string, domain: string): Promise<void> {
@@ -152,17 +144,60 @@ export class CloudflareWorkersTarget implements DeployTarget {
 		)
 	}
 
-	deploy(
+	// Read the provision outputs ONCE, then hand off to `deployWorkers`, which
+	// generates an ephemeral wrangler config per service and runs `wrangler
+	// deploy` sequentially in depends_on order. `input`/`env` (vars + secrets)
+	// are wired in US-3.2.
+	async deploy(
 		projectName: string,
 		input: DeployInput,
 		env: DeployEnv,
 	): Promise<DeployResult> {
-		void projectName
 		void input
 		void env
-		throw new Error(
-			`deploy is not wired yet for ${this.name}: the wrangler deploy implementation lands in US-3.1.`,
-		)
+		const outputs = await this.loadDeployOutputs()
+		return deployWorkers({
+			projectName,
+			environment: this.environment,
+			domain: this.config.project.domain,
+			services: this.config.deploy.services,
+			backingServices: this.config.services,
+			cron: this.config.deploy.cron,
+			outputs,
+			wranglerRunner: this.wrangler,
+			projectDir: this.requireProjectDir(),
+		})
+	}
+
+	private requireProjectDir(): string {
+		if (this.projectDir === undefined) {
+			throw new Error(
+				`${this.name} deploy needs the project directory (where the built bundle lives) but none was resolved - PIPELINE_CONFIG_FILE must point at the app's nextnode.toml.`,
+			)
+		}
+		return this.projectDir
+	}
+
+	private async loadDeployOutputs(): Promise<WorkersTerraformOutputs> {
+		const backing = deriveWorkersBackingConfig(this.config.services)
+		if (!hasWorkersBacking(backing)) {
+			return {
+				kvNamespaceIds: {},
+				queueIds: {},
+				r2Buckets: {},
+				r2CdnUrls: {},
+			}
+		}
+		return readWorkersTerraformOutputs(this.terraformContext())
+	}
+
+	private terraformContext(): WorkersTerraformContext {
+		return {
+			config: this.config,
+			environment: this.environment,
+			runner: this.runner,
+			accountId: this.accountId,
+		}
 	}
 
 	prepareRollout(
@@ -226,7 +261,8 @@ export class CloudflareWorkersTarget implements DeployTarget {
 			environment: this.environment,
 			serviceNames: Object.keys(this.config.deploy.services),
 			wranglerRunner: this.wrangler,
-			destroyTerraform: () => this.destroyTerraform(),
+			destroyTerraform: () =>
+				destroyWorkersTerraform(this.terraformContext()),
 		})
 	}
 
@@ -235,49 +271,5 @@ export class CloudflareWorkersTarget implements DeployTarget {
 			`recover is a no-op on ${this.name} for "${projectName}": the Terraform state is the source of truth, so there is nothing to reconcile.`,
 		)
 		return Promise.resolve()
-	}
-
-	private async destroyTerraform(): Promise<ResourceOutcome> {
-		await this.withTerraformWorkdir(async workdir => {
-			await terraformInit(workdir, this.runner)
-			await terraformDestroy(workdir, this.runner, this.terraformVars())
-		})
-		return { handled: true, detail: 'destroyed' }
-	}
-
-	private async applyTerraform(): Promise<ResourceOutcome> {
-		await this.withTerraformWorkdir(async workdir => {
-			await terraformInit(workdir, this.runner)
-			await terraformApply(workdir, this.runner, this.terraformVars())
-		})
-		return { handled: true, detail: 'applied' }
-	}
-
-	// account_id is only referenced by account-scoped resources; when none are
-	// declared the generated config omits the `variable` block, so passing
-	// TF_VAR_account_id would be an undeclared variable. Mirror the domain's
-	// own condition (the generated `variable` block) instead of passing blindly.
-	private terraformVars(): Record<string, string> {
-		const mainConfig = buildTerraformMainConfig(
-			this.config,
-			this.environment,
-		)
-		if (mainConfig.variable === undefined) return {}
-		return { account_id: this.accountId }
-	}
-
-	private async withTerraformWorkdir<T>(
-		run: (workdir: string) => Promise<T>,
-	): Promise<T> {
-		const workdir = await mkdtemp(join(tmpdir(), WORKDIR_PREFIX))
-		try {
-			await writeTerraformConfig(
-				workdir,
-				buildTerraformMainConfig(this.config, this.environment),
-			)
-			return await run(workdir)
-		} finally {
-			await rm(workdir, { recursive: true, force: true })
-		}
 	}
 }

@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 
 import { okEmpty, notFound } from '#/test-fetch.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -10,8 +10,12 @@ import type {
 	TerraformRunner,
 } from '#/adapters/terraform/runner.ts'
 import type { WranglerRunner } from '#/adapters/wrangler/runner.ts'
-import type { CloudflareWorkersDeployableConfig } from '#/config/types.ts'
+import type {
+	CloudflareWorkersDeployableConfig,
+	WorkerServiceConfig,
+} from '#/config/types.ts'
 import type { ServicesConfig } from '#/config/types.ts'
+import type { DeployInput, DeployEnv } from '#/domain/deploy/target.ts'
 import type { FetchImpl } from '#/test-fetch.ts'
 
 const OUTPUTS_JSON = JSON.stringify({
@@ -290,16 +294,6 @@ describe('CloudflareWorkersTarget non-applicable methods', () => {
 		environment: 'production' as const,
 	}
 
-	it('throws a provisional error for deploy', () => {
-		expect(() =>
-			target.deploy(
-				'my-worker',
-				{ secrets: {}, secretOrigins: {}, registryToken: undefined },
-				{ SITE_URL: 'https://example.com' },
-			),
-		).toThrow('deploy is not wired yet for cloudflare-workers')
-	})
-
 	it('throws a definitive error for prepareRollout', () => {
 		expect(() =>
 			target.prepareRollout(
@@ -336,6 +330,179 @@ describe('CloudflareWorkersTarget non-applicable methods', () => {
 		expect(() => target.runFinalBackup(snapshotInput)).toThrow(
 			'runFinalBackup is not applicable to cloudflare-workers',
 		)
+	})
+})
+
+const DEPLOY_INPUT: DeployInput = {
+	secrets: {},
+	secretOrigins: {},
+	registryToken: undefined,
+}
+const DEPLOY_ENV: DeployEnv = { SITE_URL: 'https://example.com' }
+
+const worker = (
+	overrides: Partial<WorkerServiceConfig> = {},
+): WorkerServiceConfig => ({
+	secrets: [],
+	needs: [],
+	dependsOn: [],
+	entry: 'dist/_worker.js/index.js',
+	...overrides,
+})
+
+function buildDeployTarget(input: {
+	readonly services: Record<string, WorkerServiceConfig>
+	readonly backing?: ServicesConfig
+	readonly terraform: TerraformRunner
+	readonly wrangler: WranglerRunner
+}): CloudflareWorkersTarget {
+	const base = buildConfig(input.backing ?? {})
+	return new CloudflareWorkersTarget({
+		accountId: 'acct-123',
+		hcpToken: 'tf-token',
+		projectDir: '/project/app',
+		environment: 'production',
+		config: {
+			...base,
+			deploy: { ...base.deploy, services: input.services, cron: [] },
+		},
+		terraformRunner: input.terraform,
+		wranglerRunner: input.wrangler,
+	})
+}
+
+// A wrangler runner that records each deployed worker's config (name + path) by
+// reading the ephemeral file while it still exists (deleted after the call).
+function makeDeployWrangler(
+	behavior: Partial<Record<string, ExecResult>> = {},
+): {
+	readonly runner: ReturnType<typeof vi.fn<WranglerRunner>>
+	readonly deployed: Array<{ name: string; path: string }>
+} {
+	const deployed: Array<{ name: string; path: string }> = []
+	const runner = vi.fn<WranglerRunner>(async args => {
+		const path = args[2] ?? ''
+		const document: { name: string } = JSON.parse(
+			readFileSync(path, 'utf8'),
+		)
+		deployed.push({ name: document.name, path })
+		return behavior[document.name] ?? ok()
+	})
+	return { runner, deployed }
+}
+
+describe('CloudflareWorkersTarget.deploy', () => {
+	it('deploys services in depends_on order (dependency first)', async () => {
+		const terraform = makeRunner()
+		const { runner, deployed } = makeDeployWrangler()
+		const target = buildDeployTarget({
+			services: {
+				web: worker({ url: 'example.com', dependsOn: ['api'] }),
+				api: worker(),
+			},
+			terraform,
+			wrangler: runner,
+		})
+
+		const deployResult = await target.deploy(
+			'my-worker',
+			DEPLOY_INPUT,
+			DEPLOY_ENV,
+		)
+
+		expect(deployed.map(d => d.name)).toEqual([
+			'my-worker-production-api',
+			'my-worker-production-web',
+		])
+		expect(terraform).not.toHaveBeenCalled()
+		expect(deployResult.deployedEnvironments).toEqual([
+			{
+				kind: 'worker',
+				name: 'production',
+				url: 'https://example.com',
+				workers: [
+					{ name: 'api', url: '' },
+					{ name: 'web', url: 'https://example.com' },
+				],
+				deployedAt: expect.any(Date),
+			},
+		])
+	})
+
+	it('reads the terraform outputs once for N services', async () => {
+		const terraform = makeRunner()
+		const { runner } = makeDeployWrangler()
+		const target = buildDeployTarget({
+			services: {
+				web: worker({ url: 'example.com', needs: ['d1'] }),
+				api: worker({ needs: ['d1'] }),
+			},
+			backing: BACKING_SERVICES,
+			terraform,
+			wrangler: runner,
+		})
+
+		await target.deploy('my-worker', DEPLOY_INPUT, DEPLOY_ENV)
+
+		expect(terraform.mock.calls.map(call => call[0][0])).toEqual([
+			'init',
+			'output',
+		])
+	})
+
+	it('removes every ephemeral wrangler config after deploy', async () => {
+		const { runner, deployed } = makeDeployWrangler()
+		const target = buildDeployTarget({
+			services: { web: worker({ url: 'example.com' }) },
+			terraform: makeRunner(),
+			wrangler: runner,
+		})
+
+		await target.deploy('my-worker', DEPLOY_INPUT, DEPLOY_ENV)
+
+		for (const { path } of deployed) expect(existsSync(path)).toBe(false)
+	})
+
+	it('throws the wrangler error and stops when a deploy fails', async () => {
+		const terraform = makeRunner()
+		const { runner } = makeDeployWrangler({
+			'my-worker-production-web': {
+				exitCode: 1,
+				stdout: '',
+				stderr: 'boom',
+			},
+		})
+		const target = buildDeployTarget({
+			services: { web: worker({ url: 'example.com' }) },
+			terraform,
+			wrangler: runner,
+		})
+
+		await expect(
+			target.deploy('my-worker', DEPLOY_INPUT, DEPLOY_ENV),
+		).rejects.toThrow('wrangler deploy (worker "my-worker-production-web")')
+	})
+
+	it('throws when no project dir was resolved', async () => {
+		const base = buildConfig({})
+		const target = new CloudflareWorkersTarget({
+			accountId: 'acct-123',
+			hcpToken: 'tf-token',
+			environment: 'production',
+			config: {
+				...base,
+				deploy: {
+					...base.deploy,
+					services: { web: worker({ url: 'example.com' }) },
+				},
+			},
+			terraformRunner: makeRunner(),
+			wranglerRunner: makeDeployWrangler().runner,
+		})
+
+		await expect(
+			target.deploy('my-worker', DEPLOY_INPUT, DEPLOY_ENV),
+		).rejects.toThrow('needs the project directory')
 	})
 })
 

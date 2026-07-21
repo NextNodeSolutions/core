@@ -29,6 +29,7 @@ import { okJson } from '#/test-fetch.ts'
 
 import { deployCommand } from './deploy.command.ts'
 
+import type { CloudflareWorkersDeployableConfig } from '#/config/types.ts'
 import type { DeployResult } from '#/domain/deploy/target.ts'
 import type { FetchImpl } from '#/test-fetch.ts'
 
@@ -110,6 +111,53 @@ vi.mock('../../adapters/hetzner/target.ts', () => ({
 		reconcileDns: vi.fn(),
 	})),
 }))
+
+// Mock CloudflareWorkersTarget class (boundary: Terraform + wrangler shell-out).
+const { mockWorkersDeploy } = vi.hoisted(() => ({ mockWorkersDeploy: vi.fn() }))
+vi.mock('../../adapters/cloudflare/workers/target.ts', () => ({
+	CloudflareWorkersTarget: vi.fn(() => ({
+		name: 'cloudflare-workers',
+		contributeEnv: () => ({
+			public: { SITE_URL: 'https://example.com' },
+			secret: {},
+		}),
+		deploy: mockWorkersDeploy,
+		ensureInfra: vi.fn(),
+		reconcileDns: vi.fn(),
+	})),
+}))
+
+const WORKERS_CONFIG: CloudflareWorkersDeployableConfig = {
+	project: {
+		name: 'my-worker',
+		type: 'app',
+		filter: false,
+		domain: 'example.com',
+		redirectDomains: [],
+		internal: false,
+	},
+	scripts: { lint: false, test: false, build: false },
+	package: false,
+	environment: { development: true },
+	deploy: {
+		target: 'cloudflare-workers',
+		secrets: [],
+		generatedSecrets: [],
+		vps: null,
+		volumes: [],
+		services: {
+			web: {
+				url: 'example.com',
+				secrets: [],
+				needs: [],
+				dependsOn: [],
+				entry: 'dist/_worker.js/index.js',
+			},
+		},
+		cron: [],
+	},
+	services: {},
+}
 
 describe('deployCommand', () => {
 	let envFile: string
@@ -241,6 +289,59 @@ describe('deployCommand', () => {
 			).rejects.toThrow(
 				'Secret "MISSING_KEY" declared in deploy.secrets but not found',
 			)
+		})
+	})
+
+	describe('workers (cloudflare-workers)', () => {
+		const WORKERS_DEPLOY_RESULT: DeployResult = {
+			projectName: 'my-worker',
+			deployedEnvironments: [
+				{
+					kind: 'worker',
+					name: 'production',
+					url: 'https://example.com',
+					workers: [{ name: 'web', url: 'https://example.com' }],
+					deployedAt: new Date('2026-01-01'),
+				},
+			],
+			durationMs: 21,
+		}
+
+		beforeEach(() => {
+			vi.stubEnv('TF_TOKEN_app_terraform_io', 'tf-token')
+			vi.stubEnv(
+				'PIPELINE_CONFIG_FILE',
+				'/workspace/apps/web/nextnode.toml',
+			)
+			vi.stubEnv('GITHUB_WORKSPACE', '/workspace')
+			mockWorkersDeploy.mockResolvedValue(WORKERS_DEPLOY_RESULT)
+		})
+
+		it('writes SITE_URL to GITHUB_ENV', async () => {
+			await deployCommand(WORKERS_CONFIG)
+
+			const ghEnv = readFileSync(envFile, 'utf-8')
+			expect(ghEnv).toContain('SITE_URL=https://example.com\n')
+		})
+
+		it('passes empty secrets and undefined registry token to the target', async () => {
+			await deployCommand(WORKERS_CONFIG)
+
+			expect(mockWorkersDeploy).toHaveBeenCalledWith(
+				'my-worker',
+				{ secrets: {}, secretOrigins: {}, registryToken: undefined },
+				{ SITE_URL: 'https://example.com' },
+			)
+		})
+
+		it('writes a worker deploy summary to GITHUB_STEP_SUMMARY', async () => {
+			await deployCommand(WORKERS_CONFIG)
+
+			const summary = readFileSync(summaryFile, 'utf-8')
+			expect(summary).toContain('Deployed `my-worker` to production')
+			expect(summary).toContain('https://example.com')
+			expect(summary).toContain('Worker (web)')
+			expect(summary).toContain('cloudflare-workers')
 		})
 	})
 

@@ -89,9 +89,29 @@ export interface StaticDeployedEnvironment extends BaseDeployedEnvironment {
 	readonly kind: 'static'
 }
 
+/**
+ * One deployed Worker within a cloudflare-workers deployment. `url` is the
+ * Custom Domain a routed service answers on (`https://<resolved-host>`); an
+ * internal worker (no declared `url`) carries an empty `url` - it is reachable
+ * only through service bindings, so it has no public address to surface.
+ */
+export interface DeployedWorker {
+	readonly name: string
+	readonly url: string
+}
+
+export interface WorkerDeployedEnvironment extends BaseDeployedEnvironment {
+	readonly kind: 'worker'
+	// One entry per deployed [deploy.services.<name>] (routed + internal). The
+	// deploy summary renders one row each, mirroring the container target's
+	// per-service image rows.
+	readonly workers: ReadonlyArray<DeployedWorker>
+}
+
 export type DeployedEnvironment =
 	| ContainerDeployedEnvironment
 	| StaticDeployedEnvironment
+	| WorkerDeployedEnvironment
 
 export interface VpsProvisionResult {
 	readonly kind: 'vps'

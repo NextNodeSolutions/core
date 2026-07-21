@@ -37,6 +37,15 @@ function buildSummaryRows(
 		}
 	}
 
+	if (env.kind === 'worker') {
+		for (const worker of env.workers) {
+			rows.push([
+				`**Worker (${worker.name})**`,
+				worker.url === '' ? 'internal (no route)' : worker.url,
+			])
+		}
+	}
+
 	rows.push(['**Target**', targetName])
 	rows.push(['**Duration**', formatDuration(durationMs)])
 

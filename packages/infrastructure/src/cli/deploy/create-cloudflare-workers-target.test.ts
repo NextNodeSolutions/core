@@ -42,10 +42,12 @@ afterEach(() => {
 })
 
 describe('createCloudflareWorkersTarget', () => {
-	it('wires the account id, HCP token, environment, and config into the target', async () => {
+	it('wires the account id, HCP token, project dir, environment, and config into the target', async () => {
 		vi.stubEnv('CLOUDFLARE_ACCOUNT_ID', 'acct-123')
 		vi.stubEnv('CLOUDFLARE_API_TOKEN', 'cf-token')
 		vi.stubEnv('TF_TOKEN_app_terraform_io', 'tf-token')
+		vi.stubEnv('GITHUB_WORKSPACE', '/workspace')
+		vi.stubEnv('PIPELINE_CONFIG_FILE', 'apps/web/nextnode.toml')
 
 		const { CloudflareWorkersTarget } =
 			await import('#/adapters/cloudflare/workers/target.ts')
@@ -55,6 +57,7 @@ describe('createCloudflareWorkersTarget', () => {
 		expect(CloudflareWorkersTarget).toHaveBeenCalledWith({
 			accountId: 'acct-123',
 			hcpToken: 'tf-token',
+			projectDir: '/workspace/apps/web',
 			environment: 'production',
 			config: WORKERS_CONFIG,
 		})
