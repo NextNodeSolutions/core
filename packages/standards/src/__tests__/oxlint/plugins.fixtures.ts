@@ -347,4 +347,25 @@ export function bindings(token: string | undefined): object {
 })
 `,
 	},
+
+	// coding RULE 1 - compare with a truthy check, not an explicit `=== undefined`
+	{
+		rule: 'nextnode(no-undefined-comparison)',
+		severity: 'error',
+		bad: `export function has(token: string | undefined): boolean {
+	return token !== undefined
+}
+`,
+		// the `void 0` spelling of undefined fires too
+		edge: `export function absent(token: string | undefined): boolean {
+	return token === void 0
+}
+`,
+		edgeExpect: 'fire',
+		// `=== null` stays legal: it distinguishes the null literal from other falsy values
+		good: `export function present(token: string | null): boolean {
+	return token !== null
+}
+`,
+	},
 ]

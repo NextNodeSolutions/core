@@ -14,6 +14,7 @@ import { noGrabBagFiles } from './rules/no-grab-bag-files.js'
 import { noNullishTernaryReturn } from './rules/no-nullish-ternary-return.js'
 import { noSentinelConsequent } from './rules/no-sentinel-consequent.js'
 import { noTypeAssertion } from './rules/no-type-assertion.js'
+import { noUndefinedComparison } from './rules/no-undefined-comparison.js'
 import { noUseEffect } from './rules/no-use-effect.js'
 
 const plugin = {
@@ -34,6 +35,7 @@ const plugin = {
 		'no-nullish-ternary-return': noNullishTernaryReturn,
 		'no-empty-object-ternary': noEmptyObjectTernary,
 		'no-sentinel-consequent': noSentinelConsequent,
+		'no-undefined-comparison': noUndefinedComparison,
 	},
 }
 
