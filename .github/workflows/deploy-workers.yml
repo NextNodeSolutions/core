@@ -54,6 +54,25 @@ jobs:
                   PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
                   PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
 
+            # The generated worker-configuration.d.ts is committed in the caller
+            # repo so `astro check`/`astro build` in the quality matrix (no infra
+            # checkout) and every developer typecheck see `interface Env`.
+            # Regenerate from nextnode.toml here (infra IS checked out) and fail
+            # on any diff, so a stale committed file cannot ship.
+            - name: Generate worker types
+              run: node src/index.ts generate-worker-types
+              working-directory: .infra/packages/infrastructure
+              env:
+                  PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
+
+            # `--intent-to-add` surfaces a never-committed file as a diff too, so
+            # a missing worker-configuration.d.ts fails like a stale one.
+            - name: Verify worker types are committed and current
+              working-directory: ${{ github.workspace }}
+              run: |
+                  git add --intent-to-add -- '**/worker-configuration.d.ts'
+                  git diff --exit-code -- '**/worker-configuration.d.ts'
+
     quality:
         name: ${{ matrix.task.name }}
         needs: plan
