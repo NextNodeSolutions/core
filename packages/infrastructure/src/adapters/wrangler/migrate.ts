@@ -1,10 +1,7 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-
 import { createLogger } from '@nextnode-solutions/logger'
 
-import { resolveDocumentPaths } from './config-paths.ts'
+import { withWranglerConfig } from './ephemeral-config.ts'
+import { assertWranglerOk } from './runner.ts'
 
 import type { WranglerDocument } from '#/domain/cloudflare/workers/wrangler-document.ts'
 import type { WranglerRunner } from './runner.ts'
@@ -12,8 +9,6 @@ import type { WranglerRunner } from './runner.ts'
 const logger = createLogger()
 
 const CONFIG_DIR_PREFIX = 'nn-wrangler-d1-'
-const CONFIG_FILENAME = 'wrangler.json'
-const JSON_INDENT = 2
 
 export interface WranglerD1MigrationsApplyInput {
 	// The owning service's generated wrangler config, carrying the D1 binding
@@ -40,41 +35,33 @@ export interface WranglerD1MigrationsApplyInput {
 export async function wranglerD1MigrationsApply(
 	input: WranglerD1MigrationsApplyInput,
 ): Promise<void> {
-	const dir = await mkdtemp(join(tmpdir(), CONFIG_DIR_PREFIX))
-	const configPath = join(dir, CONFIG_FILENAME)
-	try {
-		await writeFile(
-			configPath,
-			JSON.stringify(
-				resolveDocumentPaths(input.document, input.cwd),
-				null,
-				JSON_INDENT,
-			),
-		)
-		logger.info(
-			`wrangler d1 migrations apply "${input.databaseName}" started`,
-		)
-		const applyExec = await input.runner(
-			[
-				'd1',
-				'migrations',
-				'apply',
-				input.databaseName,
-				'--remote',
-				'--config',
-				configPath,
-			],
-			{ cwd: input.cwd },
-		)
-		if (applyExec.exitCode !== 0) {
-			throw new Error(
-				`wrangler d1 migrations apply (database "${input.databaseName}") failed (exit ${String(applyExec.exitCode)}):\n${applyExec.stderr}`,
+	await withWranglerConfig(
+		input.document,
+		input.cwd,
+		CONFIG_DIR_PREFIX,
+		async configPath => {
+			logger.info(
+				`wrangler d1 migrations apply "${input.databaseName}" started`,
 			)
-		}
-		logger.info(
-			`wrangler d1 migrations apply "${input.databaseName}" completed`,
-		)
-	} finally {
-		await rm(dir, { recursive: true, force: true })
-	}
+			const applyExec = await input.runner(
+				[
+					'd1',
+					'migrations',
+					'apply',
+					input.databaseName,
+					'--remote',
+					'--config',
+					configPath,
+				],
+				{ cwd: input.cwd },
+			)
+			assertWranglerOk(
+				applyExec,
+				`d1 migrations apply (database "${input.databaseName}")`,
+			)
+			logger.info(
+				`wrangler d1 migrations apply "${input.databaseName}" completed`,
+			)
+		},
+	)
 }

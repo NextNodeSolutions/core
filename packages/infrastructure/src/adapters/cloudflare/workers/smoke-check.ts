@@ -1,3 +1,5 @@
+import { setTimeout as sleep } from 'node:timers/promises'
+
 import { createLogger } from '@nextnode-solutions/logger'
 
 import type { SmokeCheckTarget } from '#/domain/cloudflare/workers/smoke-check.ts'
@@ -14,12 +16,6 @@ const SMOKE_CHECK_BODY_MAX_LENGTH = 500
 export interface SmokeCheckOptions {
 	// Injection point for tests; production waits with a real timer.
 	readonly sleep?: ((ms: number) => Promise<void>) | undefined
-}
-
-function realSleep(ms: number): Promise<void> {
-	return new Promise(resolve => {
-		setTimeout(resolve, ms)
-	})
 }
 
 function truncate(body: string): string {
@@ -40,13 +36,13 @@ async function attempt(url: string): Promise<string | undefined> {
 
 async function smokeCheckOne(
 	target: SmokeCheckTarget,
-	sleep: (ms: number) => Promise<void>,
+	wait: (ms: number) => Promise<void>,
 ): Promise<void> {
 	let failure: string | undefined
 	for (let tries = 1; tries <= SMOKE_CHECK_MAX_ATTEMPTS; tries += 1) {
 		if (tries > 1) {
 			// eslint-disable-next-line no-await-in-loop -- retries are strictly sequential with a bounded backoff
-			await sleep(SMOKE_CHECK_RETRY_DELAY_MS)
+			await wait(SMOKE_CHECK_RETRY_DELAY_MS)
 		}
 		// eslint-disable-next-line no-await-in-loop -- one request per attempt, awaited before deciding to retry
 		failure = await attempt(target.url)
@@ -71,10 +67,10 @@ export async function smokeCheckWorkers(
 	targets: ReadonlyArray<SmokeCheckTarget>,
 	options: SmokeCheckOptions = {},
 ): Promise<void> {
-	const sleep = options.sleep ?? realSleep
+	const wait = options.sleep ?? sleep
 	for (const target of targets) {
 		// eslint-disable-next-line no-await-in-loop -- services checked one at a time so a failure surfaces its own service
-		await smokeCheckOne(target, sleep)
+		await smokeCheckOne(target, wait)
 		logger.info(
 			`Smoke check passed for "${target.service}" (${target.url})`,
 		)

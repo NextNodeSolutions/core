@@ -28,30 +28,25 @@ export interface WorkersTerraformContext {
 	readonly accountId: string
 }
 
-// account_id is only referenced by account-scoped resources; when none are
-// declared the generated config omits the `variable` block, so passing
-// TF_VAR_account_id would be an undeclared variable. Mirror the domain's own
+// Materialise the generated main.tf.json in a scratch workdir, initialise it,
+// run `run` with the initialised workdir and its terraform vars, then remove the
+// workdir in `finally` - no config or state ever persists on disk between
+// operations. account_id is only referenced by account-scoped resources; when
+// none are declared the generated config omits the `variable` block, so passing
+// TF_VAR_account_id would be an undeclared variable - mirror the domain's own
 // condition (the generated `variable` block) instead of passing blindly.
-function terraformVars(ctx: WorkersTerraformContext): Record<string, string> {
-	const mainConfig = buildTerraformMainConfig(ctx.config, ctx.environment)
-	if (mainConfig.variable === undefined) return {}
-	return { account_id: ctx.accountId }
-}
-
-// Materialise the generated main.tf.json in a scratch workdir, run `run`, and
-// remove the workdir in `finally` - no config or state ever persists on disk
-// between operations.
 async function withWorkdir<T>(
 	ctx: WorkersTerraformContext,
-	run: (workdir: string) => Promise<T>,
+	run: (workdir: string, vars: Record<string, string>) => Promise<T>,
 ): Promise<T> {
+	const mainConfig = buildTerraformMainConfig(ctx.config, ctx.environment)
+	const vars =
+		mainConfig.variable === undefined ? {} : { account_id: ctx.accountId }
 	const workdir = await mkdtemp(join(tmpdir(), WORKDIR_PREFIX))
 	try {
-		await writeTerraformConfig(
-			workdir,
-			buildTerraformMainConfig(ctx.config, ctx.environment),
-		)
-		return await run(workdir)
+		await writeTerraformConfig(workdir, mainConfig)
+		await terraformInit(workdir, ctx.runner)
+		return await run(workdir, vars)
 	} finally {
 		await rm(workdir, { recursive: true, force: true })
 	}
@@ -60,33 +55,26 @@ async function withWorkdir<T>(
 export async function applyWorkersTerraform(
 	ctx: WorkersTerraformContext,
 ): Promise<ResourceOutcome> {
-	await withWorkdir(ctx, async workdir => {
-		await terraformInit(workdir, ctx.runner)
-		await terraformApply(workdir, ctx.runner, terraformVars(ctx))
-	})
+	await withWorkdir(ctx, (workdir, vars) =>
+		terraformApply(workdir, ctx.runner, vars),
+	)
 	return { handled: true, detail: 'applied' }
 }
 
 export async function destroyWorkersTerraform(
 	ctx: WorkersTerraformContext,
 ): Promise<ResourceOutcome> {
-	await withWorkdir(ctx, async workdir => {
-		await terraformInit(workdir, ctx.runner)
-		await terraformDestroy(workdir, ctx.runner, terraformVars(ctx))
-	})
+	await withWorkdir(ctx, (workdir, vars) =>
+		terraformDestroy(workdir, ctx.runner, vars),
+	)
 	return { handled: true, detail: 'destroyed' }
 }
 
 export function planWorkersTerraform(
 	ctx: WorkersTerraformContext,
 ): Promise<string> {
-	return withWorkdir(ctx, async workdir => {
-		await terraformInit(workdir, ctx.runner)
-		const plan = await terraformPlan(
-			workdir,
-			ctx.runner,
-			terraformVars(ctx),
-		)
+	return withWorkdir(ctx, async (workdir, vars) => {
+		const plan = await terraformPlan(workdir, ctx.runner, vars)
 		return plan.planText
 	})
 }
@@ -95,7 +83,6 @@ export function readWorkersTerraformOutputs(
 	ctx: WorkersTerraformContext,
 ): Promise<WorkersTerraformOutputs> {
 	return withWorkdir(ctx, async workdir => {
-		await terraformInit(workdir, ctx.runner)
 		const raw = await terraformOutputJson(workdir, ctx.runner)
 		return parseTerraformOutputs(raw)
 	})

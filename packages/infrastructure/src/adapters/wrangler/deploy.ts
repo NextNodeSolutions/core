@@ -1,10 +1,7 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-
 import { createLogger } from '@nextnode-solutions/logger'
 
-import { resolveDocumentPaths } from './config-paths.ts'
+import { withWranglerConfig } from './ephemeral-config.ts'
+import { assertWranglerOk } from './runner.ts'
 
 import type { WranglerDocument } from '#/domain/cloudflare/workers/wrangler-document.ts'
 import type { WranglerRunner } from './runner.ts'
@@ -12,8 +9,6 @@ import type { WranglerRunner } from './runner.ts'
 const logger = createLogger()
 
 const CONFIG_DIR_PREFIX = 'nn-wrangler-cfg-'
-const CONFIG_FILENAME = 'wrangler.json'
-const JSON_INDENT = 2
 
 export interface WranglerDeployInput {
 	readonly document: WranglerDocument
@@ -37,42 +32,34 @@ export interface WranglerDeployInput {
 export async function wranglerDeploy(
 	input: WranglerDeployInput,
 ): Promise<void> {
-	const dir = await mkdtemp(join(tmpdir(), CONFIG_DIR_PREFIX))
-	const configPath = join(dir, CONFIG_FILENAME)
-	try {
-		await writeFile(
-			configPath,
-			JSON.stringify(
-				resolveDocumentPaths(input.document, input.cwd),
-				null,
-				JSON_INDENT,
-			),
-		)
-		logger.info(`wrangler deploy "${input.document.name}" started`)
-		const deployExec = await input.runner(
-			['deploy', '--config', configPath],
-			{ cwd: input.cwd },
-		)
-		if (deployExec.exitCode !== 0) {
-			throw new Error(
-				`wrangler deploy (worker "${input.document.name}") failed (exit ${String(deployExec.exitCode)}):\n${deployExec.stderr}`,
+	await withWranglerConfig(
+		input.document,
+		input.cwd,
+		CONFIG_DIR_PREFIX,
+		async configPath => {
+			logger.info(`wrangler deploy "${input.document.name}" started`)
+			const deployExec = await input.runner(
+				['deploy', '--config', configPath],
+				{ cwd: input.cwd },
 			)
-		}
-		logger.info(`wrangler deploy "${input.document.name}" completed`)
-		if (input.secretsJson !== undefined) {
-			await wranglerSecretBulk(
-				configPath,
-				input.secretsJson,
-				input.runner,
-				{
-					cwd: input.cwd,
-					workerName: input.document.name,
-				},
+			assertWranglerOk(
+				deployExec,
+				`deploy (worker "${input.document.name}")`,
 			)
-		}
-	} finally {
-		await rm(dir, { recursive: true, force: true })
-	}
+			logger.info(`wrangler deploy "${input.document.name}" completed`)
+			if (input.secretsJson !== undefined) {
+				await wranglerSecretBulk(
+					configPath,
+					input.secretsJson,
+					input.runner,
+					{
+						cwd: input.cwd,
+						workerName: input.document.name,
+					},
+				)
+			}
+		},
+	)
 }
 
 export interface WranglerSecretBulkOptions {
@@ -98,10 +85,6 @@ export async function wranglerSecretBulk(
 		cwd: options.cwd,
 		stdin: secretsJson,
 	})
-	if (bulkExec.exitCode !== 0) {
-		throw new Error(
-			`wrangler secret bulk (worker "${options.workerName}") failed (exit ${String(bulkExec.exitCode)}):\n${bulkExec.stderr}`,
-		)
-	}
+	assertWranglerOk(bulkExec, `secret bulk (worker "${options.workerName}")`)
 	logger.info(`wrangler secret bulk "${options.workerName}" completed`)
 }

@@ -29,6 +29,14 @@ export interface ExecResult {
 	readonly stderr: string
 }
 
+export function assertWranglerOk(exec: ExecResult, label: string): void {
+	if (exec.exitCode !== 0) {
+		throw new Error(
+			`wrangler ${label} failed (exit ${String(exec.exitCode)}):\n${exec.stderr}`,
+		)
+	}
+}
+
 export interface WranglerRunnerOptions {
 	readonly cwd?: string
 	readonly stdin?: string
