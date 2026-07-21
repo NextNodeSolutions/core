@@ -6,6 +6,7 @@ import { ensureHcpWorkspace } from '#/adapters/hcp/workspaces.ts'
 import { defaultTerraformRunner } from '#/adapters/terraform/runner.ts'
 import { WORKERS_MANAGED_RESOURCES } from '#/domain/cloudflare/workers/managed-resources.ts'
 import {
+	EMPTY_WORKERS_TERRAFORM_OUTPUTS,
 	buildWorkersBackingEnv,
 	deriveWorkersBackingConfig,
 	hasWorkersBacking,
@@ -20,6 +21,7 @@ import { teardownWorkers } from './teardown-workers.ts'
 import {
 	applyWorkersTerraform,
 	destroyWorkersTerraform,
+	planWorkersTerraform,
 	readWorkersTerraformOutputs,
 } from './terraform-ops.ts'
 
@@ -184,12 +186,7 @@ export class CloudflareWorkersTarget implements DeployTarget {
 	private async loadDeployOutputs(): Promise<WorkersTerraformOutputs> {
 		const backing = deriveWorkersBackingConfig(this.config.services)
 		if (!hasWorkersBacking(backing)) {
-			return {
-				kvNamespaceIds: {},
-				queueIds: {},
-				r2Buckets: {},
-				r2CdnUrls: {},
-			}
+			return EMPTY_WORKERS_TERRAFORM_OUTPUTS
 		}
 		return readWorkersTerraformOutputs(this.terraformContext())
 	}
@@ -279,6 +276,13 @@ export class CloudflareWorkersTarget implements DeployTarget {
 			destroyTerraform: () =>
 				destroyWorkersTerraform(this.terraformContext()),
 		})
+	}
+
+	// Full init + plan even with no backing services (the workspace still owns
+	// redirect rules + support DNS records). The context carries the project, so
+	// no projectName is needed; the plan text is returned verbatim.
+	planDiff(): Promise<string> {
+		return planWorkersTerraform(this.terraformContext())
 	}
 
 	recover(projectName: string): Promise<void> {

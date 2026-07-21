@@ -21,6 +21,16 @@ export interface WorkersTerraformOutputs {
 	readonly r2CdnUrls: Readonly<Record<string, string>>
 }
 
+// The outputs of a project with no backing resources: nothing was applied, so
+// every map is empty. Used to skip a Terraform round-trip when nothing is
+// declared, instead of reading outputs that would all be absent.
+export const EMPTY_WORKERS_TERRAFORM_OUTPUTS: WorkersTerraformOutputs = {
+	kvNamespaceIds: {},
+	queueIds: {},
+	r2Buckets: {},
+	r2CdnUrls: {},
+}
+
 /**
  * The backing resources a project declares, distilled from `[services.*]`.
  * Drives the env projection: which outputs to expect (and fail loud on if

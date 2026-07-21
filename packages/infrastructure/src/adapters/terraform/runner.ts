@@ -27,6 +27,12 @@ const TERRAFORM_CONFIG_FILENAME = 'main.tf.json'
 const TERRAFORM_CONFIG_INDENT = 2
 const STATE_LOCK_FINGERPRINT = 'Error acquiring the state lock'
 
+// `terraform plan -detailed-exitcode` splits success into two codes: 0 = no
+// diff, 2 = a diff is pending. Every other code is a genuine failure. Both 0
+// and 2 carry the human-readable plan on stdout.
+const TERRAFORM_PLAN_NO_CHANGES_EXIT = 0
+const TERRAFORM_PLAN_CHANGES_EXIT = 2
+
 export interface ExecResult {
 	readonly exitCode: number
 	readonly stdout: string
@@ -185,6 +191,43 @@ export async function terraformDestroy(
 		runner,
 		tfVarEnv(vars),
 	)
+}
+
+export interface TerraformPlanResult {
+	readonly hasChanges: boolean
+	readonly planText: string
+}
+
+export async function terraformPlan(
+	workdir: string,
+	runner: TerraformRunner,
+	vars: Readonly<Record<string, string>>,
+): Promise<TerraformPlanResult> {
+	const startedAt = Date.now()
+	logger.info(`terraform plan started in "${workdir}"`)
+	const execResult = await runner(
+		[
+			'plan',
+			'-input=false',
+			'-no-color',
+			`-lock-timeout=${TERRAFORM_LOCK_TIMEOUT}`,
+			'-detailed-exitcode',
+		],
+		{ cwd: workdir, env: tfVarEnv(vars) },
+	)
+	if (
+		execResult.exitCode !== TERRAFORM_PLAN_NO_CHANGES_EXIT &&
+		execResult.exitCode !== TERRAFORM_PLAN_CHANGES_EXIT
+	) {
+		throw new Error(formatFailure('plan', execResult))
+	}
+	logger.info(
+		`terraform plan completed in ${String(Date.now() - startedAt)}ms`,
+	)
+	return {
+		hasChanges: execResult.exitCode === TERRAFORM_PLAN_CHANGES_EXIT,
+		planText: execResult.stdout,
+	}
 }
 
 export async function terraformOutputJson(

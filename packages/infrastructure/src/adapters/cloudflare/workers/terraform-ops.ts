@@ -7,6 +7,7 @@ import {
 	terraformDestroy,
 	terraformInit,
 	terraformOutputJson,
+	terraformPlan,
 	writeTerraformConfig,
 } from '#/adapters/terraform/runner.ts'
 import { parseTerraformOutputs } from '#/domain/cloudflare/workers/outputs-env.ts'
@@ -74,6 +75,20 @@ export async function destroyWorkersTerraform(
 		await terraformDestroy(workdir, ctx.runner, terraformVars(ctx))
 	})
 	return { handled: true, detail: 'destroyed' }
+}
+
+export function planWorkersTerraform(
+	ctx: WorkersTerraformContext,
+): Promise<string> {
+	return withWorkdir(ctx, async workdir => {
+		await terraformInit(workdir, ctx.runner)
+		const plan = await terraformPlan(
+			workdir,
+			ctx.runner,
+			terraformVars(ctx),
+		)
+		return plan.planText
+	})
 }
 
 export function readWorkersTerraformOutputs(

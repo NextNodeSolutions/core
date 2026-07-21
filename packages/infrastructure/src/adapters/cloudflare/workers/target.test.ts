@@ -270,6 +270,48 @@ describe('CloudflareWorkersTarget.loadBackingEnv', () => {
 	})
 })
 
+describe('CloudflareWorkersTarget.planDiff', () => {
+	it('runs terraform init before plan and returns the plan stdout', async () => {
+		const planText = 'Plan: 2 to add, 0 to change, 0 to destroy.'
+		const runner = makeRunner({
+			plan: { exitCode: 2, stdout: planText, stderr: '' },
+		})
+		const target = buildTarget(BACKING_SERVICES, runner)
+
+		await expect(target.planDiff()).resolves.toBe(planText)
+		expect(runner.mock.calls.map(call => call[0][0])).toEqual([
+			'init',
+			'plan',
+		])
+	})
+
+	it('runs a plan even when no backing services are declared', async () => {
+		const runner = makeRunner({
+			plan: { exitCode: 0, stdout: 'No changes.', stderr: '' },
+		})
+		const target = buildTarget({}, runner)
+
+		await expect(target.planDiff()).resolves.toBe('No changes.')
+		expect(runner.mock.calls.map(call => call[0][0])).toEqual([
+			'init',
+			'plan',
+		])
+	})
+
+	it('removes the scratch workdir even when terraform plan fails', async () => {
+		const runner = makeRunner({
+			plan: { exitCode: 1, stdout: '', stderr: 'boom' },
+		})
+		const target = buildTarget(BACKING_SERVICES, runner)
+
+		await expect(target.planDiff()).rejects.toThrow('terraform plan failed')
+
+		const planCall = runner.mock.calls.find(call => call[0][0] === 'plan')
+		expect(planCall).toBeDefined()
+		if (planCall) expect(existsSync(cwdOf(planCall))).toBe(false)
+	})
+})
+
 describe('CloudflareWorkersTarget.reconcileDns', () => {
 	it('is a no-op that resolves without terraform or fetch', async () => {
 		const runner = makeRunner()

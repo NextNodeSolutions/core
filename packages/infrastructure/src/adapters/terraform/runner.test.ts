@@ -10,6 +10,7 @@ import {
 	terraformDestroy,
 	terraformInit,
 	terraformOutputJson,
+	terraformPlan,
 	writeTerraformConfig,
 } from './runner.ts'
 
@@ -126,6 +127,53 @@ describe('terraformDestroy', () => {
 				`-lock-timeout=${TERRAFORM_LOCK_TIMEOUT}`,
 			],
 			{ cwd: WORKDIR, env: { TF_VAR_account_id: 'acct-123' } },
+		)
+	})
+})
+
+describe('terraformPlan', () => {
+	it('runs plan with -detailed-exitcode, bounded lock, and TF_VAR env', async () => {
+		const runner = vi.fn<TerraformRunner>().mockResolvedValue(ok())
+		await terraformPlan(WORKDIR, runner, { account_id: 'acct-123' })
+		expect(runner).toHaveBeenCalledWith(
+			[
+				'plan',
+				'-input=false',
+				'-no-color',
+				`-lock-timeout=${TERRAFORM_LOCK_TIMEOUT}`,
+				'-detailed-exitcode',
+			],
+			{ cwd: WORKDIR, env: { TF_VAR_account_id: 'acct-123' } },
+		)
+	})
+
+	it('reports no changes on exit 0 and returns the plan text', async () => {
+		const runner = vi
+			.fn<TerraformRunner>()
+			.mockResolvedValue(ok('No changes. Your infrastructure matches.'))
+		await expect(terraformPlan(WORKDIR, runner, {})).resolves.toEqual({
+			hasChanges: false,
+			planText: 'No changes. Your infrastructure matches.',
+		})
+	})
+
+	it('reports changes on exit 2 and returns the plan text', async () => {
+		const planText = 'Plan: 1 to add, 0 to change, 0 to destroy.'
+		const runner = vi
+			.fn<TerraformRunner>()
+			.mockResolvedValue({ exitCode: 2, stdout: planText, stderr: '' })
+		await expect(terraformPlan(WORKDIR, runner, {})).resolves.toEqual({
+			hasChanges: true,
+			planText,
+		})
+	})
+
+	it('throws with the terraform stderr surfaced verbatim on exit 1', async () => {
+		const runner = vi
+			.fn<TerraformRunner>()
+			.mockResolvedValue(fail(1, 'Error: invalid credentials'))
+		await expect(terraformPlan(WORKDIR, runner, {})).rejects.toThrow(
+			'terraform plan failed (exit 1):\nError: invalid credentials',
 		)
 	})
 })

@@ -314,6 +314,15 @@ export interface DeployTarget {
 	 */
 	recover?(projectName: string): Promise<void>
 	/**
+	 * Capture the infrastructure diff a reviewer should see on a PR - the
+	 * `-no-color` Terraform plan (create/update/delete) for this project's
+	 * workspace. Optional: only targets whose provisioning is declarative
+	 * (cloudflare-workers, via Terraform) can render a plan; imperative targets
+	 * (Hetzner) have no equivalent, so they omit it and the caller skips. The
+	 * returned text is bounded/truncated by the caller before rendering.
+	 */
+	planDiff?(): Promise<string>
+	/**
 	 * Load the env a target's backing infrastructure contributes when it is
 	 * realised OUTSIDE the CLI `Service` registry - the cloudflare-workers
 	 * target maps its Terraform outputs (D1/KV/Queue ids, R2 bucket names +
