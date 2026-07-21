@@ -78,6 +78,38 @@ export function hasWorkersBacking(backing: WorkersBackingConfig): boolean {
 	)
 }
 
+// The value every backing output carries when outputs stand in for type
+// generation. Never a real id: types are generated BEFORE provision (at
+// typecheck time), when no Terraform output exists, and the type generator reads
+// only the binding/var NAMES the config-driven builders produce - the values are
+// discarded. A recognisable sentinel makes an accidental deploy-time use obvious.
+const TYPES_PLACEHOLDER_OUTPUT = 'types-only-placeholder'
+
+/**
+ * Synthesise the Terraform outputs a project WOULD emit, one placeholder id per
+ * declared backing alias, so `buildWranglerConfig`/`buildWorkerVars` (which fail
+ * loud on a missing provision output) run before provision to drive type
+ * generation. Only the resulting binding + var NAMES are read; the placeholder
+ * values never reach a deploy. Deriving types from the SAME builders this feeds
+ * is what keeps the generated `Env` and the deployed wrangler config from
+ * drifting.
+ */
+export function typesPlaceholderOutputs(
+	backing: WorkersBackingConfig,
+): WorkersTerraformOutputs {
+	const fill = (aliases: ReadonlyArray<string>): Record<string, string> =>
+		Object.fromEntries(
+			aliases.map(alias => [alias, TYPES_PLACEHOLDER_OUTPUT]),
+		)
+	return {
+		kvNamespaceIds: fill(backing.kvAliases),
+		queueIds: fill(backing.queueAliases),
+		r2Buckets: fill(backing.bucketAliases),
+		r2CdnUrls: fill(backing.cdnBucketAliases),
+		...(backing.hasD1 && { d1DatabaseId: TYPES_PLACEHOLDER_OUTPUT }),
+	}
+}
+
 function extractValue(
 	raw: Readonly<Record<string, unknown>>,
 	name: string,
