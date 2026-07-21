@@ -254,6 +254,87 @@ describe('buildWranglerConfig', () => {
 		expect(forApi.triggers).toBeUndefined()
 	})
 
+	it('binds a sibling worker listed in needs as a service binding', () => {
+		const document = buildWranglerConfig(
+			input({
+				serviceName: 'web',
+				serviceNames: ['web', 'api'],
+				service: service({ needs: ['api'] }),
+			}),
+		)
+
+		expect(document.services).toEqual([
+			{ binding: 'API', service: 'proj-production-api' },
+		])
+	})
+
+	it('binds every sibling a worker needs, kebab names uppercased', () => {
+		const document = buildWranglerConfig(
+			input({
+				serviceName: 'web',
+				serviceNames: ['web', 'api', 'admin-api'],
+				service: service({ needs: ['api', 'admin-api'] }),
+			}),
+		)
+
+		expect(document.services).toEqual([
+			{ binding: 'API', service: 'proj-production-api' },
+			{ binding: 'ADMIN_API', service: 'proj-production-admin-api' },
+		])
+	})
+
+	it('emits no service binding for a worker that needs no sibling', () => {
+		const document = buildWranglerConfig(
+			input({ serviceName: 'api', serviceNames: ['web', 'api'] }),
+		)
+
+		expect(document.services).toBeUndefined()
+	})
+
+	it('never binds the worker to itself even if it lists its own name', () => {
+		const document = buildWranglerConfig(
+			input({
+				serviceName: 'api',
+				serviceNames: ['web', 'api'],
+				service: service({ needs: ['api'] }),
+			}),
+		)
+
+		expect(document.services).toBeUndefined()
+	})
+
+	it('does not turn a backing need into a service binding', () => {
+		const document = buildWranglerConfig(
+			input({
+				serviceName: 'web',
+				serviceNames: ['web', 'api'],
+				services: FULL_SERVICES,
+				outputs: FULL_OUTPUTS,
+				service: service({ needs: ['d1', 'api'] }),
+			}),
+		)
+
+		expect(document.services).toEqual([
+			{ binding: 'API', service: 'proj-production-api' },
+		])
+		expect(document.d1_databases).toBeDefined()
+	})
+
+	it('resolves the bound sibling script name to the deploy environment', () => {
+		const document = buildWranglerConfig(
+			input({
+				environment: 'development',
+				serviceName: 'web',
+				serviceNames: ['web', 'api'],
+				service: service({ needs: ['api'] }),
+			}),
+		)
+
+		expect(document.services).toEqual([
+			{ binding: 'API', service: 'proj-development-api' },
+		])
+	})
+
 	it('omits vars until they are provided', () => {
 		expect(buildWranglerConfig(input()).vars).toBeUndefined()
 		expect(
