@@ -23,6 +23,11 @@ const SCRIPT_NOT_FOUND_FINGERPRINTS = [
 	'[code: 10007]',
 ]
 
+// Cloudflare rejects an under-scoped or wrong-account token with API error 10000
+// ("Authentication error"). On the first-ever Workers deploy this is the token
+// missing Workers permissions rather than an invalid token.
+const AUTH_ERROR_FINGERPRINT = '[code: 10000]'
+
 export interface ExecResult {
 	readonly exitCode: number
 	readonly stdout: string
@@ -30,11 +35,14 @@ export interface ExecResult {
 }
 
 export function assertWranglerOk(exec: ExecResult, label: string): void {
-	if (exec.exitCode !== 0) {
+	if (exec.exitCode === 0) return
+	const base = `wrangler ${label} failed (exit ${String(exec.exitCode)}):\n${exec.stderr}`
+	if (exec.stderr.includes(AUTH_ERROR_FINGERPRINT)) {
 		throw new Error(
-			`wrangler ${label} failed (exit ${String(exec.exitCode)}):\n${exec.stderr}`,
+			`${base}\n\nCloudflare rejected the request as unauthorized (code 10000). CLOUDFLARE_API_TOKEN needs Workers permissions - at minimum Account > Workers Scripts: Edit and Account Settings: Read, plus Zone > Workers Routes: Edit, DNS: Edit and Zone: Read on each routed zone for the custom-domain routes. Also confirm the token belongs to the CLOUDFLARE_ACCOUNT_ID account.`,
 		)
 	}
+	throw new Error(base)
 }
 
 export interface WranglerRunnerOptions {

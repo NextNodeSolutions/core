@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { wranglerDelete } from './runner.ts'
+import { assertWranglerOk, wranglerDelete } from './runner.ts'
 
 import type { ExecResult, WranglerRunner } from './runner.ts'
 
@@ -67,5 +67,35 @@ describe('wranglerDelete', () => {
 		await expect(wranglerDelete('worker-a', runner)).rejects.toThrow(
 			/wrangler delete --name worker-a failed \(exit 1\):\nAuthentication error \[code: 10000\]/,
 		)
+	})
+})
+
+describe('assertWranglerOk', () => {
+	it('is a no-op on exit 0', () => {
+		expect(() =>
+			assertWranglerOk({ exitCode: 0, stdout: '', stderr: '' }, 'deploy'),
+		).not.toThrow()
+	})
+
+	it('points at the missing Workers token scopes on a code 10000 auth error', () => {
+		expect(() =>
+			assertWranglerOk(
+				{
+					exitCode: 1,
+					stdout: '',
+					stderr: 'Authentication error [code: 10000]',
+				},
+				'deploy (worker "app-web")',
+			),
+		).toThrow(/CLOUDFLARE_API_TOKEN needs Workers permissions/)
+	})
+
+	it('throws the stderr verbatim on any other failure', () => {
+		expect(() =>
+			assertWranglerOk(
+				{ exitCode: 1, stdout: '', stderr: 'some other error' },
+				'deploy',
+			),
+		).toThrow(/wrangler deploy failed \(exit 1\):\nsome other error/)
 	})
 })
