@@ -26,6 +26,10 @@ const TERRAFORM_MAX_BUFFER_BYTES = 67_108_864
 const TERRAFORM_CONFIG_FILENAME = 'main.tf.json'
 const TERRAFORM_CONFIG_INDENT = 2
 const STATE_LOCK_FINGERPRINT = 'Error acquiring the state lock'
+// HCP returns this under the lock error when the token cannot perform state
+// operations - the signature of an organization API token (which can create
+// workspaces but not lock/read/write state).
+const STATE_LOCK_NOT_FOUND_FINGERPRINT = 'resource not found'
 
 // `terraform plan -detailed-exitcode` splits success into two codes: 0 = no
 // diff, 2 = a diff is pending. Every other code is a genuine failure. Both 0
@@ -111,6 +115,9 @@ function formatFailure(command: string, execResult: ExecResult): string {
 			: execResult.stderr
 	const base = `terraform ${command} failed (exit ${String(execResult.exitCode)}):\n${output}`
 	if (!execResult.stderr.includes(STATE_LOCK_FINGERPRINT)) return base
+	if (execResult.stderr.includes(STATE_LOCK_NOT_FOUND_FINGERPRINT)) {
+		return `${base}\n\nThe state lock failed with "resource not found", not a held lock. This is the signature of an HCP Terraform *organization* API token in TF_TOKEN_app_terraform_io: it can create the workspace but cannot perform state operations. Use a *team* or *user* token instead - https://developer.hashicorp.com/terraform/cloud-docs/users-teams-organizations/api-tokens`
+	}
 	return `${base}\n\nThe Terraform state lock is held by another run (see the Lock Info above). The wait was already bounded by -lock-timeout=${TERRAFORM_LOCK_TIMEOUT}. If no run is actually active, release it with \`terraform force-unlock <LOCK_ID>\` from this workspace.`
 }
 

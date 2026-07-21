@@ -112,6 +112,17 @@ describe('terraformApply', () => {
 			'terraform force-unlock <LOCK_ID>',
 		)
 	})
+
+	it('points at the organization-token cause when the lock fails with "resource not found"', async () => {
+		const stderr =
+			'Error acquiring the state lock\n\nError message: resource not found'
+		const runner = vi
+			.fn<TerraformRunner>()
+			.mockResolvedValue(fail(1, stderr))
+		await expect(terraformApply(WORKDIR, runner, {})).rejects.toThrow(
+			'organization* API token',
+		)
+	})
 })
 
 describe('terraformDestroy', () => {
