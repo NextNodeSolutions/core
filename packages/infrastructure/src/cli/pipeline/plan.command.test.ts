@@ -90,7 +90,7 @@ describe('planCommand', () => {
 		expect(output).toContain('package_dir=apps/landing\n')
 	})
 
-	it('emits empty image outputs and a routed domain for a cloudflare-workers app', () => {
+	it('emits empty image outputs, a routed domain and no build_directory for a cloudflare-workers app', () => {
 		planCommand(WORKERS_APP_WITH_DOMAIN)
 
 		const output = readFileSync(outputFile, 'utf-8')
@@ -100,45 +100,8 @@ describe('planCommand', () => {
 		expect(output).toContain('domain=example.com\n')
 		expect(output).toContain('image_source=\n')
 		expect(output).toContain('upstream_image_refs=\n')
-		expect(output).toContain('build_directory=apps/landing/dist\n')
-	})
-
-	it('emits an empty build_directory when the routed worker ships no static assets', () => {
-		const config: NextNodeConfig = {
-			project: {
-				name: 'my-api',
-				type: 'app',
-				filter: false,
-				domain: 'example.com',
-				redirectDomains: [],
-				internal: false,
-			},
-			scripts: { lint: 'lint', test: 'test', build: 'build' },
-			package: false,
-			environment: { development: true },
-			services: {},
-			deploy: {
-				target: 'cloudflare-workers',
-				generatedSecrets: [],
-				secrets: [],
-				vps: null,
-				volumes: [],
-				services: {
-					api: {
-						url: 'api.example.com',
-						secrets: [],
-						needs: [],
-						dependsOn: [],
-						entry: 'src/index.ts',
-					},
-				},
-				cron: [],
-			},
-		}
-
-		planCommand(config)
-
-		const output = readFileSync(outputFile, 'utf-8')
+		// The SEO guard is injected per service inside the CLI deploy path, not via
+		// a CI step reading build_directory, so a workers plan emits none.
 		expect(output).toContain('build_directory=\n')
 	})
 

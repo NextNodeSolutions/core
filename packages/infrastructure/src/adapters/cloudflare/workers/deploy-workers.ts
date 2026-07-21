@@ -8,6 +8,7 @@ import { buildWranglerConfig } from '#/domain/cloudflare/workers/wrangler-config
 import { computeSiteUrl } from '#/domain/deploy/domain.ts'
 import { buildServiceSecretEnv } from '#/domain/hetzner/service-env.ts'
 
+import { injectSeoGuardAssets } from './seo-guard-assets.ts'
 import { smokeCheckWorkers } from './smoke-check.ts'
 
 import type { WranglerRunner } from '#/adapters/wrangler/runner.ts'
@@ -94,16 +95,52 @@ function buildServiceDocument(
 	})
 }
 
+interface ServiceDeployJob {
+	readonly input: WorkersDeployInput
+	readonly runner: WranglerRunner
+	readonly serviceName: string
+	readonly service: WorkerServiceConfig
+	readonly secretsJson: string | undefined
+}
+
+// Deploy one service: generate its config, inject the non-prod SEO guard into
+// its assets directory (so a non-prod deploy is not indexable) BEFORE the upload,
+// then `wrangler deploy` and bulk-upload its projected secrets against the same
+// config. A failed deploy throws (the caller stops the run).
+async function deployOneService(
+	job: ServiceDeployJob,
+): Promise<DeployedWorker> {
+	const { input, serviceName, service } = job
+	const document = buildServiceDocument(input, serviceName, service)
+	if (document.assets !== undefined) {
+		injectSeoGuardAssets(
+			input.projectDir,
+			document.assets.directory,
+			input.environment,
+		)
+	}
+	await wranglerDeploy({
+		document,
+		runner: job.runner,
+		cwd: input.projectDir,
+		...(job.secretsJson === undefined
+			? {}
+			: { secretsJson: job.secretsJson }),
+	})
+	return { name: serviceName, url: workerUrl(service, input.environment) }
+}
+
 /**
  * Deploy every Worker in the project, one `wrangler deploy` per service, in
  * `depends_on` order (a service deploys after every service it depends on). Each
  * service's ephemeral wrangler config is generated in the domain and written by
- * the adapter; its projected secrets are then bulk-uploaded against the same
- * config (worker must exist first). A failed deploy throws and stops the run
- * (later services are not deployed). Once every service is deployed, each routed
- * service is smoke-checked on `/healthz` (bounded retries); an unhealthy service
- * throws so the deploy job fails. Returns a single `worker` deployed-environment
- * carrying every service's resolved URL for the summary.
+ * the adapter; an asset-shipping service gets the non-prod SEO guard injected
+ * into its assets directory before upload, and its projected secrets are
+ * bulk-uploaded against the same config (see `deployOneService`). A failed deploy
+ * throws and stops the run (later services are not deployed). Once every service
+ * is deployed, each routed service is smoke-checked on `/healthz` (bounded
+ * retries); an unhealthy service throws so the deploy job fails. Returns a single
+ * `worker` deployed-environment carrying every service's resolved URL.
  */
 export async function deployWorkers(
 	input: WorkersDeployInput,
@@ -121,19 +158,16 @@ export async function deployWorkers(
 	for (const serviceName of order) {
 		const service = input.services[serviceName]
 		if (service === undefined) continue
-		const document = buildServiceDocument(input, serviceName, service)
-		const secretsJson = secretsJsonFor(perServiceSecrets[serviceName])
-		// eslint-disable-next-line no-await-in-loop -- deploys are strictly sequential (depends_on order); parallelism would break the ordering contract
-		await wranglerDeploy({
-			document,
-			runner,
-			cwd: input.projectDir,
-			...(secretsJson === undefined ? {} : { secretsJson }),
-		})
-		deployed.push({
-			name: serviceName,
-			url: workerUrl(service, input.environment),
-		})
+		deployed.push(
+			// eslint-disable-next-line no-await-in-loop -- deploys are strictly sequential (depends_on order); parallelism would break the ordering contract
+			await deployOneService({
+				input,
+				runner,
+				serviceName,
+				service,
+				secretsJson: secretsJsonFor(perServiceSecrets[serviceName]),
+			}),
+		)
 	}
 
 	await smokeCheckWorkers(

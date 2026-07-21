@@ -39,7 +39,6 @@ jobs:
             has_prod_gate: ${{ steps.plan.outputs.has_prod_gate }}
             has_domain: ${{ steps.plan.outputs.has_domain }}
             has_d1: ${{ steps.plan.outputs.has_d1 }}
-            build_directory: ${{ steps.plan.outputs.build_directory }}
             package_dir: ${{ steps.plan.outputs.package_dir }}
         steps:
             - uses: NextNodeSolutions/core/.github/actions/setup@main
@@ -213,15 +212,8 @@ jobs:
             - name: Build
               run: pnpm build
 
-            - name: SEO guard
-              if: needs.plan.outputs.build_directory != ''
-              run: node src/index.ts seo-guard
-              working-directory: .infra/packages/infrastructure
-              env:
-                  PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
-                  PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
-                  BUILD_DIRECTORY: ${{ github.workspace }}/${{ needs.plan.outputs.build_directory }}
-
+            # The SEO guard is injected per service inside `deploy` (before each
+            # asset upload), so there is no separate seo-guard step here.
             - name: Deploy
               run: node src/index.ts deploy
               working-directory: .infra/packages/infrastructure
