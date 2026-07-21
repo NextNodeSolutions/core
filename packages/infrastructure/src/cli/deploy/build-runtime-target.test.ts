@@ -11,7 +11,11 @@ import {
 
 const { utils: sshUtils } = ssh2
 
-import { APP_WITH_DOMAIN, STATIC_WITH_DOMAIN } from '#/cli/fixtures.ts'
+import {
+	APP_WITH_DOMAIN,
+	STATIC_WITH_DOMAIN,
+	WORKERS_APP_WITH_DOMAIN,
+} from '#/cli/fixtures.ts'
 
 import { buildRuntimeTarget } from './build-runtime-target.ts'
 
@@ -31,6 +35,9 @@ vi.mock('../../adapters/hetzner/target.ts', () => ({
 vi.mock('../../adapters/cloudflare/target.ts', () => ({
 	CloudflarePagesTarget: vi.fn(() => ({ name: 'cloudflare-pages' })),
 }))
+vi.mock('../../adapters/cloudflare/workers/target.ts', () => ({
+	CloudflareWorkersTarget: vi.fn(() => ({ name: 'cloudflare-workers' })),
+}))
 
 describe('buildRuntimeTarget', () => {
 	let testPrivateKey: string
@@ -48,6 +55,7 @@ describe('buildRuntimeTarget', () => {
 			Buffer.from(testPrivateKey).toString('base64'),
 		)
 		vi.stubEnv('TAILSCALE_AUTH_KEY', 'tskey-auth-test')
+		vi.stubEnv('TF_TOKEN_app_terraform_io', 'tf-token')
 	})
 
 	afterEach(() => {
@@ -95,5 +103,19 @@ describe('buildRuntimeTarget', () => {
 		expect(HetznerVpsTarget).not.toHaveBeenCalled()
 		expect(CloudflarePagesTarget).toHaveBeenCalledTimes(1)
 		expect(target).toEqual({ name: 'cloudflare-pages' })
+	})
+
+	it('builds a Cloudflare Workers target without needing infra storage', async () => {
+		const { CloudflareWorkersTarget } =
+			await import('#/adapters/cloudflare/workers/target.ts')
+
+		const target = buildRuntimeTarget(
+			WORKERS_APP_WITH_DOMAIN,
+			'production',
+			null,
+		)
+
+		expect(CloudflareWorkersTarget).toHaveBeenCalledTimes(1)
+		expect(target).toEqual({ name: 'cloudflare-workers' })
 	})
 })

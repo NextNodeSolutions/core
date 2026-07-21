@@ -5,6 +5,7 @@ import { computeImageRefCommand } from './cli/deploy/compute-image-ref.command.t
 import { deployCommand } from './cli/deploy/deploy.command.ts'
 import { dnsCommand } from './cli/deploy/dns.command.ts'
 import { migrateRemoteCommand } from './cli/deploy/migrate-remote.command.ts'
+import { planInfraCommand } from './cli/deploy/plan-infra.command.ts'
 import { provisionCommand } from './cli/deploy/provision.command.ts'
 import { pruneBackupsCommand } from './cli/deploy/prune-backups.ts'
 import { restoreCommand } from './cli/deploy/restore.command.ts'
@@ -39,6 +40,7 @@ const PLAN_COMMANDS: Record<string, ConfigCommand> = {
 
 const DEPLOY_COMMANDS: Record<string, DeployCommand> = {
 	provision: provisionCommand,
+	'plan-infra': planInfraCommand,
 	'migrate-remote': migrateRemoteCommand,
 	deploy: deployCommand,
 	'compute-image-ref': computeImageRefCommand,

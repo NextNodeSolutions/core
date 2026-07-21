@@ -42,6 +42,7 @@ export function writePlanOutputs({
 	writeOutput('has_prod_gate', String(hasProdGate(qualityMatrix)))
 	writeOutput('has_domain', String(Boolean(config.project.domain)))
 	writeOutput('has_postgres', String(hasPostgres(config)))
+	writeOutput('has_d1', String(hasD1(config)))
 	writeOutput('domain', config.project.domain ?? '')
 	writeOutput('build_directory', buildDirectory)
 	writeOutput('package_dir', packageDir)
@@ -94,4 +95,15 @@ function resolveImageOutputs(config: NextNodeConfig): {
  */
 function hasPostgres(config: NextNodeConfig): boolean {
 	return Boolean(config.services.postgres)
+}
+
+/**
+ * Whether the project declares `[services.d1]`. Drives the `if:` on the
+ * `detect-migration-changes` + `migrate` jobs in `deploy-workers.yml`, the
+ * cloudflare-workers mirror of `has_postgres`: a D1-less project skips the
+ * migrate path entirely so `wrangler d1 migrations apply` runs only when there
+ * is actually a database to migrate.
+ */
+function hasD1(config: NextNodeConfig): boolean {
+	return Boolean(config.services.d1)
 }

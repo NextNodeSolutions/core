@@ -33,7 +33,7 @@ export function planCommand(config: NextNodeConfig): void {
 	)
 
 	const packageDir = computePackageDir()
-	const buildDirectory = join(packageDir, DEFAULT_BUILD_OUTPUT)
+	const buildDirectory = resolveBuildDirectory(config, packageDir)
 
 	logger.info(`Project: ${config.project.name}`)
 	logger.info(`Environment: ${environment}`)
@@ -64,4 +64,21 @@ function computePackageDir(): string {
 	const configFilePath = requireEnv('PIPELINE_CONFIG_FILE')
 	const workspace = getEnv('GITHUB_WORKSPACE') ?? process.cwd()
 	return relative(workspace, dirname(configFilePath))
+}
+
+// A cloudflare-workers deploy injects the SEO guard per service inside the CLI
+// deploy path (before each service's assets upload), not via a CI step reading a
+// single build_directory - so it emits none. Every other target keeps the
+// conventional build output for the CI SEO-guard step.
+function resolveBuildDirectory(
+	config: NextNodeConfig,
+	packageDir: string,
+): string {
+	if (
+		config.deploy !== false &&
+		config.deploy.target === 'cloudflare-workers'
+	) {
+		return ''
+	}
+	return join(packageDir, DEFAULT_BUILD_OUTPUT)
 }

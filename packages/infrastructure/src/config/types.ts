@@ -1,3 +1,12 @@
+import {
+	SERVICE_NAMES,
+	SERVICE_REQUIRES_INFRA_STORAGE,
+} from './service-config.ts'
+
+import type { ServicesConfig } from './service-config.ts'
+
+export * from './service-config.ts'
+
 export interface NextNodeConfig {
 	readonly project: ProjectSection
 	readonly scripts: ScriptsSection
@@ -20,9 +29,18 @@ export interface CloudflarePagesDeployableConfig extends NextNodeConfig {
 	readonly deploy: CloudflarePagesDeploySection
 }
 
+export interface CloudflareWorkersDeployableConfig extends NextNodeConfig {
+	readonly project: ProjectSection & {
+		readonly type: DeployableProjectType
+		readonly domain: string
+	}
+	readonly deploy: CloudflareWorkersDeploySection
+}
+
 export type DeployableConfig =
 	| HetznerDeployableConfig
 	| CloudflarePagesDeployableConfig
+	| CloudflareWorkersDeployableConfig
 
 export function isHetznerDeployableConfig(
 	config: DeployableConfig,
@@ -34,6 +52,12 @@ export function isCloudflarePagesDeployableConfig(
 	config: DeployableConfig,
 ): config is CloudflarePagesDeployableConfig {
 	return config.deploy.target === 'cloudflare-pages'
+}
+
+export function isCloudflareWorkersDeployableConfig(
+	config: DeployableConfig,
+): config is CloudflareWorkersDeployableConfig {
+	return config.deploy.target === 'cloudflare-workers'
 }
 
 export const DEPLOYABLE_PROJECT_TYPES = ['app', 'static'] as const
@@ -50,8 +74,18 @@ export const PROJECT_TYPES = [
 	...NON_DEPLOYABLE_PROJECT_TYPES,
 ] as const
 
-export const DEPLOY_TARGETS = ['hetzner-vps', 'cloudflare-pages'] as const
+export const DEPLOY_TARGETS = [
+	'hetzner-vps',
+	'cloudflare-pages',
+	'cloudflare-workers',
+] as const
 export type DeployTargetType = (typeof DEPLOY_TARGETS)[number]
+
+// Default `main` for a generated wrangler config: the entry @astrojs/cloudflare
+// v14 (the only major compatible with astro 7) emits, `dist/server/entry.mjs`,
+// with its twin static-assets directory at `dist/client`. Overridable per
+// service through the workers service schema.
+export const DEFAULT_WORKER_ENTRY = 'dist/server/entry.mjs'
 
 export interface HetznerDeployConfig {
 	readonly serverType: string
@@ -233,98 +267,30 @@ export interface CloudflarePagesDeploySection extends BaseDeploySection {
 	readonly secrets: ReadonlyArray<string>
 }
 
+// A single Worker declared under [deploy.services.<name>] for the
+// cloudflare-workers target. A Worker is not a container - no port, image
+// source, or build args - so the shape is the runtime-wiring subset plus the
+// bundle `entry` wrangler deploys. The strict field-level validation (rejecting
+// container-only fields, custom entry/cron) lands in US-1.2.
+export interface WorkerServiceConfig {
+	readonly url?: string
+	readonly secrets: ReadonlyArray<string>
+	readonly needs: ReadonlyArray<string>
+	readonly dependsOn: ReadonlyArray<string>
+	readonly entry: string
+}
+
+export interface CloudflareWorkersDeploySection extends BaseDeploySection {
+	readonly target: 'cloudflare-workers'
+	readonly secrets: ReadonlyArray<string>
+	readonly services: Readonly<Record<string, WorkerServiceConfig>>
+	readonly cron: ReadonlyArray<CronJobConfig>
+}
+
 export type DeploySection =
 	| HetznerVpsDeploySection
 	| CloudflarePagesDeploySection
-
-export interface R2BucketConfig {
-	// Bucket alias declared by the dev (kebab). Materialised as the real
-	// Cloudflare bucket `<project>-<env>-<name>` via `computeR2BucketName`.
-	readonly name: string
-	// When true, the infra attaches a public custom domain
-	// (`<name>.cdn.<domain>`) to the bucket and injects its URL as
-	// `R2_BUCKET_<NAME>_URL`. Buckets default to private (cdn = false).
-	readonly cdn: boolean
-}
-
-export interface R2ServiceConfig {
-	readonly buckets: ReadonlyArray<R2BucketConfig>
-}
-
-export const POSTGRES_MODES = ['embedded', 'external'] as const
-export type PostgresMode = (typeof POSTGRES_MODES)[number]
-
-// `[services.observability]` opts the project into the self-hosted
-// observability backend (VictoriaLogs + VictoriaMetrics + vmagent +
-// vmalert + Alertmanager + blackbox_exporter) injected into the generated
-// compose file. Declared once, by the monitoring project - the stack is
-// itself a NextNode app deployed by the standard pipeline. Retentions are
-// passed verbatim to the Victoria* `-retentionPeriod` flags; vhosts are
-// the tailnet hostnames Caddy fronts VictoriaLogs (log ingestion +
-// LogsQL) and vmui (ad-hoc metrics exploration) with.
-export interface ObservabilityServiceConfig {
-	// VictoriaLogs `-retentionPeriod` (e.g. "30d").
-	readonly logsRetention: string
-	// VictoriaMetrics `-retentionPeriod`, in months (e.g. 12).
-	readonly metricsRetentionMonths: number
-	// Tailnet vhost fronting VictoriaLogs - the URL NN_VL_URL points at.
-	readonly logsVhost: string
-	// Tailnet vhost fronting VictoriaMetrics/vmui.
-	readonly metricsVhost: string
-}
-
-export interface PostgresServiceConfig {
-	readonly mode: PostgresMode
-	// Drizzle migrations folder relative to nextnode.toml. Defaults to
-	// "drizzle" (drizzle-kit's own default `out` value) when omitted.
-	readonly migrationsFolder?: string
-	// Shell command run inside the ephemeral migrate container on the VPS.
-	// Defaults to `pnpm drizzle-kit migrate` (platform-native runner that
-	// reads `drizzle.config.ts` for dialect + `dbCredentials.url`, the app's
-	// config picks up the injected `DATABASE_URL`). Override for non-Drizzle
-	// stacks (e.g. `pnpm prisma migrate deploy`).
-	readonly migrateCommand?: string
-	// Shell command run on the GH runner during the quality stage to
-	// validate the local migrations folder (no DB, pure filesystem check).
-	// CLI default is `pnpm drizzle-kit check`; override for non-Drizzle
-	// stacks (e.g. `pnpm prisma migrate diff --exit-code`).
-	readonly checkCommand?: string
-}
-
-/**
- * Single source of truth for the set of supported backing services. Adding
- * a new service means appending its name here AND adding its config type
- * to `ServiceConfigByName` - TypeScript will then force every service-aware
- * site (validators, `hasAnyService`, future routers) to handle it.
- */
-export const SERVICE_NAMES = ['r2', 'postgres', 'observability'] as const
-export type ServiceName = (typeof SERVICE_NAMES)[number]
-
-export interface ServiceConfigByName {
-	readonly r2: R2ServiceConfig
-	readonly postgres: PostgresServiceConfig
-	readonly observability: ObservabilityServiceConfig
-}
-
-export type ServicesConfig = {
-	readonly [K in ServiceName]?: ServiceConfigByName[K]
-}
-
-/**
- * Per-service flag declaring whether opting into the service requires the
- * infra storage runtime (state + certs buckets) to be loaded. The mapped
- * type forces every entry in `SERVICE_NAMES` to set this flag - adding a
- * new service is a TypeScript error until it answers the question.
- */
-export const SERVICE_REQUIRES_INFRA_STORAGE: {
-	readonly [K in ServiceName]: boolean
-} = {
-	r2: true,
-	postgres: true,
-	// The observability stack provisions nothing outside the VPS compose
-	// project itself - no buckets, no external state.
-	observability: false,
-}
+	| CloudflareWorkersDeploySection
 
 export const KEBAB_IDENTIFIER_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/
 
@@ -374,36 +340,3 @@ export const DEFAULT_DEPLOY_TARGETS: Record<
 export type ParseConfigResult =
 	| { readonly ok: true; readonly config: NextNodeConfig }
 	| { readonly ok: false; readonly errors: readonly string[] }
-
-const PROJECT_TYPE_SET: ReadonlySet<string> = new Set(PROJECT_TYPES)
-const DEPLOY_TARGET_SET: ReadonlySet<string> = new Set(DEPLOY_TARGETS)
-const POSTGRES_MODE_SET: ReadonlySet<string> = new Set(POSTGRES_MODES)
-const SECRET_GENERATOR_SET: ReadonlySet<string> = new Set(SECRET_GENERATORS)
-
-export function isPostgresMode(candidate: unknown): candidate is PostgresMode {
-	return typeof candidate === 'string' && POSTGRES_MODE_SET.has(candidate)
-}
-
-export function isBoolean(candidate: unknown): candidate is boolean {
-	return typeof candidate === 'boolean'
-}
-
-export function isProjectType(candidate: unknown): candidate is ProjectType {
-	return typeof candidate === 'string' && PROJECT_TYPE_SET.has(candidate)
-}
-
-export function isScriptValue(candidate: unknown): candidate is string | false {
-	return typeof candidate === 'string' || candidate === false
-}
-
-export function isDeployTarget(
-	candidate: unknown,
-): candidate is DeployTargetType {
-	return typeof candidate === 'string' && DEPLOY_TARGET_SET.has(candidate)
-}
-
-export function isSecretGenerator(
-	candidate: unknown,
-): candidate is SecretGenerator {
-	return typeof candidate === 'string' && SECRET_GENERATOR_SET.has(candidate)
-}

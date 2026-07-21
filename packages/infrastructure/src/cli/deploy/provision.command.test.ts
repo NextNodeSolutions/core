@@ -2,7 +2,11 @@ import { readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { STATIC_NO_DOMAIN, STATIC_WITH_DOMAIN } from '#/cli/fixtures.ts'
+import {
+	STATIC_NO_DOMAIN,
+	STATIC_WITH_DOMAIN,
+	WORKERS_APP_WITH_DOMAIN,
+} from '#/cli/fixtures.ts'
 import { methodOf, notFound, okJson, urlOf } from '#/test-fetch.ts'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -11,7 +15,12 @@ import { provisionCommand } from './provision.command.ts'
 import type { DeployableConfig } from '#/config/types.ts'
 import type { FetchImpl } from '#/test-fetch.ts'
 
-const { mockEnsureInfra, mockEnsureGenerated } = vi.hoisted(() => ({
+const {
+	mockEnsureInfra,
+	mockEnsureGenerated,
+	mockWorkersEnsureInfra,
+	mockWorkersLoadBacking,
+} = vi.hoisted(() => ({
 	mockEnsureInfra: vi.fn(async () => ({
 		kind: 'vps' as const,
 		outcome: {},
@@ -23,6 +32,19 @@ const { mockEnsureInfra, mockEnsureGenerated } = vi.hoisted(() => ({
 		durationMs: 0,
 	})),
 	mockEnsureGenerated: vi.fn(async () => {}),
+	mockWorkersEnsureInfra: vi.fn(async () => ({
+		kind: 'workers' as const,
+		outcome: {
+			'hcp-workspace': {
+				handled: true,
+				detail: 'created "my-worker-production"',
+			},
+			terraform: { handled: true, detail: 'applied' },
+		},
+		workspaceName: 'my-worker-production',
+		durationMs: 0,
+	})),
+	mockWorkersLoadBacking: vi.fn(async () => ({ public: {}, secret: {} })),
 }))
 
 // Mock the gh-backed generator: provision should DELEGATE to it; the unit under
@@ -37,6 +59,19 @@ vi.mock('../../adapters/hetzner/target.ts', () => ({
 		contributeEnv: () => ({ public: {}, secret: {} }),
 		deploy: vi.fn(),
 		ensureInfra: mockEnsureInfra,
+		reconcileDns: vi.fn(),
+	})),
+}))
+
+vi.mock('../../adapters/cloudflare/workers/target.ts', () => ({
+	CloudflareWorkersTarget: vi.fn(() => ({
+		name: 'cloudflare-workers',
+		contributeEnv: () => ({
+			public: { SITE_URL: 'https://example.com' },
+			secret: {},
+		}),
+		ensureInfra: mockWorkersEnsureInfra,
+		loadBackingEnv: mockWorkersLoadBacking,
 		reconcileDns: vi.fn(),
 	})),
 }))
@@ -109,6 +144,8 @@ describe('provisionCommand', () => {
 
 	beforeEach(() => {
 		mockEnsureGenerated.mockClear()
+		mockWorkersEnsureInfra.mockClear()
+		mockWorkersLoadBacking.mockClear()
 		const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
 		summaryFile = join(tmpdir(), `gh-summary-${id}.txt`)
 		outputFile = join(tmpdir(), `gh-output-${id}.txt`)
@@ -199,6 +236,59 @@ describe('provisionCommand', () => {
 
 		await expect(provisionCommand(STATIC_NO_DOMAIN)).rejects.toThrow(
 			'CLOUDFLARE_API_TOKEN env var',
+		)
+	})
+
+	it('runs ensureInfra and verifies backing env for a workers project', async () => {
+		vi.stubEnv('TF_TOKEN_app_terraform_io', 'tf-token')
+
+		await provisionCommand(WORKERS_APP_WITH_DOMAIN)
+
+		expect(mockWorkersEnsureInfra).toHaveBeenCalledWith('my-worker')
+		expect(mockWorkersLoadBacking).toHaveBeenCalledWith('my-worker')
+
+		const summary = readFileSync(summaryFile, 'utf-8')
+		expect(summary).toContain('Infrastructure ready for `my-worker`')
+		expect(summary).toContain('cloudflare-workers')
+		expect(summary).toContain('applied')
+	})
+
+	it('builds no R2 CLI service for a workers project declaring [services.r2] - the target Terraform apply realises the buckets', async () => {
+		vi.stubEnv('TF_TOKEN_app_terraform_io', 'tf-token')
+		// Any R2 CLI service would provision buckets through this fetch; the
+		// workers target is fully mocked, so a call here proves double
+		// realisation. It must never fire.
+		const fetchMock = vi.fn<FetchImpl>(() => {
+			throw new Error(
+				'unexpected R2 API call: R2 is realised by Terraform',
+			)
+		})
+		vi.stubGlobal('fetch', fetchMock)
+
+		const config: DeployableConfig = {
+			...WORKERS_APP_WITH_DOMAIN,
+			services: { r2: { buckets: [{ name: 'uploads', cdn: false }] } },
+		}
+
+		await provisionCommand(config)
+
+		expect(fetchMock).not.toHaveBeenCalled()
+		expect(mockWorkersEnsureInfra).toHaveBeenCalledWith('my-worker')
+	})
+
+	it('delegates generated secrets for a workers project', async () => {
+		vi.stubEnv('TF_TOKEN_app_terraform_io', 'tf-token')
+
+		await provisionCommand(WORKERS_APP_WITH_DOMAIN)
+
+		expect(mockEnsureGenerated).toHaveBeenCalledWith(
+			[],
+			{},
+			{
+				owner: 'NextNodeSolutions',
+				repo: 'core',
+				environment: 'production',
+			},
 		)
 	})
 })

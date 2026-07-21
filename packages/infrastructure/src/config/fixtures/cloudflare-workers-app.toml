@@ -1,0 +1,23 @@
+[project]
+name = "studiobymina"
+type = "app"
+domain = "studiobymina.com"
+redirect_domains = ["studiobymina.fr"]
+
+[deploy]
+target = "cloudflare-workers"
+secrets = [{ name = "JWT_SECRET", generate = "token", length = 43 }]
+
+[deploy.services.web]
+url = "studiobymina.com"
+
+[deploy.services.back]
+url = "api.studiobymina.com"
+needs = ["d1"]
+secrets = ["RESEND_API_KEY"]
+
+[deploy.services.admin]
+url = "admin.studiobymina.com"
+
+[services.d1]
+migrations_folder = "drizzle"

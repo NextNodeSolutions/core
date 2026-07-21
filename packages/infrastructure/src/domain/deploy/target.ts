@@ -4,6 +4,7 @@ import type { AutoRestoreInput, AutoRestoreResult } from './auto-restore.ts'
 import type {
 	PagesResourceOutcome,
 	VpsResourceOutcome,
+	WorkersResourceOutcome,
 } from './resource-outcome.ts'
 import type { TeardownResult } from './teardown-result.ts'
 import type { TeardownTarget } from './teardown-target.ts'
@@ -88,9 +89,29 @@ export interface StaticDeployedEnvironment extends BaseDeployedEnvironment {
 	readonly kind: 'static'
 }
 
+/**
+ * One deployed Worker within a cloudflare-workers deployment. `url` is the
+ * Custom Domain a routed service answers on (`https://<resolved-host>`); an
+ * internal worker (no declared `url`) carries an empty `url` - it is reachable
+ * only through service bindings, so it has no public address to surface.
+ */
+export interface DeployedWorker {
+	readonly name: string
+	readonly url: string
+}
+
+export interface WorkerDeployedEnvironment extends BaseDeployedEnvironment {
+	readonly kind: 'worker'
+	// One entry per deployed [deploy.services.<name>] (routed + internal). The
+	// deploy summary renders one row each, mirroring the container target's
+	// per-service image rows.
+	readonly workers: ReadonlyArray<DeployedWorker>
+}
+
 export type DeployedEnvironment =
 	| ContainerDeployedEnvironment
 	| StaticDeployedEnvironment
+	| WorkerDeployedEnvironment
 
 export interface VpsProvisionResult {
 	readonly kind: 'vps'
@@ -110,7 +131,17 @@ export interface StaticProvisionResult {
 	readonly durationMs: number
 }
 
-export type ProvisionResult = VpsProvisionResult | StaticProvisionResult
+export interface WorkersProvisionResult {
+	readonly kind: 'workers'
+	readonly outcome: WorkersResourceOutcome
+	readonly workspaceName: string
+	readonly durationMs: number
+}
+
+export type ProvisionResult =
+	| VpsProvisionResult
+	| StaticProvisionResult
+	| WorkersProvisionResult
 
 export interface TargetState {
 	readonly projectName: string
@@ -124,17 +155,38 @@ export interface DeployResult {
 }
 
 /**
- * Inputs required to run schema migrations against the project's database
- * on the deploy target. The migrate runs in an ephemeral container built
- * from the same `image` as the app, joining the project's docker network
+ * Inputs to run schema migrations against the project's database. Discriminated
+ * by `kind` so each target consumes only the shape it understands: a container
+ * target reads `image`/`migrateCommand`, a D1 target reads neither (it drives
+ * `wrangler d1 migrations apply`, which resolves the database + migrations
+ * directory from the generated wrangler config, not a Docker image).
+ */
+export type MigrateInput = ContainerMigrateInput | D1MigrateInput
+
+/**
+ * Container (Hetzner VPS) migrate. The migrate runs in an ephemeral container
+ * built from the same `image` as the app, joining the project's docker network
  * so the embedded postgres sidecar resolves at its compose service name.
  * `migrateCommand` is the shell command the container executes (default
  * `pnpm drizzle-kit migrate`, overridable via `[services.postgres].migrate_command`).
  */
-export interface MigrateInput {
+export interface ContainerMigrateInput {
+	readonly kind: 'container'
 	readonly projectName: string
+	readonly environment: AppEnvironment
 	readonly image: ImageRef
 	readonly migrateCommand: string
+}
+
+/**
+ * D1 (Cloudflare Workers) migrate. Carries only project + environment: the D1
+ * database name (`<project>-<env>-d1`), its id, and the migrations directory are
+ * resolved from the provision outputs + the owning service's generated wrangler
+ * config, so no image or migrate command is needed.
+ */
+export interface D1MigrateInput {
+	readonly kind: 'd1'
+	readonly projectName: string
 	readonly environment: AppEnvironment
 }
 
@@ -253,4 +305,32 @@ export interface DeployTarget {
 		shouldWipeVolumes: boolean,
 	): Promise<TeardownResult>
 	describe?(projectName: string): Promise<TargetState | null>
+	/**
+	 * Reconcile the target back to its declared state after an interrupted or
+	 * partial operation. Optional: only targets whose source of truth can drift
+	 * from reality implement it. The cloudflare-workers target implements it as a
+	 * documented no-op - the Terraform state IS the source of truth, so there is
+	 * nothing to reconcile.
+	 */
+	recover?(projectName: string): Promise<void>
+	/**
+	 * Capture the infrastructure diff a reviewer should see on a PR - the
+	 * `-no-color` Terraform plan (create/update/delete) for this project's
+	 * workspace. Optional: only targets whose provisioning is declarative
+	 * (cloudflare-workers, via Terraform) can render a plan; imperative targets
+	 * (Hetzner) have no equivalent, so they omit it and the caller skips. The
+	 * returned text is bounded/truncated by the caller before rendering.
+	 */
+	planDiff?(): Promise<string>
+	/**
+	 * Load the env a target's backing infrastructure contributes when it is
+	 * realised OUTSIDE the CLI `Service` registry - the cloudflare-workers
+	 * target maps its Terraform outputs (D1/KV/Queue ids, R2 bucket names +
+	 * CDN URLs, endpoint) into a `ServiceEnv` here, since its backing services
+	 * are inert on the CLI side. Optional: targets whose backing env already
+	 * flows through `resolveServices` (Hetzner, Pages) omit it. When present it
+	 * merges through the same `mergeServiceEnvs` as target + services + secrets,
+	 * so a key collision fails loud exactly like any other service's would.
+	 */
+	loadBackingEnv?(projectName: string): Promise<ServiceEnv>
 }

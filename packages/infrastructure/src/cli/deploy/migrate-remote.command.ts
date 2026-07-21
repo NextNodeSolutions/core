@@ -3,7 +3,10 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
 
-import { isHetznerDeployableConfig } from '#/config/types.ts'
+import {
+	isCloudflareWorkersDeployableConfig,
+	isHetznerDeployableConfig,
+} from '#/config/types.ts'
 import { selectServiceImage } from '#/domain/deploy/image-ref.ts'
 import { buildMigrateSummary } from '#/domain/deploy/migrate-summary.ts'
 import { resolveMigrationServiceName } from '#/domain/deploy/migration-service.ts'
@@ -12,43 +15,59 @@ import { DEFAULT_MIGRATE_COMMAND } from '#/domain/deploy/target.ts'
 import { pruneProjectBackups } from './prune-backups.ts'
 import { resolveDeployContext } from './resolve-deploy-context.ts'
 
-import type { DeployableConfig } from '#/config/types.ts'
+import type {
+	CloudflareWorkersDeployableConfig,
+	DeployableConfig,
+	PostgresServiceConfig,
+} from '#/config/types.ts'
 import type { MigrateInput } from '#/domain/deploy/target.ts'
 
 /**
- * `migrate-remote` orchestrates Path A's migrate phase. It runs in its own GH
- * Actions job between `provision` and `deploy`, so a failure here halts the
- * workflow BEFORE the app rotates against an unmigrated schema.
+ * `migrate-remote` runs the migrate phase between `provision` and `deploy`, in
+ * its own GH Actions job, so a failure halts the workflow BEFORE the app rotates
+ * against an unmigrated schema. It dispatches on the declared database:
  *
- * Steps:
- *   1. Stage the rollout on the target - env file, compose file, registry
- *      login, image pull, postgres up + healthy. On a fresh VPS the wal-g
- *      image entrypoint restores the latest base backup + replays archived WAL
- *      before postgres reports healthy, so migrate runs on the rehydrated
- *      schema (zero-loss VPS swap).
- *   2. Run the migrate command in an ephemeral container joined to the
- *      project's docker network (postgres reachable internally, never bound on
- *      the host).
+ *   - `[services.postgres]` (Hetzner VPS): stage the rollout, then migrate in an
+ *     ephemeral container inside the project's docker network.
+ *   - `[services.d1]` (Cloudflare Workers): apply D1 migrations with
+ *     `wrangler d1 migrations apply --remote` - no rollout to stage (no database
+ *     to bring up) and no image (wrangler resolves the database + migrations
+ *     from the generated config).
  *
- * No pre-migrate snapshot is taken: continuous WAL archiving (archive_command,
- * RPO <=180s) plus the periodic base backups already capture the pre-migration
- * state for a wal-g point-in-time recovery (operator-run, a separate follow-up,
- * not this command). NOTE: `infrastructure restore --at <ts>` is the pg_dump
- * LOGICAL restore - it replays the closest daily dump on the VPS, it is NOT a
- * WAL-G PITR. Skipped (early-exit) when the project does not declare
- * `[services.postgres]`.
+ * The two databases never coexist (postgres is rejected on Workers and d1 on
+ * Hetzner), so exactly one branch runs; a project declaring neither is a no-op.
  */
 export async function migrateRemoteCommand(
 	config: DeployableConfig,
 ): Promise<void> {
-	const { postgres } = config.services
-	if (!postgres) {
-		logger.info(
-			`Skipping migrate-remote: no [services.postgres] for "${config.project.name}"`,
-		)
+	const { postgres, d1 } = config.services
+	if (postgres) {
+		await migratePostgres(config, postgres)
 		return
 	}
+	if (isCloudflareWorkersDeployableConfig(config) && d1) {
+		await migrateD1(config)
+		return
+	}
+	logger.info(
+		`Skipping migrate-remote: no [services.postgres] or [services.d1] for "${config.project.name}"`,
+	)
+}
 
+/**
+ * Hetzner VPS path. Stages the rollout (env + compose files on disk, image
+ * pulled, postgres up + healthy - on a fresh VPS the wal-g entrypoint rehydrates
+ * from the latest base backup + archived WAL first, so migrate runs on the
+ * recovered schema) then runs the migrate command in an ephemeral container.
+ *
+ * No pre-migrate snapshot is taken: continuous WAL archiving plus periodic base
+ * backups already capture the pre-migration state for a wal-g PITR (operator-run,
+ * a separate follow-up).
+ */
+async function migratePostgres(
+	config: DeployableConfig,
+	postgres: PostgresServiceConfig,
+): Promise<void> {
 	const { target, env, input, environment, infraStorage } =
 		await resolveDeployContext(config)
 
@@ -65,6 +84,7 @@ export async function migrateRemoteCommand(
 	await target.prepareRollout(config.project.name, input, env)
 
 	const migrateInput: MigrateInput = {
+		kind: 'container',
 		projectName: config.project.name,
 		environment,
 		image: migrateImage,
@@ -86,6 +106,36 @@ export async function migrateRemoteCommand(
 			environment,
 		)
 	}
+
+	writeSummary(
+		buildMigrateSummary({
+			projectName: config.project.name,
+			environment,
+			migrateDurationMs: migrateResult.durationMs,
+			snapshotDurationMs: null,
+		}),
+	)
+}
+
+/**
+ * Cloudflare Workers path. Applies pending D1 migrations against the remote
+ * database via the target, which drives `wrangler d1 migrations apply`. No
+ * IMAGE_REFS (no Docker image) and no `prepareRollout` (no database to stage) -
+ * the D1 migrate input carries only project + environment.
+ */
+async function migrateD1(
+	config: CloudflareWorkersDeployableConfig,
+): Promise<void> {
+	const { target, environment } = await resolveDeployContext(config)
+
+	const migrateResult = await target.runMigrate({
+		kind: 'd1',
+		projectName: config.project.name,
+		environment,
+	})
+	logger.info(
+		`Migration applied for "${config.project.name}" in ${migrateResult.durationMs}ms`,
+	)
 
 	writeSummary(
 		buildMigrateSummary({

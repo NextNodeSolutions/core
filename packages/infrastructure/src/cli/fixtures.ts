@@ -1,7 +1,10 @@
+import { DEFAULT_WORKER_ENTRY } from '#/config/types.ts'
+
 import type {
 	DeployableConfig,
 	PostgresServiceConfig,
 	UserServiceConfig,
+	WorkerServiceConfig,
 } from '#/config/types.ts'
 
 // Every fixture shares the same project/scripts shell; each varies only in
@@ -76,6 +79,52 @@ function staticSite({
 		},
 	}
 }
+
+interface CloudflareWorkersAppFixture {
+	readonly workerService: WorkerServiceConfig
+	readonly secrets?: ReadonlyArray<string>
+}
+
+function cloudflareWorkersApp({
+	workerService,
+	secrets = [],
+}: CloudflareWorkersAppFixture): DeployableConfig {
+	return {
+		project: {
+			type: 'app',
+			name: 'my-worker',
+			domain: 'example.com',
+			redirectDomains: [],
+			filter: false,
+			internal: false,
+		},
+		scripts: { lint: 'lint', test: 'test', build: 'build' },
+		package: false,
+		environment: { development: true },
+		services: {},
+		deploy: {
+			target: 'cloudflare-workers',
+			generatedSecrets: [],
+			secrets,
+			vps: null,
+			volumes: [],
+			services: { web: workerService },
+			cron: [],
+		},
+	}
+}
+
+const WORKER_APP_SERVICE: WorkerServiceConfig = {
+	url: 'example.com',
+	secrets: [],
+	needs: [],
+	dependsOn: [],
+	entry: DEFAULT_WORKER_ENTRY,
+}
+
+export const WORKERS_APP_WITH_DOMAIN: DeployableConfig = cloudflareWorkersApp({
+	workerService: WORKER_APP_SERVICE,
+})
 
 const BUILD_APP_SERVICE: UserServiceConfig = {
 	port: 3000,

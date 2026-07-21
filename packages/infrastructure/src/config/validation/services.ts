@@ -1,28 +1,44 @@
 import { SERVICE_NAMES } from '#/config/types.ts'
 import { isRecord } from '#/kernel/guards.ts'
 
+import { validateD1Service } from './services/d1.ts'
+import { validateKvService } from './services/kv.ts'
 import { validateObservabilityService } from './services/observability.ts'
 import { validatePostgresService } from './services/postgres.ts'
+import { validateQueuesService } from './services/queues.ts'
 import { validateR2Service } from './services/r2.ts'
 
 import type {
-	ObservabilityServiceConfig,
-	PostgresServiceConfig,
-	R2ServiceConfig,
+	ServiceConfigByName,
+	ServiceName,
 	ServicesConfig,
 } from '#/config/types.ts'
 import type { ValidationResult } from './result.ts'
 
-interface MutableServicesConfig {
-	r2?: R2ServiceConfig
-	postgres?: PostgresServiceConfig
-	observability?: ObservabilityServiceConfig
+type MutableServicesConfig = {
+	-readonly [K in ServiceName]?: ServiceConfigByName[K]
+}
+
+// Validate one optional sub-table: absent -> undefined; present + valid ->
+// its section; present + invalid -> undefined after appending its errors. The
+// caller assigns the section under a LITERAL key so each service keeps its
+// precise type (a union-keyed write would collapse to their intersection).
+function runService<T>(
+	raw: unknown,
+	validate: (raw: unknown) => ValidationResult<T>,
+	errors: string[],
+): T | undefined {
+	if (raw === undefined) return undefined
+	const validation = validate(raw)
+	if (validation.ok) return validation.section
+	errors.push(...validation.errors)
+	return undefined
 }
 
 /**
  * Validate the [services] table. Returns an empty `ServicesConfig` when no
- * services are declared - every backing service (R2, postgres, observability)
- * lives as an optional sub-table under `[services.<name>]`.
+ * services are declared - every backing service lives as an optional sub-table
+ * under `[services.<name>]`.
  */
 export function validateServicesSection(
 	raw: unknown,
@@ -35,34 +51,31 @@ export function validateServicesSection(
 	const errors: string[] = []
 	const services: MutableServicesConfig = {}
 
-	if (raw['r2'] !== undefined) {
-		const r2Result = validateR2Service(raw['r2'])
-		if (r2Result.ok) {
-			services.r2 = r2Result.section
-		} else {
-			errors.push(...r2Result.errors)
-		}
-	}
+	const r2 = runService(raw['r2'], validateR2Service, errors)
+	if (r2 !== undefined) services.r2 = r2
 
-	if (raw['postgres'] !== undefined) {
-		const postgresResult = validatePostgresService(raw['postgres'])
-		if (postgresResult.ok) {
-			services.postgres = postgresResult.section
-		} else {
-			errors.push(...postgresResult.errors)
-		}
-	}
+	const postgres = runService(
+		raw['postgres'],
+		validatePostgresService,
+		errors,
+	)
+	if (postgres !== undefined) services.postgres = postgres
 
-	if (raw['observability'] !== undefined) {
-		const observabilityResult = validateObservabilityService(
-			raw['observability'],
-		)
-		if (observabilityResult.ok) {
-			services.observability = observabilityResult.section
-		} else {
-			errors.push(...observabilityResult.errors)
-		}
-	}
+	const observability = runService(
+		raw['observability'],
+		validateObservabilityService,
+		errors,
+	)
+	if (observability !== undefined) services.observability = observability
+
+	const d1 = runService(raw['d1'], validateD1Service, errors)
+	if (d1 !== undefined) services.d1 = d1
+
+	const kv = runService(raw['kv'], validateKvService, errors)
+	if (kv !== undefined) services.kv = kv
+
+	const queues = runService(raw['queues'], validateQueuesService, errors)
+	if (queues !== undefined) services.queues = queues
 
 	if (errors.length > 0) return { ok: false, errors }
 	return { ok: true, section: services }

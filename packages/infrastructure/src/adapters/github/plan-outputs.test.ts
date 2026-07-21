@@ -115,7 +115,7 @@ describe('writePlanOutputs', () => {
 			{ id: 'test', name: 'Test', cmd: 'pnpm test' },
 		])
 		expect(output).toBe(
-			`quality_matrix=${matrixJson}\nproject_name=my-app\nproject_type=app\nproject_filter=\npublish=false\ndevelopment_enabled=true\nhas_prod_gate=false\nhas_domain=false\nhas_postgres=false\ndomain=\nbuild_directory=apps/landing/dist\npackage_dir=apps/landing\nimage_source=build\nupstream_image_refs=\n`,
+			`quality_matrix=${matrixJson}\nproject_name=my-app\nproject_type=app\nproject_filter=\npublish=false\ndevelopment_enabled=true\nhas_prod_gate=false\nhas_domain=false\nhas_postgres=false\nhas_d1=false\ndomain=\nbuild_directory=apps/landing/dist\npackage_dir=apps/landing\nimage_source=build\nupstream_image_refs=\n`,
 		)
 	})
 
@@ -289,6 +289,30 @@ describe('writePlanOutputs', () => {
 		expect(output).toContain('has_postgres=true\n')
 	})
 
+	it('writes has_d1=false by default and true when [services.d1] is configured', () => {
+		writePlanOutputs({
+			config: APP_CONFIG,
+			pagesProjectName: 'my-app',
+			tasks: [],
+			buildDirectory: 'dist',
+			packageDir: '.',
+		})
+		expect(readFileSync(outputFile, 'utf-8')).toContain('has_d1=false\n')
+
+		const withD1: NextNodeConfig = {
+			...APP_CONFIG,
+			services: { d1: { migrationsFolder: 'drizzle' } },
+		}
+		writePlanOutputs({
+			config: withD1,
+			pagesProjectName: 'my-app',
+			tasks: [],
+			buildDirectory: 'dist',
+			packageDir: '.',
+		})
+		expect(readFileSync(outputFile, 'utf-8')).toContain('has_d1=true\n')
+	})
+
 	it('writes empty image outputs for non-deployable projects', () => {
 		writePlanOutputs({
 			config: PACKAGE_CONFIG,
@@ -319,6 +343,42 @@ describe('writePlanOutputs', () => {
 		writePlanOutputs({
 			config,
 			pagesProjectName: 'my-site',
+			tasks: [],
+			buildDirectory: 'dist',
+			packageDir: '.',
+		})
+
+		const output = readFileSync(outputFile, 'utf-8')
+		expect(output).toContain('image_source=\n')
+		expect(output).toContain('upstream_image_refs=\n')
+	})
+
+	it('writes empty image outputs for cloudflare-workers deploys', () => {
+		const config: NextNodeConfig = {
+			...APP_CONFIG,
+			project: { ...APP_CONFIG.project, domain: 'example.com' },
+			deploy: {
+				target: 'cloudflare-workers',
+				secrets: [],
+				generatedSecrets: [],
+				vps: null,
+				volumes: [],
+				cron: [],
+				services: {
+					web: {
+						url: 'example.com',
+						secrets: [],
+						needs: [],
+						dependsOn: [],
+						entry: 'dist/server/entry.mjs',
+					},
+				},
+			},
+		}
+
+		writePlanOutputs({
+			config,
+			pagesProjectName: 'my-worker',
 			tasks: [],
 			buildDirectory: 'dist',
 			packageDir: '.',

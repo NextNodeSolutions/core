@@ -1,18 +1,21 @@
-import type { PostgresServiceConfig } from '#/config/types.ts'
+import { DEFAULT_MIGRATIONS_FOLDER } from '#/config/types.ts'
 
-// drizzle-kit's own default `out` directory. A postgres project that does not
-// override `migrations_folder` ships its generated SQL here.
-const DEFAULT_MIGRATIONS_FOLDER = 'drizzle'
+import type { ServicesConfig } from '#/config/types.ts'
 
 /**
  * The directory (relative to the project root) holding generated migration
- * files. Used to decide whether a given push touched the schema, so the
- * migrate job can be skipped when it did not.
+ * files. Used to decide whether a given push touched the schema, so the migrate
+ * job can be skipped when it did not. The folder comes from whichever database
+ * the project declares - `[services.postgres]` on a VPS or `[services.d1]` on
+ * Cloudflare Workers (the two never coexist: postgres is rejected on Workers and
+ * d1 on Hetzner). Defaults to `drizzle` when neither declares an override.
  */
-export function resolveMigrationsFolder(
-	postgres: PostgresServiceConfig | undefined,
-): string {
-	return postgres?.migrationsFolder ?? DEFAULT_MIGRATIONS_FOLDER
+export function resolveMigrationsFolder(services: ServicesConfig): string {
+	return (
+		services.postgres?.migrationsFolder ??
+		services.d1?.migrationsFolder ??
+		DEFAULT_MIGRATIONS_FOLDER
+	)
 }
 
 // The set of paths a push changed, or a signal that we could not compute it.

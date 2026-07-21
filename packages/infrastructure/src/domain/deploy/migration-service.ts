@@ -1,9 +1,14 @@
-import type { UserServiceConfig } from '#/config/types.ts'
+import type { UserServiceConfig, WorkerServiceConfig } from '#/config/types.ts'
 
 // The backing-service name a workload lists in `needs` to opt into the project
 // database. A project declares exactly one [services.postgres], so exactly one
 // user service should own its schema.
 const POSTGRES_NEED = 'postgres'
+
+// The backing-service name a Worker lists in `needs` to bind the project D1
+// database. Unlike postgres, D1 allows many consumers - but there is one
+// database and one migrations directory, so exactly one config drives the apply.
+const D1_NEED = 'd1'
 
 /**
  * Resolve the single user service that owns the database schema - the one
@@ -37,4 +42,26 @@ export function resolveMigrationServiceName(
 		)
 	}
 	return owner
+}
+
+/**
+ * Resolve the Worker whose generated wrangler config drives the D1 migrations
+ * apply - the FIRST service (declaration order) that lists `needs = ["d1"]`. D1
+ * permits many consumers, so unlike postgres there is no "multiple owners"
+ * error: every consumer binds the same single database, and the migrations
+ * directory is identical, so the first is a deterministic, sufficient choice.
+ *
+ * Only called when the project declares [services.d1]; a database declared with
+ * no Worker binding it is a misconfiguration (nothing to migrate against), so
+ * zero consumers throws before the migrate job runs.
+ */
+export function resolveD1MigrationServiceName(
+	services: Readonly<Record<string, WorkerServiceConfig>>,
+): string {
+	for (const [name, service] of Object.entries(services)) {
+		if (service.needs.includes(D1_NEED)) return name
+	}
+	throw new Error(
+		'No deploy service declares needs = ["d1"] while [services.d1] is set - at least one Worker must bind the database (needs = ["d1"]) for `wrangler d1 migrations apply` to have a config to run against',
+	)
 }

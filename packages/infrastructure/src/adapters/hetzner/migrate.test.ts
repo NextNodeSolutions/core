@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { buildMigrateCommand, buildSnapshotCommand } from './migrate.ts'
 
 import type {
+	ContainerMigrateInput,
 	ImageRef,
-	MigrateInput,
 	SnapshotInput,
 } from '#/domain/deploy/target.ts'
 
@@ -14,7 +14,8 @@ const IMAGE: ImageRef = {
 	tag: 'sha-abc1234',
 }
 
-const BASE_INPUT: MigrateInput = {
+const BASE_INPUT: ContainerMigrateInput = {
+	kind: 'container',
 	projectName: 'acme-web',
 	image: IMAGE,
 	migrateCommand: 'pnpm drizzle-kit migrate',

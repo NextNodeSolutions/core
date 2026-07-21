@@ -1,0 +1,62 @@
+name: Plan Workers Diff
+
+# Comments the Terraform plan (create/update/delete) for a Cloudflare Workers
+# project on the pull request, so a reviewer sees the infrastructure diff before
+# merge. The plan is env-specific (HCP workspace <project>-<environment>).
+#
+# The caller decides WHEN to run it — trigger on nextnode.toml changes:
+#
+#   on:
+#     pull_request:
+#       paths: ['**/nextnode.toml']
+#   jobs:
+#     plan-infra:
+#       uses: NextNodeSolutions/core/.github/workflows/plan-workers-diff.yml@main
+#       with:
+#         environment: development
+#         config_file: apps/web/nextnode.toml
+#       secrets: inherit
+
+on:
+    workflow_call:
+        inputs:
+            environment:
+                type: string
+                required: true
+                description: 'development or production - the plan is env-specific (workspace <project>-<env>)'
+            config_file:
+                type: string
+                default: 'nextnode.toml'
+                description: 'Path to nextnode.toml in the calling repo'
+
+permissions:
+    contents: read
+    pull-requests: write
+
+jobs:
+    plan-infra:
+        name: Plan infra diff
+        runs-on: ubuntu-latest
+        steps:
+            - uses: NextNodeSolutions/core/.github/actions/setup@main
+              with:
+                  infra: 'true'
+                  deps: 'false'
+
+            - name: Setup Terraform
+              uses: hashicorp/setup-terraform@v3
+              with:
+                  terraform_version: '~> 1.9'
+                  terraform_wrapper: false
+
+            - name: Plan infra diff
+              run: node src/index.ts plan-infra
+              working-directory: .infra/packages/infrastructure
+              env:
+                  PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
+                  PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
+                  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+                  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+                  TF_TOKEN_app_terraform_io: ${{ secrets.TF_CLOUD_TOKEN }}
+                  GH_TOKEN: ${{ github.token }}
+                  PIPELINE_PR_NUMBER: ${{ github.event.pull_request.number }}

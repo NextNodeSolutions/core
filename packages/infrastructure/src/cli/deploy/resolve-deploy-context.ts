@@ -139,7 +139,19 @@ async function resolveMergedDeployEnv(
 		public: {},
 		secret: pickSecrets(args.repoSecrets, args.config.deploy.secrets),
 	}
-	const merged = mergeServiceEnvs([targetEnv, servicesEnv, userSecretsEnv])
+	// A target whose backing services are realised outside the CLI Service
+	// registry (cloudflare-workers, via Terraform outputs) contributes its
+	// backing env through `loadBackingEnv`. It merges alongside target +
+	// services + user secrets so it obeys the same collision detection.
+	const backingEnv = args.target.loadBackingEnv
+		? await args.target.loadBackingEnv(args.config.project.name)
+		: undefined
+	const merged = mergeServiceEnvs([
+		targetEnv,
+		...(backingEnv ? [backingEnv] : []),
+		servicesEnv,
+		userSecretsEnv,
+	])
 	return { merged, secretOrigins }
 }
 

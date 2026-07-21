@@ -74,4 +74,33 @@ describe('buildProvisionSummary', () => {
 		expect(summary).toContain('cloudflare-pages')
 		expect(summary).toContain('3.2s')
 	})
+
+	it('renders a workers provision summary by duck-typing on outcome/duration', () => {
+		const provisionResult: ProvisionResult = {
+			kind: 'workers',
+			outcome: {
+				'hcp-workspace': {
+					handled: true,
+					detail: 'created "my-worker-production"',
+				},
+				terraform: { handled: true, detail: 'applied' },
+			},
+			workspaceName: 'my-worker-production',
+			durationMs: 42_000,
+		}
+
+		const summary = buildProvisionSummary(
+			provisionResult,
+			'my-worker',
+			'cloudflare-workers',
+		)
+
+		expect(summary).toContain(
+			'### :white_check_mark: Infrastructure ready for `my-worker`',
+		)
+		expect(summary).toContain('created "my-worker-production"')
+		expect(summary).toContain('applied')
+		expect(summary).toContain('cloudflare-workers')
+		expect(summary).toContain('42.0s')
+	})
 })
