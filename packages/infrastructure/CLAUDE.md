@@ -21,6 +21,7 @@ src/
       create-target.ts  — Factory: config + env → DeployTarget instance
       provision.command.ts  — target.ensureInfra()
       deploy.command.ts     — SITE_URL → GITHUB_ENV + target.deploy()
+      generate-worker-types.command.ts — worker-configuration.d.ts per Worker
     pipeline/         — Pipeline-related commands
       plan.command.ts
       prod-gate.command.ts
@@ -267,6 +268,26 @@ secrets = [
   `ALL_SECRETS` snapshot (GitHub freezes secrets at job start), so the flow is
   _provision → re-trigger deploy_ — the same contract every auto-generated
   secret uses.
+
+## Worker binding types: `generate-worker-types`
+
+`generate-worker-types` writes a `worker-configuration.d.ts` per Worker so the
+app's `import { env } from 'cloudflare:workers'` is typed, replacing hand-written
+`env.d.ts` shims. It is a cloudflare-workers-only command (no-op on other
+targets) and runs at TYPECHECK/BUILD time, never at deploy — the app's `astro
+check`/`astro build` must already see `interface Env`.
+
+Single source of truth: the types are rendered from the SAME `WranglerDocument`
+`buildWranglerConfig` deploys (fed placeholder provision outputs, since types
+need only binding NAMES, not ids), so a binding can never exist in the deployed
+wrangler config yet be missing from the generated `Env`, or vice versa. Siblings
+in `needs` are `Fetcher`; D1/KV/R2/Queues get their Cloudflare types; public vars
+and secrets are `string`; `@cloudflare/workers-types` supplies the globals.
+
+The generated file is COMMITTED in the consumer repo (unlike the deploy-only
+wrangler config): types are needed at typecheck time, locally and in every CI
+job, with no infra dependency at build. CI regenerates and `git diff
+--exit-code` guards drift, so nextnode.toml stays authoritative.
 
 ## How It Runs
 
