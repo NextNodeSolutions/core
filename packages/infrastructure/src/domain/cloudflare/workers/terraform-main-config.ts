@@ -116,6 +116,6 @@ export interface TerraformMainConfig {
 	readonly data: {
 		readonly cloudflare_zone: Readonly<Record<string, ZoneDataSource>>
 	}
-	readonly resource: TerraformResourceBlock
-	readonly output: Readonly<Record<string, OutputValue>>
+	readonly resource?: TerraformResourceBlock
+	readonly output?: Readonly<Record<string, OutputValue>>
 }
