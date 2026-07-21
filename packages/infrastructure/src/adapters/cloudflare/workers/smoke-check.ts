@@ -6,11 +6,15 @@ import type { SmokeCheckTarget } from '#/domain/cloudflare/workers/smoke-check.t
 
 const logger = createLogger()
 
-// A freshly attached Custom Domain needs a few seconds for DNS + the edge cert
-// to propagate, so the first request after deploy can legitimately fail; retry
-// a bounded number of times before declaring the service unhealthy.
-export const SMOKE_CHECK_MAX_ATTEMPTS = 5
-export const SMOKE_CHECK_RETRY_DELAY_MS = 3000
+// A freshly attached Custom Domain needs DNS + a newly issued edge certificate
+// to propagate before the first request succeeds. A one-label host under the
+// zone is covered by the existing Universal SSL wildcard and answers in
+// seconds, but a two-label-deep host (e.g. dev.admin.example.com) needs its own
+// certificate issued on demand - observed at 3-6 minutes on a first greenfield
+// deploy. The budget bounds that wait (the loop exits on the first 2xx) before
+// declaring the service genuinely unhealthy.
+export const SMOKE_CHECK_MAX_ATTEMPTS = 40
+export const SMOKE_CHECK_RETRY_DELAY_MS = 15_000
 const SMOKE_CHECK_BODY_MAX_LENGTH = 500
 
 export interface SmokeCheckOptions {
