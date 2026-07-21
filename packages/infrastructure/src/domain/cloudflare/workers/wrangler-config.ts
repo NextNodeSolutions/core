@@ -10,6 +10,7 @@ import {
 	WORKERS_ASSETS_BINDING,
 	WORKERS_COMPATIBILITY_FLAGS,
 	WORKERS_D1_BINDING,
+	WORKERS_HYPERDRIVE_BINDING,
 } from './wrangler-document.ts'
 
 import type {
@@ -23,6 +24,7 @@ import type {
 	WranglerAssets,
 	WranglerD1Database,
 	WranglerDocument,
+	WranglerHyperdrive,
 	WranglerKvNamespace,
 	WranglerQueueProducer,
 	WranglerR2Bucket,
@@ -106,6 +108,26 @@ function d1Databases(
 
 type WranglerD1DatabaseDraft = {
 	-readonly [K in keyof WranglerD1Database]: WranglerD1Database[K]
+}
+
+function hyperdrive(
+	input: WranglerConfigInput,
+): ReadonlyArray<WranglerHyperdrive> | undefined {
+	if (
+		!input.services.planetscale ||
+		!input.service.needs.includes('planetscale')
+	) {
+		return undefined
+	}
+	return [
+		{
+			binding: WORKERS_HYPERDRIVE_BINDING,
+			id: requireOutput(
+				input.outputs.hyperdriveConfigId,
+				'hyperdrive_config_id',
+			),
+		},
+	]
 }
 
 function kvNamespaces(
@@ -205,6 +227,7 @@ export function buildWranglerConfig(
 	const crons = serviceCrons(input)
 	const services = serviceBindings(input)
 	const d1 = d1Databases(input)
+	const hyperdriveBindings = hyperdrive(input)
 	const kv = kvNamespaces(input, backing)
 	const r2 = r2Buckets(input, backing)
 	const queues = queueProducers(input, backing)
@@ -225,6 +248,7 @@ export function buildWranglerConfig(
 	if (Object.keys(input.vars).length > 0) document.vars = input.vars
 	if (services) document.services = services
 	if (d1) document.d1_databases = d1
+	if (hyperdriveBindings) document.hyperdrive = hyperdriveBindings
 	if (kv) document.kv_namespaces = kv
 	if (r2) document.r2_buckets = r2
 	if (queues) document.queues = { producers: queues }

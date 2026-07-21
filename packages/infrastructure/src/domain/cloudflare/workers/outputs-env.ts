@@ -15,6 +15,10 @@ import type { ServiceEnv } from '#/domain/services/service.ts'
  */
 export interface WorkersTerraformOutputs {
 	readonly d1DatabaseId?: string
+	// The `cloudflare_hyperdrive_config` id - consumed by the `hyperdrive` wrangler
+	// binding, never projected as an env var (the Worker reaches Postgres through
+	// the binding, not a string). Present only when [services.planetscale] exists.
+	readonly hyperdriveConfigId?: string
 	readonly kvNamespaceIds: Readonly<Record<string, string>>
 	readonly queueIds: Readonly<Record<string, string>>
 	readonly r2Buckets: Readonly<Record<string, string>>
@@ -39,6 +43,7 @@ export const EMPTY_WORKERS_TERRAFORM_OUTPUTS: WorkersTerraformOutputs = {
  */
 export interface WorkersBackingConfig {
 	readonly hasD1: boolean
+	readonly hasPlanetscale: boolean
 	readonly kvAliases: ReadonlyArray<string>
 	readonly queueAliases: ReadonlyArray<string>
 	readonly bucketAliases: ReadonlyArray<string>
@@ -51,6 +56,7 @@ export function deriveWorkersBackingConfig(
 	const buckets = computeR2ServiceBuckets(services)
 	return {
 		hasD1: Boolean(services.d1),
+		hasPlanetscale: Boolean(services.planetscale),
 		kvAliases: (services.kv?.namespaces ?? []).map(
 			namespace => namespace.name,
 		),
@@ -65,6 +71,7 @@ export function deriveWorkersBackingConfig(
 export function hasWorkersBacking(backing: WorkersBackingConfig): boolean {
 	return (
 		backing.hasD1 ||
+		backing.hasPlanetscale ||
 		backing.kvAliases.length > 0 ||
 		backing.queueAliases.length > 0 ||
 		backing.bucketAliases.length > 0
@@ -133,6 +140,7 @@ export function parseTerraformOutputs(
 	raw: Readonly<Record<string, unknown>>,
 ): WorkersTerraformOutputs {
 	const d1 = extractValue(raw, 'd1_database_id')
+	const hyperdrive = extractValue(raw, 'hyperdrive_config_id')
 	const kv = extractValue(raw, 'kv_namespace_ids')
 	const queues = extractValue(raw, 'queue_ids')
 	const buckets = extractValue(raw, 'r2_buckets')
@@ -145,6 +153,9 @@ export function parseTerraformOutputs(
 	}
 	if (typeof d1 !== 'undefined') {
 		outputs.d1DatabaseId = asString(d1, 'd1_database_id')
+	}
+	if (typeof hyperdrive !== 'undefined') {
+		outputs.hyperdriveConfigId = asString(hyperdrive, 'hyperdrive_config_id')
 	}
 	return outputs
 }

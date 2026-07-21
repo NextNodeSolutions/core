@@ -415,4 +415,71 @@ describe('buildTerraformMainConfig', () => {
 		expect(CLOUDFLARE_PROVIDER_SOURCE).toBe('cloudflare/cloudflare')
 		expect(CLOUDFLARE_PROVIDER_VERSION).toBe('~> 5.0')
 	})
+
+	it('generates the PlanetScale branch-role + Hyperdrive config wired origin', () => {
+		const tfConfig = build('studiobymina.com', 'production', {
+			services: { planetscale: { clusterSize: 'PS_10' } },
+			workers: {
+				back: worker('api.studiobymina.com', {
+					needs: ['planetscale'],
+				}),
+			},
+		})
+
+		expect(
+			tfConfig.resource?.planetscale_postgres_branch_role?.[
+				'planetscale'
+			],
+		).toEqual({
+			organization: 'nextnode',
+			database: 'studiobymina-production-planetscale',
+			branch: 'main',
+			name: 'hyperdrive',
+			inherited_roles: ['pg_read_all_data', 'pg_write_all_data'],
+		})
+		expect(
+			tfConfig.resource?.cloudflare_hyperdrive_config?.['planetscale'],
+		).toEqual({
+			account_id: '${var.account_id}',
+			name: 'studiobymina-production-hyperdrive',
+			origin: {
+				scheme: 'postgres',
+				host: '${planetscale_postgres_branch_role.planetscale.access_host_url}',
+				port: 5432,
+				database:
+					'${planetscale_postgres_branch_role.planetscale.database_name}',
+				user: '${planetscale_postgres_branch_role.planetscale.username}',
+				password:
+					'${planetscale_postgres_branch_role.planetscale.password}',
+			},
+		})
+		expect(tfConfig.output?.['hyperdrive_config_id']).toEqual({
+			value: '${cloudflare_hyperdrive_config.planetscale.id}',
+		})
+	})
+
+	it('pulls the PlanetScale provider only when a PlanetScale DB is declared', () => {
+		const withPg = build('studiobymina.com', 'production', {
+			services: { planetscale: {} },
+			workers: {
+				back: worker('api.studiobymina.com', {
+					needs: ['planetscale'],
+				}),
+			},
+		})
+		expect(withPg.terraform.required_providers.planetscale).toEqual({
+			source: 'planetscale/planetscale',
+			version: '~> 1.5',
+		})
+		expect(withPg.provider.planetscale).toEqual({})
+
+		const withoutPg = build('studiobymina.com', 'production', {
+			services: FULL_SERVICES,
+			workers: FULL_WORKERS,
+		})
+		expect(
+			withoutPg.terraform.required_providers.planetscale,
+		).toBeUndefined()
+		expect(withoutPg.provider.planetscale).toBeUndefined()
+	})
 })

@@ -59,6 +59,11 @@ export function buildOutputs(
 	if (derived.hasD1) {
 		output['d1_database_id'] = { value: '${cloudflare_d1_database.d1.id}' }
 	}
+	if (derived.hasPlanetscale) {
+		output['hyperdrive_config_id'] = {
+			value: '${cloudflare_hyperdrive_config.planetscale.id}',
+		}
+	}
 	if (derived.kvNames.length > 0) {
 		output['kv_namespace_ids'] = kvNamespaceIdsOutput(derived)
 	}

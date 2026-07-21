@@ -11,7 +11,12 @@ import {
 	redirectZoneLabel,
 	toTerraformLabel,
 } from './terraform-labels.ts'
+import {
+	buildHyperdriveConfig,
+	buildPlanetscaleBranchRole,
+} from './terraform-planetscale-resources.ts'
 import { buildRedirectResources } from './terraform-redirects.ts'
+import { ACCOUNT_ID_REF } from './terraform-refs.ts'
 
 import type { R2BucketConfig } from '#/config/service-config.ts'
 import type { CloudflareWorkersDeployableConfig } from '#/config/types.ts'
@@ -26,11 +31,6 @@ import type {
 	ZoneDataSource,
 } from './terraform-main-config.ts'
 
-// account_id is injected at apply time as TF_VAR_account_id (the adapter knows
-// the account id from the env; the pure config never does), so every
-// account-scoped resource references this Terraform variable rather than a
-// literal.
-export const ACCOUNT_ID_REF = '${var.account_id}'
 const MAIN_ZONE_LABEL = 'zone_main'
 const MAIN_ZONE_ID_REF = '${data.cloudflare_zone.zone_main.id}'
 
@@ -44,6 +44,7 @@ export interface WorkersDerivedResources {
 	readonly kvNames: ReadonlyArray<string>
 	readonly queueNames: ReadonlyArray<string>
 	readonly hasD1: boolean
+	readonly hasPlanetscale: boolean
 	readonly redirectDomains: ReadonlyArray<string>
 	readonly hasAccountResource: boolean
 }
@@ -61,6 +62,7 @@ export function deriveWorkersResources(
 		queue => queue.name,
 	)
 	const hasD1 = Boolean(config.services.d1)
+	const hasPlanetscale = Boolean(config.services.planetscale)
 
 	return {
 		projectName,
@@ -72,6 +74,7 @@ export function deriveWorkersResources(
 		kvNames,
 		queueNames,
 		hasD1,
+		hasPlanetscale,
 		// Redirect Rules materialise the apex+www .fr -> .com concept, which only
 		// exists in production; a dev zone has no record to redirect, so both the
 		// rulesets and their support records (and their redirect zone lookups) are
@@ -80,6 +83,7 @@ export function deriveWorkersResources(
 			environment === 'production' ? config.project.redirectDomains : [],
 		hasAccountResource:
 			hasD1 ||
+			hasPlanetscale ||
 			kvNames.length > 0 ||
 			queueNames.length > 0 ||
 			buckets.length > 0,
@@ -186,6 +190,11 @@ export function buildResourceBlock(
 	const resource: TerraformResourceDraft = {}
 	if (derived.hasD1) {
 		resource.cloudflare_d1_database = d1Resources(derived)
+	}
+	if (derived.hasPlanetscale) {
+		resource.planetscale_postgres_branch_role =
+			buildPlanetscaleBranchRole(derived)
+		resource.cloudflare_hyperdrive_config = buildHyperdriveConfig(derived)
 	}
 	if (derived.kvNames.length > 0) {
 		resource.cloudflare_workers_kv_namespace = kvResources(derived)

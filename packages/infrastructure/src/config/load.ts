@@ -5,6 +5,7 @@ import { parse as parseTOML } from 'smol-toml'
 import {
 	SERVICE_NAMES,
 	SERVICE_SUPPORTED_TARGETS,
+	impliableServiceNames,
 	isDeployable,
 } from './types.ts'
 import { validateDeploySection } from './validation/deploy.ts'
@@ -110,18 +111,45 @@ function assembleDeployable({
 	)
 	if (!deployResult.ok) return { ok: false, errors: deployResult.errors }
 
+	const services = withImpliedServices(base.services, deployResult.section)
+
 	const compatibilityErrors = [
-		...checkServicesTargetCompatibility(
-			base.services,
-			deployResult.section,
-		),
+		...checkServicesTargetCompatibility(services, deployResult.section),
 		...checkInternalCompatibility(project, deployResult.section),
 	]
 	if (compatibilityErrors.length > 0) {
 		return { ok: false, errors: compatibilityErrors }
 	}
 
-	return { ok: true, config: { ...base, deploy: deployResult.section } }
+	return {
+		ok: true,
+		config: { ...base, services, deploy: deployResult.section },
+	}
+}
+
+// A service flagged SERVICE_IMPLIABLE_FROM_NEEDS has no required config, so a
+// bare `needs = ["<name>"]` provisions it without a `[services.<name>]` table.
+// Synthesise the empty config here so every downstream consumer keeps the
+// invariant "provisioned iff `services.<name>` is present" and needs no special
+// case. An explicit table (overrides) already sets the key, so it is skipped.
+function withImpliedServices(
+	services: ServicesConfig,
+	deploy: DeploySection,
+): ServicesConfig {
+	if (!('services' in deploy)) return services
+	const { services: workloads } = deploy
+	const implied = impliableServiceNames(deploy.target).filter(
+		name =>
+			!services[name] &&
+			Object.values(workloads).some(workload =>
+				workload.needs.includes(name),
+			),
+	)
+	if (implied.length === 0) return services
+	return {
+		...services,
+		...Object.fromEntries(implied.map(name => [name, {}])),
+	}
 }
 
 // A backing service only validates against the deploy targets that can realise

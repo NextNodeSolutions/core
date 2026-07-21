@@ -1,3 +1,7 @@
+import {
+	PLANETSCALE_PROVIDER_SOURCE,
+	PLANETSCALE_PROVIDER_VERSION,
+} from './planetscale.ts'
 import { buildOutputs } from './terraform-outputs.ts'
 import {
 	buildResourceBlock,
@@ -54,9 +58,20 @@ export function buildTerraformMainConfig(
 					source: CLOUDFLARE_PROVIDER_SOURCE,
 					version: CLOUDFLARE_PROVIDER_VERSION,
 				},
+				// Pulled ONLY when a PlanetScale DB is provisioned, so a plain
+				// workers project never downloads the provider on `terraform init`.
+				...(derived.hasPlanetscale && {
+					planetscale: {
+						source: PLANETSCALE_PROVIDER_SOURCE,
+						version: PLANETSCALE_PROVIDER_VERSION,
+					},
+				}),
 			},
 		},
-		provider: { cloudflare: {} },
+		provider: {
+			cloudflare: {},
+			...(derived.hasPlanetscale && { planetscale: {} }),
+		},
 		data: { cloudflare_zone: buildZoneData(derived) },
 	}
 	if (Object.keys(resource).length > 0) mainConfig.resource = resource
