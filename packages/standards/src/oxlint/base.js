@@ -112,6 +112,7 @@ export default defineConfig({
 		'nextnode/max-props': 'warn',
 		'nextnode/component-filename-match': 'error',
 		'nextnode/no-grab-bag-files': 'error',
+		'nextnode/no-nullish-ternary-return': 'error',
 	},
 	overrides: [
 		{
