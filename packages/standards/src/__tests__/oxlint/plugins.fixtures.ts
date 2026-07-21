@@ -298,4 +298,25 @@ export { Modal }
 }
 `,
 	},
+
+	// coding RULE 1 - a ternary with an empty-object branch is a conditional spread in disguise
+	{
+		rule: 'nextnode(no-empty-object-ternary)',
+		severity: 'error',
+		bad: `export function bindings(token: string | undefined): object {
+	const planetscale =
+		token === undefined ? {} : { planetscaleServiceToken: token }
+	return { ...planetscale }
+}
+`,
+		// the empty object on the consequent branch still fires
+		edge: `export const overrides = (skip: boolean): object =>
+	skip ? {} : { retries: 3 }
+`,
+		edgeExpect: 'fire',
+		good: `export function bindings(token: string | undefined): object {
+	return { ...(token !== undefined && { planetscaleServiceToken: token }) }
+}
+`,
+	},
 ]
