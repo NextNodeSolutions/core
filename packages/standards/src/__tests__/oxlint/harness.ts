@@ -128,6 +128,21 @@ const parseOxlintOutput = (raw: string): OxlintOutput => {
 	return parsed
 }
 
+const execOxlint = async (
+	args: string[],
+): Promise<{ stdout: string; stderr: string }> => {
+	try {
+		return await execFileAsync(OXLINT_BIN, args, {
+			cwd: PACKAGE_ROOT,
+			maxBuffer: MAX_OUTPUT_BYTES,
+		})
+	} catch (error: unknown) {
+		// oxlint exits non-zero when it finds errors; the JSON is still on stdout
+		if (!isExecFailure(error)) throw error
+		return { stdout: error.stdout, stderr: error.stderr ?? '' }
+	}
+}
+
 export const lintFixtures = async (
 	cases: RuleCase[],
 	options: RunOptions = {},
@@ -155,19 +170,7 @@ export const lintFixtures = async (
 	]
 
 	const startedAt = performance.now()
-	let stdout = ''
-	let stderr = ''
-	try {
-		;({ stdout, stderr } = await execFileAsync(OXLINT_BIN, args, {
-			cwd: PACKAGE_ROOT,
-			maxBuffer: MAX_OUTPUT_BYTES,
-		}))
-	} catch (error: unknown) {
-		// oxlint exits non-zero when it finds errors; the JSON is still on stdout
-		if (!isExecFailure(error)) throw error
-		;({ stdout } = error)
-		stderr = error.stderr ?? ''
-	}
+	const { stdout, stderr } = await execOxlint(args)
 	const durationMs = performance.now() - startedAt
 
 	const parsed = parseOxlintOutput(stdout)
