@@ -390,4 +390,54 @@ export function bindings(token: string | undefined): object {
 })
 `,
 	},
+
+	// coding - no formatter-inserted leading `;` guarding `(`/`[` statements
+	{
+		rule: 'nextnode(no-leading-semicolon)',
+		severity: 'error',
+		bad: `declare const signInResult: { error: string | null }
+let error: string | null = null
+;({ error } = signInResult)
+export { error }
+`,
+		// a statement-position IIFE forces the same leading `;` and fires too
+		edge: `declare const setup: () => Promise<void>
+;(async () => {
+	await setup()
+})()
+`,
+		edgeExpect: 'fire',
+		// destructuring in the declarator needs no guard
+		good: `declare const signInResult: { error: string | null }
+const { error } = signInResult
+export { error }
+`,
+	},
+
+	// coding - no single-use const that only re-reads a property under its name
+	{
+		rule: 'nextnode(no-single-use-passthrough)',
+		severity: 'error',
+		bad: `declare const signInResult: { error: string | null }
+declare function use(x: unknown): void
+const { error } = signInResult
+use(error)
+`,
+		// the guarded-ternary alias is the same passthrough and fires too
+		edge: `declare const object: { error: string } | null
+declare function use(x: unknown): void
+const error = object ? object.error : null
+use(error)
+`,
+		edgeExpect: 'fire',
+		// read twice earns its keep; a rename carries new meaning
+		good: `declare const object: { error: string; currentUser: string } | null
+declare function use(x: unknown): void
+const error = object?.error
+use(error)
+use(error)
+const user = object?.currentUser
+use(user)
+`,
+	},
 ]
