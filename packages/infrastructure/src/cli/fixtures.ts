@@ -141,6 +141,13 @@ export const WORKERS_APP_WITH_DOMAIN: DeployableConfig = cloudflareWorkersApp({
 	workerService: WORKER_APP_SERVICE,
 })
 
+// A plain, asset-less worker (source entry, not the @astrojs/cloudflare
+// `dist/server/entry.mjs` convention) - the shape that runs under `wrangler dev`
+// and receives a generated dev `wrangler.jsonc`.
+export const WORKERS_APP_ASSET_LESS: DeployableConfig = cloudflareWorkersApp({
+	workerService: { ...WORKER_APP_SERVICE, entry: 'src/index.ts' },
+})
+
 const BUILD_APP_SERVICE: UserServiceConfig = {
 	port: 3000,
 	secrets: [],

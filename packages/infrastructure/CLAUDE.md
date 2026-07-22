@@ -22,6 +22,7 @@ src/
       provision.command.ts  — target.ensureInfra()
       deploy.command.ts     — SITE_URL → GITHUB_ENV + target.deploy()
       generate-worker-types.command.ts — worker-configuration.d.ts per Worker
+      generate-dev-config.command.ts — wrangler.jsonc per plain Worker (dev compat pin)
     pipeline/         — Pipeline-related commands
       plan.command.ts
       prod-gate.command.ts
@@ -288,6 +289,26 @@ The generated file is COMMITTED in the consumer repo (unlike the deploy-only
 wrangler config): types are needed at typecheck time, locally and in every CI
 job, with no infra dependency at build. CI regenerates and `git diff
 --exit-code` guards drift, so nextnode.toml stays authoritative.
+
+## Local dev compat pin: `generate-dev-config`
+
+`generate-dev-config` writes a committed `wrangler.jsonc` per PLAIN (asset-less)
+Worker, pinning the fleet `compatibility_date` + `compatibility_flags`
+(`DEFAULT_WORKERS_COMPATIBILITY_DATE` / `WORKERS_COMPATIBILITY_FLAGS`, the same
+values the deploy `WranglerDocument` carries). Without a config file `wrangler
+dev` defaults `compatibility_date` to the current day, so a worker silently
+requires a workerd newer than the installed one the moment the calendar passes
+the binary's newest supported date — dev then refuses to boot. Pinning freezes
+dev's runtime to prod's; the compat date becomes a deliberate, reviewed fleet
+bump, never a floating value.
+
+Asset-bearing Workers (the `@astrojs/cloudflare` fronts, `dist/server/entry.mjs`)
+run under `astro dev`, not `wrangler dev`, so `deriveWorkerAssetsDirectory`
+filters them out — they get no file. `main`/`--port` stay on the CLI, so the file
+carries only the runtime pin. Like `generate-worker-types`: cloudflare-workers
+only, runs at TYPECHECK/BUILD (never deploy — deploy passes its own ephemeral
+`--config`), COMMITTED in the consumer repo, CI regenerates + `git diff
+--exit-code` guards drift.
 
 ## How It Runs
 

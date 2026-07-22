@@ -65,13 +65,22 @@ jobs:
               env:
                   PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
 
+            # The committed per-worker wrangler.jsonc pins the fleet
+            # compatibility_date/flags for local `wrangler dev`, so dev never
+            # floats to today's date and outruns the installed workerd.
+            - name: Generate dev wrangler config
+              run: node src/index.ts generate-dev-config
+              working-directory: .infra/packages/infrastructure
+              env:
+                  PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
+
             # `--intent-to-add` surfaces a never-committed file as a diff too, so
-            # a missing worker-configuration.d.ts fails like a stale one.
-            - name: Verify worker types are committed and current
+            # a missing generated file fails like a stale one.
+            - name: Verify generated worker config is committed and current
               working-directory: ${{ github.workspace }}
               run: |
-                  git add --intent-to-add -- '**/worker-configuration.d.ts'
-                  git diff --exit-code -- '**/worker-configuration.d.ts'
+                  git add --intent-to-add -- '**/worker-configuration.d.ts' '**/wrangler.jsonc'
+                  git diff --exit-code -- '**/worker-configuration.d.ts' '**/wrangler.jsonc'
 
     quality:
         name: ${{ matrix.task.name }}
