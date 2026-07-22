@@ -10,7 +10,7 @@ import type { ExecResult, WranglerRunner } from './runner.ts'
 const DOCUMENT: WranglerDocument = {
 	name: 'proj-production-web',
 	main: 'dist/server/entry.mjs',
-	compatibility_date: '2026-06-01',
+	compatibility_date: '2026-07-14',
 	compatibility_flags: ['nodejs_compat'],
 	assets: { directory: 'dist/client', binding: 'ASSETS' },
 	observability: { enabled: true },
