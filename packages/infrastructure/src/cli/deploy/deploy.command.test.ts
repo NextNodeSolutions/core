@@ -152,6 +152,7 @@ const WORKERS_CONFIG: CloudflareWorkersDeployableConfig = {
 				needs: [],
 				dependsOn: [],
 				entry: 'dist/server/entry.mjs',
+				observability: true,
 			},
 		},
 		cron: [],

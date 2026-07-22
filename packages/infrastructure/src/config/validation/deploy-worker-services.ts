@@ -3,7 +3,7 @@ import {
 	KEBAB_IDENTIFIER_PATTERN,
 } from '#/config/types.ts'
 import { isRecord } from '#/kernel/guards.ts'
-import { object, optional } from 'valibot'
+import { boolean, object, optional } from 'valibot'
 
 import {
 	forbiddenField,
@@ -29,6 +29,7 @@ type ParsedWorkerService = {
 	needs: string[]
 	depends_on: string[]
 	entry: string
+	observability: boolean
 	port?: undefined
 	source?: undefined
 	ref?: undefined
@@ -87,6 +88,14 @@ const workerServiceSchema = (
 			),
 			DEFAULT_WORKER_ENTRY,
 		),
+		// Workers Logs default on: a silent-by-default Worker retains no
+		// invocation logs and is a debugging trap. Opt out with
+		// `observability = false` on high-traffic Workers where the
+		// 20M-events/month Paid allowance is a concern.
+		observability: optional(
+			boolean(`deploy.services.${name}.observability must be a boolean`),
+			true,
+		),
 		...containerFieldsForbidden(name),
 	})
 
@@ -100,6 +109,7 @@ function toWorkerService(parsed: ParsedWorkerService): WorkerServiceConfig {
 		needs: parsed.needs,
 		dependsOn: parsed.depends_on,
 		entry: parsed.entry,
+		observability: parsed.observability,
 	}
 	if (parsed.url) workerService.url = parsed.url
 	return workerService

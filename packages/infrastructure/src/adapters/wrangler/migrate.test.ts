@@ -20,6 +20,7 @@ const DOCUMENT: WranglerDocument = {
 			migrations_dir: 'drizzle',
 		},
 	],
+	observability: { enabled: true },
 }
 
 interface Captured {

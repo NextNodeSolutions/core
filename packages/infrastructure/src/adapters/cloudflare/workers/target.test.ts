@@ -67,6 +67,7 @@ function buildConfig(
 					needs: [],
 					dependsOn: [],
 					entry: 'dist/server/entry.mjs',
+					observability: true,
 				},
 			},
 			cron: [],
@@ -126,6 +127,7 @@ function buildTeardownTarget(input: {
 				needs: [],
 				dependsOn: [],
 				entry: 'dist/server/entry.mjs',
+				observability: true,
 			},
 		]),
 	)
@@ -393,6 +395,7 @@ const worker = (
 	needs: [],
 	dependsOn: [],
 	entry: 'dist/server/entry.mjs',
+	observability: true,
 	...overrides,
 })
 

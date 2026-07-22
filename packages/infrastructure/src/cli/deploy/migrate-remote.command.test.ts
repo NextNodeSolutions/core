@@ -453,6 +453,7 @@ const WORKERS_APP_WITH_D1: CloudflareWorkersDeployableConfig = {
 				needs: ['d1'],
 				dependsOn: [],
 				entry: 'dist/server/entry.mjs',
+				observability: true,
 			},
 		},
 	},

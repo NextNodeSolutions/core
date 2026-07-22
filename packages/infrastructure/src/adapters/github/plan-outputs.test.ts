@@ -371,6 +371,7 @@ describe('writePlanOutputs', () => {
 						needs: [],
 						dependsOn: [],
 						entry: 'dist/server/entry.mjs',
+						observability: true,
 					},
 				},
 			},

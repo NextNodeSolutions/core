@@ -242,6 +242,7 @@ export function buildWranglerConfig(
 		compatibility_date: DEFAULT_WORKERS_COMPATIBILITY_DATE,
 		compatibility_flags: [...WORKERS_COMPATIBILITY_FLAGS],
 		workers_dev: false,
+		observability: { enabled: input.service.observability },
 	}
 	if (routes) document.routes = routes
 	if (assets) document.assets = assets
