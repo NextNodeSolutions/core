@@ -13,6 +13,7 @@ const DOCUMENT: WranglerDocument = {
 	compatibility_date: '2026-06-01',
 	compatibility_flags: ['nodejs_compat'],
 	assets: { directory: 'dist/client', binding: 'ASSETS' },
+	observability: { enabled: true },
 }
 
 interface Captured {

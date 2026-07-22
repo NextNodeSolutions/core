@@ -21,6 +21,7 @@ const worker = (needs: string[]): WorkerServiceConfig => ({
 	needs,
 	dependsOn: [],
 	entry: 'dist/server/entry.mjs',
+	observability: true,
 })
 
 describe('resolveMigrationServiceName', () => {

@@ -39,6 +39,7 @@ const service = (
 	needs: [],
 	dependsOn: [],
 	entry: 'dist/server/entry.mjs',
+	observability: true,
 	...overrides,
 })
 
@@ -379,5 +380,19 @@ describe('buildWranglerConfig', () => {
 				}),
 			),
 		).toThrow(/hyperdrive_config_id/)
+	})
+
+	it('enables observability by default', () => {
+		expect(buildWranglerConfig(input()).observability).toEqual({
+			enabled: true,
+		})
+	})
+
+	it('disables observability when the service opts out', () => {
+		const document = buildWranglerConfig(
+			input({ service: service({ observability: false }) }),
+		)
+
+		expect(document.observability).toEqual({ enabled: false })
 	})
 })

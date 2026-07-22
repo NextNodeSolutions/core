@@ -22,6 +22,7 @@ const worker = (
 	needs: [],
 	dependsOn: [],
 	entry: 'dist/server/entry.mjs',
+	observability: true,
 	...overrides,
 })
 

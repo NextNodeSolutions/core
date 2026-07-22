@@ -134,6 +134,7 @@ const WORKER_APP_SERVICE: WorkerServiceConfig = {
 	needs: [],
 	dependsOn: [],
 	entry: DEFAULT_WORKER_ENTRY,
+	observability: true,
 }
 
 export const WORKERS_APP_WITH_DOMAIN: DeployableConfig = cloudflareWorkersApp({

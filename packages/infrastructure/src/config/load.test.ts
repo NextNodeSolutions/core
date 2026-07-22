@@ -153,6 +153,7 @@ describe('loadConfig', () => {
 					needs: [],
 					dependsOn: [],
 					entry: 'dist/server/entry.mjs',
+					observability: true,
 				},
 				back: {
 					url: 'api.studiobymina.com',
@@ -160,6 +161,7 @@ describe('loadConfig', () => {
 					needs: ['d1'],
 					dependsOn: [],
 					entry: 'dist/server/entry.mjs',
+					observability: true,
 				},
 				admin: {
 					url: 'admin.studiobymina.com',
@@ -167,6 +169,7 @@ describe('loadConfig', () => {
 					needs: [],
 					dependsOn: [],
 					entry: 'dist/server/entry.mjs',
+					observability: true,
 				},
 			},
 		})
@@ -250,6 +253,7 @@ describe('parseConfig', () => {
 						needs: [],
 						dependsOn: [],
 						entry: 'dist/server/entry.mjs',
+						observability: true,
 					},
 				},
 			})
@@ -1992,6 +1996,7 @@ describe('parseConfig', () => {
 				needs: [],
 				dependsOn: [],
 				entry: 'dist/server/index.js',
+				observability: true,
 			})
 		})
 
@@ -2007,7 +2012,38 @@ describe('parseConfig', () => {
 				needs: [],
 				dependsOn: [],
 				entry: 'dist/server/entry.mjs',
+				observability: true,
 			})
+		})
+
+		it('opts a worker out of observability with observability = false', () => {
+			const parsed = parseConfig(
+				workersConfig({
+					web: { url: 'example.com', observability: false },
+				}),
+			)
+
+			expect(parsed.ok).toBe(true)
+			if (!parsed.ok || parsed.config.deploy === false) return
+			if (parsed.config.deploy.target !== 'cloudflare-workers') return
+
+			expect(parsed.config.deploy.services['web']?.observability).toBe(
+				false,
+			)
+		})
+
+		it('rejects a non-boolean observability', () => {
+			const parsed = parseConfig(
+				workersConfig({
+					web: { url: 'example.com', observability: 'yes' },
+				}),
+			)
+
+			expect(parsed.ok).toBe(false)
+			if (parsed.ok) return
+			expect(parsed.errors).toContain(
+				'deploy.services.web.observability must be a boolean',
+			)
 		})
 
 		it('rejects a routed url outside project.domain', () => {

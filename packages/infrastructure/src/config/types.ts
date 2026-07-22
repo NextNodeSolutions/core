@@ -278,6 +278,7 @@ export interface WorkerServiceConfig {
 	readonly needs: ReadonlyArray<string>
 	readonly dependsOn: ReadonlyArray<string>
 	readonly entry: string
+	readonly observability: boolean
 }
 
 export interface CloudflareWorkersDeploySection extends BaseDeploySection {

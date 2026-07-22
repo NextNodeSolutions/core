@@ -112,6 +112,14 @@ export interface WranglerTriggers {
 	readonly crons: ReadonlyArray<string>
 }
 
+// Workers Logs configuration. `enabled` gates whether invocation logs are
+// ingested and retained (queryable in the dashboard); without it a Worker keeps
+// no logs. Always emitted so the on/off state is explicit in the generated
+// config rather than relying on wrangler's own default.
+export interface WranglerObservability {
+	readonly enabled: boolean
+}
+
 /**
  * The wrangler configuration document (JSON) generated per service and written
  * to an ephemeral file for `wrangler deploy --config`. Optional keys are omitted
@@ -138,4 +146,7 @@ export interface WranglerDocument {
 	readonly hyperdrive?: ReadonlyArray<WranglerHyperdrive>
 	readonly queues?: WranglerQueues
 	readonly triggers?: WranglerTriggers
+	// Always emitted so Workers Logs are on by default; a service sets
+	// `observability = false` in nextnode.toml to opt out.
+	readonly observability: WranglerObservability
 }
