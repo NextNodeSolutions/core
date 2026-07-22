@@ -90,15 +90,14 @@ export const experimental_ppr = true
 `,
 	},
 
-	// coding quick-ref \u2014 em dash (U+2014) is forbidden, in strings and comments
+	// coding quick-ref \u2014 em dash is forbidden as raw U+2014 and as its HTML entities
 	{
 		rule: 'nextnode(no-em-dash)',
 		severity: 'error',
 		bad: `export const tagline = 'fast \u2014 reliable'
 `,
-		// comments are scanned too
-		edge: `// overview \u2014 details below
-export const tagline = 'fast and reliable'
+		// HTML entity forms render as the same glyph and are scanned too
+		edge: `export const tagline = 'fast \x26mdash; reliable'
 `,
 		edgeExpect: 'fire',
 		good: `// overview - details below
