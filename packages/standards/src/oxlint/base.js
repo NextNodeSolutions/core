@@ -117,6 +117,7 @@ export default defineConfig({
 		'nextnode/no-sentinel-consequent': 'error',
 		'nextnode/no-undefined-comparison': 'error',
 		'nextnode/no-ternary-spread': 'error',
+		'nextnode/no-implicit-boolean-condition': 'error',
 	},
 	overrides: [
 		{

@@ -391,4 +391,35 @@ export function bindings(token: string | undefined): object {
 })
 `,
 	},
+
+	// coding RULE 4 - a truthy condition must compare explicitly, not coerce
+	{
+		rule: 'nextnode(no-implicit-boolean-condition)',
+		severity: 'error',
+		bad: `export const assets = (
+	binding: { name: string } | undefined,
+): object[] => (binding ? [{ name: binding.name }] : [])
+`,
+		// if/while conditions on a bare value fire too
+		edge: `export const first = (items: string[]): string | undefined => {
+	if (items.length) {
+		return items[0]
+	}
+	return undefined
+}
+`,
+		edgeExpect: 'fire',
+		// comparisons, boolean-named values and calls pass
+		good: `export const assets = (
+	binding: { name: string } | undefined,
+): object[] => (binding != null ? [{ name: binding.name }] : [])
+
+export const pick = (count: number, isReady: boolean): string => {
+	if (count > 0 && isReady) {
+		return 'ok'
+	}
+	return 'no'
+}
+`,
+	},
 ]

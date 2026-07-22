@@ -11,6 +11,7 @@ import { noEmptyObjectTernary } from './rules/no-empty-object-ternary.js'
 import { noEnum } from './rules/no-enum.js'
 import { noGenericNames } from './rules/no-generic-names.js'
 import { noGrabBagFiles } from './rules/no-grab-bag-files.js'
+import { noImplicitBooleanCondition } from './rules/no-implicit-boolean-condition.js'
 import { noNullishTernaryReturn } from './rules/no-nullish-ternary-return.js'
 import { noSentinelConsequent } from './rules/no-sentinel-consequent.js'
 import { noTernarySpread } from './rules/no-ternary-spread.js'
@@ -33,6 +34,7 @@ const plugin = {
 		'max-props': maxProps,
 		'component-filename-match': componentFilenameMatch,
 		'no-grab-bag-files': noGrabBagFiles,
+		'no-implicit-boolean-condition': noImplicitBooleanCondition,
 		'no-nullish-ternary-return': noNullishTernaryReturn,
 		'no-empty-object-ternary': noEmptyObjectTernary,
 		'no-sentinel-consequent': noSentinelConsequent,
