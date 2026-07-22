@@ -2,12 +2,9 @@
  * The Cloudflare Workers runtime version every generated config pins. A fixed
  * date freezes the workerd behaviour set so a deploy is reproducible run to run;
  * bumping it is a deliberate, reviewed change - never a floating value. Held
- * centrally by the infra (the dev never spells it in nextnode.toml). MUST equal
- * `WORKERS_COMPATIBILITY_DATE` in `@nextnode-solutions/standards/workers`, which
- * pins the same runtime for local `wrangler dev`; `compatibility-drift.test.ts`
- * fails the build if the two diverge.
+ * centrally by the infra (the dev never spells it in nextnode.toml).
  */
-export const DEFAULT_WORKERS_COMPATIBILITY_DATE = '2026-07-14'
+export const DEFAULT_WORKERS_COMPATIBILITY_DATE = '2026-06-01'
 
 /**
  * The compatibility flags every generated config carries. `nodejs_compat`
