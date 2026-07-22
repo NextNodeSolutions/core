@@ -10,7 +10,7 @@ import type { WranglerRunner } from './runner.ts'
 const DOCUMENT: WranglerDocument = {
 	name: 'proj-production-api',
 	main: 'dist/server/entry.mjs',
-	compatibility_date: '2026-07-14',
+	compatibility_date: '2026-06-01',
 	compatibility_flags: ['nodejs_compat'],
 	d1_databases: [
 		{
