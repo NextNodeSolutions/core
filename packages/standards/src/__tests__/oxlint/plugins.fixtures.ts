@@ -368,6 +368,36 @@ export function bindings(token: string | undefined): object {
 `,
 	},
 
+	// coding RULE 1 - narrowing an indexed access is the exemption: under
+	// noUncheckedIndexedAccess a truthy check is falsy-unsafe, so the value check
+	// is the only assertion-free narrow
+	{
+		rule: 'nextnode(no-undefined-comparison)',
+		severity: 'error',
+		// plain property access is not indexed: a truthy check still says it
+		badFile: 'undefined-comparison-indexed.bad.ts',
+		bad: `export function has(session: { token?: string }): boolean {
+	return session.token === undefined
+}
+`,
+		// a binding taken from an indexed access carries the narrow: allowed
+		edgeFile: 'undefined-comparison-indexed.edge.ts',
+		edge: `export function first(collection: number[]): number {
+	const firstItem = collection[0]
+	if (firstItem === undefined) throw new Error('Collection vide')
+	return firstItem
+}
+`,
+		edgeExpect: 'clean',
+		// the direct indexed access `collection[0] === undefined` is the blessed form
+		goodFile: 'undefined-comparison-indexed.good.ts',
+		good: `export function head(collection: number[]): number {
+	if (collection[0] === undefined) throw new Error('Collection vide')
+	return collection[0]
+}
+`,
+	},
+
 	// coding RULE 1 - in a spread, `cond && value` beats `cond ? value : undefined`
 	{
 		rule: 'nextnode(no-ternary-spread)',
