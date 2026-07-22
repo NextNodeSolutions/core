@@ -21,6 +21,9 @@
     "README.md",
     "src"
   ],
+  "bin": {
+    "nextnode-workers-dev": "./src/workers/dev.js"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/NextNodeSolutions/core.git"
@@ -98,6 +101,10 @@
   "packageManager": "pnpm@10.11.0",
   "type": "module",
   "exports": {
+    "./workers": {
+      "types": "./src/workers/compatibility.d.ts",
+      "default": "./src/workers/compatibility.js"
+    },
     "./oxlint": {
       "types": "./src/oxlint/base.d.ts",
       "default": "./src/oxlint/base.js"
