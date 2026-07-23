@@ -1,0 +1,11 @@
+[project]
+name = "worker-types"
+type = "package"
+filter = "@nextnode-solutions/worker-types"
+
+[scripts]
+test = false
+
+[package]
+access = "public"
+canary_on_label = true

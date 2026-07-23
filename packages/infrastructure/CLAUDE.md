@@ -5,7 +5,9 @@
 NextNode infrastructure CLI — runs in GitHub Actions to orchestrate CI/CD: planning, provisioning, and deployment.
 Commands: `plan` (quality matrix), `provision` (infra setup via DeployTarget), `deploy` (env vars + secrets sync), `prod-gate`, `publish-result`.
 
-**This package is NEVER published to npm.** It is consumed directly from the monorepo by GitHub Actions workflows. Do not add `publishConfig`, `.releaserc.json`, or `[package]` section to `nextnode.toml`.
+**This CLI package is NEVER published to npm.** The CI/CD orchestrator is consumed directly from the monorepo by GitHub Actions workflows — do not add `publishConfig`, `.releaserc.json`, or a `[package]` section to its `nextnode.toml`.
+
+That ban is on *this* package, not on the infra domain. A pure, reusable slice of it may be extracted into its own thin, semver-published package that projects install as a devDependency (e.g. `@nextnode-solutions/worker-types`, which bundles this package's `./worker-types` entry). Such a package keeps a single source of truth with the deploy path while giving consumers a versioned install instead of an unversioned `@main` coupling.
 
 ## Architecture — STRICT LAYERED RULE (ABSOLUTE BAN)
 

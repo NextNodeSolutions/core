@@ -1,0 +1,9 @@
+{
+	"extends": "@nextnode-solutions/standards/typescript/library",
+	"compilerOptions": {
+		"allowImportingTsExtensions": true,
+		"types": ["node"]
+	},
+	"include": ["src"],
+	"exclude": ["node_modules", "dist"]
+}
