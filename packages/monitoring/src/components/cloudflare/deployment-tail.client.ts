@@ -66,7 +66,7 @@ const readMessageData = (event: Event): string => {
 
 const renderInvocation = (sink: TailOutput, raw: string): void => {
 	const invocations = parseInvocations(raw)
-	if (!invocations || !invocations.length) {
+	if (!invocations?.length) {
 		sink.appendLine(
 			`<span class="text-red-400">! malformed tail frame: ${escapeHtml(raw)}</span>`,
 		)

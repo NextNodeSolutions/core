@@ -60,7 +60,7 @@ const readMessageData = (event: MessageEvent): string =>
 
 const renderInvocations = (raw: string): ReadonlyArray<string> => {
 	const invocations = parseInvocations(raw)
-	if (!invocations || !invocations.length) {
+	if (!invocations?.length) {
 		return [
 			`<span class="text-red-400">! malformed tail frame: ${escapeHtml(raw)}</span>`,
 		]
