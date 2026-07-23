@@ -3,6 +3,6 @@ import { defineConfig } from 'tsdown'
 
 export default defineConfig({
 	...baseConfig,
-	entry: 'src/index.ts',
+	entry: ['src/index.ts', 'src/lib/worker-types.ts'],
 	dts: false,
 })
