@@ -1,6 +1,6 @@
 {
   "name": "@nextnode-solutions/worker-types",
-  "version": "0.0.0-development",
+  "version": "1.0.0",
   "description": "Generate Cloudflare Workers `worker-configuration.d.ts` from nextnode.toml",
   "keywords": [
     "cloudflare",
