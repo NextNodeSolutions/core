@@ -730,6 +730,7 @@ function makeEnvWrangler(): {
 	readonly deploys: Array<{
 		name: string
 		vars: Record<string, string>
+		services: ReadonlyArray<{ binding: string; service: string }>
 		order: number
 	}>
 	readonly bulks: Array<{
@@ -741,6 +742,7 @@ function makeEnvWrangler(): {
 	const deploys: Array<{
 		name: string
 		vars: Record<string, string>
+		services: ReadonlyArray<{ binding: string; service: string }>
 		order: number
 	}> = []
 	const bulks: Array<{
