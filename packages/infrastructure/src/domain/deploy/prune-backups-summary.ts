@@ -24,7 +24,7 @@ export function buildPruneBackupsSummary(
 ): string {
 	const totalPruned = outcomes.reduce((sum, o) => sum + o.pruned, 0)
 	const header = `## Prune postgres backups\n\nPruned ${String(totalPruned)} dump(s) across ${String(outcomes.length)} project(s).`
-	if (outcomes.length === 0) return header
+	if (!outcomes.length) return header
 
 	const rows = outcomes
 		.map(o =>

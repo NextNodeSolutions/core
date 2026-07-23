@@ -138,10 +138,9 @@ async function teardownR2CustomDomains(
 	const cdnBuckets = (config.services.r2?.buckets ?? []).filter(
 		bucket => bucket.cdn,
 	)
-	if (cdnBuckets.length === 0) return
+	if (!cdnBuckets.length) return
 
 	const cfToken = requireEnv('CLOUDFLARE_API_TOKEN')
-	const { accountId } = infraStorage
 	// Resolve the deploy domain ONCE - the same single resolution the provision
 	// path applies via `resolveServices` - so the hostname detached here matches
 	// the one attached at provision (in development both gain the `dev.` prefix).
@@ -157,7 +156,12 @@ async function teardownR2CustomDomains(
 				bucket.name,
 				resolvedDomain,
 			)
-			await deleteR2CustomDomain(cfToken, accountId, bucketName, hostname)
+			await deleteR2CustomDomain(
+				cfToken,
+				infraStorage.accountId,
+				bucketName,
+				hostname,
+			)
 			logger.info(
 				`Detached R2 custom domain "${hostname}" from bucket "${bucketName}"`,
 			)

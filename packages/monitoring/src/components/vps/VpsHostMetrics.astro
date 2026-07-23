@@ -8,8 +8,7 @@ interface Props {
 	metrics: HostMetrics
 }
 
-const { metrics } = Astro.props
-const rows = formatHostMetrics(metrics)
+const rows = formatHostMetrics(Astro.props.metrics)
 ---
 
 <section class="mt-10 space-y-6">

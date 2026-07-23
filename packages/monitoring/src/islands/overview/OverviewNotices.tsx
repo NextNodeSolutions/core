@@ -14,7 +14,7 @@ interface OverviewNoticesProps {
 export function OverviewNotices({
 	notices,
 }: OverviewNoticesProps): React.ReactElement | null {
-	if (notices.length === 0) return null
+	if (!notices.length) return null
 	return (
 		<div className="flex flex-col gap-2.5">
 			{notices.map(notice => (

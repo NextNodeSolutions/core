@@ -40,7 +40,7 @@ export const appendTailLines = (
 	state: TailLineState,
 	htmlLines: ReadonlyArray<string>,
 ): TailLineState => {
-	if (htmlLines.length === 0) return state
+	if (!htmlLines.length) return state
 	const appended = htmlLines.map((html, offset) => ({
 		id: state.nextId + offset,
 		html,
@@ -60,7 +60,7 @@ const readMessageData = (event: MessageEvent): string =>
 
 const renderInvocations = (raw: string): ReadonlyArray<string> => {
 	const invocations = parseInvocations(raw)
-	if (!invocations || invocations.length === 0) {
+	if (!invocations || !invocations.length) {
 		return [
 			`<span class="text-red-400">! malformed tail frame: ${escapeHtml(raw)}</span>`,
 		]

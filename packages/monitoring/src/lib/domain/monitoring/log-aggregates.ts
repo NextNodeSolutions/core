@@ -128,7 +128,7 @@ export const parseFleetStats = (
 	let total = 0
 	for (const raw of body.split('\n')) {
 		const trimmed = raw.trim()
-		if (trimmed.length === 0) continue
+		if (!trimmed.length) continue
 		let parsed: unknown
 		try {
 			parsed = JSON.parse(trimmed)

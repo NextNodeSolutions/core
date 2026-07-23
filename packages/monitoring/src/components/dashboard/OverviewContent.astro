@@ -52,7 +52,6 @@ interface Props {
 	range: string
 }
 
-const { range } = Astro.props
 
 const NULL_METRICS: HostMetrics = {
 	cpuPercent: null,
@@ -98,7 +97,7 @@ const recentStatePromise = loadPageState('overview.deployments', () =>
 const vpsRunsStatePromise = loadPageState('overview.vpsRuns', () =>
 	loadVpsDeployRuns(VPS_RUNS_PER_WORKFLOW),
 )
-const seedPromise = loadOverviewWindow(range)
+const seedPromise = loadOverviewWindow(Astro.props.range)
 const [fleetLoads, recentState, vpsRunsState, seed] = await Promise.all([
 	fleetLoadsPromise,
 	recentStatePromise,

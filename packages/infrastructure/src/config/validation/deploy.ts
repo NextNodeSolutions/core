@@ -186,7 +186,7 @@ function providerRequirementErrors(
 	}
 	if (
 		provider.requiresServices &&
-		serviceCheck.errors.length === 0 &&
+		!serviceCheck.errors.length &&
 		serviceCheck.count === 0
 	) {
 		errors.push('at least one [deploy.services.<name>] is required')

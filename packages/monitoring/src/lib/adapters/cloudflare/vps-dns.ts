@@ -36,7 +36,7 @@ export const listDnsMatchesForVps = async (
 	options: ListDnsMatchesForVpsOptions,
 ): Promise<ReadonlyArray<VpsDnsMatch>> => {
 	const plans = buildQueryPlan(options)
-	if (plans.length === 0) return []
+	if (!plans.length) return []
 
 	const zones = await listZones(options.client)
 	const queries = zones.flatMap(zone =>

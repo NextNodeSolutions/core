@@ -134,7 +134,7 @@ function kvNamespaces(
 	input: WranglerConfigInput,
 	backing: ReturnType<typeof deriveWorkersBackingConfig>,
 ): ReadonlyArray<WranglerKvNamespace> | undefined {
-	if (!input.service.needs.includes('kv') || backing.kvAliases.length === 0) {
+	if (!input.service.needs.includes('kv') || !backing.kvAliases.length) {
 		return undefined
 	}
 	return backing.kvAliases.map(alias => ({
@@ -150,10 +150,7 @@ function r2Buckets(
 	input: WranglerConfigInput,
 	backing: ReturnType<typeof deriveWorkersBackingConfig>,
 ): ReadonlyArray<WranglerR2Bucket> | undefined {
-	if (
-		!input.service.needs.includes('r2') ||
-		backing.bucketAliases.length === 0
-	) {
+	if (!input.service.needs.includes('r2') || !backing.bucketAliases.length) {
 		return undefined
 	}
 	return backing.bucketAliases.map(alias => ({
@@ -171,7 +168,7 @@ function queueProducers(
 ): ReadonlyArray<WranglerQueueProducer> | undefined {
 	if (
 		!input.service.needs.includes('queues') ||
-		backing.queueAliases.length === 0
+		!backing.queueAliases.length
 	) {
 		return undefined
 	}
@@ -196,7 +193,7 @@ function serviceBindings(
 		input.service.needs,
 		input.serviceNames,
 	)
-	if (bound.length === 0) return undefined
+	if (!bound.length) return undefined
 	return bound.map(name => ({
 		binding: toBindingName(name),
 		service: computeWorkerScriptName(

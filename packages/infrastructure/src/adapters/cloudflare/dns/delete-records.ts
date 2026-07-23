@@ -21,7 +21,7 @@ export async function deleteDnsRecordsByName(
 	records: ReadonlyArray<DnsRecordLookup>,
 	token: string,
 ): Promise<number> {
-	if (records.length === 0) return 0
+	if (!records.length) return 0
 
 	const zoneIds = await resolveAllZoneIds(records, token)
 
@@ -35,7 +35,7 @@ export async function deleteDnsRecordsByName(
 			}
 
 			const existing = await listDnsRecords(zoneId, desired.name, token)
-			if (existing.length === 0) return
+			if (!existing.length) return
 
 			await Promise.all(
 				existing.map(record =>

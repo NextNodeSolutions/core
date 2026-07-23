@@ -19,7 +19,7 @@ export async function findExistingVps(
 		vps: vpsName,
 		managed_by: 'nextnode',
 	})
-	if (matches.length === 0) return null
+	if (!matches.length) return null
 	if (matches.length > 1) {
 		const ids = matches.map(s => s.id).join(', ')
 		throw new Error(

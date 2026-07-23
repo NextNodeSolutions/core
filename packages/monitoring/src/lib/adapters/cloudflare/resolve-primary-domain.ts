@@ -20,7 +20,7 @@ export const resolvePrimaryDomain = async ({
 }: ResolvePrimaryDomainOptions): Promise<string | null> => {
 	const domains = await listPagesDomains({ client, projectName })
 	const active = domains.filter(domain => domain.status === 'active')
-	if (active.length === 0) return null
+	if (!active.length) return null
 	const probes = await Promise.all(
 		active.map(async domain => ({
 			name: domain.name,

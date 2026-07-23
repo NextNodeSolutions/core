@@ -56,7 +56,7 @@ export const r2ServiceDefinition: ServiceDefinition<'r2'> = {
 	name: 'r2',
 	build(services, ctx) {
 		const buckets = computeR2ServiceBuckets(services)
-		if (buckets.length === 0) return null
+		if (!buckets.length) return null
 		return createR2Service(ctx, { buckets })
 	},
 }

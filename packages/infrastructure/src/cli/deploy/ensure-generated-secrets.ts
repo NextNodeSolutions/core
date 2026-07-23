@@ -36,7 +36,7 @@ export async function ensureGeneratedSecrets(
 			`${present} generated secret(s) already present in ALL_SECRETS - skipping (no rotation)`,
 		)
 	}
-	if (pending.length === 0) return
+	if (!pending.length) return
 
 	if (!(await adapter.ghAvailable())) {
 		throw new Error(

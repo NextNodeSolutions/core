@@ -48,7 +48,7 @@ const HIST_SEGMENT_GAP = 0.5
 const HIST_MIN_BAR = 1
 
 const matchesQuery = (line: LogLine, query: string): boolean => {
-	if (query.length === 0) return true
+	if (!query.length) return true
 	const haystack = [line.message, line.service, line.path, line.traceId]
 		.filter((part): part is string => part !== null && part.length > 0)
 		.join(' ')
@@ -153,7 +153,7 @@ export const selectLogByKey = (
 	logs: ReadonlyArray<LogLine>,
 	key: string,
 ): LogLine | null => {
-	if (key.length === 0) return null
+	if (!key.length) return null
 	return logs.find(line => logLineKey(line) === key) ?? null
 }
 

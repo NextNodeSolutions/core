@@ -12,6 +12,7 @@ import { noEnum } from './rules/no-enum.js'
 import { noGenericNames } from './rules/no-generic-names.js'
 import { noGrabBagFiles } from './rules/no-grab-bag-files.js'
 import { noLeadingSemicolon } from './rules/no-leading-semicolon.js'
+import { noLengthZeroComparison } from './rules/no-length-zero-comparison.js'
 import { noNullishTernaryReturn } from './rules/no-nullish-ternary-return.js'
 import { noSentinelConsequent } from './rules/no-sentinel-consequent.js'
 import { noSingleUsePassthrough } from './rules/no-single-use-passthrough.js'
@@ -36,6 +37,7 @@ const plugin = {
 		'component-filename-match': componentFilenameMatch,
 		'no-grab-bag-files': noGrabBagFiles,
 		'no-leading-semicolon': noLeadingSemicolon,
+		'no-length-zero-comparison': noLengthZeroComparison,
 		'no-nullish-ternary-return': noNullishTernaryReturn,
 		'no-empty-object-ternary': noEmptyObjectTernary,
 		'no-sentinel-consequent': noSentinelConsequent,

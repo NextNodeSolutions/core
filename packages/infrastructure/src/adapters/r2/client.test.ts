@@ -118,8 +118,7 @@ describe('deleteByPrefix', () => {
 
 	it('lists and deletes all objects under the prefix in one page', async () => {
 		send.mockImplementation(async command => {
-			const { name } = command.constructor
-			if (name === 'ListObjectsV2Command') {
+			if (command.constructor.name === 'ListObjectsV2Command') {
 				return {
 					Contents: [
 						{ Key: 'my-project/a.json' },
@@ -142,8 +141,7 @@ describe('deleteByPrefix', () => {
 	it('paginates through multiple list pages', async () => {
 		let callIndex = 0
 		send.mockImplementation(async command => {
-			const { name } = command.constructor
-			if (name === 'ListObjectsV2Command') {
+			if (command.constructor.name === 'ListObjectsV2Command') {
 				callIndex += 1
 				if (callIndex === 1) {
 					return {
@@ -166,8 +164,7 @@ describe('deleteByPrefix', () => {
 
 	it('skips objects without a Key', async () => {
 		send.mockImplementation(async command => {
-			const { name } = command.constructor
-			if (name === 'ListObjectsV2Command') {
+			if (command.constructor.name === 'ListObjectsV2Command') {
 				return {
 					Contents: [{ Key: 'p/a.json' }, { Key: undefined }],
 					NextContinuationToken: undefined,
@@ -183,8 +180,7 @@ describe('deleteByPrefix', () => {
 
 	it('only deletes keys matching the predicate', async () => {
 		send.mockImplementation(async command => {
-			const { name } = command.constructor
-			if (name === 'ListObjectsV2Command') {
+			if (command.constructor.name === 'ListObjectsV2Command') {
 				return {
 					Contents: [
 						{ Key: 'vps/certificates/le/foo.example.com/cert' },
@@ -216,8 +212,7 @@ describe('deleteByPrefix', () => {
 
 	it('returns 0 when nothing matches the predicate', async () => {
 		send.mockImplementation(async command => {
-			const { name } = command.constructor
-			if (name === 'ListObjectsV2Command') {
+			if (command.constructor.name === 'ListObjectsV2Command') {
 				return {
 					Contents: [{ Key: 'vps/certificates/le/foo/cert' }],
 					NextContinuationToken: undefined,

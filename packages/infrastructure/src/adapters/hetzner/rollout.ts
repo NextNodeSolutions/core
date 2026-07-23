@@ -107,7 +107,6 @@ async function openRolloutSession(
 	readonly tailnetIp: string
 }> {
 	requireImages(input)
-	const { vpsName } = ctx.config
 
 	const existing = await requireDeployableState(ctx)
 
@@ -124,7 +123,7 @@ async function openRolloutSession(
 				[projectName]: hostPorts,
 			},
 		}
-		await writeState(ctx.r2, vpsName, updated, existing.etag)
+		await writeState(ctx.r2, ctx.config.vpsName, updated, existing.etag)
 	}
 
 	const session = await createSshSession({

@@ -4,5 +4,5 @@
  * (the teardown confirmation gate) or a LogsQL `field:~` filter - so the value
  * cannot widen or break the match. Single source so the escaping never drifts.
  */
-export const escapeRegex = (value: string): string =>
-	value.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)
+export const escapeRegex = (literal: string): string =>
+	literal.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)

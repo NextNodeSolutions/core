@@ -37,11 +37,7 @@ export function DeploymentTail({
 				onClear={clear}
 			/>
 			<pre className="bg-base-950 text-base-50 max-h-[320px] min-h-[120px] overflow-auto px-3 py-2.5 font-mono text-[11px] leading-relaxed">
-				{lines.length === 0 ? (
-					<span className="text-base-400">
-						Press “Start tail” to begin streaming.
-					</span>
-				) : (
+				{lines.length ? (
 					lines.map(line => (
 						// The render helpers emit trusted, escaped HTML (see
 						// deployment-tail.render.ts); each line is its own block.
@@ -51,6 +47,10 @@ export function DeploymentTail({
 							dangerouslySetInnerHTML={{ __html: line.html }}
 						/>
 					))
+				) : (
+					<span className="text-base-400">
+						Press “Start tail” to begin streaming.
+					</span>
 				)}
 			</pre>
 		</div>

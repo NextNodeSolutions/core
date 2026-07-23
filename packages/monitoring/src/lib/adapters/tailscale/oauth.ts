@@ -76,7 +76,7 @@ const findDeviceIpv4 = (devices: unknown, hostname: string): string | null => {
 		}))
 		.filter((d): d is { ipv4: string; created: string } => d.ipv4 !== null)
 
-	if (candidates.length === 0) return null
+	if (!candidates.length) return null
 
 	return (
 		candidates.toSorted((a, b) => b.created.localeCompare(a.created))[0]

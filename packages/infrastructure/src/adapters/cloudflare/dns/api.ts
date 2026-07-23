@@ -78,7 +78,7 @@ export async function lookupZoneId(
 	)
 
 	const zones = requireArrayResult(responseBody, context)
-	if (zones.length === 0) {
+	if (!zones.length) {
 		throw new Error(
 			`Cloudflare zone not found for "${zoneName}" - ensure the zone exists in this account and the API token has Zone:Read access`,
 		)

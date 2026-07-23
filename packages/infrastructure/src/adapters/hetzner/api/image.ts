@@ -57,8 +57,9 @@ export async function findImagesByLabels(
 			`list images label_selector="${selector}": missing \`images\` array`,
 		)
 	}
-	const { images } = responseBody
-	return images.map((img, i) => parseImageObject(img, `images[${i}]`))
+	return responseBody.images.map((img, i) =>
+		parseImageObject(img, `images[${i}]`),
+	)
 }
 
 export async function findImageById(

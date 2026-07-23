@@ -114,7 +114,7 @@ function expandServiceSecrets<T extends { secrets: ReadonlyArray<string> }>(
 	services: Record<string, T>,
 	globalNames: ReadonlyArray<string>,
 ): Record<string, T> {
-	if (globalNames.length === 0) return services
+	if (!globalNames.length) return services
 	return Object.fromEntries(
 		Object.entries(services).map(([name, service]): [string, T] => [
 			name,

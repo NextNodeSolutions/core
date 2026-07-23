@@ -54,7 +54,7 @@ export interface ProjectSummary {
 const finishedSuccessRate = (
 	finished: ReadonlyArray<CloudflarePagesDeployment>,
 ): number | null => {
-	if (finished.length === 0) return null
+	if (!finished.length) return null
 	const succeeded = finished.filter(
 		deployment => deployment.status === 'success',
 	).length

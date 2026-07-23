@@ -63,7 +63,7 @@ const SECRETS_JSON_INDENT = 2
 function secretsJsonFor(
 	secrets: Readonly<Record<string, string>> | undefined,
 ): string | undefined {
-	if (!secrets || Object.keys(secrets).length === 0) {
+	if (!secrets || !Object.keys(secrets).length) {
 		return undefined
 	}
 	return JSON.stringify(secrets, null, SECRETS_JSON_INDENT)

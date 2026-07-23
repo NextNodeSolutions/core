@@ -39,7 +39,14 @@ export function DeploymentHistoryTable(): React.ReactElement {
 							</tr>
 						</thead>
 						<tbody>
-							{history.length === 0 ? (
+							{history.length ? (
+								history.map(deployment => (
+									<DeploymentRow
+										key={deployment.id}
+										deployment={deployment}
+									/>
+								))
+							) : (
 								<tr>
 									<td
 										colSpan={HISTORY_COLUMN_COUNT}
@@ -48,13 +55,6 @@ export function DeploymentHistoryTable(): React.ReactElement {
 										Aucun déploiement pour ce filtre.
 									</td>
 								</tr>
-							) : (
-								history.map(deployment => (
-									<DeploymentRow
-										key={deployment.id}
-										deployment={deployment}
-									/>
-								))
 							)}
 						</tbody>
 					</table>

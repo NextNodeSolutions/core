@@ -421,6 +421,27 @@ export function bindings(token: string | undefined): object {
 `,
 	},
 
+	// coding - `.length` is a non-negative int, so a truthy check says emptiness
+	{
+		rule: 'nextnode(no-length-zero-comparison)',
+		severity: 'error',
+		bad: `export function isEmpty(written: string[]): boolean {
+	return written.length === 0
+}
+`,
+		// `!== 0` fires too: it is the truthy inverse `x.length`
+		edge: `export function hasAny(written: string[]): boolean {
+	return written.length !== 0
+}
+`,
+		edgeExpect: 'fire',
+		// optional-chained length is exempt: `!x?.length` is not `x?.length === 0`
+		good: `export function isEmpty(written: string[] | undefined): boolean {
+	return written?.length === 0
+}
+`,
+	},
+
 	// coding - no formatter-inserted leading `;` guarding `(`/`[` statements
 	{
 		rule: 'nextnode(no-leading-semicolon)',

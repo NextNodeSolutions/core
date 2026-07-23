@@ -30,7 +30,7 @@ const writeAsNode: ConsoleWriter = (entry, method) => {
 const writeAsBrowser: ConsoleWriter = (entry, method) => {
 	const { format, styles, objects } = formatForBrowser(entry)
 
-	if (objects.length === 0) {
+	if (!objects.length) {
 		console[method](format, ...styles)
 		return
 	}

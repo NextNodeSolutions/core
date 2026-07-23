@@ -145,7 +145,7 @@ function withImpliedServices(
 				workload.needs.includes(name),
 			),
 	)
-	if (implied.length === 0) return services
+	if (!implied.length) return services
 	return {
 		...services,
 		...Object.fromEntries(implied.map(name => [name, {}])),

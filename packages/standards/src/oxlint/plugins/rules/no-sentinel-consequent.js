@@ -9,7 +9,7 @@ const isSentinel = node =>
 	(node.type === 'Literal' && node.value === null) ||
 	(node.type === 'Identifier' && node.name === 'undefined') ||
 	(node.type === 'UnaryExpression' && node.operator === 'void') ||
-	(node.type === 'ObjectExpression' && node.properties.length === 0)
+	(node.type === 'ObjectExpression' && !node.properties.length)
 
 export const noSentinelConsequent = {
 	meta: {

@@ -45,7 +45,7 @@ export function selectGoldenImage(
 	const matching = input.images.filter(
 		image => image.labels[FINGERPRINT_LABEL] === input.currentFingerprint,
 	)
-	if (matching.length === 0) {
+	if (!matching.length) {
 		return {
 			action: 'rebuild',
 			reason: `no snapshot matches fingerprint ${input.currentFingerprint}`,

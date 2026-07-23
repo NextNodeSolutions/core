@@ -111,7 +111,7 @@ function buildDependsOn(
 					: 'service_started',
 		}
 	}
-	if (Object.keys(dependencies).length === 0) return {}
+	if (!Object.keys(dependencies).length) return {}
 	return { depends_on: dependencies }
 }
 
@@ -129,7 +129,7 @@ export function buildCronScheduler(
 	jobs: ReadonlyArray<CronJobConfig>,
 	services: Readonly<Record<string, UserServiceConfig>>,
 ): Readonly<Record<string, CronComposeService>> | null {
-	if (jobs.length === 0) return null
+	if (!jobs.length) return null
 
 	const resolved = jobs.map(job => ({
 		job,
