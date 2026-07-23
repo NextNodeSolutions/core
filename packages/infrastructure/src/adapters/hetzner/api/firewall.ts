@@ -64,8 +64,7 @@ export async function findFirewallsByName(
 			`list firewalls name="${name}": missing \`firewalls\` array`,
 		)
 	}
-	const { firewalls } = responseBody
-	return firewalls.map((fw, i) => {
+	return responseBody.firewalls.map((fw, i) => {
 		if (!isRecord(fw)) {
 			throw new Error(`firewalls[${i}]: invalid firewall shape`)
 		}

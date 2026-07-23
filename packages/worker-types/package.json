@@ -1,0 +1,57 @@
+{
+  "name": "@nextnode-solutions/worker-types",
+  "version": "0.0.0-development",
+  "description": "Generate Cloudflare Workers `worker-configuration.d.ts` from nextnode.toml",
+  "keywords": [
+    "cloudflare",
+    "nextnode",
+    "types",
+    "workers"
+  ],
+  "homepage": "https://github.com/NextNodeSolutions/core#readme",
+  "license": "MIT",
+  "author": "NextNode Solutions",
+  "files": [
+    "dist"
+  ],
+  "bin": {
+    "worker-types": "./dist/index.js"
+  },
+  "repository": {
+    "directory": "packages/worker-types",
+    "type": "git",
+    "url": "https://github.com/NextNodeSolutions/core.git"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "node src/index.ts",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "lint": "oxlint --type-aware",
+    "type-check": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "@nextnode-solutions/logger": "^2.0.0",
+    "smol-toml": "^1.6.1",
+    "valibot": "^1.4.1"
+  },
+  "devDependencies": {
+    "@nextnode-solutions/infrastructure": "workspace:*",
+    "@nextnode-solutions/standards": "workspace:*",
+    "@types/node": "^24.0.0",
+    "@typescript/native-preview": "7.0.0-dev.20260407.1",
+    "oxfmt": "^0.43.0",
+    "oxlint": "^1.62.0",
+    "oxlint-tsgolint": "^0.23.0",
+    "tsdown": "^0.21.9"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "packageManager": "pnpm@10.11.0",
+  "type": "module"
+}

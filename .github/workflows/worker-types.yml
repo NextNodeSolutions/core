@@ -1,0 +1,16 @@
+name: Worker Types
+
+on:
+    workflow_dispatch:
+    push:
+        branches: [main]
+        paths: ['packages/worker-types/**']
+    pull_request:
+        paths: ['packages/worker-types/**']
+
+jobs:
+    pipeline:
+        uses: ./.github/workflows/publish-package.yml
+        with:
+            config_file: packages/worker-types/nextnode.toml
+        secrets: inherit

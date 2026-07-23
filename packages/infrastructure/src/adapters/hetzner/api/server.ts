@@ -159,8 +159,9 @@ export async function findServersByLabels(
 			`list servers label_selector="${selector}": missing \`servers\` array`,
 		)
 	}
-	const { servers } = responseBody
-	return servers.map((s, i) => parseServerObject(s, `servers[${i}]`))
+	return responseBody.servers.map((s, i) =>
+		parseServerObject(s, `servers[${i}]`),
+	)
 }
 
 /**

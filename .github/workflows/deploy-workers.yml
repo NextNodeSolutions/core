@@ -54,25 +54,6 @@ jobs:
                   PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
                   PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
 
-            # The generated worker-configuration.d.ts is committed in the caller
-            # repo so `astro check`/`astro build` in the quality matrix (no infra
-            # checkout) and every developer typecheck see `interface Env`.
-            # Regenerate from nextnode.toml here (infra IS checked out) and fail
-            # on any diff, so a stale committed file cannot ship.
-            - name: Generate worker types
-              run: node src/index.ts generate-worker-types
-              working-directory: .infra/packages/infrastructure
-              env:
-                  PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
-
-            # `--intent-to-add` surfaces a never-committed file as a diff too, so
-            # a missing worker-configuration.d.ts fails like a stale one.
-            - name: Verify worker types are committed and current
-              working-directory: ${{ github.workspace }}
-              run: |
-                  git add --intent-to-add -- '**/worker-configuration.d.ts'
-                  git diff --exit-code -- '**/worker-configuration.d.ts'
-
     quality:
         name: ${{ matrix.task.name }}
         needs: plan
@@ -141,43 +122,16 @@ jobs:
                   # and skip regeneration (idempotent, non-rotating).
                   ALL_SECRETS: ${{ toJSON(secrets) }}
 
-    detect-migrations:
-        name: Detect migrations
-        needs: plan
-        # `wrangler d1 migrations apply --remote` is the per-deploy hotspot on
-        # the Workers path. Skip it when the push changed no migration file. The
-        # git-diff + fail-safe decision is a TS command (no decision logic in
-        # YAML); it fails safe to migrations_changed=true on any range it cannot
-        # diff (manual dispatch, first push, shallow clone), so a real migration
-        # is never skipped.
-        if: needs.plan.outputs.has_d1 == 'true'
-        runs-on: ubuntu-latest
-        outputs:
-            migrations_changed: ${{ steps.detect.outputs.migrations_changed }}
-        steps:
-            - uses: NextNodeSolutions/core/.github/actions/setup@main
-              with:
-                  infra: 'true'
-                  deps: 'false'
-                  # Full history so `git diff <before> <sha>` can resolve the base.
-                  fetch-depth: '0'
-
-            - name: Detect migration changes
-              id: detect
-              run: node src/index.ts detect-migration-changes
-              working-directory: .infra/packages/infrastructure
-              env:
-                  PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
-                  PIPELINE_BASE_SHA: ${{ github.event.before }}
-
     migrate:
         name: Migrate
-        needs: [plan, provision, detect-migrations]
-        # Applies pending D1 migrations. Skipped when the project has no
-        # `[services.d1]`, OR when this push changed no migration file (see
-        # detect-migrations) - so the wrangler roundtrip is only paid where a
-        # schema actually changed.
-        if: ${{ !cancelled() && !failure() && needs.plan.outputs.has_d1 == 'true' && needs.detect-migrations.outputs.migrations_changed == 'true' }}
+        needs: [plan, provision]
+        # Applies pending D1 migrations whenever the project declares
+        # `[services.d1]`. `wrangler d1 migrations apply --remote` is idempotent -
+        # it lists the remote `d1_migrations` table and applies only what is
+        # pending, so running it every deploy is a no-op when the schema is
+        # current. No git-diff gating: the deployed D1 (which a provision can
+        # recreate empty) is the source of truth, not the push's file diff.
+        if: ${{ !cancelled() && !failure() && needs.plan.outputs.has_d1 == 'true' }}
         runs-on: ubuntu-latest
         # migrate-remote resolves the deploy context (resolveDeployContext reads
         # ALL_SECRETS for the per-service secret pool) exactly like deploy, so it

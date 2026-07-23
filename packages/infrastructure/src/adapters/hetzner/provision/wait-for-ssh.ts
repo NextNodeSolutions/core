@@ -30,10 +30,9 @@ export async function waitForSsh(
 				username: 'deploy',
 				privateKey: input.privateKey,
 			})
-			const { hostKeyFingerprint } = session
 			session.close()
 			logger.info(`SSH reachable at ${input.host}`)
-			return { hostKeyFingerprint }
+			return { hostKeyFingerprint: session.hostKeyFingerprint }
 		} catch (err) {
 			lastError = err
 			const message = err instanceof Error ? err.message : String(err)
