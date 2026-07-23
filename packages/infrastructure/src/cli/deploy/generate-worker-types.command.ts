@@ -30,7 +30,7 @@ function resolveConfigDir(): string {
  */
 export function generateWorkerTypesCommand(config: DeployableConfig): void {
 	const written = generateWorkerTypes(config, resolveConfigDir())
-	if (written.length === 0) {
+	if (!written.length) {
 		logger.info(
 			'generate-worker-types is a no-op: target is not cloudflare-workers',
 		)

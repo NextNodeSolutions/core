@@ -89,7 +89,7 @@ export async function teardownProjectCaddyRoute(
 	projectHostnames: ReadonlyArray<string>,
 	caddy: TeardownCaddyContext,
 ): Promise<ResourceOutcome> {
-	if (projectHostnames.length === 0) {
+	if (!projectHostnames.length) {
 		return { handled: false, detail: 'no routed hostnames' }
 	}
 
@@ -107,20 +107,19 @@ export async function teardownProjectCaddyRoute(
 		return { handled: false, detail: 'no route for project hostnames' }
 	}
 
-	const nextConfig =
-		remaining.length === 0
-			? EMPTY_CADDY_CONFIG
-			: JSON.stringify(
-					composeCaddyConfig({
-						storage: buildR2CaddyBinding(
-							caddy.infraStorage,
-							caddy.vpsName,
-						),
-						upstreams: remaining,
-						acmeEmail: caddy.acmeEmail,
-						internal: caddy.internal,
-					}),
-				)
+	const nextConfig = remaining.length
+		? JSON.stringify(
+				composeCaddyConfig({
+					storage: buildR2CaddyBinding(
+						caddy.infraStorage,
+						caddy.vpsName,
+					),
+					upstreams: remaining,
+					acmeEmail: caddy.acmeEmail,
+					internal: caddy.internal,
+				}),
+			)
+		: EMPTY_CADDY_CONFIG
 
 	await session.writeFile(CADDY_CONFIG_PATH, nextConfig)
 	await session.exec(`caddy reload --config ${CADDY_CONFIG_PATH}`)
@@ -147,7 +146,7 @@ export async function teardownProjectCerts(
 	vpsName: string,
 	projectHostnames: ReadonlyArray<string>,
 ): Promise<ResourceOutcome> {
-	if (projectHostnames.length === 0) {
+	if (!projectHostnames.length) {
 		return { handled: false, detail: 'no routed hostnames' }
 	}
 	const listPrefix = `${vpsName}/certificates/`
@@ -208,7 +207,7 @@ export async function teardownProjectDns(
 	projectHostnames: ReadonlyArray<string>,
 	dns: DnsClient,
 ): Promise<ResourceOutcome> {
-	if (projectHostnames.length === 0) {
+	if (!projectHostnames.length) {
 		return { handled: false, detail: 'no routed hostnames' }
 	}
 	const deletedCount = await dns.deleteByName(

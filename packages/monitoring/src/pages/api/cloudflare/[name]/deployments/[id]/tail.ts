@@ -243,7 +243,6 @@ export const GET: APIRoute = async ({ params }) => {
 	// Event handlers gate their writes on `signal.aborted` - no defensive
 	// try/catch, no boolean flag, no race between concurrent handlers.
 	const lifecycle = new AbortController()
-	const { signal } = lifecycle
 	const abort = (reason: string): void => lifecycle.abort(reason)
 
 	const stream = new ReadableStream<Uint8Array>({
@@ -253,7 +252,7 @@ export const GET: APIRoute = async ({ params }) => {
 				session,
 				projectName,
 				deploymentId,
-				signal,
+				signal: lifecycle.signal,
 				abort,
 			})
 		},

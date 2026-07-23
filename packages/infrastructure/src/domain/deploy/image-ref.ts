@@ -153,7 +153,7 @@ export function parseImageRefsEnv(raw: string): Record<string, ImageRef> {
 		)
 	}
 	const entries = Object.entries(parsed)
-	if (entries.length === 0) {
+	if (!entries.length) {
 		throw new Error(
 			`Invalid IMAGE_REFS "${raw}": at least one service image ref is required`,
 		)

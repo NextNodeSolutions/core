@@ -17,7 +17,7 @@ const MAX_ROWS = 250
 export function LogList(): React.ReactElement {
 	const filtered = useAtomValue(filteredLogsAtom)
 
-	if (filtered.length === 0) {
+	if (!filtered.length) {
 		return (
 			<div className="text-base-400 px-3.5 py-16 text-center text-sm">
 				Aucun log ne correspond aux filtres.

@@ -14,6 +14,7 @@ import {
 // oxlint-disable-next-line nextnode/boolean-naming -- prerender is Astro's required route export name
 export const prerender = false
 
+// oxlint-disable-next-line nextnode/no-single-use-passthrough -- read across the template; the rule only sees the frontmatter reference
 const { slug } = Astro.params
 
 if (!slug) {

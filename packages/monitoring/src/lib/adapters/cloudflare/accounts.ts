@@ -10,7 +10,7 @@ export const resolveAccountId = async (token: string): Promise<string> => {
 	const context = 'Cloudflare accounts list'
 	const envelope = await apiGet('/accounts', token, context)
 	const accounts = extractArrayResult(envelope, context)
-	if (accounts.length === 0) {
+	if (!accounts.length) {
 		throw new Error(
 			`${context}: token grants access to no accounts - check token scope`,
 		)

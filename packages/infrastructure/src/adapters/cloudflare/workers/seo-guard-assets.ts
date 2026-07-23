@@ -44,7 +44,7 @@ export function injectSeoGuardAssets(
 	environment: AppEnvironment,
 ): void {
 	const files: ReadonlyArray<GuardFile> = computeSeoGuardFiles(environment)
-	if (files.length === 0) return
+	if (!files.length) return
 
 	const directory = join(projectDir, assetsDirectory)
 	for (const file of files) {

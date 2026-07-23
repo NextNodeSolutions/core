@@ -72,7 +72,7 @@ const validateMessage = (message: EmailMessage): Result<void, EmailError> => {
 	}
 
 	// Check empty recipients (EC-3)
-	if (toArray.length === 0) {
+	if (!toArray.length) {
 		return emailFail('VALIDATION_ERROR', 'No recipients specified')
 	}
 

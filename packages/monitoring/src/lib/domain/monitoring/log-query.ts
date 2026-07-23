@@ -186,7 +186,7 @@ export const parseLogFacet = (
 	const values = new Set<string>()
 	for (const raw of body.split('\n')) {
 		const trimmed = raw.trim()
-		if (trimmed.length === 0) continue
+		if (!trimmed.length) continue
 		let parsed: unknown
 		try {
 			parsed = JSON.parse(trimmed)
@@ -227,7 +227,7 @@ export const buildFleetErrorCountQuery = (
 export const parseStatsCount = (body: string, field: string): number => {
 	for (const raw of body.split('\n')) {
 		const trimmed = raw.trim()
-		if (trimmed.length === 0) continue
+		if (!trimmed.length) continue
 		let parsed: unknown
 		try {
 			parsed = JSON.parse(trimmed)
@@ -251,7 +251,7 @@ export const parseLogLines = (body: string): ReadonlyArray<LogLine> => {
 	const lines: Array<LogLine> = []
 	for (const raw of body.split('\n')) {
 		const trimmed = raw.trim()
-		if (trimmed.length === 0) continue
+		if (!trimmed.length) continue
 		const parsed = safeParse(trimmed)
 		if (parsed === null) continue
 		lines.push(parsed)

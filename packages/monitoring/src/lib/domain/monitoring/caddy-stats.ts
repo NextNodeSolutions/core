@@ -58,7 +58,7 @@ export const parseCaddyStats = (body: string): ReadonlyArray<CaddyHostStat> => {
 	const stats: Array<CaddyHostStat> = []
 	for (const raw of body.split('\n')) {
 		const trimmed = raw.trim()
-		if (trimmed.length === 0) continue
+		if (!trimmed.length) continue
 		const row = safeParseRow(trimmed)
 		if (row !== null) stats.push(row)
 	}

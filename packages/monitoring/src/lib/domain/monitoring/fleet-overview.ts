@@ -230,7 +230,7 @@ export function fleetCpuWindowAverage(
 	const perServerMeans = cpuSeriesByServer
 		.filter(series => series.length > 0)
 		.map(series => series.reduce((sum, v) => sum + v, 0) / series.length)
-	if (perServerMeans.length === 0) return { average: null, nodeCount: 0 }
+	if (!perServerMeans.length) return { average: null, nodeCount: 0 }
 	const average =
 		perServerMeans.reduce((sum, mean) => sum + mean, 0) /
 		perServerMeans.length

@@ -98,7 +98,7 @@ function buildTopLevelVolumes(
 	if (hasObservability) {
 		for (const name of OBSERVABILITY_VOLUMES) volumes[name] = {}
 	}
-	if (Object.keys(volumes).length === 0) return undefined
+	if (!Object.keys(volumes).length) return undefined
 	return volumes
 }
 

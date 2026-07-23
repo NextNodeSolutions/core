@@ -14,7 +14,7 @@ export function DetailContext({
 	meta,
 }: DetailContextProps): React.ReactElement | null {
 	const entries = Object.entries(meta)
-	if (entries.length === 0) return null
+	if (!entries.length) return null
 
 	return (
 		<div>

@@ -27,7 +27,7 @@ export function orderServicesByDependsOn(
 				pending.has(name) &&
 				node.dependsOn.every(dep => !pending.has(dep)),
 		)
-		if (ready.length === 0) {
+		if (!ready.length) {
 			throw new Error(
 				`deploy.services depends_on forms a cycle among: ${[...pending].join(', ')} - remove a dependency so the services can deploy in order.`,
 			)

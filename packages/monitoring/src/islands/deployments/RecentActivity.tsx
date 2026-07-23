@@ -16,7 +16,7 @@ export function RecentActivity(): React.ReactElement {
 	const recent = useAtomValue(recentActivityAtom)
 	const nowMs = useAtomValue(nowMsAtom)
 
-	if (recent.length === 0) {
+	if (!recent.length) {
 		return (
 			<div className="border-base-200 shadow-subtle text-base-400 overflow-hidden rounded-xl border bg-white px-4 py-12 text-center text-sm">
 				Aucun déploiement récent.

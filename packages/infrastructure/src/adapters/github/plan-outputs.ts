@@ -81,7 +81,7 @@ function resolveImageOutputs(config: NextNodeConfig): {
 		upstreamRefs[name] = parseImageRef(service.ref)
 	}
 
-	if (Object.keys(upstreamRefs).length === 0) {
+	if (!Object.keys(upstreamRefs).length) {
 		return { source: 'build', imageRefs: '' }
 	}
 	return { source: 'upstream', imageRefs: JSON.stringify(upstreamRefs) }

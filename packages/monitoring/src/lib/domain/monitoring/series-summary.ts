@@ -15,7 +15,7 @@ export interface SeriesSummary {
 export const summarizeSeries = (
 	points: ReadonlyArray<RangePoint>,
 ): SeriesSummary => {
-	if (points.length === 0) return { average: null, peak: null }
+	if (!points.length) return { average: null, peak: null }
 	const values = points.map(point => point.v)
 	const total = values.reduce((sum, sample) => sum + sample, 0)
 	return { average: total / values.length, peak: Math.max(...values) }

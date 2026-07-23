@@ -56,14 +56,14 @@ export async function recoverCommand(): Promise<void> {
 
 	const orphans = await detectOrphanVps(hcloudToken, stateR2)
 
-	if (orphans.length === 0) {
+	if (!orphans.length) {
 		logger.info('No orphan VPS detected.')
 		writeSummary(formatNoOrphans())
 		return
 	}
 
 	const targets = selectTargets(orphans, recoverList)
-	if (targets.length === 0) {
+	if (!targets.length) {
 		logger.info(
 			`Detected ${String(orphans.length)} orphan VPS - list-only (set RECOVER_VPS_NAMES to recover).`,
 		)
@@ -135,7 +135,7 @@ function parseRecoverList(raw: string | undefined): RecoverList | null {
 		.split(',')
 		.map(n => n.trim())
 		.filter(n => n.length > 0)
-	if (names.length === 0) return null
+	if (!names.length) return null
 	return { kind: 'names', names: new Set(names) }
 }
 

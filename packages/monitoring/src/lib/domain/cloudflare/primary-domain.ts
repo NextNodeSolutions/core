@@ -21,7 +21,7 @@ export const selectPrimaryDomain = (
 	probes: ReadonlyArray<DomainProbe>,
 ): string | null => {
 	const eligible = probes.filter(probe => probe.httpStatus === HTTP_OK)
-	if (eligible.length === 0) return null
+	if (!eligible.length) return null
 	const sorted = [...eligible].toSorted((a, b) =>
 		a.createdAt.localeCompare(b.createdAt),
 	)

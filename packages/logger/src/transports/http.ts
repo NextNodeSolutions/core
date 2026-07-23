@@ -158,7 +158,7 @@ export class HttpTransport implements Transport {
 	}
 
 	async flush(): Promise<void> {
-		if (this.isFlushing || this.buffer.length === 0) {
+		if (this.isFlushing || !this.buffer.length) {
 			return
 		}
 

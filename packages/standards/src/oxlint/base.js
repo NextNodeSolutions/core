@@ -119,6 +119,7 @@ export default defineConfig({
 		'nextnode/component-filename-match': 'error',
 		'nextnode/no-grab-bag-files': 'error',
 		'nextnode/no-leading-semicolon': 'error',
+		'nextnode/no-length-zero-comparison': 'error',
 		'nextnode/no-nullish-ternary-return': 'error',
 		'nextnode/no-empty-object-ternary': 'error',
 		'nextnode/no-sentinel-consequent': 'error',

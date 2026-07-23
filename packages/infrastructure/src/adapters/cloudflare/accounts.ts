@@ -26,7 +26,7 @@ export async function resolveAccountId(token: string): Promise<string> {
 	)
 
 	const accounts = requireArrayResult(responseBody, context)
-	if (accounts.length === 0) {
+	if (!accounts.length) {
 		throw new Error(
 			`${context}: token grants access to no accounts - check token scope`,
 		)

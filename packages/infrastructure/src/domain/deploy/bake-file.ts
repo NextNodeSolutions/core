@@ -65,7 +65,7 @@ export interface RenderBakeFileInput {
  * `upstream` services are pulled, never built, so they never appear here.
  */
 export function renderBakeFile(input: RenderBakeFileInput): string {
-	if (input.bakeTargets.length === 0) {
+	if (!input.bakeTargets.length) {
 		throw new Error(
 			'renderBakeFile: no build services to bake - compute-image-ref runs only when at least one service has source = "build"',
 		)

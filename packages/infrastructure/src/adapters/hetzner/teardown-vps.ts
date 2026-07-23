@@ -54,7 +54,7 @@ export async function teardownFirewall(
 ): Promise<ResourceOutcome> {
 	const firewallName = `${vpsName}-fw`
 	const firewalls = await findFirewallsByName(hcloudToken, firewallName)
-	if (firewalls.length === 0) {
+	if (!firewalls.length) {
 		return { handled: false, detail: 'not found' }
 	}
 
@@ -103,7 +103,7 @@ export async function teardownVpsDns(
 	hostnames: ReadonlyArray<string>,
 	dns: DnsClient,
 ): Promise<ResourceOutcome> {
-	if (hostnames.length === 0) {
+	if (!hostnames.length) {
 		return { handled: false, detail: 'no hostnames to delete' }
 	}
 

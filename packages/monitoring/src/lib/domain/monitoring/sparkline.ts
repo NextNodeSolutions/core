@@ -34,10 +34,9 @@ export function sparklineGeometry(
 	}))
 	const linePath = buildLinePath(points)
 	const last = points.at(-1) ?? { x: 0, y: height - SPARK_PAD }
-	const areaPath =
-		points.length === 0
-			? ''
-			: `${linePath} L${coord(width)} ${coord(height)} L0.0 ${coord(height)} Z`
+	const areaPath = points.length
+		? `${linePath} L${coord(width)} ${coord(height)} L0.0 ${coord(height)} Z`
+		: ''
 
 	return { linePath, areaPath, lastX: last.x, lastY: last.y }
 }

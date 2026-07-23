@@ -24,7 +24,7 @@ async function initResend(
 	config: ResendProviderConfig,
 	logger: Logger,
 ): Promise<EmailProvider> {
-	if (!config.apiKey || config.apiKey.trim().length === 0) {
+	if (!config.apiKey?.trim().length) {
 		throw new Error('Resend API key is required and cannot be empty')
 	}
 

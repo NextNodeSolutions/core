@@ -102,7 +102,7 @@ function buildDependsOn(
 			condition: 'service_healthy',
 		}
 	}
-	if (Object.keys(dependencies).length === 0) return {}
+	if (!Object.keys(dependencies).length) return {}
 	return { depends_on: dependencies }
 }
 

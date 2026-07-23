@@ -5,7 +5,7 @@
  * helper returning `T | undefined` and spread its result instead.
  */
 const isEmptyObject = node =>
-	node.type === 'ObjectExpression' && node.properties.length === 0
+	node.type === 'ObjectExpression' && !node.properties.length
 
 export const noEmptyObjectTernary = {
 	meta: {

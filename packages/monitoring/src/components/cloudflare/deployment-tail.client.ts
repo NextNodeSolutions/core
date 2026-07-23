@@ -35,7 +35,7 @@ const createTailOutput = (outputEl: HTMLElement): TailOutput => {
 		}
 	}
 	const appendLines = (lines: ReadonlyArray<string>): void => {
-		if (lines.length === 0) return
+		if (!lines.length) return
 		const fragment = document.createDocumentFragment()
 		for (const html of lines) {
 			const div = document.createElement('div')
@@ -66,7 +66,7 @@ const readMessageData = (event: Event): string => {
 
 const renderInvocation = (sink: TailOutput, raw: string): void => {
 	const invocations = parseInvocations(raw)
-	if (!invocations || invocations.length === 0) {
+	if (!invocations?.length) {
 		sink.appendLine(
 			`<span class="text-red-400">! malformed tail frame: ${escapeHtml(raw)}</span>`,
 		)

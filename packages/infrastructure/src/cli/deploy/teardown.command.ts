@@ -138,7 +138,7 @@ async function teardownR2CustomDomains(
 	const cdnBuckets = (config.services.r2?.buckets ?? []).filter(
 		bucket => bucket.cdn,
 	)
-	if (cdnBuckets.length === 0) return
+	if (!cdnBuckets.length) return
 
 	const cfToken = requireEnv('CLOUDFLARE_API_TOKEN')
 	// Resolve the deploy domain ONCE - the same single resolution the provision

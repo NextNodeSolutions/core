@@ -26,7 +26,7 @@ function computeHostKeyFingerprint(key: Buffer): string {
 function fingerprintsMatch(observed: string, expected: string): boolean {
 	const a = Buffer.from(observed, 'hex')
 	const b = Buffer.from(expected, 'hex')
-	if (a.length !== b.length || a.length === 0) return false
+	if (a.length !== b.length || !a.length) return false
 	return timingSafeEqual(a, b)
 }
 

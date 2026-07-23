@@ -43,7 +43,7 @@ export async function mintAuthkey(
 	ttlSeconds: number,
 	description: string,
 ): Promise<MintedAuthkey> {
-	if (tags.length === 0) {
+	if (!tags.length) {
 		throw new Error('mintAuthkey requires at least one tag')
 	}
 

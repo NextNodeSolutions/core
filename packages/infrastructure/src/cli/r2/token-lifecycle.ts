@@ -60,7 +60,7 @@ export async function revokeStaleTokens(
 	const stale = existing.filter(
 		t => t.name === tokenName && t.id !== keepTokenId,
 	)
-	if (stale.length === 0) return
+	if (!stale.length) return
 
 	await Promise.all(
 		stale.map(async token => {

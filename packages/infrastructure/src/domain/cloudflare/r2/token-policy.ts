@@ -29,7 +29,7 @@ interface R2TokenPolicyBody {
 export function buildR2TokenPolicy(
 	input: R2TokenPolicyInput,
 ): R2TokenPolicyBody {
-	if (input.bucketNames.length === 0) {
+	if (!input.bucketNames.length) {
 		throw new Error('buildR2TokenPolicy: bucketNames must not be empty')
 	}
 
