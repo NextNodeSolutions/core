@@ -21,9 +21,9 @@ function run(): void {
 
 	const written = generateWorkerTypesFromFile(values.config)
 	logger.info(
-		written.length === 0
-			? 'worker-types: no cloudflare-workers target - nothing to generate'
-			: `worker-types: generated ${written.length} worker-configuration.d.ts file(s)`,
+		written.length
+			? `worker-types: generated ${written.length} worker-configuration.d.ts file(s)`
+			: 'worker-types: no cloudflare-workers target - nothing to generate',
 	)
 }
 
