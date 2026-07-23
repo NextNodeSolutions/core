@@ -63,8 +63,8 @@
       "default": "./dist/index.js"
     },
     "./worker-types": {
-      "types": "./src/lib/worker-types.ts",
-      "default": "./dist/lib/worker-types.js"
+      "types": "./src/cli/deploy/worker-types.ts",
+      "default": "./dist/cli/deploy/worker-types.js"
     }
   },
   "imports": {

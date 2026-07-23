@@ -1,4 +1,4 @@
-import { isAbsolute, resolve } from 'node:path'
+import { resolve } from 'node:path'
 
 import { writeWorkerTypes } from '#/adapters/cloudflare/workers/write-worker-types.ts'
 import { loadConfig } from '#/config/load.ts'
@@ -35,9 +35,7 @@ export function generateWorkerTypes(
 export function generateWorkerTypesFromFile(
 	configPath: string,
 ): ReadonlyArray<string> {
-	const absolute = isAbsolute(configPath)
-		? configPath
-		: resolve(process.cwd(), configPath)
+	const absolute = resolve(configPath)
 	const config = loadConfig(absolute)
 	if (!isDeployableConfig(config)) return []
 	return generateWorkerTypes(config, resolve(absolute, '..'))

@@ -1,7 +1,7 @@
 import { isAbsolute, resolve } from 'node:path'
 
+import { generateWorkerTypes } from '#/cli/deploy/worker-types.ts'
 import { getEnv, requireEnv } from '#/cli/env.ts'
-import { generateWorkerTypes } from '#/lib/worker-types.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
 import type { DeployableConfig } from '#/config/types.ts'
