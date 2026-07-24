@@ -480,6 +480,24 @@ export { error }
 `,
 	},
 
+	// architecture - no barrel modules; import from the defining module
+	{
+		rule: 'nextnode(no-barrel-file)',
+		severity: 'error',
+		bad: `export { createClient } from './client.ts'
+`,
+		// star re-exports are barrels too
+		edge: `export * as tokens from './tokens.ts'
+`,
+		edgeExpect: 'fire',
+		// exporting what the file owns is not a re-export
+		good: `const port = 3000
+type Port = typeof port
+export { port }
+export type { Port }
+`,
+	},
+
 	// coding - no single-use const that only re-reads a property under its name
 	{
 		rule: 'nextnode(no-single-use-passthrough)',

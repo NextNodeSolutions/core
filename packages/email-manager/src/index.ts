@@ -1,3 +1,4 @@
+/* eslint-disable nextnode/no-barrel-file -- published package entry point: `exports['.']` maps to this file, so it is the API surface by contract */
 /**
  * @nextnode-solutions/email-manager
  * Template-first email sending library for NextNode projects

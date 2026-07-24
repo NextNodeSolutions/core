@@ -119,6 +119,7 @@ export default defineConfig({
 		'nextnode/max-props': 'warn',
 		'nextnode/component-filename-match': 'error',
 		'nextnode/no-grab-bag-files': 'error',
+		'nextnode/no-barrel-file': 'error',
 		'nextnode/no-leading-semicolon': 'error',
 		'nextnode/no-length-zero-comparison': 'error',
 		'nextnode/no-nullish-ternary-return': 'error',
@@ -166,6 +167,13 @@ export default defineConfig({
 			],
 			rules: {
 				'import/no-default-export': 'off',
+			},
+		},
+		{
+			// tool configs forward a shared preset: `export { default } from '<preset>'`
+			files: ['**/*.config.*', '**/.*rc.*'],
+			rules: {
+				'nextnode/no-barrel-file': 'off',
 			},
 		},
 		{

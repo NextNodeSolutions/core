@@ -5,6 +5,7 @@
 import { booleanNaming } from './rules/boolean-naming.js'
 import { componentFilenameMatch } from './rules/component-filename-match.js'
 import { maxProps } from './rules/max-props.js'
+import { noBarrelFile } from './rules/no-barrel-file.js'
 import { noBooleanParams } from './rules/no-boolean-params.js'
 import { noConfusableChars } from './rules/no-confusable-chars.js'
 import { noEmDash } from './rules/no-em-dash.js'
@@ -38,6 +39,7 @@ const plugin = {
 		'max-props': maxProps,
 		'component-filename-match': componentFilenameMatch,
 		'no-grab-bag-files': noGrabBagFiles,
+		'no-barrel-file': noBarrelFile,
 		'no-leading-semicolon': noLeadingSemicolon,
 		'no-length-zero-comparison': noLengthZeroComparison,
 		'no-nullish-ternary-return': noNullishTernaryReturn,

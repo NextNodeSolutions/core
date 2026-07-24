@@ -1,3 +1,4 @@
+/* eslint-disable nextnode/no-barrel-file -- published package entry point: `exports['.']` maps to this file, so it is the API surface by contract */
 /**
  * NextNode Logger - public entry point.
  * Thin barrel that re-exports the full public API.
