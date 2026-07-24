@@ -114,6 +114,7 @@ export default defineConfig({
 		'nextnode/boolean-naming': 'error',
 		'nextnode/no-generic-names': 'warn',
 		'nextnode/no-em-dash': 'error',
+		'nextnode/no-confusable-chars': 'error',
 		'nextnode/no-use-effect': 'warn',
 		'nextnode/max-props': 'warn',
 		'nextnode/component-filename-match': 'error',

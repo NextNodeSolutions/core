@@ -43,7 +43,7 @@ const REGISTRY_TOKEN_USER = '__token__'
 /**
  * Seconds the docker compose CLI's native `--wait` flag will block before
  * giving up on a service reporting `healthy`. 60s comfortably covers a
- * cold `postgres:18` `initdb` on a `cpx22` (typically 5–15s) and aborts
+ * cold `postgres:18` `initdb` on a `cpx22` (typically 5-15s) and aborts
  * the deploy loudly when the container is wedged.
  */
 const POSTGRES_WAIT_TIMEOUT_SECONDS = 60
