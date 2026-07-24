@@ -1,16 +1,8 @@
-import {
-	DEPLOY_TARGETS,
-	POSTGRES_MODES,
-	PROJECT_TYPES,
-	SECRET_GENERATORS,
-} from './types.ts'
+import { POSTGRES_MODES } from './service-config.ts'
+import { DEPLOY_TARGETS, PROJECT_TYPES, SECRET_GENERATORS } from './types.ts'
 
-import type {
-	DeployTargetType,
-	PostgresMode,
-	ProjectType,
-	SecretGenerator,
-} from './types.ts'
+import type { PostgresMode } from './service-config.ts'
+import type { DeployTargetType, ProjectType, SecretGenerator } from './types.ts'
 
 const PROJECT_TYPE_SET: ReadonlySet<string> = new Set(PROJECT_TYPES)
 const DEPLOY_TARGET_SET: ReadonlySet<string> = new Set(DEPLOY_TARGETS)

@@ -1,4 +1,4 @@
-import { DEFAULT_MIGRATIONS_FOLDER } from '#/config/types.ts'
+import { DEFAULT_MIGRATIONS_FOLDER } from '#/config/service-config.ts'
 import { isRecord } from '#/kernel/guards.ts'
 import { optional } from 'valibot'
 
@@ -9,7 +9,7 @@ import {
 	runSchema,
 } from '../valibot.ts'
 
-import type { D1ServiceConfig } from '#/config/types.ts'
+import type { D1ServiceConfig } from '#/config/service-config.ts'
 import type { ValidationResult } from '#/config/validation/result.ts'
 
 const migrationsFolderSchema = optional(

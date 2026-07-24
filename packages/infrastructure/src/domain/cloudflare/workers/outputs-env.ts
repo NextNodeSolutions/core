@@ -2,7 +2,7 @@ import { computeR2Endpoint } from '#/domain/cloudflare/r2/addressing.ts'
 import { computeR2ServiceBuckets } from '#/domain/services/r2.ts'
 import { isRecord } from '#/kernel/guards.ts'
 
-import type { ServicesConfig } from '#/config/types.ts'
+import type { ServicesConfig } from '#/config/service-config.ts'
 import type { ServiceEnv } from '#/domain/services/service.ts'
 
 /**
@@ -187,7 +187,10 @@ export function parseTerraformOutputs(
 		outputs.d1DatabaseId = asString(d1, 'd1_database_id')
 	}
 	if (typeof hyperdrive !== 'undefined') {
-		outputs.hyperdriveConfigId = asString(hyperdrive, 'hyperdrive_config_id')
+		outputs.hyperdriveConfigId = asString(
+			hyperdrive,
+			'hyperdrive_config_id',
+		)
 	}
 	return outputs
 }

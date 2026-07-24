@@ -11,7 +11,7 @@ import {
 
 import { collectFieldErrors, nonEmptyString, runSchema } from '../valibot.ts'
 
-import type { ObservabilityServiceConfig } from '#/config/types.ts'
+import type { ObservabilityServiceConfig } from '#/config/service-config.ts'
 import type { ValidationResult } from '#/config/validation/result.ts'
 import type { GenericSchema } from 'valibot'
 

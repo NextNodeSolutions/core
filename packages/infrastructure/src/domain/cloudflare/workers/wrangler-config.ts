@@ -13,11 +13,8 @@ import {
 	WORKERS_HYPERDRIVE_BINDING,
 } from './wrangler-document.ts'
 
-import type {
-	CronJobConfig,
-	ServicesConfig,
-	WorkerServiceConfig,
-} from '#/config/types.ts'
+import type { ServicesConfig } from '#/config/service-config.ts'
+import type { CronJobConfig, WorkerServiceConfig } from '#/config/types.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 import type { WorkersTerraformOutputs } from './outputs-env.ts'
 import type {

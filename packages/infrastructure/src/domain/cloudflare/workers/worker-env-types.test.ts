@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import { renderWorkerEnvTypes } from './worker-env-types.ts'
 
-import type { ServicesConfig, WorkerServiceConfig } from '#/config/types.ts'
+import type { ServicesConfig } from '#/config/service-config.ts'
+import type { WorkerServiceConfig } from '#/config/types.ts'
 import type { WorkerEnvTypesInput } from './worker-env-types.ts'
 
 const FULL_SERVICES: ServicesConfig = {

@@ -25,7 +25,7 @@ import type {
 	ServiceDefinition,
 	ServiceFactoryContext,
 } from '#/cli/services/service.ts'
-import type { PostgresServiceConfig } from '#/config/types.ts'
+import type { PostgresServiceConfig } from '#/config/service-config.ts'
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import type { ServiceEnv } from '#/domain/services/service.ts'
 

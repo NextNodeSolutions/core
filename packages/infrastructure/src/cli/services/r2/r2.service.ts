@@ -11,7 +11,7 @@ import type {
 	ServiceDefinition,
 	ServiceFactoryContext,
 } from '#/cli/services/service.ts'
-import type { R2ServiceConfig } from '#/config/types.ts'
+import type { R2ServiceConfig } from '#/config/service-config.ts'
 import type { ServiceEnv } from '#/domain/services/service.ts'
 
 export function createR2Service(

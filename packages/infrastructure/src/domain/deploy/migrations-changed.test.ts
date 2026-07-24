@@ -5,7 +5,10 @@ import {
 	resolveMigrationsFolder,
 } from './migrations-changed.ts'
 
-import type { PostgresServiceConfig, ServicesConfig } from '#/config/types.ts'
+import type {
+	PostgresServiceConfig,
+	ServicesConfig,
+} from '#/config/service-config.ts'
 
 const embedded = (
 	extra: Partial<PostgresServiceConfig> = {},

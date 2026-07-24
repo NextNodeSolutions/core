@@ -1,4 +1,4 @@
-import { TARGET_REALISES_BACKING_SERVICES } from '#/config/types.ts'
+import { TARGET_REALISES_BACKING_SERVICES } from '#/config/service-config.ts'
 import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
 
 import { SERVICE_DEFINITIONS } from './registry.ts'

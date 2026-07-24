@@ -4,11 +4,8 @@ import { buildWranglerConfig } from '#/domain/cloudflare/workers/wrangler-config
 import { resolveD1MigrationServiceName } from '#/domain/deploy/migration-service.ts'
 
 import type { WranglerRunner } from '#/adapters/wrangler/runner.ts'
-import type {
-	CronJobConfig,
-	ServicesConfig,
-	WorkerServiceConfig,
-} from '#/config/types.ts'
+import type { ServicesConfig } from '#/config/service-config.ts'
+import type { CronJobConfig, WorkerServiceConfig } from '#/config/types.ts'
 import type { WorkersTerraformOutputs } from '#/domain/cloudflare/workers/outputs-env.ts'
 import type { MigrateResult } from '#/domain/deploy/target.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'

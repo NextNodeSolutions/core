@@ -6,7 +6,8 @@ import {
 	WORKERS_COMPATIBILITY_FLAGS,
 } from './wrangler-document.ts'
 
-import type { ServicesConfig, WorkerServiceConfig } from '#/config/types.ts'
+import type { ServicesConfig } from '#/config/service-config.ts'
+import type { WorkerServiceConfig } from '#/config/types.ts'
 import type { WorkersTerraformOutputs } from './outputs-env.ts'
 import type { WranglerConfigInput } from './wrangler-config.ts'
 

@@ -7,7 +7,7 @@ import {
 	postgresProjectIdentifier,
 } from './postgres.ts'
 
-import type { PostgresServiceConfig } from '#/config/types.ts'
+import type { PostgresServiceConfig } from '#/config/service-config.ts'
 
 /**
  * The postgres+wal-g image (postgres:18 + the wal-g binary, see

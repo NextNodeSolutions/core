@@ -1,10 +1,10 @@
-import { POSTGRES_MODES } from '#/config/types.ts'
+import { POSTGRES_MODES } from '#/config/service-config.ts'
 import { isRecord } from '#/kernel/guards.ts'
 import { picklist } from 'valibot'
 
 import { collectFieldErrors, optionalNonEmpty, runSchema } from '../valibot.ts'
 
-import type { PostgresServiceConfig } from '#/config/types.ts'
+import type { PostgresServiceConfig } from '#/config/service-config.ts'
 import type { ValidationResult } from '#/config/validation/result.ts'
 
 const modeSchema = picklist(

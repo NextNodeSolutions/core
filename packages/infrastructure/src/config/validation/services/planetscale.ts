@@ -2,7 +2,7 @@ import { isRecord } from '#/kernel/guards.ts'
 
 import { collectFieldErrors, optionalNonEmpty, runSchema } from '../valibot.ts'
 
-import type { PlanetscaleServiceConfig } from '#/config/types.ts'
+import type { PlanetscaleServiceConfig } from '#/config/service-config.ts'
 import type { ValidationResult } from '#/config/validation/result.ts'
 
 const clusterSizeSchema = optionalNonEmpty(

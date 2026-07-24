@@ -1,4 +1,4 @@
-import type { ServiceName } from '#/config/types.ts'
+import type { ServiceName } from '#/config/service-config.ts'
 import type { ServiceDefinition } from './service.ts'
 
 /**

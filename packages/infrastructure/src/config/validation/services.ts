@@ -1,4 +1,4 @@
-import { SERVICE_NAMES } from '#/config/types.ts'
+import { SERVICE_NAMES } from '#/config/service-config.ts'
 import { isRecord } from '#/kernel/guards.ts'
 
 import { validateD1Service } from './services/d1.ts'
@@ -13,7 +13,7 @@ import type {
 	ServiceConfigByName,
 	ServiceName,
 	ServicesConfig,
-} from '#/config/types.ts'
+} from '#/config/service-config.ts'
 import type { ValidationResult } from './result.ts'
 
 type MutableServicesConfig = {

@@ -1,6 +1,6 @@
 import { parseArgs } from 'node:util'
 
-import type { PostgresServiceConfig } from '#/config/types.ts'
+import type { PostgresServiceConfig } from '#/config/service-config.ts'
 import type { ServiceEnv } from './service.ts'
 
 /**

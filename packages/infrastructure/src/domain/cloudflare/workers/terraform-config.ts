@@ -13,8 +13,6 @@ import type { CloudflareWorkersDeployableConfig } from '#/config/types.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 import type { TerraformMainConfig } from './terraform-main-config.ts'
 
-export type { TerraformMainConfig } from './terraform-main-config.ts'
-
 // HCP Terraform organization every workspace lives under. Not a nextnode.toml
 // default (it is not overridable per project) - it is the fixed backend
 // coordinate the generated `terraform.cloud` block points at.

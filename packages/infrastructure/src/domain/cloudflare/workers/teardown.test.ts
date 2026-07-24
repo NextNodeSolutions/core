@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { assertWipeDataAllowed } from './teardown.ts'
 
-import type { ServicesConfig } from '#/config/types.ts'
+import type { ServicesConfig } from '#/config/service-config.ts'
 
 const D1: ServicesConfig = { d1: { migrationsFolder: 'drizzle' } }
 const R2: ServicesConfig = { r2: { buckets: [{ name: 'assets', cdn: false }] } }

@@ -9,7 +9,7 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 import { shellEscape } from './ssh/shell-escape.ts'
 
-import type { PostgresServiceConfig } from '#/config/types.ts'
+import type { PostgresServiceConfig } from '#/config/service-config.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 import type { SshSession } from './ssh/session.types.ts'
 

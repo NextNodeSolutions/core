@@ -1,9 +1,6 @@
 import { isDeployTarget } from '#/config/predicates.ts'
-import {
-	DEFAULT_DEPLOY_TARGETS,
-	DEPLOY_TARGETS,
-	impliableServiceNames,
-} from '#/config/types.ts'
+import { impliableServiceNames } from '#/config/service-config.ts'
+import { DEFAULT_DEPLOY_TARGETS, DEPLOY_TARGETS } from '#/config/types.ts'
 import { isRecord } from '#/kernel/guards.ts'
 
 import { resolveSecrets } from './deploy-secrets.ts'

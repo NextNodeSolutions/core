@@ -15,10 +15,10 @@ import { DEFAULT_MIGRATE_COMMAND } from '#/domain/deploy/target.ts'
 import { pruneProjectBackups } from './prune-backups.ts'
 import { resolveDeployContext } from './resolve-deploy-context.ts'
 
+import type { PostgresServiceConfig } from '#/config/service-config.ts'
 import type {
 	CloudflareWorkersDeployableConfig,
 	DeployableConfig,
-	PostgresServiceConfig,
 } from '#/config/types.ts'
 import type { MigrateInput } from '#/domain/deploy/target.ts'
 

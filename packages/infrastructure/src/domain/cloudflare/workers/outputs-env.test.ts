@@ -7,7 +7,7 @@ import {
 	parseTerraformOutputs,
 } from './outputs-env.ts'
 
-import type { ServicesConfig } from '#/config/types.ts'
+import type { ServicesConfig } from '#/config/service-config.ts'
 import type { WorkersBackingConfig } from './outputs-env.ts'
 
 const FULL_RAW = {

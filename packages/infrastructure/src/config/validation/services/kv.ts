@@ -4,7 +4,10 @@ import { array, minLength, object, pipe, rawTransform, unknown } from 'valibot'
 
 import { runSchema } from '../valibot.ts'
 
-import type { KvNamespaceConfig, KvServiceConfig } from '#/config/types.ts'
+import type {
+	KvNamespaceConfig,
+	KvServiceConfig,
+} from '#/config/service-config.ts'
 import type { ValidationResult } from '#/config/validation/result.ts'
 
 // One error per namespace entry, first-match-wins (table -> name present ->

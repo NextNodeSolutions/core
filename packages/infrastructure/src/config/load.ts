@@ -6,8 +6,8 @@ import {
 	SERVICE_NAMES,
 	SERVICE_SUPPORTED_TARGETS,
 	impliableServiceNames,
-	isDeployable,
-} from './types.ts'
+} from './service-config.ts'
+import { isDeployable } from './types.ts'
 import { validateDeploySection } from './validation/deploy.ts'
 import {
 	validateEnvironmentSection,
@@ -22,13 +22,13 @@ import {
 	validateServicesSection,
 } from './validation/services.ts'
 
+import type { ServicesConfig } from './service-config.ts'
 import type {
 	DeployableProjectType,
 	DeploySection,
 	NextNodeConfig,
 	ParseConfigResult,
 	ProjectSection,
-	ServicesConfig,
 } from './types.ts'
 
 export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {

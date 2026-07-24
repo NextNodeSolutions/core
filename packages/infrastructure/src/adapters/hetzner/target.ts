@@ -14,11 +14,13 @@ import { readState } from './state/read-write.ts'
 import { runHetznerTeardown } from './teardown.ts'
 
 import type {
+	ObservabilityServiceConfig,
+	PostgresServiceConfig,
+} from '#/config/service-config.ts'
+import type {
 	CronJobConfig,
 	DeployVolume,
 	HetznerVpsDeploySection,
-	ObservabilityServiceConfig,
-	PostgresServiceConfig,
 	UserServiceConfig,
 } from '#/config/types.ts'
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
