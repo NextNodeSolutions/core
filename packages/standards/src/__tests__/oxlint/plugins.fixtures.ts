@@ -498,6 +498,31 @@ export type { Port }
 `,
 	},
 
+	// oxlint gap - import/consistent-type-specifier-style ignores export statements
+	{
+		rule: 'nextnode(no-inline-type-export)',
+		severity: 'error',
+		bad: `declare const client: string
+declare const kind: string
+type Client = typeof client
+export { client, type Client }
+export { kind }
+`,
+		// an all-inline type export still owes a top-level \`export type\`
+		edge: `declare const client: string
+type Client = typeof client
+type Kind = string
+export { client }
+export { type Client, type Kind }
+`,
+		edgeExpect: 'fire',
+		good: `declare const client: string
+type Client = typeof client
+export { client }
+export type { Client }
+`,
+	},
+
 	// coding - no single-use const that only re-reads a property under its name
 	{
 		rule: 'nextnode(no-single-use-passthrough)',

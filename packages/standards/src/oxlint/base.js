@@ -107,6 +107,8 @@ export default defineConfig({
 		// SRP proxies: one component per file, shallow JSX trees
 		'react/no-multi-comp': 'warn',
 		'react/jsx-max-depth': ['error', { max: 8 }],
+		// oxlint's port only covers import statements; exports are handled by
+		// nextnode/no-inline-type-export
 		'import/consistent-type-specifier-style': ['error', 'prefer-top-level'],
 		'nextnode/no-type-assertion': 'error',
 		'nextnode/no-enum': 'error',
@@ -120,6 +122,7 @@ export default defineConfig({
 		'nextnode/component-filename-match': 'error',
 		'nextnode/no-grab-bag-files': 'error',
 		'nextnode/no-barrel-file': 'error',
+		'nextnode/no-inline-type-export': 'error',
 		'nextnode/no-leading-semicolon': 'error',
 		'nextnode/no-length-zero-comparison': 'error',
 		'nextnode/no-nullish-ternary-return': 'error',

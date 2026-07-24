@@ -13,6 +13,7 @@ import { noEmptyObjectTernary } from './rules/no-empty-object-ternary.js'
 import { noEnum } from './rules/no-enum.js'
 import { noGenericNames } from './rules/no-generic-names.js'
 import { noGrabBagFiles } from './rules/no-grab-bag-files.js'
+import { noInlineTypeExport } from './rules/no-inline-type-export.js'
 import { noLeadingSemicolon } from './rules/no-leading-semicolon.js'
 import { noLengthZeroComparison } from './rules/no-length-zero-comparison.js'
 import { noNullishTernaryReturn } from './rules/no-nullish-ternary-return.js'
@@ -40,6 +41,7 @@ const plugin = {
 		'component-filename-match': componentFilenameMatch,
 		'no-grab-bag-files': noGrabBagFiles,
 		'no-barrel-file': noBarrelFile,
+		'no-inline-type-export': noInlineTypeExport,
 		'no-leading-semicolon': noLeadingSemicolon,
 		'no-length-zero-comparison': noLengthZeroComparison,
 		'no-nullish-ternary-return': noNullishTernaryReturn,
