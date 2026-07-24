@@ -111,6 +111,7 @@ function d1Resources(
 		d1: {
 			account_id: ACCOUNT_ID_REF,
 			name: `${derived.projectName}-${derived.environment}-d1`,
+			read_replication: { mode: 'disabled' },
 		},
 	}
 }

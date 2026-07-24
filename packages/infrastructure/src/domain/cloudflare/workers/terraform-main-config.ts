@@ -33,9 +33,18 @@ export interface ZoneDataSource {
 	readonly filter: { readonly name: string }
 }
 
+export interface D1ReadReplication {
+	readonly mode: 'auto' | 'disabled'
+}
+
+// read_replication is Optional+Computed in the Cloudflare v5 provider: on create
+// the API writes { mode: "disabled" }, so a config that omits it plans a perpetual
+// { mode: "disabled" } -> null diff that the API rejects (400 "Expected object,
+// received null"). Declaring it explicitly keeps config and state in sync.
 export interface D1DatabaseResource {
 	readonly account_id: string
 	readonly name: string
+	readonly read_replication: D1ReadReplication
 }
 
 export interface KvNamespaceResource {
