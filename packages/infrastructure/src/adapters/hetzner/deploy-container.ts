@@ -21,10 +21,12 @@ import { writePostgresWalgBuildContext } from './postgres-walg-build-context.ts'
 import { shellEscape } from './ssh/shell-escape.ts'
 
 import type {
-	CronJobConfig,
-	DeployVolume,
 	ObservabilityServiceConfig,
 	PostgresServiceConfig,
+} from '#/config/service-config.ts'
+import type {
+	CronJobConfig,
+	DeployVolume,
 	UserServiceConfig,
 } from '#/config/types.ts'
 import type { CaddyUpstream } from '#/domain/caddy/config.ts'

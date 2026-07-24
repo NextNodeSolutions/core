@@ -1,8 +1,5 @@
-import {
-	durationLabel,
-	EMPTY_VALUE,
-} from '@/islands/deployments/deploy-styles.ts'
-import { formatRelative } from '@/lib/domain/monitoring/format.ts'
+import { durationLabel } from '@/islands/deployments/deploy-styles.ts'
+import { EMPTY_LABEL, formatRelative } from '@/lib/domain/monitoring/format.ts'
 
 import type { CloudflarePagesDeployment } from '@/lib/domain/cloudflare/pages-deployment.ts'
 
@@ -29,7 +26,7 @@ export function DrawerSpecs({
 		readonly text: string
 	}> = [
 		{ label: 'Projet', text: projectName },
-		{ label: 'Auteur', text: deployment.author ?? EMPTY_VALUE },
+		{ label: 'Auteur', text: deployment.author ?? EMPTY_LABEL },
 		{ label: 'Durée', text: durationLabel(deployment) },
 		{
 			label: 'Démarré',

@@ -26,10 +26,6 @@ const MID_SUCCESS_RATE = 70
 const STRIP_BASE_OPACITY = 0.35
 const STRIP_GRADED_RANGE = 0.65
 
-// The island-local aliases for the shared domain display rules.
-export { EMPTY_LABEL as EMPTY_VALUE } from '@/lib/domain/monitoring/format.ts'
-export { deploymentCommitLabel as commitLabel } from '@/lib/domain/cloudflare/deployment-summary.ts'
-
 /**
  * The DeployIcon glyph per display status. Mirrors the shared
  * `DEPLOY_STATUS_ICON` map (which is typed against Astro's wider `IconName`),

@@ -12,7 +12,7 @@ import {
 	buildObservabilityStack,
 } from './observability.ts'
 
-import type { ObservabilityServiceConfig } from '#/config/types.ts'
+import type { ObservabilityServiceConfig } from '#/config/service-config.ts'
 
 const CONFIG: ObservabilityServiceConfig = {
 	logsRetention: '30d',

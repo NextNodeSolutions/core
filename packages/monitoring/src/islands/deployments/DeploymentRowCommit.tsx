@@ -1,8 +1,6 @@
-import {
-	commitLabel,
-	EMPTY_VALUE,
-} from '@/islands/deployments/deploy-styles.ts'
 import { DeployIcon } from '@/islands/deployments/DeployIcon.tsx'
+import { deploymentCommitLabel } from '@/lib/domain/cloudflare/deployment-summary.ts'
+import { EMPTY_LABEL } from '@/lib/domain/monitoring/format.ts'
 
 import type { CloudflarePagesDeployment } from '@/lib/domain/cloudflare/pages-deployment.ts'
 
@@ -33,10 +31,10 @@ export function DeploymentRowCommit({
 			<td className="px-2 py-2.5">
 				<span className="text-base-700 inline-flex items-center gap-1.5 font-mono text-[12.5px]">
 					<DeployIcon name="branch" size={11} />
-					{deployment.branch ?? EMPTY_VALUE}
+					{deployment.branch ?? EMPTY_LABEL}
 				</span>
 				<div className="text-base-500 font-mono text-[11px]">
-					{commitLabel(deployment)}
+					{deploymentCommitLabel(deployment)}
 				</div>
 			</td>
 		</>

@@ -1,6 +1,6 @@
-import { DEFAULT_MIGRATIONS_FOLDER } from '#/config/types.ts'
+import { DEFAULT_MIGRATIONS_FOLDER } from '#/config/service-config.ts'
 
-import type { ServicesConfig } from '#/config/types.ts'
+import type { ServicesConfig } from '#/config/service-config.ts'
 
 /**
  * The directory (relative to the project root) holding generated migration

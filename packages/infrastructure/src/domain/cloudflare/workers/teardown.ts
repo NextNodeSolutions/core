@@ -1,4 +1,4 @@
-import type { ServicesConfig } from '#/config/types.ts'
+import type { ServicesConfig } from '#/config/service-config.ts'
 
 /**
  * Refuse a teardown that would irreversibly destroy stateful data (D1

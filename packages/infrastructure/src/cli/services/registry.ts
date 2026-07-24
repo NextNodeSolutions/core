@@ -3,7 +3,7 @@ import { postgresServiceDefinition } from './postgres/postgres.service.ts'
 import { r2ServiceDefinition } from './r2/r2.service.ts'
 import { terraformBackedServiceDefinition } from './terraform-backed-service.ts'
 
-import type { ServiceName } from '#/config/types.ts'
+import type { ServiceName } from '#/config/service-config.ts'
 import type { ServiceDefinition } from './service.ts'
 
 /**

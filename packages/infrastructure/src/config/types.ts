@@ -5,8 +5,6 @@ import {
 
 import type { ServicesConfig } from './service-config.ts'
 
-export * from './service-config.ts'
-
 export interface NextNodeConfig {
 	readonly project: ProjectSection
 	readonly scripts: ScriptsSection

@@ -1,8 +1,8 @@
 import { DEFAULT_WORKER_ENTRY } from '#/config/types.ts'
 
+import type { PostgresServiceConfig } from '#/config/service-config.ts'
 import type {
 	DeployableConfig,
-	PostgresServiceConfig,
 	UserServiceConfig,
 	WorkerServiceConfig,
 } from '#/config/types.ts'

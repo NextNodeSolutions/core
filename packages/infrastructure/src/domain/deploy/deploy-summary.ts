@@ -3,8 +3,6 @@ import { formatDuration, renderKeyValueTable } from './summary-renderer.ts'
 import type { SummaryRow } from './summary-renderer.ts'
 import type { DeployedEnvironment, DeployResult } from './target.ts'
 
-export { formatDuration } from './summary-renderer.ts'
-
 export function buildDeploySummary(
 	deployResult: DeployResult,
 	targetName: string,

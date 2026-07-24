@@ -26,11 +26,10 @@ import { stringify } from 'yaml'
 import { buildUserServices } from './compose-user-services.ts'
 
 import type {
-	CronJobConfig,
 	ObservabilityServiceConfig,
 	PostgresServiceConfig,
-	UserServiceConfig,
-} from '#/config/types.ts'
+} from '#/config/service-config.ts'
+import type { CronJobConfig, UserServiceConfig } from '#/config/types.ts'
 import type { ImageRef } from '#/domain/deploy/target.ts'
 import type { CronComposeService } from '#/domain/services/cron.ts'
 import type { ObservabilityComposeService } from '#/domain/services/observability.ts'

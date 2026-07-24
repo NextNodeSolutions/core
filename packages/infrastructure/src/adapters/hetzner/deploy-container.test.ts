@@ -7,10 +7,8 @@ import {
 	stageRollout,
 } from './deploy-container.ts'
 
-import type {
-	PostgresServiceConfig,
-	UserServiceConfig,
-} from '#/config/types.ts'
+import type { PostgresServiceConfig } from '#/config/service-config.ts'
+import type { UserServiceConfig } from '#/config/types.ts'
 import type { ImageRef } from '#/domain/deploy/target.ts'
 import type { BringUpInput, DeployContainerInput } from './deploy-container.ts'
 import type { SshSession } from './ssh/session.types.ts'

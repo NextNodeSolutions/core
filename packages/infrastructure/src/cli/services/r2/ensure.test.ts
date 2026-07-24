@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { R2BucketConfig } from '#/config/types.ts'
+import type { R2BucketConfig } from '#/config/service-config.ts'
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 
 vi.mock('node:timers/promises', () => ({

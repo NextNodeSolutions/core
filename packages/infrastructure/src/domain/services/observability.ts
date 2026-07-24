@@ -1,4 +1,4 @@
-import type { ObservabilityServiceConfig } from '#/config/types.ts'
+import type { ObservabilityServiceConfig } from '#/config/service-config.ts'
 
 /**
  * Pinned images for the observability backend. One editor (VictoriaMetrics)

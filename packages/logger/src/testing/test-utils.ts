@@ -219,7 +219,7 @@ export const createMockLogger = (): MockLogger => ({
 	child: (): MockLogger => createMockLogger(),
 })
 
-// Re-export types for convenience
+// eslint-disable-next-line nextnode/no-barrel-file -- published `./testing` entry point: these types are part of its API surface
 export type {
 	LogEntry,
 	Logger,

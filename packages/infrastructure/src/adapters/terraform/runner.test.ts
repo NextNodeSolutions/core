@@ -14,7 +14,7 @@ import {
 	writeTerraformConfig,
 } from './runner.ts'
 
-import type { TerraformMainConfig } from '#/domain/cloudflare/workers/terraform-config.ts'
+import type { TerraformMainConfig } from '#/domain/cloudflare/workers/terraform-main-config.ts'
 import type { ExecResult, TerraformRunner } from './runner.ts'
 
 const WORKDIR = '/work/app'

@@ -26,7 +26,7 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 import { awaitR2DomainActive } from './await-domain-active.ts'
 
-import type { R2BucketConfig } from '#/config/types.ts'
+import type { R2BucketConfig } from '#/config/service-config.ts'
 import type { R2StaticCredentials } from '#/domain/cloudflare/r2/credentials.ts'
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'

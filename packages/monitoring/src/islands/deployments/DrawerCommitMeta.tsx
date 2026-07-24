@@ -1,9 +1,7 @@
 import { ENV_PILL_CLASS } from '@/components/deployments/activity-display.ts'
-import {
-	commitLabel,
-	EMPTY_VALUE,
-} from '@/islands/deployments/deploy-styles.ts'
 import { DeployIcon } from '@/islands/deployments/DeployIcon.tsx'
+import { deploymentCommitLabel } from '@/lib/domain/cloudflare/deployment-summary.ts'
+import { EMPTY_LABEL } from '@/lib/domain/monitoring/format.ts'
 
 import type { CloudflarePagesDeployment } from '@/lib/domain/cloudflare/pages-deployment.ts'
 
@@ -33,10 +31,10 @@ export function DrawerCommitMeta({
 				</span>
 				<span className="border-base-200 bg-base-100 text-base-700 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 font-mono text-[11px]">
 					<DeployIcon name="branch" size={11} />
-					{deployment.branch ?? EMPTY_VALUE}
+					{deployment.branch ?? EMPTY_LABEL}
 				</span>
 				<span className="border-base-200 bg-base-100 text-base-700 inline-flex items-center rounded-full border px-2.5 py-0.5 font-mono text-[11px]">
-					{commitLabel(deployment)}
+					{deploymentCommitLabel(deployment)}
 				</span>
 			</div>
 		</div>

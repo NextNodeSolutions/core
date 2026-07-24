@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildDeploySummary, formatDuration } from './deploy-summary.ts'
+import { buildDeploySummary } from './deploy-summary.ts'
+import { formatDuration } from './summary-renderer.ts'
 
 import type { DeployResult } from './target.ts'
 

@@ -10,11 +10,11 @@ import type {
 	TerraformRunner,
 } from '#/adapters/terraform/runner.ts'
 import type { WranglerRunner } from '#/adapters/wrangler/runner.ts'
+import type { ServicesConfig } from '#/config/service-config.ts'
 import type {
 	CloudflareWorkersDeployableConfig,
 	WorkerServiceConfig,
 } from '#/config/types.ts'
-import type { ServicesConfig } from '#/config/types.ts'
 import type { DeployInput, DeployEnv } from '#/domain/deploy/target.ts'
 import type { FetchImpl } from '#/test-fetch.ts'
 

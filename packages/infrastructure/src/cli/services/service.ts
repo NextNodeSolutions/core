@@ -1,5 +1,5 @@
 import type { GithubRepository } from '#/cli/env.ts'
-import type { ServiceName, ServicesConfig } from '#/config/types.ts'
+import type { ServiceName, ServicesConfig } from '#/config/service-config.ts'
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 import type { ServiceEnv } from '#/domain/services/service.ts'

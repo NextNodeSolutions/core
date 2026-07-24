@@ -12,11 +12,8 @@ import { injectSeoGuardAssets } from './seo-guard-assets.ts'
 import { smokeCheckWorkers } from './smoke-check.ts'
 
 import type { WranglerRunner } from '#/adapters/wrangler/runner.ts'
-import type {
-	CronJobConfig,
-	ServicesConfig,
-	WorkerServiceConfig,
-} from '#/config/types.ts'
+import type { ServicesConfig } from '#/config/service-config.ts'
+import type { CronJobConfig, WorkerServiceConfig } from '#/config/types.ts'
 import type { WorkersTerraformOutputs } from '#/domain/cloudflare/workers/outputs-env.ts'
 import type { WranglerDocument } from '#/domain/cloudflare/workers/wrangler-document.ts'
 import type { DeployedWorker, DeployResult } from '#/domain/deploy/target.ts'

@@ -5,7 +5,8 @@ import {
 import { buildWorkerVars } from './worker-vars.ts'
 import { buildWranglerConfig } from './wrangler-config.ts'
 
-import type { ServicesConfig, WorkerServiceConfig } from '#/config/types.ts'
+import type { ServicesConfig } from '#/config/service-config.ts'
+import type { WorkerServiceConfig } from '#/config/types.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 import type { WranglerDocument } from './wrangler-document.ts'
 

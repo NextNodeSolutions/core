@@ -4,7 +4,7 @@ import {
 	VICTORIAMETRICS_HOST_PORT,
 } from '#/domain/services/observability.ts'
 
-import type { ObservabilityServiceConfig } from '#/config/types.ts'
+import type { ObservabilityServiceConfig } from '#/config/service-config.ts'
 import type { CaddyUpstream } from '#/domain/caddy/config.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 

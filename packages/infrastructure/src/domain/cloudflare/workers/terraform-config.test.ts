@@ -11,7 +11,7 @@ import type { ServicesConfig } from '#/config/service-config.ts'
 import type { CloudflareWorkersDeployableConfig } from '#/config/types.ts'
 import type { WorkerServiceConfig } from '#/config/types.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
-import type { TerraformMainConfig } from './terraform-config.ts'
+import type { TerraformMainConfig } from './terraform-main-config.ts'
 
 const worker = (
 	url: string,

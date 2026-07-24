@@ -4,7 +4,10 @@ import { array, minLength, pipe, rawTransform, unknown } from 'valibot'
 
 import { runSchema } from '../valibot.ts'
 
-import type { QueueConfig, QueuesServiceConfig } from '#/config/types.ts'
+import type {
+	QueueConfig,
+	QueuesServiceConfig,
+} from '#/config/service-config.ts'
 import type { ValidationResult } from '#/config/validation/result.ts'
 
 // `[[services.queues]]` is a table-array directly under `services`, so smol-toml
