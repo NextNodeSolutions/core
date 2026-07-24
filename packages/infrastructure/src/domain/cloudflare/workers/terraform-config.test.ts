@@ -119,6 +119,7 @@ describe('buildTerraformMainConfig', () => {
 					d1: {
 						account_id: '${var.account_id}',
 						name: 'studiobymina-production-d1',
+						read_replication: { mode: 'disabled' },
 					},
 				},
 				cloudflare_workers_kv_namespace: {
@@ -304,6 +305,7 @@ describe('buildTerraformMainConfig', () => {
 					d1: {
 						account_id: '${var.account_id}',
 						name: 'studiobymina-development-d1',
+						read_replication: { mode: 'disabled' },
 					},
 				},
 				cloudflare_workers_kv_namespace: {
