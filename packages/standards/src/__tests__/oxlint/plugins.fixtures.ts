@@ -105,6 +105,21 @@ export const tagline = 'fast - reliable'
 `,
 	},
 
+	// coding quick-ref \u2014 ASCII lookalikes (curly quotes, NBSP, zero-width)
+	{
+		rule: 'nextnode(no-confusable-chars)',
+		severity: 'error',
+		bad: `export const CATEGORY = 'R\u00e9cit d\u2019\u0153uvre'
+`,
+		// invisible characters are scanned too, here a no-break space
+		edge: `export const LABEL = 'Prix\u00a0: 10 EUR'
+`,
+		edgeExpect: 'fire',
+		// accented letters and ligatures are not lookalikes
+		good: `export const CATEGORY = "R\u00e9cit d'\u0153uvre"
+`,
+	},
+
 	// react RULE 1 \u2014 you do not need useEffect (most of the time)
 	{
 		rule: 'nextnode(no-use-effect)',

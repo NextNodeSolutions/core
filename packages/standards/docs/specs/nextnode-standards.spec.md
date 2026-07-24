@@ -292,15 +292,16 @@ Every mechanizable rule from the `coding`, `javascript`, `typescript` and `react
 
 One rule per file under `plugins/rules/`, aggregated by `plugins/nextnode.js`:
 
-| Rule                | Level | Skill source                                             |
-| ------------------- | ----- | -------------------------------------------------------- |
-| `no-type-assertion` | error | typescript R0 (`as` banned except `as const`)            |
-| `no-enum`           | error | typescript (unions over enums; `declare enum` tolerated) |
-| `no-boolean-params` | error | coding R6 (2+ boolean params)                            |
-| `boolean-naming`    | error | coding R4 (is/has/can/should prefixes, no negated names) |
-| `no-generic-names`  | warn  | coding R4 (data, info, result, item, value, temp, stuff) |
-| `no-em-dash`        | error | coding quick-ref (U+2014 in strings AND comments)        |
-| `no-use-effect`     | warn  | react R1 (every useEffect questioned)                    |
+| Rule                  | Level | Skill source                                                                       |
+| --------------------- | ----- | ---------------------------------------------------------------------------------- |
+| `no-type-assertion`   | error | typescript R0 (`as` banned except `as const`)                                      |
+| `no-enum`             | error | typescript (unions over enums; `declare enum` tolerated)                           |
+| `no-boolean-params`   | error | coding R6 (2+ boolean params)                                                      |
+| `boolean-naming`      | error | coding R4 (is/has/can/should prefixes, no negated names)                           |
+| `no-generic-names`    | warn  | coding R4 (data, info, result, item, value, temp, stuff)                           |
+| `no-em-dash`          | error | coding quick-ref (U+2014 in strings AND comments)                                  |
+| `no-confusable-chars` | error | coding quick-ref (ASCII lookalikes: curly quotes, non-em dashes, NBSP, zero-width) |
+| `no-use-effect`       | warn  | react R1 (every useEffect questioned)                                              |
 
 ### Not mechanizable (stays in skills)
 

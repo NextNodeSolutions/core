@@ -191,7 +191,7 @@ const bindTailPanel = (root: HTMLElement): void => {
 	controls.stopBtn.addEventListener('click', session.stop)
 	controls.clearBtn.addEventListener('click', () => {
 		sink.reset(
-			'<span class="text-base-400">Cleared. Press “Start tail” to resume.</span>',
+			'<span class="text-base-400">Cleared. Press "Start tail" to resume.</span>',
 		)
 	})
 	window.addEventListener('beforeunload', session.stop)

@@ -5,6 +5,8 @@
  * optional trailing semicolon), which all render as the same glyph. Use `-`
  * with spaces or rephrase.
  */
+import { reportSourceMatches } from '../source-scan.js'
+
 const EM_DASH_SOURCE = '\\u2014|\\x26mdash;?|\\x26#0*8212;?|\\x26#[xX]0*2014;?'
 
 export const noEmDash = {
@@ -23,27 +25,11 @@ export const noEmDash = {
 	create(context) {
 		return {
 			Program(node) {
-				const { text } = context.sourceCode
-				const pattern = new RegExp(EM_DASH_SOURCE, 'g')
-
-				let match = pattern.exec(text)
-				while (match !== null) {
-					const { index } = match
-					const before = text.slice(0, index)
-					const line = before.split('\n').length
-					const column = index - (before.lastIndexOf('\n') + 1)
-
-					context.report({
-						node,
-						messageId: 'noEmDash',
-						loc: {
-							start: { line, column },
-							end: { line, column: column + match[0].length },
-						},
-					})
-
-					match = pattern.exec(text)
-				}
+				reportSourceMatches(
+					context,
+					new RegExp(EM_DASH_SOURCE, 'g'),
+					() => ({ node, messageId: 'noEmDash' }),
+				)
 			},
 		}
 	},

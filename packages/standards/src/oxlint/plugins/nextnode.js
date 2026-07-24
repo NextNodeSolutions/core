@@ -6,6 +6,7 @@ import { booleanNaming } from './rules/boolean-naming.js'
 import { componentFilenameMatch } from './rules/component-filename-match.js'
 import { maxProps } from './rules/max-props.js'
 import { noBooleanParams } from './rules/no-boolean-params.js'
+import { noConfusableChars } from './rules/no-confusable-chars.js'
 import { noEmDash } from './rules/no-em-dash.js'
 import { noEmptyObjectTernary } from './rules/no-empty-object-ternary.js'
 import { noEnum } from './rules/no-enum.js'
@@ -32,6 +33,7 @@ const plugin = {
 		'boolean-naming': booleanNaming,
 		'no-generic-names': noGenericNames,
 		'no-em-dash': noEmDash,
+		'no-confusable-chars': noConfusableChars,
 		'no-use-effect': noUseEffect,
 		'max-props': maxProps,
 		'component-filename-match': componentFilenameMatch,

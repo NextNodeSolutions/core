@@ -49,7 +49,7 @@ export function DeploymentTail({
 					))
 				) : (
 					<span className="text-base-400">
-						Press “Start tail” to begin streaming.
+						Press "Start tail" to begin streaming.
 					</span>
 				)}
 			</pre>

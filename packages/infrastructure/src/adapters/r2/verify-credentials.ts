@@ -28,7 +28,7 @@ export type VerifyR2Result =
  * `ListObjectsV2` (max-keys=0) against the target bucket.
  *
  * Returns `{valid:true}` on HTTP 200, `{valid:false, status, body}` on
- * 400–403 (cred rejection: malformed key, bad signature, unauthorized).
+ * 400-403 (cred rejection: malformed key, bad signature, unauthorized).
  * Any other status is treated as an infrastructure error and propagates.
  */
 export async function verifyR2Credentials(
