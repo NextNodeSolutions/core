@@ -1,9 +1,6 @@
-import {
-	commitLabel,
-	EMPTY_VALUE,
-	successRateLabel,
-} from '@/islands/deployments/deploy-styles.ts'
-import { formatRelative } from '@/lib/domain/monitoring/format.ts'
+import { successRateLabel } from '@/islands/deployments/deploy-styles.ts'
+import { deploymentCommitLabel } from '@/lib/domain/cloudflare/deployment-summary.ts'
+import { EMPTY_LABEL, formatRelative } from '@/lib/domain/monitoring/format.ts'
 
 import type { ProjectSummary } from '@/lib/domain/cloudflare/deployment-summary.ts'
 import type { CloudflarePagesProject } from '@/lib/domain/cloudflare/pages-project.ts'
@@ -35,7 +32,7 @@ export function ProjectStatsGrid({
 					Déploiement prod
 				</div>
 				<div className="text-base-900 mt-0.5 font-mono text-[13px]">
-					{current ? commitLabel(current) : EMPTY_VALUE}
+					{current ? deploymentCommitLabel(current) : EMPTY_LABEL}
 				</div>
 			</div>
 			<div>
@@ -49,7 +46,7 @@ export function ProjectStatsGrid({
 				<div className="text-base-900 mt-0.5 text-[13px]">
 					{current
 						? formatRelative(Date.parse(current.createdAt), nowMs)
-						: EMPTY_VALUE}
+						: EMPTY_LABEL}
 				</div>
 			</div>
 			<div>

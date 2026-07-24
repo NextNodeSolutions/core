@@ -1,5 +1,5 @@
-import { commitLabel } from '@/islands/deployments/deploy-styles.ts'
 import { DeployIcon } from '@/islands/deployments/DeployIcon.tsx'
+import { deploymentCommitLabel } from '@/lib/domain/cloudflare/deployment-summary.ts'
 import { formatRelative } from '@/lib/domain/monitoring/format.ts'
 
 import type { ProjectSummary } from '@/lib/domain/cloudflare/deployment-summary.ts'
@@ -26,7 +26,7 @@ export function ProjectCardFooter({
 				<DeployIcon name="branch" size={11} />
 				<span className="truncate">
 					{summary.last
-						? `${commitLabel(summary.last)} · ${formatRelative(Date.parse(summary.last.createdAt), nowMs)}`
+						? `${deploymentCommitLabel(summary.last)} · ${formatRelative(Date.parse(summary.last.createdAt), nowMs)}`
 						: 'aucun déploiement'}
 				</span>
 			</span>
