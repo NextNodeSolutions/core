@@ -1,12 +1,14 @@
 /**
  * Forbid a single-use `const` that only re-reads a property under the same
- * name: `const error = obj.error`, `const error = obj ? obj.error : null`,
- * `const { error } = obj` - each used exactly once. The binding adds no name
- * the access did not already carry (`error` <- `.error`), so inline it:
- * `obj.error`, `obj?.error` for the guarded form. A binding earns its keep
- * when it is read more than once (DRY), when its initializer is impure or
- * computed (a call, arithmetic, a named boolean), or when it renames the
- * property (`const user = obj.currentUser`) - none of those fire here.
+ * name: `const error = obj.error` or `const error = obj ? obj.error : null`,
+ * each used exactly once. The binding adds no name the access did not already
+ * carry (`error` <- `.error`), so inline it: `obj.error`, `obj?.error` for the
+ * guarded form. A binding earns its keep when it is read more than once (DRY),
+ * when its initializer is impure or computed (a call, arithmetic, a named
+ * boolean), or when it renames the property (`const user = obj.currentUser`) -
+ * none of those fire here. Object destructuring is exempt whatever its arity:
+ * `const { active } = Astro.props` states the shape a module consumes, which
+ * the inlined access does not.
  */
 const isNullish = node =>
 	(node.type === 'Literal' && node.value === null) ||
@@ -50,26 +52,7 @@ const guardedMemberLeaf = node => {
 	return node.consequent.property.name
 }
 
-const destructureLeaf = id => {
-	if (id.type !== 'ObjectPattern' || id.properties.length !== 1) return null
-	const [property] = id.properties
-	if (
-		property.type !== 'Property' ||
-		property.computed ||
-		property.key.type !== 'Identifier' ||
-		property.value.type !== 'Identifier'
-	) {
-		return null
-	}
-	if (property.value.name !== property.key.name) return null
-	return property.key.name
-}
-
 const redundantAlias = node => {
-	if (node.id.type === 'ObjectPattern') {
-		if (!node.init || !isSimpleRef(node.init)) return null
-		return destructureLeaf(node.id)
-	}
 	if (node.id.type !== 'Identifier' || !node.init) return null
 	const leaf = memberLeaf(node.init) ?? guardedMemberLeaf(node.init)
 	if (leaf !== node.id.name) return null
