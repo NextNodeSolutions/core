@@ -553,4 +553,33 @@ const { active } = componentProps
 use(active)
 `,
 	},
+
+	// astro - the frontmatter destructuring is the props contract
+	{
+		rule: 'nextnode(astro-props-destructuring)',
+		severity: 'error',
+		ext: 'astro',
+		bad: `---
+const label = \`\${Astro.props.title} - \${Astro.props.subtitle}\`
+---
+<h1>{label}</h1>
+`,
+		// a computed access hides the same contract and fires too
+		edge: `---
+const key = 'title'
+const label = Astro.props[key]
+---
+<h1>{label}</h1>
+`,
+		edgeExpect: 'fire',
+		// destructuring names what the component consumes; a spread forwards
+		// the whole shape and keeps nothing implicit
+		good: `---
+const { title } = Astro.props
+const forwarded = { ...Astro.props }
+---
+<h1>{title}</h1>
+<pre>{JSON.stringify(forwarded)}</pre>
+`,
+	},
 ]

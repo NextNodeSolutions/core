@@ -131,6 +131,7 @@ export default defineConfig({
 		'nextnode/no-single-use-passthrough': 'error',
 		'nextnode/no-undefined-comparison': 'error',
 		'nextnode/no-ternary-spread': 'error',
+		'nextnode/astro-props-destructuring': 'error',
 	},
 	overrides: [
 		{

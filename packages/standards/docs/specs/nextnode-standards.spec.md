@@ -304,6 +304,7 @@ One rule per file under `plugins/rules/`, aggregated by `plugins/nextnode.js`:
 | `no-use-effect`         | warn  | react R1 (every useEffect questioned)                                                           |
 | `no-barrel-file`        | error | architecture (no `export … from` barrels; package entries opt out with a disable comment)       |
 | `no-inline-type-export` | error | fills the `import/consistent-type-specifier-style` gap: oxlint's port ignores export statements |
+| `astro-props-destructuring` | error | astro (props read through `const { x } = Astro.props`, never `Astro.props.x`; spreads exempt) |
 
 ### Not mechanizable (stays in skills)
 
