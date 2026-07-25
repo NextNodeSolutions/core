@@ -2,6 +2,7 @@
  * NextNode custom oxlint plugin - mechanized rules from the coding,
  * typescript and react skills that no native oxlint rule covers.
  */
+import { astroPropsDestructuring } from './rules/astro-props-destructuring.js'
 import { booleanNaming } from './rules/boolean-naming.js'
 import { componentFilenameMatch } from './rules/component-filename-match.js'
 import { maxProps } from './rules/max-props.js'
@@ -50,6 +51,7 @@ const plugin = {
 		'no-single-use-passthrough': noSingleUsePassthrough,
 		'no-undefined-comparison': noUndefinedComparison,
 		'no-ternary-spread': noTernarySpread,
+		'astro-props-destructuring': astroPropsDestructuring,
 	},
 }
 
