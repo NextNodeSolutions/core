@@ -34,12 +34,13 @@ import type {
 import type { GenericSchema } from 'valibot'
 
 // A request path in the TOML: an exact path, or a trailing `*` standing for a
-// prefix. Both firewall families share the grammar, so both share the pattern
-// and the message that explains it.
-const REQUEST_PATH_PATTERN = /^\//
+// prefix. A `*` anywhere else would be emitted as a literal, producing a rule
+// that matches nothing; `"` and `\` would break out of the quoted string the
+// path is interpolated into. Both are rejected here rather than at apply.
+const REQUEST_PATH_PATTERN = /^\/[^*"\\]*\*?$/
 
 const pathEntriesMessage = (prefix: string): string =>
-	`${prefix} entries must start with "/" (an exact path, or a trailing "*" for a prefix)`
+	`${prefix} entries must start with "/" (an exact path, or a trailing "*" for a prefix) and carry no quote or backslash`
 
 const pathArray = (prefix: string): GenericSchema<unknown, string[]> => {
 	const entryMessage = pathEntriesMessage(prefix)
@@ -183,9 +184,8 @@ const rateLimitersSchema = (
 	)
 }
 
-// The four barrier fields a Worker may declare, as valibot entries spliced into
-// the worker service schema. `public_paths` carries no default: absent means "no
-// firewall rule", empty means "every path blocked".
+// `public_paths` carries no default: absent means "no firewall rule", empty
+// means "every path blocked".
 export const workerFirewallFields = (
 	name: string,
 ): {
@@ -228,9 +228,8 @@ function toLimits(parsed: ParsedLimits): WorkerLimitsConfig {
 	}
 }
 
-// snake_case TOML to camelCase config, dropping every key the file did not
-// declare: an absent barrier must stay absent, since the generators read
-// presence (not a default) to decide whether to emit anything.
+// An absent barrier must stay absent: the generators read presence, not a
+// default, to decide whether to emit anything.
 export function toWorkerFirewall(
 	parsed: ParsedWorkerFirewall,
 ): WorkerFirewallDraft {

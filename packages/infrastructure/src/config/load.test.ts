@@ -2409,7 +2409,20 @@ describe('parseConfig', () => {
 			[
 				'a path not starting with a slash',
 				{ paths: ['api/contact'], requests_per_period: 5 },
-				'deploy.services.web.rate_limit.paths entries must start with "/" (an exact path, or a trailing "*" for a prefix)',
+				'deploy.services.web.rate_limit.paths entries must start with "/" (an exact path, or a trailing "*" for a prefix) and carry no quote or backslash',
+			],
+			[
+				'a star anywhere but at the end, which would be emitted literally',
+				{ paths: ['/api/*/send'], requests_per_period: 5 },
+				'deploy.services.web.rate_limit.paths entries must start with "/" (an exact path, or a trailing "*" for a prefix) and carry no quote or backslash',
+			],
+			[
+				'a path carrying a quote, which would break out of the expression',
+				{
+					paths: ['/health" or http.host ne "'],
+					requests_per_period: 5,
+				},
+				'deploy.services.web.rate_limit.paths entries must start with "/" (an exact path, or a trailing "*" for a prefix) and carry no quote or backslash',
 			],
 			[
 				'an unknown HTTP method',
@@ -2431,17 +2444,20 @@ describe('parseConfig', () => {
 			expect(errorsOf(parsed)).toContain(message)
 		})
 
-		it('rejects a public_paths entry not starting with a slash', () => {
-			const parsed = parseConfig(
-				workersConfig({
-					web: { url: 'example.com', public_paths: ['health'] },
-				}),
-			)
+		it.each([['health'], ['/api/*/send'], ['/health" or http.host ne "']])(
+			'rejects the public_paths entry %s',
+			path => {
+				const parsed = parseConfig(
+					workersConfig({
+						web: { url: 'example.com', public_paths: [path] },
+					}),
+				)
 
-			expect(errorsOf(parsed)).toContain(
-				'deploy.services.web.public_paths entries must start with "/" (an exact path, or a trailing "*" for a prefix)',
-			)
-		})
+				expect(errorsOf(parsed)).toContain(
+					'deploy.services.web.public_paths entries must start with "/" (an exact path, or a trailing "*" for a prefix) and carry no quote or backslash',
+				)
+			},
+		)
 
 		it.each([
 			[
