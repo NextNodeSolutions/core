@@ -1,0 +1,12 @@
+{
+	"decisions": {
+		"fusion-t3-t4": { "choice": "deux" },
+		"split-t2": { "choice": "un" },
+		"doc-t7": { "choice": "ticket" },
+		"pr18": { "choice": "ticket" }
+	},
+	"edits": {},
+	"tokens": {},
+	"freeform": "",
+	"approval_mode": "approved"
+}
