@@ -152,12 +152,24 @@ export interface RateLimitRulesetRule extends RulesetRuleCommon {
 	readonly ratelimit: RateLimitParameters
 }
 
-export type RulesetRule = RedirectRulesetRule | RateLimitRulesetRule
+// A plain deny. No `action_parameters`: the Free plan reserves the custom
+// response of a firewall custom rule to Pro and above, and rejects `log`.
+export interface BlockRulesetRule extends RulesetRuleCommon {
+	readonly action: 'block'
+}
+
+export type RulesetRule =
+	| RedirectRulesetRule
+	| RateLimitRulesetRule
+	| BlockRulesetRule
 
 // The phases a generated ruleset may enter. A zone owns ONE entry point per
 // phase, so the label a family emits under and its phase move together; a phase
 // absent from this union is a phase nothing emits.
-export type RulesetPhase = 'http_request_dynamic_redirect' | 'http_ratelimit'
+export type RulesetPhase =
+	| 'http_request_dynamic_redirect'
+	| 'http_ratelimit'
+	| 'http_request_firewall_custom'
 
 export interface RulesetResource {
 	readonly zone_id: string
