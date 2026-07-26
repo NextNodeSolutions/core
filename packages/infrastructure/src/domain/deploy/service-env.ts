@@ -22,10 +22,13 @@ const URL_SCHEME = 'https://'
 
 /**
  * Turn a KEBAB service instance name into its URL env var key:
- * `admin-api` -> `ADMIN_API_URL`. Service names are validated KEBAB
- * identifiers, so this always yields a `^[A-Z_][A-Z0-9_]*$` key.
+ * `admin-api` -> `ADMIN_API_URL`. The KEBAB pattern alone does NOT make the
+ * result a valid identifier - it admits a leading digit (`2fa` -> `2FA_URL`) -
+ * so the workers target validates the derived key at config load
+ * (`config/validation/worker-env-keys.ts`), which is also where a key already
+ * claimed by the infra is rejected.
  */
-function toUrlEnvKey(serviceName: string): string {
+export function toUrlEnvKey(serviceName: string): string {
 	return `${serviceName.toUpperCase().replaceAll('-', '_')}${URL_ENV_SUFFIX}`
 }
 
