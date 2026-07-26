@@ -50,3 +50,20 @@ pick: `.dev.vars`, or the `vars` block of a `wrangler.dev.jsonc`.
 It is an example and nothing more: nothing checks that your actual `.dev.vars`
 matches it, so a key you skip still surfaces as an `undefined` at runtime while
 the generated types promise a `string`.
+
+## Contributing: every generation change needs a commit here
+
+The generation logic lives in `@nextnode-solutions/infrastructure` and is inlined
+into this package's published bundle (it is a devDependency, and `tsdown`
+declares no `external`). Consumers install only this package.
+
+The release pipeline for it triggers on, and analyses, commits touching
+`packages/worker-types/` **only**. So a change written entirely inside
+`packages/infrastructure/` publishes the infrastructure package and never this
+one, and consumers keep the stale generator indefinitely.
+
+Therefore: any change to the generation logic must ship with a commit that
+touches `packages/worker-types/` — extending `src/generate.test.ts` to cover the
+new behaviour is the natural one. That test also runs the generation end-to-end
+against a fixture project, though it resolves the workspace package, not the
+published artifact: it does not prove the bundle re-inlined anything.
