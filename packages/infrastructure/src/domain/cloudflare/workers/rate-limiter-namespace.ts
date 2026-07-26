@@ -3,9 +3,11 @@
 const FNV_OFFSET_BASIS = 2166136261
 const FNV_PRIME = 16777619
 
+const ENCODER = new TextEncoder()
+
 function fnv1a32(namespaceKey: string): number {
 	let hash = FNV_OFFSET_BASIS
-	for (const byte of new TextEncoder().encode(namespaceKey)) {
+	for (const byte of ENCODER.encode(namespaceKey)) {
 		hash ^= byte
 		hash = Math.imul(hash, FNV_PRIME)
 	}

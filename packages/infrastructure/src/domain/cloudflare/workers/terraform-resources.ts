@@ -41,7 +41,6 @@ import type {
 	ZoneDataSource,
 } from './terraform-main-config.ts'
 import type { WorkerRateLimitRule } from './terraform-rate-limit.ts'
-import type { RedirectResources } from './terraform-redirects.ts'
 
 export interface WorkersDerivedResources {
 	readonly projectName: string
@@ -224,7 +223,12 @@ export function buildResourceBlock(
 	if (derived.cdnBuckets.length > 0) {
 		resource.cloudflare_r2_custom_domain = r2CustomDomainResources(derived)
 	}
-	const redirects = redirectResources(derived)
+	const redirects = buildRedirectResources(
+		derived.domain,
+		derived.environment,
+		derived.resolvedDomain,
+		derived.redirectDomains,
+	)
 	const rulesets = mergeRulesetFamilies([
 		redirects.rulesets,
 		buildRateLimitResources(derived.rateLimitRules),
@@ -237,18 +241,4 @@ export function buildResourceBlock(
 		resource.cloudflare_ruleset = rulesets
 	}
 	return resource
-}
-
-const EMPTY_REDIRECT_RESOURCES: RedirectResources = { dns: {}, rulesets: {} }
-
-function redirectResources(
-	derived: WorkersDerivedResources,
-): RedirectResources {
-	if (!derived.redirectDomains.length) return EMPTY_REDIRECT_RESOURCES
-	return buildRedirectResources(
-		derived.domain,
-		derived.environment,
-		derived.resolvedDomain,
-		derived.redirectDomains,
-	)
 }

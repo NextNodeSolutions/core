@@ -3,7 +3,7 @@ import {
 	buildPathsExpression,
 } from './ruleset-expressions.ts'
 import { toTerraformLabel } from './terraform-labels.ts'
-import { MAIN_ZONE_ID_REF } from './terraform-refs.ts'
+import { zoneRuleset } from './terraform-rulesets.ts'
 
 import type { WorkerRateLimitConfig } from '#/config/worker-firewall.ts'
 import type { RulesetResource } from './terraform-main-config.ts'
@@ -37,50 +37,43 @@ function buildExpression(rule: WorkerRateLimitRule): string {
 	return `(${clauses.join(' and ')})`
 }
 
-function rateLimitRuleset(rule: WorkerRateLimitRule): RulesetResource {
-	const label = toTerraformLabel(rule.serviceName)
+function rateLimitRuleset(
+	rule: WorkerRateLimitRule,
+	label: string,
+): RulesetResource {
 	const { requestsPerPeriod, period, mitigationTimeout } = rule.rateLimit
-	return {
-		zone_id: MAIN_ZONE_ID_REF,
-		name: `ratelimit-${label}`,
-		// A zone phase entry point is of kind "zone"; the API rejects "root"
-		// (the account-level kind) on a zone-scoped ruleset.
-		kind: 'zone',
-		phase: 'http_ratelimit',
-		rules: [
-			{
-				ref: `ratelimit_${label}`,
-				description: `Rate limit ${rule.host} to ${requestsPerPeriod} requests per ${period} seconds`,
-				expression: buildExpression(rule),
-				action: 'block',
-				action_parameters: {
-					response: {
-						status_code: TOO_MANY_REQUESTS_STATUS,
-						content_type: 'application/json',
-						content: RATE_LIMITED_BODY,
-					},
-				},
-				ratelimit: {
-					characteristics: [...RATE_LIMIT_CHARACTERISTICS],
-					period,
-					requests_per_period: requestsPerPeriod,
-					mitigation_timeout: mitigationTimeout,
+	return zoneRuleset(`ratelimit-${label}`, 'http_ratelimit', [
+		{
+			ref: `ratelimit_${label}`,
+			description: `Rate limit ${rule.host} to ${requestsPerPeriod} requests per ${period} seconds`,
+			expression: buildExpression(rule),
+			action: 'block',
+			action_parameters: {
+				response: {
+					status_code: TOO_MANY_REQUESTS_STATUS,
+					content_type: 'application/json',
+					content: RATE_LIMITED_BODY,
 				},
 			},
-		],
-	}
+			ratelimit: {
+				characteristics: [...RATE_LIMIT_CHARACTERISTICS],
+				period,
+				requests_per_period: requestsPerPeriod,
+				mitigation_timeout: mitigationTimeout,
+			},
+		},
+	])
 }
 
-// The upstream ceiling family: one ruleset per worker that declares a
-// `rate_limit`, keyed `ratelimit_<worker>`. The defaults were applied when the
-// config was loaded - nothing is defaulted here.
+// The defaults were applied when the config was loaded - nothing is defaulted
+// here.
 export function buildRateLimitResources(
 	rules: ReadonlyArray<WorkerRateLimitRule>,
 ): Record<string, RulesetResource> {
 	const rulesets: Record<string, RulesetResource> = {}
 	for (const rule of rules) {
-		rulesets[`ratelimit_${toTerraformLabel(rule.serviceName)}`] =
-			rateLimitRuleset(rule)
+		const label = toTerraformLabel(rule.serviceName)
+		rulesets[`ratelimit_${label}`] = rateLimitRuleset(rule, label)
 	}
 	return rulesets
 }

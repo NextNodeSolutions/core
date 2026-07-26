@@ -51,73 +51,56 @@ function validateWorkerServiceUrls(
 const FREE_PLAN_RATE_LIMIT_RULES = 1
 const FREE_PLAN_CUSTOM_RULES = 5
 
-// The barriers that become ZONE rules: they match on the host, so a worker with
-// no `url` has no host to match and no rule to emit.
+// A zone rule matches on the host, so a worker declaring one without `url` has
+// no host to match and no rule to emit; and the whole project shares one zone,
+// so the plan ceiling counts the workers declaring the barrier.
 interface ZoneBarrier {
 	readonly field: string
-	readonly declaredBy: (service: WorkerServiceConfig) => boolean
+	readonly isDeclaredBy: (service: WorkerServiceConfig) => boolean
 	readonly ceiling: number
 	readonly ceilingReason: string
 }
 
-const ZONE_BARRIERS: ReadonlyArray<ZoneBarrier> = [
-	{
-		field: 'rate_limit',
-		declaredBy: service => typeof service.rateLimit !== 'undefined',
-		ceiling: FREE_PLAN_RATE_LIMIT_RULES,
-		ceilingReason:
-			'the Cloudflare Free plan allows a single rate limiting rule per zone - keep one',
-	},
-	{
-		field: 'public_paths',
-		declaredBy: service => typeof service.publicPaths !== 'undefined',
-		ceiling: FREE_PLAN_CUSTOM_RULES,
-		ceilingReason:
-			'the Cloudflare Free plan allows five custom rules per zone',
-	},
-]
-
-function hostlessBarrierErrors(
-	barrier: ZoneBarrier,
-	declaring: ReadonlyArray<[string, WorkerServiceConfig]>,
+function zoneBarrierErrors(
+	services: Record<string, WorkerServiceConfig>,
+	{ field, isDeclaredBy, ceiling, ceilingReason }: ZoneBarrier,
 ): string[] {
-	return declaring
+	const declaring = Object.entries(services).filter(([, service]) =>
+		isDeclaredBy(service),
+	)
+	const hostless = declaring
 		.filter(([, service]) => typeof service.url === 'undefined')
 		.map(
 			([name]) =>
-				`deploy.services.${name}.${barrier.field} requires deploy.services.${name}.url - a zone rule matches on the host, and no host is derivable for a worker without url`,
+				`deploy.services.${name}.${field} requires deploy.services.${name}.url - a zone rule matches on the host, and no host is derivable for a worker without url`,
 		)
-}
-
-function ceilingErrors(
-	barrier: ZoneBarrier,
-	declaring: ReadonlyArray<[string, WorkerServiceConfig]>,
-): string[] {
-	if (declaring.length <= barrier.ceiling) return []
+	if (declaring.length <= ceiling) return hostless
 	const names = declaring.map(([name]) => name).join(', ')
 	return [
-		`deploy.services declares ${declaring.length} ${barrier.field} blocks (${names}) but ${barrier.ceilingReason}`,
-	]
-}
-
-function barrierErrors(
-	barrier: ZoneBarrier,
-	declared: ReadonlyArray<[string, WorkerServiceConfig]>,
-): string[] {
-	const declaring = declared.filter(([, service]) =>
-		barrier.declaredBy(service),
-	)
-	return [
-		...hostlessBarrierErrors(barrier, declaring),
-		...ceilingErrors(barrier, declaring),
+		...hostless,
+		`deploy.services declares ${declaring.length} ${field} blocks (${names}) but ${ceilingReason}`,
 	]
 }
 
 function validateZoneBarriers(
 	services: Record<string, WorkerServiceConfig>,
 ): string[] {
-	const declared = Object.entries(services)
-	return ZONE_BARRIERS.flatMap(barrier => barrierErrors(barrier, declared))
+	return [
+		...zoneBarrierErrors(services, {
+			field: 'rate_limit',
+			isDeclaredBy: service => typeof service.rateLimit !== 'undefined',
+			ceiling: FREE_PLAN_RATE_LIMIT_RULES,
+			ceilingReason:
+				'the Cloudflare Free plan allows a single rate limiting rule per zone - keep one',
+		}),
+		...zoneBarrierErrors(services, {
+			field: 'public_paths',
+			isDeclaredBy: service => typeof service.publicPaths !== 'undefined',
+			ceiling: FREE_PLAN_CUSTOM_RULES,
+			ceilingReason:
+				'the Cloudflare Free plan allows five custom rules per zone',
+		}),
+	]
 }
 
 // Fields a VPS deploy carries that a Worker cannot honour: there is no host to

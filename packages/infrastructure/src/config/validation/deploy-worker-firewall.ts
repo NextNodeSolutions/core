@@ -41,14 +41,13 @@ const REQUEST_PATH_PATTERN = /^\//
 const pathEntriesMessage = (prefix: string): string =>
 	`${prefix} entries must start with "/" (an exact path, or a trailing "*" for a prefix)`
 
-const pathArray = (prefix: string): GenericSchema<unknown, string[]> =>
-	array(
-		pipe(
-			string(pathEntriesMessage(prefix)),
-			regex(REQUEST_PATH_PATTERN, pathEntriesMessage(prefix)),
-		),
+const pathArray = (prefix: string): GenericSchema<unknown, string[]> => {
+	const entryMessage = pathEntriesMessage(prefix)
+	return array(
+		pipe(string(entryMessage), regex(REQUEST_PATH_PATTERN, entryMessage)),
 		`${prefix} must be an array of strings`,
 	)
+}
 
 const positiveInteger = (msg: string): GenericSchema<unknown, number> =>
 	pipe(number(msg), integer(msg), minValue(1, msg))

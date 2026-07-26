@@ -3,7 +3,7 @@ import {
 	buildPathsExpression,
 } from './ruleset-expressions.ts'
 import { toTerraformLabel } from './terraform-labels.ts'
-import { MAIN_ZONE_ID_REF } from './terraform-refs.ts'
+import { zoneRuleset } from './terraform-rulesets.ts'
 
 import type {
 	BlockRulesetRule,
@@ -43,9 +43,8 @@ function publicPathsRule(rule: WorkerPublicPathsRule): BlockRulesetRule {
 	}
 }
 
-// The public gate family: every routed worker that declares `public_paths`
-// contributes one rule to the zone's firewall entry point, ordered by service
-// name so the generated config is stable run to run.
+// Rules are ordered by service name: order inside a ruleset is evaluation
+// order, and the generated config must be stable run to run.
 export function buildFirewallResources(
 	rules: ReadonlyArray<WorkerPublicPathsRule>,
 ): Record<string, RulesetResource> {
@@ -54,12 +53,10 @@ export function buildFirewallResources(
 		left.serviceName.localeCompare(right.serviceName),
 	)
 	return {
-		[FIREWALL_LABEL]: {
-			zone_id: MAIN_ZONE_ID_REF,
-			name: 'firewall-public-paths',
-			kind: 'zone',
-			phase: 'http_request_firewall_custom',
-			rules: ordered.map(publicPathsRule),
-		},
+		[FIREWALL_LABEL]: zoneRuleset(
+			'firewall-public-paths',
+			'http_request_firewall_custom',
+			ordered.map(publicPathsRule),
+		),
 	}
 }

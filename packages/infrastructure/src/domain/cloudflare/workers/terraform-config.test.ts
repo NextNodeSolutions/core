@@ -10,6 +10,7 @@ import {
 import type { ServicesConfig } from '#/config/service-config.ts'
 import type { CloudflareWorkersDeployableConfig } from '#/config/types.ts'
 import type { WorkerServiceConfig } from '#/config/types.ts'
+import type { WorkerRateLimitConfig } from '#/config/worker-firewall.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 import type { TerraformMainConfig } from './terraform-main-config.ts'
 
@@ -23,6 +24,16 @@ const worker = (
 	dependsOn: [],
 	entry: 'dist/server/entry.mjs',
 	observability: true,
+	...overrides,
+})
+
+const rateLimit = (
+	overrides: Partial<WorkerRateLimitConfig> = {},
+): WorkerRateLimitConfig => ({
+	paths: ['/api/contact'],
+	requestsPerPeriod: 5,
+	period: 60,
+	mitigationTimeout: 600,
 	...overrides,
 })
 
@@ -382,13 +393,7 @@ describe('buildTerraformMainConfig', () => {
 		const tfConfig = build('example.com', 'production', {
 			workers: {
 				web: worker('example.com', {
-					rateLimit: {
-						paths: ['/api/contact'],
-						methods: ['POST'],
-						requestsPerPeriod: 5,
-						period: 60,
-						mitigationTimeout: 600,
-					},
+					rateLimit: rateLimit({ methods: ['POST'] }),
 				}),
 			},
 		})
@@ -430,12 +435,9 @@ describe('buildTerraformMainConfig', () => {
 		const tfConfig = build('example.com', 'production', {
 			workers: {
 				web: worker('example.com', {
-					rateLimit: {
+					rateLimit: rateLimit({
 						paths: ['/api/contact', '/api/upload/*'],
-						requestsPerPeriod: 5,
-						period: 60,
-						mitigationTimeout: 600,
-					},
+					}),
 				}),
 			},
 		})
@@ -452,12 +454,7 @@ describe('buildTerraformMainConfig', () => {
 		const tfConfig = build('example.com', 'development', {
 			workers: {
 				web: worker('example.com', {
-					rateLimit: {
-						paths: ['/api/contact'],
-						requestsPerPeriod: 5,
-						period: 60,
-						mitigationTimeout: 600,
-					},
+					rateLimit: rateLimit(),
 				}),
 			},
 		})
@@ -470,12 +467,7 @@ describe('buildTerraformMainConfig', () => {
 			redirectDomains: ['studiobymina.fr'],
 			workers: {
 				web: worker('studiobymina.com', {
-					rateLimit: {
-						paths: ['/api/contact'],
-						requestsPerPeriod: 5,
-						period: 60,
-						mitigationTimeout: 600,
-					},
+					rateLimit: rateLimit(),
 				}),
 			},
 		})
@@ -555,12 +547,7 @@ describe('buildTerraformMainConfig', () => {
 			redirectDomains: ['studiobymina.fr'],
 			workers: {
 				web: worker('studiobymina.com', {
-					rateLimit: {
-						paths: ['/api/contact'],
-						requestsPerPeriod: 5,
-						period: 60,
-						mitigationTimeout: 600,
-					},
+					rateLimit: rateLimit(),
 				}),
 				api: worker('api.studiobymina.com', {
 					publicPaths: ['/health'],
