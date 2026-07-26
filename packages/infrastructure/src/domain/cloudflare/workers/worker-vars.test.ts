@@ -52,9 +52,21 @@ const EMPTY_BACKING: WorkersBackingConfig = {
 	cdnBucketAliases: [],
 }
 
+// web + admin routed, api internal - the project every peer-URL expectation
+// below is written against.
+const WEB_WORKER = worker({ url: 'example.com' })
+const ADMIN_WORKER = worker({ url: 'admin.example.com' })
+const API_WORKER = worker()
+const PROJECT_WORKERS: Record<string, WorkerServiceConfig> = {
+	web: WEB_WORKER,
+	admin: ADMIN_WORKER,
+	api: API_WORKER,
+}
+
 const input = (
 	overrides: {
 		service?: WorkerServiceConfig
+		workerServices?: Record<string, WorkerServiceConfig>
 		backing?: WorkersBackingConfig
 		outputs?: WorkersTerraformOutputs
 		environment?: 'production' | 'development'
@@ -65,6 +77,7 @@ const input = (
 	projectDomain: overrides.projectDomain ?? 'example.com',
 	environment: overrides.environment ?? 'production',
 	service: overrides.service ?? worker(),
+	workerServices: overrides.workerServices ?? {},
 	backing: overrides.backing ?? EMPTY_BACKING,
 	outputs: overrides.outputs ?? EMPTY_OUTPUTS,
 	accountId: overrides.accountId ?? 'acct-123',
@@ -81,10 +94,62 @@ describe('buildWorkerVars', () => {
 		).toBe('https://dev.example.com')
 	})
 
-	it('never injects a peer <NAME>_URL - worker-to-worker goes through the service binding, not a URL', () => {
+	it('injects a <NAME>_URL for every routed peer and none for an internal one', () => {
 		expect(
-			buildWorkerVars(input({ service: worker({ url: 'example.com' }) })),
+			buildWorkerVars(
+				input({
+					service: API_WORKER,
+					workerServices: PROJECT_WORKERS,
+				}),
+			),
+		).toEqual({
+			SITE_URL: 'https://example.com',
+			WEB_URL: 'https://example.com',
+			ADMIN_URL: 'https://admin.example.com',
+		})
+	})
+
+	it('resolves peer URLs to the dev hostname in development', () => {
+		expect(
+			buildWorkerVars(
+				input({
+					service: API_WORKER,
+					workerServices: PROJECT_WORKERS,
+					environment: 'development',
+				}),
+			)['ADMIN_URL'],
+		).toBe('https://dev.admin.example.com')
+	})
+
+	it('injects a routed worker its own URL - the block is symmetric', () => {
+		expect(
+			buildWorkerVars(
+				input({
+					service: WEB_WORKER,
+					workerServices: PROJECT_WORKERS,
+				}),
+			)['WEB_URL'],
+		).toBe('https://example.com')
+	})
+
+	it('injects no peer URL when no service declares one', () => {
+		expect(
+			buildWorkerVars(
+				input({ workerServices: { api: worker(), jobs: worker() } }),
+			),
 		).toEqual({ SITE_URL: 'https://example.com' })
+	})
+
+	it('throws when a service name claims the infra-injected SITE_URL', () => {
+		expect(() =>
+			buildWorkerVars(
+				input({
+					workerServices: { site: worker({ url: 'example.com' }) },
+				}),
+			),
+		).toThrow(
+			'env key "SITE_URL" collides between two services on the public channel',
+		)
 	})
 
 	it('injects no backing env for a worker that declares no needs', () => {

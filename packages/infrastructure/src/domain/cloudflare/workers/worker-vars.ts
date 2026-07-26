@@ -1,4 +1,5 @@
 import { computeSiteUrl } from '#/domain/deploy/domain.ts'
+import { buildServiceUrlEnv } from '#/domain/deploy/service-env.ts'
 import { mergeServiceEnvs } from '#/domain/services/service.ts'
 
 import { buildWorkersBackingEnv } from './outputs-env.ts'
@@ -15,6 +16,9 @@ export interface WorkerVarsInput {
 	readonly environment: AppEnvironment
 	// The worker whose vars are built (its `needs` filter the backing env).
 	readonly service: WorkerServiceConfig
+	// EVERY worker of the project, so the peer URL block can be derived. Not
+	// filtered by `needs`: the block is symmetric.
+	readonly workerServices: Readonly<Record<string, WorkerServiceConfig>>
 	readonly backing: WorkersBackingConfig
 	readonly outputs: WorkersTerraformOutputs
 	readonly accountId: string
@@ -45,20 +49,24 @@ function backingForNeeds(
 
 /**
  * Build the public `vars` block injected into one Worker's generated wrangler
- * config. Two disjoint sources:
+ * config. Three disjoint sources:
  *
  *   - the backing env (D1/KV/Queue ids, R2 bucket names + CDN URLs, endpoint)
  *     of the backing services THIS worker declares in `needs` - least-privilege,
  *     never the full backing surface;
+ *   - one `<NAME>_URL` per routed peer, symmetric: every worker of the project
+ *     gets the same block, its own URL included, regardless of `needs`;
  *   - `SITE_URL`, the project's canonical site URL.
  *
  * Disjoint is enforced, not assumed: composition goes through `mergeServiceEnvs`,
  * so a key claimed by two sources throws instead of one silently winning.
  *
- * Worker-to-worker addressing is NOT here: a Worker reaches a sibling only
- * through its service binding (`env.<NAME>`, see `wrangler-config.ts`), never a
- * `<NAME>_URL`. Secrets never travel here either (they go through `wrangler
- * secret bulk`); this block is public and lands in the generated config's `vars`.
+ * Calling a sibling and naming it stay separate concerns: the service binding
+ * (`env.<NAME>`, see `wrangler-config.ts`) remains the ONLY worker-to-worker
+ * call channel, and it is gated by `needs`; `<NAME>_URL` only designates a peer's
+ * public host, which is why obtaining one requires no binding. Secrets never
+ * travel here (they go through `wrangler secret bulk`); this block is public and
+ * lands in the generated config's `vars`.
  */
 export function buildWorkerVars(
 	input: WorkerVarsInput,
@@ -71,6 +79,10 @@ export function buildWorkerVars(
 
 	return mergeServiceEnvs([
 		backingEnv,
+		{
+			public: buildServiceUrlEnv(input.workerServices, input.environment),
+			secret: {},
+		},
 		{
 			public: {
 				SITE_URL: computeSiteUrl(
