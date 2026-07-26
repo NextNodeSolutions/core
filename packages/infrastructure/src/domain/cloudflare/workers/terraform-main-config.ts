@@ -111,10 +111,13 @@ export interface DnsRecordResource {
 	readonly proxied: boolean
 }
 
-export interface RulesetRule {
+interface RulesetRuleCommon {
 	readonly ref: string
 	readonly description: string
 	readonly expression: string
+}
+
+export interface RedirectRulesetRule extends RulesetRuleCommon {
 	readonly action: 'redirect'
 	readonly action_parameters: {
 		readonly from_value: {
@@ -125,11 +128,18 @@ export interface RulesetRule {
 	}
 }
 
+export type RulesetRule = RedirectRulesetRule
+
+// The phases a generated ruleset may enter. A zone owns ONE entry point per
+// phase, so the label a family emits under and its phase move together; a phase
+// absent from this union is a phase nothing emits.
+export type RulesetPhase = 'http_request_dynamic_redirect'
+
 export interface RulesetResource {
 	readonly zone_id: string
 	readonly name: string
 	readonly kind: 'zone'
-	readonly phase: 'http_request_dynamic_redirect'
+	readonly phase: RulesetPhase
 	readonly rules: ReadonlyArray<RulesetRule>
 }
 
