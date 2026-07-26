@@ -8,6 +8,7 @@ import {
 
 import {
 	indexBy,
+	r2BucketLabel,
 	redirectZoneLabel,
 	toTerraformLabel,
 } from './terraform-labels.ts'
@@ -146,7 +147,7 @@ function r2BucketResources(
 	return indexBy(
 		derived.buckets.map(bucket => bucket.name),
 		name => [
-			`r2_${toTerraformLabel(name)}`,
+			r2BucketLabel(name),
 			{
 				account_id: ACCOUNT_ID_REF,
 				name: computeR2BucketName(
@@ -166,7 +167,7 @@ function r2CustomDomainResources(
 	return indexBy(
 		derived.cdnBuckets.map(bucket => bucket.name),
 		name => [
-			`r2_${toTerraformLabel(name)}_cdn`,
+			`${r2BucketLabel(name)}_cdn`,
 			{
 				account_id: ACCOUNT_ID_REF,
 				// Interpolates the bucket resource rather than recomputing its
@@ -174,7 +175,7 @@ function r2CustomDomainResources(
 				// edge. With a literal, both resources are created in the same
 				// wave and the custom-domain POST races the bucket creation
 				// (404 "The specified bucket does not exist").
-				bucket_name: `\${cloudflare_r2_bucket.r2_${toTerraformLabel(name)}.name}`,
+				bucket_name: `\${cloudflare_r2_bucket.${r2BucketLabel(name)}.name}`,
 				domain: computeR2CustomDomainHostname(
 					name,
 					derived.resolvedDomain,

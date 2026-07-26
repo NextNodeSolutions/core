@@ -3,7 +3,7 @@ import {
 	computeR2PublicUrl,
 } from '#/domain/cloudflare/r2/custom-domain.ts'
 
-import { indexBy, toTerraformLabel } from './terraform-labels.ts'
+import { indexBy, r2BucketLabel, toTerraformLabel } from './terraform-labels.ts'
 
 import type { OutputValue } from './terraform-main-config.ts'
 import type { WorkersDerivedResources } from './terraform-resources.ts'
@@ -32,7 +32,7 @@ function r2BucketsOutput(derived: WorkersDerivedResources): OutputValue {
 			derived.buckets.map(bucket => bucket.name),
 			name => [
 				name,
-				`\${cloudflare_r2_bucket.r2_${toTerraformLabel(name)}.id}`,
+				`\${cloudflare_r2_bucket.${r2BucketLabel(name)}.id}`,
 			],
 		),
 	}
