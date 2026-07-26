@@ -1,4 +1,5 @@
 import { computeSiteUrl } from '#/domain/deploy/domain.ts'
+import { mergeServiceEnvs } from '#/domain/services/service.ts'
 
 import { buildWorkersBackingEnv } from './outputs-env.ts'
 
@@ -44,13 +45,15 @@ function backingForNeeds(
 
 /**
  * Build the public `vars` block injected into one Worker's generated wrangler
- * config. Two sources, precedence low-to-high on the (pathological) key
- * collision:
+ * config. Two disjoint sources:
  *
  *   - the backing env (D1/KV/Queue ids, R2 bucket names + CDN URLs, endpoint)
  *     of the backing services THIS worker declares in `needs` - least-privilege,
  *     never the full backing surface;
- *   - `SITE_URL`, the project's canonical site URL, always authoritative.
+ *   - `SITE_URL`, the project's canonical site URL.
+ *
+ * Disjoint is enforced, not assumed: composition goes through `mergeServiceEnvs`,
+ * so a key claimed by two sources throws instead of one silently winning.
  *
  * Worker-to-worker addressing is NOT here: a Worker reaches a sibling only
  * through its service binding (`env.<NAME>`, see `wrangler-config.ts`), never a
@@ -64,10 +67,18 @@ export function buildWorkerVars(
 		input.outputs,
 		input.accountId,
 		backingForNeeds(input.backing, input.service.needs),
-	).public
+	)
 
-	return {
-		...backingEnv,
-		SITE_URL: computeSiteUrl(input.projectDomain, input.environment),
-	}
+	return mergeServiceEnvs([
+		backingEnv,
+		{
+			public: {
+				SITE_URL: computeSiteUrl(
+					input.projectDomain,
+					input.environment,
+				),
+			},
+			secret: {},
+		},
+	]).public
 }
