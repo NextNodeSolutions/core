@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest'
 
 import { loadConfig, parseConfig } from './load.ts'
 
+import type { ParseConfigResult, WorkerServiceConfig } from './types.ts'
+
 const FIXTURES = join(import.meta.dirname, 'fixtures')
 const fixture = (name: string): string => join(FIXTURES, name)
 
@@ -34,6 +36,17 @@ const workersConfig = (
 	if (backingServices) config.services = backingServices
 	return config
 }
+
+const workersOf = (
+	parsed: ParseConfigResult,
+): Readonly<Record<string, WorkerServiceConfig>> => {
+	if (!parsed.ok || parsed.config.deploy === false) return {}
+	if (parsed.config.deploy.target !== 'cloudflare-workers') return {}
+	return parsed.config.deploy.services
+}
+
+const errorsOf = (parsed: ParseConfigResult): ReadonlyArray<string> =>
+	parsed.ok ? [] : parsed.errors
 
 describe('loadConfig', () => {
 	it('loads a minimal valid config with defaults', () => {
@@ -2205,6 +2218,277 @@ describe('parseConfig', () => {
 			expect(parsed.errors).toContain(
 				'deploy.cron job "nightly" service "ghost" must reference a declared [deploy.services.<name>]',
 			)
+		})
+	})
+
+	describe('cloudflare-workers zone firewall', () => {
+		it('loads a rate_limit block with its period and mitigation defaults', () => {
+			const parsed = parseConfig(
+				workersConfig({
+					web: {
+						url: 'example.com',
+						rate_limit: {
+							paths: ['/api/contact'],
+							requests_per_period: 5,
+						},
+					},
+				}),
+			)
+
+			expect(workersOf(parsed)['web']?.rateLimit).toEqual({
+				paths: ['/api/contact'],
+				requestsPerPeriod: 5,
+				period: 60,
+				mitigationTimeout: 600,
+			})
+		})
+
+		it('keeps an explicit period, mitigation_timeout and methods', () => {
+			const parsed = parseConfig(
+				workersConfig({
+					web: {
+						url: 'example.com',
+						rate_limit: {
+							paths: ['/api/contact', '/api/upload/*'],
+							methods: ['POST'],
+							requests_per_period: 5,
+							period: 10,
+							mitigation_timeout: 0,
+						},
+					},
+				}),
+			)
+
+			expect(workersOf(parsed)['web']?.rateLimit).toEqual({
+				paths: ['/api/contact', '/api/upload/*'],
+				methods: ['POST'],
+				requestsPerPeriod: 5,
+				period: 10,
+				mitigationTimeout: 0,
+			})
+		})
+
+		it('loads public_paths verbatim', () => {
+			const parsed = parseConfig(
+				workersConfig({
+					api: {
+						url: 'api.example.com',
+						public_paths: ['/webhooks/*', '/health'],
+					},
+				}),
+			)
+
+			expect(workersOf(parsed)['api']?.publicPaths).toEqual([
+				'/webhooks/*',
+				'/health',
+			])
+		})
+
+		it('accepts an empty public_paths as "no path is public"', () => {
+			const parsed = parseConfig(
+				workersConfig({
+					api: { url: 'api.example.com', public_paths: [] },
+				}),
+			)
+
+			expect(workersOf(parsed)['api']?.publicPaths).toEqual([])
+		})
+
+		it('leaves publicPaths undefined when the field is absent', () => {
+			const parsed = parseConfig(
+				workersConfig({ api: { url: 'api.example.com' } }),
+			)
+
+			expect(workersOf(parsed)['api']?.publicPaths).toBeUndefined()
+		})
+
+		it('loads a limits block field by field', () => {
+			const parsed = parseConfig(
+				workersConfig({
+					api: { url: 'api.example.com', limits: { cpu_ms: 5000 } },
+				}),
+			)
+
+			expect(workersOf(parsed)['api']?.limits).toEqual({ cpuMs: 5000 })
+		})
+
+		it('loads rate_limiters as named binding declarations', () => {
+			const parsed = parseConfig(
+				workersConfig({
+					api: {
+						url: 'api.example.com',
+						rate_limiters: [
+							{ name: 'forms', limit: 5, period: 60 },
+							{ name: 'send-email', limit: 2, period: 10 },
+						],
+					},
+				}),
+			)
+
+			expect(workersOf(parsed)['api']?.rateLimiters).toEqual([
+				{ name: 'forms', limit: 5, period: 60 },
+				{ name: 'send-email', limit: 2, period: 10 },
+			])
+		})
+
+		it('rejects rate_limit on a worker without url', () => {
+			const parsed = parseConfig(
+				workersConfig({
+					api: {
+						rate_limit: {
+							paths: ['/api/contact'],
+							requests_per_period: 5,
+						},
+					},
+				}),
+			)
+
+			expect(errorsOf(parsed)).toContain(
+				'deploy.services.api.rate_limit requires deploy.services.api.url - a zone rule matches on the host, and no host is derivable for a worker without url',
+			)
+		})
+
+		it('rejects public_paths on a worker without url', () => {
+			const parsed = parseConfig(
+				workersConfig({ api: { public_paths: ['/health'] } }),
+			)
+
+			expect(errorsOf(parsed)).toContain(
+				'deploy.services.api.public_paths requires deploy.services.api.url - a zone rule matches on the host, and no host is derivable for a worker without url',
+			)
+		})
+
+		it('rejects a second rate_limit block: the Free plan allows one rule per zone', () => {
+			const rateLimit = { paths: ['/api'], requests_per_period: 5 }
+			const parsed = parseConfig(
+				workersConfig({
+					web: { url: 'example.com', rate_limit: rateLimit },
+					api: { url: 'api.example.com', rate_limit: rateLimit },
+				}),
+			)
+
+			expect(errorsOf(parsed)).toContain(
+				'deploy.services declares 2 rate_limit blocks (web, api) but the Cloudflare Free plan allows a single rate limiting rule per zone - keep one',
+			)
+		})
+
+		it('rejects a sixth public_paths block: the Free plan allows five custom rules per zone', () => {
+			const services = Object.fromEntries(
+				['a', 'b', 'c', 'd', 'e', 'f'].map(name => [
+					name,
+					{ url: `${name}.example.com`, public_paths: ['/health'] },
+				]),
+			)
+			const parsed = parseConfig(workersConfig(services))
+
+			expect(errorsOf(parsed)).toContain(
+				'deploy.services declares 6 public_paths blocks (a, b, c, d, e, f) but the Cloudflare Free plan allows five custom rules per zone',
+			)
+		})
+
+		it.each([
+			[
+				'a period outside the accepted set',
+				{ paths: ['/api'], requests_per_period: 5, period: 45 },
+				'deploy.services.web.rate_limit.period must be one of 10, 60, 120, 300, 600, 3600 seconds',
+			],
+			[
+				'a mitigation_timeout outside the accepted set',
+				{
+					paths: ['/api'],
+					requests_per_period: 5,
+					mitigation_timeout: 45,
+				},
+				'deploy.services.web.rate_limit.mitigation_timeout must be one of 0, 10, 60, 120, 300, 600, 3600, 86400 seconds',
+			],
+			[
+				'an empty paths',
+				{ paths: [], requests_per_period: 5 },
+				'deploy.services.web.rate_limit.paths must declare at least one path',
+			],
+			[
+				'a path not starting with a slash',
+				{ paths: ['api/contact'], requests_per_period: 5 },
+				'deploy.services.web.rate_limit.paths entries must start with "/" (an exact path, or a trailing "*" for a prefix)',
+			],
+			[
+				'an unknown HTTP method',
+				{ paths: ['/api'], methods: ['FETCH'], requests_per_period: 5 },
+				'deploy.services.web.rate_limit.methods entries must be one of GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS',
+			],
+			[
+				'a requests_per_period below one',
+				{ paths: ['/api'], requests_per_period: 0 },
+				'deploy.services.web.rate_limit.requests_per_period must be a positive integer',
+			],
+		])('rejects %s', (_case, rateLimit, message) => {
+			const parsed = parseConfig(
+				workersConfig({
+					web: { url: 'example.com', rate_limit: rateLimit },
+				}),
+			)
+
+			expect(errorsOf(parsed)).toContain(message)
+		})
+
+		it('rejects a public_paths entry not starting with a slash', () => {
+			const parsed = parseConfig(
+				workersConfig({
+					web: { url: 'example.com', public_paths: ['health'] },
+				}),
+			)
+
+			expect(errorsOf(parsed)).toContain(
+				'deploy.services.web.public_paths entries must start with "/" (an exact path, or a trailing "*" for a prefix)',
+			)
+		})
+
+		it.each([
+			[
+				'a non-integer cpu_ms',
+				{ cpu_ms: 1.5 },
+				'deploy.services.web.limits.cpu_ms must be a positive integer',
+			],
+			[
+				'a zero subrequests',
+				{ subrequests: 0 },
+				'deploy.services.web.limits.subrequests must be a positive integer',
+			],
+		])('rejects %s', (_case, limits, message) => {
+			const parsed = parseConfig(
+				workersConfig({ web: { url: 'example.com', limits } }),
+			)
+
+			expect(errorsOf(parsed)).toContain(message)
+		})
+
+		it.each([
+			[
+				'a period other than 10 or 60',
+				[{ name: 'forms', limit: 5, period: 120 }],
+				'deploy.services.web.rate_limiters period must be 10 or 60 seconds (the only periods a Rate Limit binding accepts)',
+			],
+			[
+				'a name that is not a kebab identifier',
+				[{ name: 'Forms_1', limit: 5, period: 60 }],
+				'deploy.services.web.rate_limiters name must be lowercase alphanumeric with dashes only',
+			],
+			[
+				'two limiters sharing a name',
+				[
+					{ name: 'forms', limit: 5, period: 60 },
+					{ name: 'forms', limit: 2, period: 10 },
+				],
+				'deploy.services.web.rate_limiters must not declare two limiters named the same - each name becomes one RL_<NAME> binding',
+			],
+		])('rejects %s', (_case, rateLimiters, message) => {
+			const parsed = parseConfig(
+				workersConfig({
+					web: { url: 'example.com', rate_limiters: rateLimiters },
+				}),
+			)
+
+			expect(errorsOf(parsed)).toContain(message)
 		})
 	})
 
