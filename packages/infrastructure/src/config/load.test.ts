@@ -2258,6 +2258,43 @@ describe('parseConfig', () => {
 			)
 		})
 
+		it('rejects a service name that yields a sibling service binding name', () => {
+			const parsed = parseConfig(
+				workersConfig({
+					web: { url: 'example.com', needs: ['api-url'] },
+					api: { url: 'api.example.com' },
+					'api-url': {},
+				}),
+			)
+
+			expect(parsed.ok).toBe(false)
+			if (parsed.ok) return
+
+			expect(parsed.errors).toContain(
+				'deploy.services.api: the service name yields env key "API_URL", already injected by the infra - rename the service',
+			)
+		})
+
+		it('rejects a service name that yields a backing binding name', () => {
+			const parsed = parseConfig(
+				workersConfig(
+					{
+						web: { url: 'example.com', needs: ['r2'] },
+						'r2-medias': { url: 'medias.example.com' },
+					},
+					{},
+					{ r2: { buckets: [{ name: 'medias-url' }] } },
+				),
+			)
+
+			expect(parsed.ok).toBe(false)
+			if (parsed.ok) return
+
+			expect(parsed.errors).toContain(
+				'deploy.services.r2-medias: the service name yields env key "R2_MEDIAS_URL", already injected by the infra - rename the service',
+			)
+		})
+
 		it('rejects a service name that yields an invalid identifier', () => {
 			const parsed = parseConfig(
 				workersConfig({ '2fa': { url: 'example.com' } }),

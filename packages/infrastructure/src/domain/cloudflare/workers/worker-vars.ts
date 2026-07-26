@@ -2,13 +2,8 @@ import { computeSiteUrl } from '#/domain/deploy/domain.ts'
 import { buildServiceUrlEnv } from '#/domain/deploy/service-env.ts'
 import { mergeServiceEnvs } from '#/domain/services/service.ts'
 
-import {
-	buildWorkersBackingEnv,
-	deriveWorkersBackingConfig,
-	typesPlaceholderOutputs,
-} from './outputs-env.ts'
+import { buildWorkersBackingEnv } from './outputs-env.ts'
 
-import type { ServicesConfig } from '#/config/service-config.ts'
 import type { WorkerServiceConfig } from '#/config/types.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 import type {
@@ -98,43 +93,4 @@ export function buildWorkerVars(
 			secret: {},
 		},
 	]).public
-}
-
-// Value-side stand-ins for a keys-only query: the account id feeds R2_ENDPOINT's
-// value and the domain feeds SITE_URL's, never their keys.
-const KEY_SET_ONLY_ACCOUNT_ID = 'key-set-only'
-const KEY_SET_ONLY_DOMAIN = 'key-set-only.invalid'
-
-/**
- * Every env key the infra itself injects into a worker of this project: SITE_URL
- * and the full backing surface. Derived by asking `buildWorkerVars` - with
- * placeholder values and a worker that needs every declared backing service - so
- * the answer cannot drift from what a deploy actually injects.
- *
- * Peer URLs are deliberately absent: they are what the caller validates against
- * this set (see `config/validation/worker-env-keys.ts`).
- */
-export function infraInjectedEnvKeys(
-	services: ServicesConfig,
-): ReadonlySet<string> {
-	const backing = deriveWorkersBackingConfig(services)
-	return new Set(
-		Object.keys(
-			buildWorkerVars({
-				projectDomain: KEY_SET_ONLY_DOMAIN,
-				environment: 'production',
-				service: {
-					secrets: [],
-					needs: Object.keys(services),
-					dependsOn: [],
-					entry: '',
-					observability: false,
-				},
-				workerServices: {},
-				backing,
-				outputs: typesPlaceholderOutputs(backing),
-				accountId: KEY_SET_ONLY_ACCOUNT_ID,
-			}),
-		),
-	)
 }

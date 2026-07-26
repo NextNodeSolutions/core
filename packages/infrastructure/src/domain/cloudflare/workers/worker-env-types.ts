@@ -1,5 +1,10 @@
-import { stringEnvKeys } from './worker-env-document.ts'
+import {
+	bindingMembers,
+	byCodePoint,
+	stringEnvKeys,
+} from './worker-env-document.ts'
 
+import type { EnvMember } from './worker-env-document.ts'
 import type { WranglerDocument } from './wrangler-document.ts'
 
 const GENERATED_HEADER = [
@@ -7,46 +12,14 @@ const GENERATED_HEADER = [
 	'// Regenerate with `worker-types gen`; source of truth is nextnode.toml.',
 ].join('\n')
 
-interface EnvMember {
-	readonly name: string
-	readonly type: string
-}
-
-function bindingMembers(document: WranglerDocument): ReadonlyArray<EnvMember> {
-	return [
-		...(document.assets
-			? [{ name: document.assets.binding, type: 'Fetcher' }]
-			: []),
-		...(document.services ?? []).map(binding => ({
-			name: binding.binding,
-			type: 'Fetcher',
-		})),
-		...(document.d1_databases ?? []).map(binding => ({
-			name: binding.binding,
-			type: 'D1Database',
-		})),
-		...(document.kv_namespaces ?? []).map(binding => ({
-			name: binding.binding,
-			type: 'KVNamespace',
-		})),
-		...(document.r2_buckets ?? []).map(binding => ({
-			name: binding.binding,
-			type: 'R2Bucket',
-		})),
-		...(document.queues?.producers ?? []).map(binding => ({
-			name: binding.binding,
-			type: 'Queue',
-		})),
-	]
-}
-
 function stringMembers(names: ReadonlyArray<string>): ReadonlyArray<EnvMember> {
 	return names.map(name => ({ name, type: 'string' }))
 }
 
 // Every `env.<key>` a worker reads: typed bindings (from the wrangler document),
-// public vars, and secrets. Deduped (a name cannot span two kinds by
-// construction) and sorted so the emitted file is stable run to run.
+// public vars, and secrets. Sorted so the emitted file is stable, and deduped by
+// name - a binding name that a var also claims is rejected at config load
+// (`config/validation/worker-env-keys.ts`), so the collapse is unreachable here.
 function collectMembers(
 	document: WranglerDocument,
 	secretNames: ReadonlyArray<string>,
@@ -58,7 +31,7 @@ function collectMembers(
 	]) {
 		byName.set(member.name, member)
 	}
-	return [...byName.values()].toSorted((a, b) => a.name.localeCompare(b.name))
+	return [...byName.values()].toSorted((a, b) => byCodePoint(a.name, b.name))
 }
 
 /**

@@ -107,6 +107,9 @@ export function typesPlaceholderOutputs(
 		r2Buckets: fill(backing.bucketAliases),
 		r2CdnUrls: fill(backing.cdnBucketAliases),
 		...(backing.hasD1 && { d1DatabaseId: TYPES_PLACEHOLDER_OUTPUT }),
+		...(backing.hasPlanetscale && {
+			hyperdriveConfigId: TYPES_PLACEHOLDER_OUTPUT,
+		}),
 	}
 }
 

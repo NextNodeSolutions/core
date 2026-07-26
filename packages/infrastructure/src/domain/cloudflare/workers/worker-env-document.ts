@@ -35,11 +35,20 @@ const TYPES_ENVIRONMENT: AppEnvironment = 'production'
 const TYPES_PROJECT_DOMAIN = 'types.invalid'
 const TYPES_ACCOUNT_ID = 'types'
 
+// Code-point order, NOT localeCompare: the generated files are regenerated on
+// every build and one of them is committed, and localeCompare follows the
+// machine's ICU locale (an et_EE contributor sorts Z before T), which would make
+// the file churn between developers.
+export function byCodePoint(a: string, b: string): number {
+	if (a === b) return 0
+	return a < b ? -1 : 1
+}
+
 /**
  * Every `env.<key>` a worker reads that carries a plain string: its public vars
- * and its secret names. Sorted so the generated files are stable run to run, and
- * shared by both renderers so the `.dev.vars.example` cannot list a key the
- * generated `Env` does not type.
+ * and its secret names. Sorted so the generated files are stable across runs AND
+ * machines, and shared by both renderers so the `.dev.vars.example` cannot list a
+ * key the generated `Env` does not type.
  */
 export function stringEnvKeys(
 	document: WranglerDocument,
@@ -47,7 +56,50 @@ export function stringEnvKeys(
 ): ReadonlyArray<string> {
 	return [
 		...new Set([...Object.keys(document.vars ?? {}), ...secretNames]),
-	].toSorted((a, b) => a.localeCompare(b))
+	].toSorted(byCodePoint)
+}
+
+export interface EnvMember {
+	readonly name: string
+	readonly type: string
+}
+
+// Every `env.<key>` bound by the runtime rather than supplied as a string, read
+// off the document so the binding names can never diverge from the deployed
+// config. The single derivation behind both the generated `Env` and the
+// name-reservation rule that keeps a var from shadowing one of these.
+export function bindingMembers(
+	document: WranglerDocument,
+): ReadonlyArray<EnvMember> {
+	return [
+		...(document.assets
+			? [{ name: document.assets.binding, type: 'Fetcher' }]
+			: []),
+		...(document.services ?? []).map(binding => ({
+			name: binding.binding,
+			type: 'Fetcher',
+		})),
+		...(document.d1_databases ?? []).map(binding => ({
+			name: binding.binding,
+			type: 'D1Database',
+		})),
+		...(document.kv_namespaces ?? []).map(binding => ({
+			name: binding.binding,
+			type: 'KVNamespace',
+		})),
+		...(document.r2_buckets ?? []).map(binding => ({
+			name: binding.binding,
+			type: 'R2Bucket',
+		})),
+		...(document.queues?.producers ?? []).map(binding => ({
+			name: binding.binding,
+			type: 'Queue',
+		})),
+		...(document.hyperdrive ?? []).map(binding => ({
+			name: binding.binding,
+			type: 'Hyperdrive',
+		})),
+	]
 }
 
 /**

@@ -130,6 +130,17 @@ describe('renderWorkerEnvTypes', () => {
 		expect(dts).not.toContain('API_URL')
 	})
 
+	it('types the Hyperdrive binding of a worker that needs planetscale', () => {
+		const dts = renderTypes(
+			input({
+				service: service({ needs: ['planetscale'] }),
+				services: { planetscale: {} },
+			}),
+		)
+
+		expect(dts).toContain(member('HYPERDRIVE', 'Hyperdrive'))
+	})
+
 	it('types every backing binding with its Cloudflare type', () => {
 		const dts = renderTypes(
 			input({

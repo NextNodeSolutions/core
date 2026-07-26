@@ -1,4 +1,4 @@
-import { infraInjectedEnvKeys } from '#/domain/cloudflare/workers/worker-vars.ts'
+import { occupiedEnvKeys } from '#/domain/cloudflare/workers/occupied-env-keys.ts'
 import { toUrlEnvKey } from '#/domain/deploy/service-env.ts'
 
 import type { ServicesConfig } from '#/config/service-config.ts'
@@ -39,16 +39,17 @@ export function checkWorkerServiceEnvKeys(
 }
 
 // Every env key a worker already receives from something other than a peer's
-// URL: what the infra injects (asked of the deploy-time composer itself, so the
-// two cannot drift), plus the secret names. The secrets are the union over ALL
-// workers, not the one being checked: the URL block is injected symmetrically,
-// so a key collides as soon as ONE worker declares that secret.
+// URL: what the infra occupies - injected vars AND binding names, asked of the
+// deploy-time builders themselves so the two cannot drift - plus the secret
+// names. The secrets are the union over ALL workers, not the one being checked:
+// the URL block is injected symmetrically, so a key collides as soon as ONE
+// worker declares that secret.
 function reservedEnvKeys(
 	workerServices: Readonly<Record<string, WorkerServiceConfig>>,
 	services: ServicesConfig,
 ): ReadonlySet<string> {
 	return new Set([
-		...infraInjectedEnvKeys(services),
+		...occupiedEnvKeys(services, workerServices),
 		...Object.values(workerServices).flatMap(service => service.secrets),
 	])
 }
