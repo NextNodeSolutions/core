@@ -378,6 +378,17 @@ describe('buildTerraformMainConfig', () => {
 		})
 	})
 
+	it('prefixes every ruleset label with its family so two families cannot collide', () => {
+		const tfConfig = build('studiobymina.com', 'production', {
+			redirectDomains: ['studiobymina.fr'],
+			workers: FULL_WORKERS,
+		})
+
+		expect(
+			Object.keys(tfConfig.resource?.cloudflare_ruleset ?? {}),
+		).toEqual(['redirect_studiobymina_fr'])
+	})
+
 	it('never emits a cloudflare_zone resource - the zone is always a data lookup', () => {
 		const tfConfig = build('studiobymina.com', 'production', {
 			redirectDomains: ['studiobymina.fr'],

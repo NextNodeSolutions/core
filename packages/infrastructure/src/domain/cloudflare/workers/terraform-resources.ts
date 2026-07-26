@@ -18,6 +18,7 @@ import {
 } from './terraform-planetscale-resources.ts'
 import { buildRedirectResources } from './terraform-redirects.ts'
 import { ACCOUNT_ID_REF } from './terraform-refs.ts'
+import { mergeRulesetFamilies } from './terraform-rulesets.ts'
 
 import type { R2BucketConfig } from '#/config/service-config.ts'
 import type { CloudflareWorkersDeployableConfig } from '#/config/types.ts'
@@ -31,6 +32,7 @@ import type {
 	TerraformResourceDraft,
 	ZoneDataSource,
 } from './terraform-main-config.ts'
+import type { RedirectResources } from './terraform-redirects.ts'
 
 const MAIN_ZONE_LABEL = 'zone_main'
 const MAIN_ZONE_ID_REF = '${data.cloudflare_zone.zone_main.id}'
@@ -211,15 +213,27 @@ export function buildResourceBlock(
 	if (derived.cdnBuckets.length > 0) {
 		resource.cloudflare_r2_custom_domain = r2CustomDomainResources(derived)
 	}
-	if (derived.redirectDomains.length > 0) {
-		const { dns, rulesets } = buildRedirectResources(
-			derived.domain,
-			derived.environment,
-			derived.resolvedDomain,
-			derived.redirectDomains,
-		)
-		resource.cloudflare_dns_record = dns
+	const redirects = redirectResources(derived)
+	const rulesets = mergeRulesetFamilies([redirects.rulesets])
+	if (Object.keys(redirects.dns).length > 0) {
+		resource.cloudflare_dns_record = redirects.dns
+	}
+	if (Object.keys(rulesets).length > 0) {
 		resource.cloudflare_ruleset = rulesets
 	}
 	return resource
+}
+
+const EMPTY_REDIRECT_RESOURCES: RedirectResources = { dns: {}, rulesets: {} }
+
+function redirectResources(
+	derived: WorkersDerivedResources,
+): RedirectResources {
+	if (!derived.redirectDomains.length) return EMPTY_REDIRECT_RESOURCES
+	return buildRedirectResources(
+		derived.domain,
+		derived.environment,
+		derived.resolvedDomain,
+		derived.redirectDomains,
+	)
 }
