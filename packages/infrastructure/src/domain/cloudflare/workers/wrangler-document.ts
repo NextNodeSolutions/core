@@ -15,6 +15,16 @@ export const DEFAULT_WORKERS_COMPATIBILITY_DATE = '2026-06-01'
 export const WORKERS_COMPATIBILITY_FLAGS = ['nodejs_compat'] as const
 
 /**
+ * The per-invocation ceilings every generated config carries. They bound the
+ * COST of one invocation (the zone rules bound their number): a runaway loop
+ * dies at `cpu_ms`, an uncontrolled fan-out at `subrequests`. Held by the infra
+ * so no project has to spell them; a service overrides either through
+ * `[deploy.services.<name>.limits]`.
+ */
+export const DEFAULT_WORKER_CPU_MS = 1000
+export const DEFAULT_WORKER_SUBREQUESTS = 50
+
+/**
  * The binding a Worker reads its static-asset fetcher under (`env.ASSETS`). Set
  * whenever the service ships assets (the @astrojs/cloudflare `server`/`client`
  * convention, or the historic `_worker.js/` one).
@@ -120,6 +130,13 @@ export interface WranglerObservability {
 	readonly enabled: boolean
 }
 
+// Per-invocation ceilings. Always emitted so the bound is explicit in the
+// generated config rather than left to wrangler's own default.
+export interface WranglerLimits {
+	readonly cpu_ms: number
+	readonly subrequests: number
+}
+
 /**
  * The wrangler configuration document (JSON) generated per service and written
  * to an ephemeral file for `wrangler deploy --config`. Optional keys are omitted
@@ -149,4 +166,7 @@ export interface WranglerDocument {
 	// Always emitted so Workers Logs are on by default; a service sets
 	// `observability = false` in nextnode.toml to opt out.
 	readonly observability: WranglerObservability
+	// Always emitted: an invocation with no ceiling has no upper bound on what
+	// it can spend. Overridden field by field through `[deploy.services.*.limits]`.
+	readonly limits: WranglerLimits
 }
