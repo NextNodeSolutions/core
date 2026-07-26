@@ -27,7 +27,10 @@ export function computeRateLimiterNamespaceId(
 	workerName: string,
 	limiterName: string,
 ): string {
+	// Joined on a character no kebab identifier may carry: with a dash, worker
+	// `api` + limiter `forms-v2` and worker `api-forms` + limiter `v2` would
+	// hash the same key and silently share one counter.
 	return String(
-		fnv1a32(`${projectName}-${environment}-${workerName}-${limiterName}`),
+		fnv1a32([projectName, environment, workerName, limiterName].join('/')),
 	)
 }

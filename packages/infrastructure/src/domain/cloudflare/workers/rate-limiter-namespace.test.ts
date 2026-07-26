@@ -3,10 +3,28 @@ import { describe, expect, it } from 'vitest'
 import { computeRateLimiterNamespaceId } from './rate-limiter-namespace.ts'
 
 describe('computeRateLimiterNamespaceId', () => {
-	it('pins the FNV-1a hash of <project>-<environment>-<worker>-<limiter>', () => {
+	it('pins the FNV-1a hash of project/environment/worker/limiter', () => {
 		expect(
 			computeRateLimiterNamespaceId('proj', 'production', 'api', 'forms'),
-		).toBe('2206811365')
+		).toBe('3552928083')
+	})
+
+	it('separates two limiters whose dash-joined names would read the same', () => {
+		expect(
+			computeRateLimiterNamespaceId(
+				'proj',
+				'production',
+				'api',
+				'forms-v2',
+			),
+		).not.toBe(
+			computeRateLimiterNamespaceId(
+				'proj',
+				'production',
+				'api-forms',
+				'v2',
+			),
+		)
 	})
 
 	it('returns the same id for the same inputs', () => {
