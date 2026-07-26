@@ -2,6 +2,7 @@ import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
 
 import { deriveWorkerAssetsDirectory } from './assets-directory.ts'
 import { deriveWorkersBackingConfig } from './outputs-env.ts'
+import { computeRateLimiterNamespaceId } from './rate-limiter-namespace.ts'
 import { deriveBoundSiblings } from './service-bindings.ts'
 import { computeWorkerScriptName } from './worker-name.ts'
 import {
@@ -28,6 +29,7 @@ import type {
 	WranglerLimits,
 	WranglerQueueProducer,
 	WranglerR2Bucket,
+	WranglerRateLimit,
 	WranglerRoute,
 	WranglerServiceBinding,
 } from './wrangler-document.ts'
@@ -204,6 +206,23 @@ function serviceBindings(
 	}))
 }
 
+function rateLimiters(
+	input: WranglerConfigInput,
+): ReadonlyArray<WranglerRateLimit> | undefined {
+	const declared = input.service.rateLimiters
+	if (!declared?.length) return undefined
+	return declared.map(limiter => ({
+		name: `RL_${toBindingName(limiter.name)}`,
+		namespace_id: computeRateLimiterNamespaceId(
+			input.projectName,
+			input.environment,
+			input.serviceName,
+			limiter.name,
+		),
+		simple: { limit: limiter.limit, period: limiter.period },
+	}))
+}
+
 function workerLimits(service: WorkerServiceConfig): WranglerLimits {
 	return {
 		cpu_ms: service.limits?.cpuMs ?? DEFAULT_WORKER_CPU_MS,
@@ -235,6 +254,7 @@ export function buildWranglerConfig(
 	const kv = kvNamespaces(input, backing)
 	const r2 = r2Buckets(input, backing)
 	const queues = queueProducers(input, backing)
+	const limiters = rateLimiters(input)
 
 	const document: WranglerDocumentDraft = {
 		name: computeWorkerScriptName(
@@ -258,6 +278,7 @@ export function buildWranglerConfig(
 	if (kv) document.kv_namespaces = kv
 	if (r2) document.r2_buckets = r2
 	if (queues) document.queues = { producers: queues }
+	if (limiters) document.ratelimits = limiters
 	if (crons.length > 0) document.triggers = { crons }
 	return document
 }

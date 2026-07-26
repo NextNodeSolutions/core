@@ -114,6 +114,16 @@ export interface WranglerHyperdrive {
 	readonly id: string
 }
 
+// A Rate Limit binding: `env.<name>` exposes a limiter counting `limit` hits
+// per `period` seconds under whatever key the Worker code passes. It runs
+// INSIDE the Worker, so the request is already billed when it rejects - it
+// protects what sits behind the Worker, never the Worker's own bill.
+export interface WranglerRateLimit {
+	readonly name: string
+	readonly namespace_id: string
+	readonly simple: { readonly limit: number; readonly period: number }
+}
+
 export interface WranglerQueues {
 	readonly producers: ReadonlyArray<WranglerQueueProducer>
 }
@@ -162,6 +172,7 @@ export interface WranglerDocument {
 	readonly r2_buckets?: ReadonlyArray<WranglerR2Bucket>
 	readonly hyperdrive?: ReadonlyArray<WranglerHyperdrive>
 	readonly queues?: WranglerQueues
+	readonly ratelimits?: ReadonlyArray<WranglerRateLimit>
 	readonly triggers?: WranglerTriggers
 	// Always emitted so Workers Logs are on by default; a service sets
 	// `observability = false` in nextnode.toml to opt out.
