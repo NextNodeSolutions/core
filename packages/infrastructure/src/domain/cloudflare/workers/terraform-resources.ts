@@ -169,11 +169,12 @@ function r2CustomDomainResources(
 			`r2_${toTerraformLabel(name)}_cdn`,
 			{
 				account_id: ACCOUNT_ID_REF,
-				bucket_name: computeR2BucketName(
-					derived.projectName,
-					derived.environment,
-					name,
-				),
+				// Interpolates the bucket resource rather than recomputing its
+				// name: the reference is what gives Terraform the dependency
+				// edge. With a literal, both resources are created in the same
+				// wave and the custom-domain POST races the bucket creation
+				// (404 "The specified bucket does not exist").
+				bucket_name: `\${cloudflare_r2_bucket.r2_${toTerraformLabel(name)}.name}`,
 				domain: computeR2CustomDomainHostname(
 					name,
 					derived.resolvedDomain,
