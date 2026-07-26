@@ -16,8 +16,13 @@ import {
 	buildHyperdriveConfig,
 	buildPlanetscaleBranchRole,
 } from './terraform-planetscale-resources.ts'
+import { buildRateLimitResources } from './terraform-rate-limit.ts'
 import { buildRedirectResources } from './terraform-redirects.ts'
-import { ACCOUNT_ID_REF } from './terraform-refs.ts'
+import {
+	ACCOUNT_ID_REF,
+	MAIN_ZONE_ID_REF,
+	MAIN_ZONE_LABEL,
+} from './terraform-refs.ts'
 import { mergeRulesetFamilies } from './terraform-rulesets.ts'
 
 import type { R2BucketConfig } from '#/config/service-config.ts'
@@ -32,10 +37,8 @@ import type {
 	TerraformResourceDraft,
 	ZoneDataSource,
 } from './terraform-main-config.ts'
+import type { WorkerRateLimitRule } from './terraform-rate-limit.ts'
 import type { RedirectResources } from './terraform-redirects.ts'
-
-const MAIN_ZONE_LABEL = 'zone_main'
-const MAIN_ZONE_ID_REF = '${data.cloudflare_zone.zone_main.id}'
 
 export interface WorkersDerivedResources {
 	readonly projectName: string
@@ -49,7 +52,31 @@ export interface WorkersDerivedResources {
 	readonly hasD1: boolean
 	readonly hasPlanetscale: boolean
 	readonly redirectDomains: ReadonlyArray<string>
+	readonly rateLimitRules: ReadonlyArray<WorkerRateLimitRule>
 	readonly hasAccountResource: boolean
+}
+
+// A zone owns ONE ruleset entry point per phase, so dev and prod workspaces
+// would overwrite each other's rules if both emitted this family - hence
+// production only, the same reason the Redirect Rules are production only.
+function deriveRateLimitRules(
+	config: CloudflareWorkersDeployableConfig,
+	environment: AppEnvironment,
+): ReadonlyArray<WorkerRateLimitRule> {
+	if (environment !== 'production') return []
+	return Object.entries(config.deploy.services).flatMap(
+		([serviceName, service]) => {
+			const { url, rateLimit } = service
+			if (!rateLimit || typeof url === 'undefined') return []
+			return [
+				{
+					serviceName,
+					host: resolveDeployDomain(url, environment),
+					rateLimit,
+				},
+			]
+		},
+	)
 }
 
 export function deriveWorkersResources(
@@ -84,6 +111,7 @@ export function deriveWorkersResources(
 		// omitted in development.
 		redirectDomains:
 			environment === 'production' ? config.project.redirectDomains : [],
+		rateLimitRules: deriveRateLimitRules(config, environment),
 		hasAccountResource:
 			hasD1 ||
 			hasPlanetscale ||
@@ -214,7 +242,10 @@ export function buildResourceBlock(
 		resource.cloudflare_r2_custom_domain = r2CustomDomainResources(derived)
 	}
 	const redirects = redirectResources(derived)
-	const rulesets = mergeRulesetFamilies([redirects.rulesets])
+	const rulesets = mergeRulesetFamilies([
+		redirects.rulesets,
+		buildRateLimitResources(derived.rateLimitRules),
+	])
 	if (Object.keys(redirects.dns).length > 0) {
 		resource.cloudflare_dns_record = redirects.dns
 	}

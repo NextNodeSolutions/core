@@ -378,6 +378,113 @@ describe('buildTerraformMainConfig', () => {
 		})
 	})
 
+	it('emits the upstream rate limiting ruleset for a routed worker', () => {
+		const tfConfig = build('example.com', 'production', {
+			workers: {
+				web: worker('example.com', {
+					rateLimit: {
+						paths: ['/api/contact'],
+						methods: ['POST'],
+						requestsPerPeriod: 5,
+						period: 60,
+						mitigationTimeout: 600,
+					},
+				}),
+			},
+		})
+
+		expect(
+			tfConfig.resource?.cloudflare_ruleset?.['ratelimit_web'],
+		).toEqual({
+			zone_id: '${data.cloudflare_zone.zone_main.id}',
+			name: 'ratelimit-web',
+			kind: 'zone',
+			phase: 'http_ratelimit',
+			rules: [
+				{
+					ref: 'ratelimit_web',
+					description:
+						'Rate limit example.com to 5 requests per 60 seconds',
+					expression:
+						'(http.host eq "example.com" and (http.request.uri.path eq "/api/contact") and http.request.method in {"POST"})',
+					action: 'block',
+					action_parameters: {
+						response: {
+							status_code: 429,
+							content_type: 'application/json',
+							content: '{"error":"rate_limited"}',
+						},
+					},
+					ratelimit: {
+						characteristics: ['ip.src', 'cf.colo.id'],
+						period: 60,
+						requests_per_period: 5,
+						mitigation_timeout: 600,
+					},
+				},
+			],
+		})
+	})
+
+	it('joins the declared paths with or and turns a trailing star into a prefix match', () => {
+		const tfConfig = build('example.com', 'production', {
+			workers: {
+				web: worker('example.com', {
+					rateLimit: {
+						paths: ['/api/contact', '/api/upload/*'],
+						requestsPerPeriod: 5,
+						period: 60,
+						mitigationTimeout: 600,
+					},
+				}),
+			},
+		})
+
+		expect(
+			tfConfig.resource?.cloudflare_ruleset?.['ratelimit_web']?.rules[0]
+				?.expression,
+		).toBe(
+			'(http.host eq "example.com" and (http.request.uri.path eq "/api/contact" or starts_with(http.request.uri.path, "/api/upload/")))',
+		)
+	})
+
+	it('omits the rate limiting ruleset in development, where the zone entry point is shared', () => {
+		const tfConfig = build('example.com', 'development', {
+			workers: {
+				web: worker('example.com', {
+					rateLimit: {
+						paths: ['/api/contact'],
+						requestsPerPeriod: 5,
+						period: 60,
+						mitigationTimeout: 600,
+					},
+				}),
+			},
+		})
+
+		expect(tfConfig.resource?.cloudflare_ruleset).toBeUndefined()
+	})
+
+	it('keeps the redirect and rate limiting families side by side in production', () => {
+		const tfConfig = build('studiobymina.com', 'production', {
+			redirectDomains: ['studiobymina.fr'],
+			workers: {
+				web: worker('studiobymina.com', {
+					rateLimit: {
+						paths: ['/api/contact'],
+						requestsPerPeriod: 5,
+						period: 60,
+						mitigationTimeout: 600,
+					},
+				}),
+			},
+		})
+
+		expect(
+			Object.keys(tfConfig.resource?.cloudflare_ruleset ?? {}).toSorted(),
+		).toEqual(['ratelimit_web', 'redirect_studiobymina_fr'])
+	})
+
 	it('prefixes every ruleset label with its family so two families cannot collide', () => {
 		const tfConfig = build('studiobymina.com', 'production', {
 			redirectDomains: ['studiobymina.fr'],
