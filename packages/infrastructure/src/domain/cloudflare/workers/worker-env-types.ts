@@ -16,9 +16,11 @@ export interface WorkerEnvTypesInput {
 	// The [services.*] backing block; bindings/vars are filtered per service by
 	// its own `needs`, exactly as the deployed wrangler config filters them.
 	readonly services: ServicesConfig
-	// Every declared worker name, so a sibling listed in `needs` resolves to a
-	// service binding (`Fetcher`) and not a backing binding.
-	readonly serviceNames: ReadonlyArray<string>
+	// Every worker of the project. Its keys resolve a sibling listed in `needs`
+	// to a service binding (`Fetcher`) rather than a backing binding, and its
+	// entries carry the `url`s the peer URL block derives from - so the generated
+	// `Env` types a `<NAME>_URL` for a peer this worker never binds.
+	readonly workerServices: Readonly<Record<string, WorkerServiceConfig>>
 	// The secret NAMES this worker receives (already expanded: the GLOBAL
 	// `[deploy].secrets` pool folded into the service's own). Typed `string`.
 	readonly secretNames: ReadonlyArray<string>
@@ -119,11 +121,12 @@ export function renderWorkerEnvTypes(input: WorkerEnvTypesInput): string {
 		services: input.services,
 		outputs,
 		cron: [],
-		serviceNames: input.serviceNames,
+		serviceNames: Object.keys(input.workerServices),
 		vars: buildWorkerVars({
 			projectDomain: TYPES_PROJECT_DOMAIN,
 			environment: TYPES_ENVIRONMENT,
 			service: input.service,
+			workerServices: input.workerServices,
 			backing,
 			outputs,
 			accountId: TYPES_ACCOUNT_ID,

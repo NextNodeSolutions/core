@@ -30,7 +30,7 @@ const input = (
 	serviceName: 'web',
 	service: service(),
 	services: {},
-	serviceNames: ['web'],
+	workerServices: { web: service() },
 	secretNames: [],
 	...overrides,
 })
@@ -93,7 +93,7 @@ describe('renderWorkerEnvTypes', () => {
 			input({
 				serviceName: 'web',
 				service: service({ needs: ['api'] }),
-				serviceNames: ['web', 'api'],
+				workerServices: { web: service(), api: service() },
 			}),
 		)
 
@@ -105,12 +105,29 @@ describe('renderWorkerEnvTypes', () => {
 			input({
 				serviceName: 'web',
 				service: service({ needs: ['web', 'ghost'] }),
-				serviceNames: ['web', 'api'],
+				workerServices: { web: service(), api: service() },
 			}),
 		)
 
 		expect(dts).not.toContain(member('WEB', 'Fetcher'))
 		expect(dts).not.toContain('GHOST')
+	})
+
+	it('types a <NAME>_URL for every routed peer, declared in needs or not', () => {
+		const dts = renderWorkerEnvTypes(
+			input({
+				serviceName: 'api',
+				workerServices: {
+					web: service({ url: 'example.com' }),
+					admin: service({ url: 'admin.example.com' }),
+					api: service(),
+				},
+			}),
+		)
+
+		expect(dts).toContain(member('WEB_URL', 'string'))
+		expect(dts).toContain(member('ADMIN_URL', 'string'))
+		expect(dts).not.toContain('API_URL')
 	})
 
 	it('types every backing binding with its Cloudflare type', () => {
@@ -165,7 +182,7 @@ describe('renderWorkerEnvTypes', () => {
 		const dts = renderWorkerEnvTypes(
 			input({
 				service: service({ needs: ['api'] }),
-				serviceNames: ['web', 'api'],
+				workerServices: { web: service(), api: service() },
 				secretNames: ['STRIPE_KEY'],
 			}),
 		)
