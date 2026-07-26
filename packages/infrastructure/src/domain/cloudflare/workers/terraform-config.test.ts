@@ -485,6 +485,98 @@ describe('buildTerraformMainConfig', () => {
 		).toEqual(['ratelimit_web', 'redirect_studiobymina_fr'])
 	})
 
+	it('blocks everything outside the declared public paths of a routed worker', () => {
+		const tfConfig = build('example.com', 'production', {
+			workers: {
+				api: worker('api.example.com', {
+					publicPaths: ['/webhooks/*', '/health'],
+				}),
+			},
+		})
+
+		expect(
+			tfConfig.resource?.cloudflare_ruleset?.['firewall_public_paths'],
+		).toEqual({
+			zone_id: '${data.cloudflare_zone.zone_main.id}',
+			name: 'firewall-public-paths',
+			kind: 'zone',
+			phase: 'http_request_firewall_custom',
+			rules: [
+				{
+					ref: 'firewall_api',
+					description:
+						'Block every path of api.example.com but /webhooks/*, /health',
+					expression:
+						'(http.host eq "api.example.com" and not (starts_with(http.request.uri.path, "/webhooks/") or http.request.uri.path eq "/health"))',
+					action: 'block',
+				},
+			],
+		})
+	})
+
+	it('blocks the whole host when public_paths is empty', () => {
+		const tfConfig = build('example.com', 'production', {
+			workers: { api: worker('api.example.com', { publicPaths: [] }) },
+		})
+
+		expect(
+			tfConfig.resource?.cloudflare_ruleset?.['firewall_public_paths']
+				?.rules[0]?.expression,
+		).toBe('(http.host eq "api.example.com")')
+	})
+
+	it('gathers every worker rule in the single zone entry point, ordered by service name', () => {
+		const tfConfig = build('example.com', 'production', {
+			workers: {
+				web: worker('example.com', { publicPaths: ['/'] }),
+				api: worker('api.example.com', { publicPaths: ['/health'] }),
+			},
+		})
+
+		expect(
+			tfConfig.resource?.cloudflare_ruleset?.[
+				'firewall_public_paths'
+			]?.rules.map(rule => rule.ref),
+		).toEqual(['firewall_api', 'firewall_web'])
+	})
+
+	it('omits the firewall ruleset in development', () => {
+		const tfConfig = build('example.com', 'development', {
+			workers: {
+				api: worker('api.example.com', { publicPaths: ['/health'] }),
+			},
+		})
+
+		expect(tfConfig.resource?.cloudflare_ruleset).toBeUndefined()
+	})
+
+	it('keeps the redirect, rate limiting and firewall families side by side', () => {
+		const tfConfig = build('studiobymina.com', 'production', {
+			redirectDomains: ['studiobymina.fr'],
+			workers: {
+				web: worker('studiobymina.com', {
+					rateLimit: {
+						paths: ['/api/contact'],
+						requestsPerPeriod: 5,
+						period: 60,
+						mitigationTimeout: 600,
+					},
+				}),
+				api: worker('api.studiobymina.com', {
+					publicPaths: ['/health'],
+				}),
+			},
+		})
+
+		expect(
+			Object.keys(tfConfig.resource?.cloudflare_ruleset ?? {}).toSorted(),
+		).toEqual([
+			'firewall_public_paths',
+			'ratelimit_web',
+			'redirect_studiobymina_fr',
+		])
+	})
+
 	it('prefixes every ruleset label with its family so two families cannot collide', () => {
 		const tfConfig = build('studiobymina.com', 'production', {
 			redirectDomains: ['studiobymina.fr'],
