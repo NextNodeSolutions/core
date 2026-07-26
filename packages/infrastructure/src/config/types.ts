@@ -5,6 +5,11 @@ import {
 } from './service-config.ts'
 
 import type { ServicesConfig } from './service-config.ts'
+import type {
+	WorkerLimitsConfig,
+	WorkerRateLimitConfig,
+	WorkerRateLimiterConfig,
+} from './worker-firewall.ts'
 
 export interface NextNodeConfig {
 	readonly project: ProjectSection
@@ -269,8 +274,9 @@ export interface CloudflarePagesDeploySection extends BaseDeploySection {
 // A single Worker declared under [deploy.services.<name>] for the
 // cloudflare-workers target. A Worker is not a container - no port, image
 // source, or build args - so the shape is the runtime-wiring subset plus the
-// bundle `entry` wrangler deploys. The strict field-level validation (rejecting
-// container-only fields, custom entry/cron) lands in US-1.2.
+// bundle `entry` wrangler deploys, plus the four barriers a project declares
+// around it. `publicPaths` distinguishes absent (no firewall rule emitted) from
+// empty (every path blocked), so it stays optional rather than defaulting.
 export interface WorkerServiceConfig {
 	readonly url?: string
 	readonly secrets: ReadonlyArray<string>
@@ -278,6 +284,10 @@ export interface WorkerServiceConfig {
 	readonly dependsOn: ReadonlyArray<string>
 	readonly entry: string
 	readonly observability: boolean
+	readonly rateLimit?: WorkerRateLimitConfig
+	readonly publicPaths?: ReadonlyArray<string>
+	readonly limits?: WorkerLimitsConfig
+	readonly rateLimiters?: ReadonlyArray<WorkerRateLimiterConfig>
 }
 
 export interface CloudflareWorkersDeploySection extends BaseDeploySection {
