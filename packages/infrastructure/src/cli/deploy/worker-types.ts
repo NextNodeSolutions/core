@@ -16,19 +16,18 @@ export function generateWorkerTypes(
 ): ReadonlyArray<string> {
 	if (!isCloudflareWorkersDeployableConfig(config)) return []
 
-	const serviceNames = Object.keys(config.deploy.services)
-	return Object.entries(config.deploy.services).map(
-		([serviceName, service]) =>
-			writeWorkerTypes({
-				entryPath: resolve(configDir, service.entry),
-				content: renderWorkerEnvTypes({
-					serviceName,
-					service,
-					services: config.services,
-					serviceNames,
-					secretNames: service.secrets,
-				}),
+	const workerServices = config.deploy.services
+	return Object.entries(workerServices).map(([serviceName, service]) =>
+		writeWorkerTypes({
+			entryPath: resolve(configDir, service.entry),
+			content: renderWorkerEnvTypes({
+				serviceName,
+				service,
+				services: config.services,
+				workerServices,
+				secretNames: service.secrets,
 			}),
+		}),
 	)
 }
 

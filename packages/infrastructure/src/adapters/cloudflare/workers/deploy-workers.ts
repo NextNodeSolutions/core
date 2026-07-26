@@ -84,6 +84,7 @@ function buildServiceDocument(
 			projectDomain: input.domain,
 			environment: input.environment,
 			service,
+			workerServices: input.services,
 			backing: deriveWorkersBackingConfig(input.backingServices),
 			outputs: input.outputs,
 			accountId: input.accountId,
