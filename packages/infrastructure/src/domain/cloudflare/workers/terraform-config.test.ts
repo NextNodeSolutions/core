@@ -184,7 +184,7 @@ describe('buildTerraformMainConfig', () => {
 						zone_id:
 							'${data.cloudflare_zone.zone_redirect_studiobymina_fr.id}',
 						name: 'redirect-studiobymina_fr-to-main',
-						kind: 'root',
+						kind: 'zone',
 						phase: 'http_request_dynamic_redirect',
 						rules: [
 							{
