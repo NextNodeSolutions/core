@@ -49,17 +49,12 @@ export function writeWorkerTypes(
 	input: WriteWorkerTypesInput,
 ): ReadonlyArray<string> {
 	const packageDir = resolvePackageDir(input.entryPath)
-	const files: ReadonlyArray<readonly [string, string]> = [
-		[TYPES_FILENAME, input.types],
-		[DEV_VARS_EXAMPLE_FILENAME, input.devVarsExample],
-	]
-	const written = files.map(([filename, content]) => {
-		const target = join(packageDir, filename)
-		writeFileSync(target, content)
-		return target
-	})
+	const typesPath = join(packageDir, TYPES_FILENAME)
+	const devVarsExamplePath = join(packageDir, DEV_VARS_EXAMPLE_FILENAME)
+	writeFileSync(typesPath, input.types)
+	writeFileSync(devVarsExamplePath, input.devVarsExample)
 	logger.info(
 		`Generated ${TYPES_FILENAME} + ${DEV_VARS_EXAMPLE_FILENAME} in ${packageDir}`,
 	)
-	return written
+	return [typesPath, devVarsExamplePath]
 }

@@ -2293,7 +2293,9 @@ describe('parseConfig', () => {
 			).not.toThrow()
 		})
 
-		it('leaves a hetzner-vps service named site untouched', () => {
+		// The rule is workers-only for now: the hetzner service table is out of
+		// this guard's scope, so a name colliding there still loads.
+		it('does not reach a hetzner-vps service named site', () => {
 			const parsed = parseConfig(
 				appConfig({ site: { port: 3000, url: 'example.com' } }),
 			)

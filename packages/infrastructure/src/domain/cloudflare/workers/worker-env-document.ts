@@ -36,6 +36,21 @@ const TYPES_PROJECT_DOMAIN = 'types.invalid'
 const TYPES_ACCOUNT_ID = 'types'
 
 /**
+ * Every `env.<key>` a worker reads that carries a plain string: its public vars
+ * and its secret names. Sorted so the generated files are stable run to run, and
+ * shared by both renderers so the `.dev.vars.example` cannot list a key the
+ * generated `Env` does not type.
+ */
+export function stringEnvKeys(
+	document: WranglerDocument,
+	secretNames: ReadonlyArray<string>,
+): ReadonlyArray<string> {
+	return [
+		...new Set([...Object.keys(document.vars ?? {}), ...secretNames]),
+	].toSorted((a, b) => a.localeCompare(b))
+}
+
+/**
  * Build the wrangler document a worker's generated files are read from. It is
  * the SAME document `buildWranglerConfig` deploys, fed placeholder provision
  * outputs (types are generated before provision, when no Terraform output

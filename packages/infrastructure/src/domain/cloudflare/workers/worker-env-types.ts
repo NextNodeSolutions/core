@@ -1,6 +1,5 @@
-import { buildWorkerEnvDocument } from './worker-env-document.ts'
+import { stringEnvKeys } from './worker-env-document.ts'
 
-import type { WorkerEnvInput } from './worker-env-document.ts'
 import type { WranglerDocument } from './wrangler-document.ts'
 
 const GENERATED_HEADER = [
@@ -55,8 +54,7 @@ function collectMembers(
 	const byName = new Map<string, EnvMember>()
 	for (const member of [
 		...bindingMembers(document),
-		...stringMembers(Object.keys(document.vars ?? {})),
-		...stringMembers(secretNames),
+		...stringMembers(stringEnvKeys(document, secretNames)),
 	]) {
 		byName.set(member.name, member)
 	}
@@ -78,10 +76,11 @@ function collectMembers(
  * or vice versa. Sibling workers are `Fetcher`; D1/KV/R2/Queues get their
  * Cloudflare types; vars and secrets are `string`.
  */
-export function renderWorkerEnvTypes(input: WorkerEnvInput): string {
-	const document = buildWorkerEnvDocument(input)
-
-	const members = collectMembers(document, input.secretNames)
+export function renderWorkerEnvTypes(
+	document: WranglerDocument,
+	secretNames: ReadonlyArray<string>,
+): string {
+	const members = collectMembers(document, secretNames)
 	return [
 		GENERATED_HEADER,
 		'',
