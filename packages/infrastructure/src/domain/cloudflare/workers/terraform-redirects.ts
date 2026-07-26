@@ -47,7 +47,10 @@ function redirectRuleset(
 	return {
 		zone_id: `\${data.cloudflare_zone.${redirectZoneLabel(redirectDomain)}.id}`,
 		name: `redirect-${label}-to-main`,
-		kind: 'root',
+		// The phase entry point for `http_request_dynamic_redirect` is created at
+		// the ZONE level, so its kind is "zone". "root" is the account-level entry
+		// point kind and the API rejects it on a zone-scoped ruleset.
+		kind: 'zone',
 		phase: 'http_request_dynamic_redirect',
 		rules: [
 			{

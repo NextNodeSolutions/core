@@ -146,6 +146,11 @@ export type ServicesConfig = {
  * infra storage runtime (state + certs buckets) to be loaded. The mapped
  * type forces every entry in `SERVICE_NAMES` to set this flag - adding a
  * new service is a TypeScript error until it answers the question.
+ *
+ * Only consulted for a target that does NOT realise its own backing services
+ * (see `TARGET_REALISES_BACKING_SERVICES`): where the target realises them,
+ * no CLI `Service` is built, so no S3 credential is ever consumed and
+ * `requiresInfraStorage` short-circuits to false before reading this table.
  */
 export const SERVICE_REQUIRES_INFRA_STORAGE: {
 	readonly [K in ServiceName]: boolean

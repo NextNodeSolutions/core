@@ -128,7 +128,7 @@ export interface RulesetRule {
 export interface RulesetResource {
 	readonly zone_id: string
 	readonly name: string
-	readonly kind: 'root'
+	readonly kind: 'zone'
 	readonly phase: 'http_request_dynamic_redirect'
 	readonly rules: ReadonlyArray<RulesetRule>
 }

@@ -153,7 +153,7 @@ describe('buildTerraformMainConfig', () => {
 				cloudflare_r2_custom_domain: {
 					r2_assets_cdn: {
 						account_id: '${var.account_id}',
-						bucket_name: 'studiobymina-production-assets',
+						bucket_name: '${cloudflare_r2_bucket.r2_assets.name}',
 						domain: 'assets.cdn.studiobymina.com',
 						zone_id: '${data.cloudflare_zone.zone_main.id}',
 						enabled: true,
@@ -184,7 +184,7 @@ describe('buildTerraformMainConfig', () => {
 						zone_id:
 							'${data.cloudflare_zone.zone_redirect_studiobymina_fr.id}',
 						name: 'redirect-studiobymina_fr-to-main',
-						kind: 'root',
+						kind: 'zone',
 						phase: 'http_request_dynamic_redirect',
 						rules: [
 							{
@@ -339,7 +339,7 @@ describe('buildTerraformMainConfig', () => {
 				cloudflare_r2_custom_domain: {
 					r2_assets_cdn: {
 						account_id: '${var.account_id}',
-						bucket_name: 'studiobymina-development-assets',
+						bucket_name: '${cloudflare_r2_bucket.r2_assets.name}',
 						domain: 'assets.cdn.dev.studiobymina.com',
 						zone_id: '${data.cloudflare_zone.zone_main.id}',
 						enabled: true,
