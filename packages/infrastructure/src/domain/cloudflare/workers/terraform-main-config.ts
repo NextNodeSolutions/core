@@ -128,12 +128,36 @@ export interface RedirectRulesetRule extends RulesetRuleCommon {
 	}
 }
 
-export type RulesetRule = RedirectRulesetRule
+// The custom response a rule returns instead of the origin's. `content` is a
+// body serialised by the generator (JSON for `application/json`), never
+// hand-concatenated into the surrounding JSON.
+export interface RulesetResponse {
+	readonly status_code: number
+	readonly content_type: string
+	readonly content: string
+}
+
+// The counting parameters of a rate limiting rule. `characteristics` is what
+// the counter is keyed by; `period` counts, `mitigation_timeout` blocks for.
+export interface RateLimitParameters {
+	readonly characteristics: ReadonlyArray<string>
+	readonly period: number
+	readonly requests_per_period: number
+	readonly mitigation_timeout: number
+}
+
+export interface RateLimitRulesetRule extends RulesetRuleCommon {
+	readonly action: 'block'
+	readonly action_parameters: { readonly response: RulesetResponse }
+	readonly ratelimit: RateLimitParameters
+}
+
+export type RulesetRule = RedirectRulesetRule | RateLimitRulesetRule
 
 // The phases a generated ruleset may enter. A zone owns ONE entry point per
 // phase, so the label a family emits under and its phase move together; a phase
 // absent from this union is a phase nothing emits.
-export type RulesetPhase = 'http_request_dynamic_redirect'
+export type RulesetPhase = 'http_request_dynamic_redirect' | 'http_ratelimit'
 
 export interface RulesetResource {
 	readonly zone_id: string
