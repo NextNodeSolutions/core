@@ -5,6 +5,8 @@ import { deriveWorkersBackingConfig } from './outputs-env.ts'
 import { deriveBoundSiblings } from './service-bindings.ts'
 import { computeWorkerScriptName } from './worker-name.ts'
 import {
+	DEFAULT_WORKER_CPU_MS,
+	DEFAULT_WORKER_SUBREQUESTS,
 	DEFAULT_WORKERS_COMPATIBILITY_DATE,
 	toBindingName,
 	WORKERS_ASSETS_BINDING,
@@ -23,6 +25,7 @@ import type {
 	WranglerDocument,
 	WranglerHyperdrive,
 	WranglerKvNamespace,
+	WranglerLimits,
 	WranglerQueueProducer,
 	WranglerR2Bucket,
 	WranglerRoute,
@@ -201,6 +204,13 @@ function serviceBindings(
 	}))
 }
 
+function workerLimits(service: WorkerServiceConfig): WranglerLimits {
+	return {
+		cpu_ms: service.limits?.cpuMs ?? DEFAULT_WORKER_CPU_MS,
+		subrequests: service.limits?.subrequests ?? DEFAULT_WORKER_SUBREQUESTS,
+	}
+}
+
 /**
  * Build the wrangler configuration document for one service. Pure: the caller
  * (adapter) writes it to an ephemeral file and runs `wrangler deploy`. Name is
@@ -237,6 +247,7 @@ export function buildWranglerConfig(
 		compatibility_flags: [...WORKERS_COMPATIBILITY_FLAGS],
 		workers_dev: false,
 		observability: { enabled: input.service.observability },
+		limits: workerLimits(input.service),
 	}
 	if (routes) document.routes = routes
 	if (assets) document.assets = assets

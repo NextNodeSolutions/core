@@ -21,6 +21,7 @@ const DOCUMENT: WranglerDocument = {
 		},
 	],
 	observability: { enabled: true },
+	limits: { cpu_ms: 1000, subrequests: 50 },
 }
 
 interface Captured {

@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import { buildWranglerConfig } from './wrangler-config.ts'
 import {
+	DEFAULT_WORKER_CPU_MS,
+	DEFAULT_WORKER_SUBREQUESTS,
 	DEFAULT_WORKERS_COMPATIBILITY_DATE,
 	WORKERS_COMPATIBILITY_FLAGS,
 } from './wrangler-document.ts'
@@ -395,5 +397,37 @@ describe('buildWranglerConfig', () => {
 		)
 
 		expect(document.observability).toEqual({ enabled: false })
+	})
+
+	it('caps cpu time and subrequests with the infra defaults', () => {
+		expect(buildWranglerConfig(input()).limits).toEqual({
+			cpu_ms: DEFAULT_WORKER_CPU_MS,
+			subrequests: DEFAULT_WORKER_SUBREQUESTS,
+		})
+	})
+
+	it('overrides the caps field by field', () => {
+		const document = buildWranglerConfig(
+			input({ service: service({ limits: { cpuMs: 5000 } }) }),
+		)
+
+		expect(document.limits).toEqual({
+			cpu_ms: 5000,
+			subrequests: DEFAULT_WORKER_SUBREQUESTS,
+		})
+	})
+
+	it('emits the caps in development too', () => {
+		const document = buildWranglerConfig(
+			input({
+				environment: 'development',
+				service: service({ limits: { subrequests: 10 } }),
+			}),
+		)
+
+		expect(document.limits).toEqual({
+			cpu_ms: DEFAULT_WORKER_CPU_MS,
+			subrequests: 10,
+		})
 	})
 })
