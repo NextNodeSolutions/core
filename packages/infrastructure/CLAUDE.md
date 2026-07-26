@@ -219,7 +219,8 @@ url = "example.com"
 public_paths = ["/webhooks/*", "/health"]  # absent = the whole worker is public
 
 [deploy.services.web.rate_limit]
-paths = ["/api/contact"]         # exact path, or a trailing "*" for a prefix
+paths = ["/api/contact"]         # exact path, or a trailing "*" for a prefix;
+                                 # a "*" elsewhere is refused at load
 methods = ["POST"]               # optional; absent = every method counts
 requests_per_period = 5
 period = 60                      # default: DEFAULT_RATE_LIMIT_PERIOD
@@ -246,15 +247,30 @@ custom rules per zone (so at most five workers may declare `public_paths`), and
 `ip.src` is the only counting characteristic available (the generator adds the
 mandatory `cf.colo.id`, which the expression may never mention). The `log`
 action and a custom response on a custom rule are Pro-and-above, so the public
-gate blocks with no `action_parameters` at all. The upstream ceiling does carry
-a `429 application/json` response — if the API ever refuses it on Free, the
-decided fallback is to drop `action_parameters` and change nothing else.
+gate blocks with no `action_parameters` at all.
+
+**`rate_limit` needs a Pro zone or above.** The public gate (`public_paths`)
+applies on a Free zone; the upstream ceiling as generated does not. Cloudflare's
+rate-limiting-rules availability table gives a Free zone only the `Path` field
+in the rule expression (`Host` is Pro, `Method` is Business), a single counting
+period of 10 s, a single mitigation timeout of 10 s, and no custom block
+response — while the generated rule carries `http.host`, the declared `period` /
+`mitigation_timeout`, and a `429 application/json` body. On a Free zone the
+`cloudflare_ruleset.ratelimit_*` create is refused at apply. `public_paths`,
+`limits` and `rate_limiters` are unaffected.
+
+**`limits` needs Workers Paid.** `wrangler deploy` rejects a config carrying
+`limits.cpu_ms` on a Workers Free account (`code: 100328`), and the block is
+emitted for every worker. The Workers plan is account-scoped and independent
+from the zone plan. `limits.subrequests` additionally requires wrangler >= 4.62.
 
 **Both rulesets are emitted in production only.** A zone owns a single ruleset
 entry point per phase, so a development workspace and a production workspace
 would overwrite each other's rules on every apply — the same reason the
 Redirect Rules are production only. A `terraform destroy` therefore removes the
-rules along with the environment: the zone keeps no barrier of its own.
+rules along with the environment: the zone keeps no barrier of its own. The
+development deployment is consequently ungated: the same worker answers on
+`dev.<host>` with no rate limiting and no public-path gate.
 
 `public_paths` names what is **open**, and the rule blocks its negation: a
 wildcard that is one segment too wide silently reopens the whole tree, and no

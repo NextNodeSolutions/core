@@ -17,11 +17,9 @@ export function zoneRuleset(
 	return { zone_id: MAIN_ZONE_ID_REF, name, kind: 'zone', phase, rules }
 }
 
-// Terraform holds every ruleset of the project in ONE `cloudflare_ruleset` map,
-// while each family (redirects, rate limiting, firewall) builds its own entries
-// under its own label prefix. Assigning a family over that map instead of
-// merging into it deletes the other families on the next apply. Pure: no sort,
-// no rename, no validation - families own their labels.
+// Terraform holds every ruleset of the project in ONE `cloudflare_ruleset` map:
+// assigning a family over that map instead of merging into it deletes the other
+// families on the next apply.
 export function mergeRulesetFamilies(
 	families: ReadonlyArray<Record<string, RulesetResource>>,
 ): Record<string, RulesetResource> {

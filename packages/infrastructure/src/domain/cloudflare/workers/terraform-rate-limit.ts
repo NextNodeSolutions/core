@@ -65,8 +65,6 @@ function rateLimitRuleset(
 	])
 }
 
-// The defaults were applied when the config was loaded - nothing is defaulted
-// here.
 export function buildRateLimitResources(
 	rules: ReadonlyArray<WorkerRateLimitRule>,
 ): Record<string, RulesetResource> {

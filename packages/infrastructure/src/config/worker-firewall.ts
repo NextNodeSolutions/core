@@ -1,9 +1,3 @@
-// The four barriers a cloudflare-workers project declares around a Worker: the
-// upstream ceiling (a zone rate limiting rule), the public gate (a zone custom
-// rule over the paths it names), the per-invocation ceilings, and the in-Worker
-// rate limiter. Everything here is vocabulary the loaded config carries; what is
-// emitted from it lives in the workers domain.
-
 const TEN_SECONDS = 10
 const ONE_MINUTE = 60
 const TWO_MINUTES = 120

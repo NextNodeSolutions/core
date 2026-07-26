@@ -1,7 +1,3 @@
-// The Cloudflare Rules-language fragments every zone rule family builds its
-// expression from. Shared so the upstream ceiling and the public gate read the
-// same path grammar: an exact path, or a trailing `*` standing for a prefix.
-
 const PATH_FIELD = 'http.request.uri.path'
 const PREFIX_WILDCARD = '*'
 
