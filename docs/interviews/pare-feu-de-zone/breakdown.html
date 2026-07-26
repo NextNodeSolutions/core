@@ -1,0 +1,1710 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Découpage — pare-feu de zone dans nextnode.toml</title>
+<script>
+(function () {
+  try {
+    var stored = localStorage.getItem('np-theme');
+    var theme = stored || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', theme);
+  } catch (e) {
+    document.documentElement.setAttribute('data-theme', 'light');
+  }
+})();
+</script>
+<style>
+/* ============================================================
+   np.css — NextNode HTML deliverables stylesheet
+   Single source of truth for every /html artifact.
+   Inlined into the final file by scripts/build.sh.
+   Token discipline: no color literal below the token blocks.
+   ============================================================ */
+
+:root {
+  /* Surfaces & text — base scale (mirrors nextnode-landing global.css) */
+  --np-bg:          oklch(98.4% 0.003 247.86);
+  --np-bg-soft:     oklch(96.8% 0.007 247.84);
+  --np-bg-edit:     #FFF8C5;
+  --np-text:        oklch(20.8% 0.042 265.76);
+  --np-text-muted:  oklch(55.4% 0.046 257.42);
+  --np-border:      oklch(92.9% 0.013 255.51);
+  --np-border-soft: oklch(96.8% 0.007 247.84);
+
+  /* Brand accent — OKLCH from landing (accent-500 ≠ teal-500) */
+  --np-accent:      oklch(70.4% 0.14 182.503);
+  --np-accent-bg:   oklch(95.3% 0.051 180.801);
+  --np-accent-hover:oklch(60% 0.118 184.704);
+
+  --np-highlight:   #F97316;
+  --np-highlight-bg:#FFEDD5;
+  --np-highlight-tx:#9A3412;
+  --np-success:     #16A34A;
+  --np-warn:        #D97706;
+  --np-danger:      #DC2626;
+  --np-add-bg:      #DCFCE7;
+  --np-add-text:    #166534;
+  --np-add-border:  #BBF7D0;
+  --np-del-bg:      #FEE2E2;
+  --np-del-text:    #991B1B;
+  --np-del-border:  #FECACA;
+  --np-edit-bg:     #FFF8C5;
+  --np-edit-text:   #854D0E;
+  --np-edit-border: #FDE68A;
+
+  --np-shadow-soft: 0 2px 6px rgba(0,0,0,.06);
+  --np-shadow-pop:  0 4px 16px rgba(0,0,0,.12);
+  --np-shadow-bar:  0 -2px 12px rgba(0,0,0,.04);
+  --np-shadow-modal:0 8px 32px rgba(0,0,0,.20);
+  --np-radius:      8px;
+  --np-mono:        "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --np-sans:        "DM Sans", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --np-display:     "Plus Jakarta Sans", "DM Sans", sans-serif;
+}
+
+[data-theme="dark"] {
+  --np-bg:          oklch(20.8% 0.042 265.76);
+  --np-bg-soft:     oklch(27.9% 0.041 260.03);
+  --np-bg-edit:     #3A2D04;
+  --np-text:        oklch(98.4% 0.003 247.86);
+  --np-text-muted:  oklch(70.4% 0.04 256.79);
+  --np-border:      oklch(37.2% 0.044 257.29);
+  --np-border-soft: oklch(27.9% 0.041 260.03);
+  --np-accent:      oklch(77.7% 0.152 181.912);
+  --np-accent-bg:   oklch(38.6% 0.063 188.416);
+  --np-accent-hover:oklch(85.5% 0.138 181.071);
+  --np-highlight:   #FB923C;
+  --np-highlight-bg:rgba(251,146,60,.18);
+  --np-highlight-tx:#FDBA74;
+  --np-success:     #4ADE80;
+  --np-warn:        #FBBF24;
+  --np-danger:      #F87171;
+  --np-add-bg:      rgba(74,222,128,.18);
+  --np-add-text:    #86EFAC;
+  --np-add-border:  rgba(74,222,128,.40);
+  --np-del-bg:      rgba(248,113,113,.18);
+  --np-del-text:    #FCA5A5;
+  --np-del-border:  rgba(248,113,113,.40);
+  --np-edit-bg:     rgba(251,191,36,.18);
+  --np-edit-text:   #FCD34D;
+  --np-edit-border: rgba(251,191,36,.40);
+  --np-shadow-soft: 0 2px 6px rgba(0,0,0,.40);
+  --np-shadow-pop:  0 4px 16px rgba(0,0,0,.55);
+  --np-shadow-bar:  0 -2px 12px rgba(0,0,0,.35);
+  --np-shadow-modal:0 8px 32px rgba(0,0,0,.65);
+}
+
+/* ---------- base ---------- */
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--np-bg);
+  color: var(--np-text);
+  font-family: var(--np-sans);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, h4 { font-family: var(--np-display); line-height: 1.2; }
+a { color: var(--np-accent-hover); }
+hr { border: 0; border-top: 1px solid var(--np-border); margin: 32px 0; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--np-border); }
+th { font-family: var(--np-mono); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--np-text-muted); }
+blockquote { margin: 14px 0; padding: 8px 16px; border-left: 3px solid var(--np-accent); background: var(--np-bg-soft); border-radius: 4px; color: var(--np-text-muted); }
+
+/* ---------- layout (shell-provided) ---------- */
+.layout { max-width: 1240px; margin: 0 auto; }
+.layout.has-sidebar { display: grid; grid-template-columns: 220px 1fr; gap: 0; }
+.main { padding: 36px 40px 120px; max-width: 1120px; min-width: 0; margin: 0 auto; }
+body[data-width="prose"] .main { max-width: 760px; }
+.sidebar { display: none; }
+.layout.has-sidebar .sidebar {
+  display: block;
+  position: sticky; top: 0; align-self: start; height: 100vh; overflow: auto;
+  padding: 24px 14px 40px; border-right: 1px solid var(--np-border);
+  font-size: 12.5px;
+}
+.sidebar .brand { font-family: var(--np-display); font-weight: 800; font-size: 15px; margin-bottom: 2px; }
+.sidebar .brand .dot { color: var(--np-accent); }
+.sidebar .sub { color: var(--np-text-muted); font-size: 11px; margin-bottom: 18px; }
+.sidebar nav a {
+  display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 6px;
+  color: var(--np-text-muted); text-decoration: none; line-height: 1.3;
+}
+.sidebar nav a:hover { background: var(--np-bg-soft); color: var(--np-text); }
+.sidebar nav a.active { background: var(--np-bg-soft); color: var(--np-accent-hover); font-weight: 600; }
+.sidebar nav a .n { font-family: var(--np-mono); font-size: 10px; opacity: .6; min-width: 16px; }
+.sidebar::-webkit-scrollbar { width: 5px; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--np-border); border-radius: 99px; }
+@media (max-width: 1024px) {
+  .layout.has-sidebar { grid-template-columns: 1fr; }
+  .layout.has-sidebar .sidebar { display: none; }
+  .main { padding: 28px 18px 80px; }
+}
+
+/* ---------- header ---------- */
+.eyebrow { font-family: var(--np-mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--np-accent-hover); }
+h1 { font-size: 33px; margin: 8px 0 4px; letter-spacing: -.02em; }
+.dek { color: var(--np-text-muted); font-size: 16px; max-width: 70ch; }
+.prompt-box {
+  margin: 18px 0 0; padding: 10px 14px; background: var(--np-bg-soft);
+  border-left: 3px solid var(--np-accent); border-radius: 4px;
+  font-size: 13.5px; color: var(--np-text-muted);
+}
+.prompt-box b { color: var(--np-text); font-weight: 600; }
+
+/* ---------- tldr ---------- */
+.tldr {
+  margin: 26px 0; padding: 16px 18px; background: var(--np-bg-soft);
+  border: 1px solid var(--np-border); border-radius: var(--np-radius);
+}
+.tldr p { margin: 0 0 8px; }
+.tldr p:last-child { margin: 0; }
+
+/* ---------- summary strip ---------- */
+.strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 22px 0 8px; }
+.strip .cell { padding: 12px; background: var(--np-bg-soft); border: 1px solid var(--np-border); border-radius: var(--np-radius); }
+.strip .k { font-family: var(--np-mono); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--np-text-muted); }
+.strip .v { font-family: var(--np-display); font-weight: 700; font-size: 20px; margin-top: 4px; }
+.strip .v small { font-size: 12px; font-weight: 500; color: var(--np-text-muted); }
+
+/* ---------- sections ---------- */
+section { margin: 46px 0; scroll-margin-top: 20px; }
+section > h2 { font-size: 23px; margin: 0 0 4px; letter-spacing: -.01em; }
+section > h2 .num { font-family: var(--np-mono); font-size: 13px; color: var(--np-accent); margin-right: 8px; font-weight: 500; }
+section > .lead { color: var(--np-text-muted); margin: 0 0 18px; max-width: 76ch; }
+h3.sub { font-size: 15px; margin: 26px 0 10px; display: flex; align-items: center; gap: 8px; }
+
+/* ---------- callout ---------- */
+.callout { margin: 14px 0; padding: 12px 16px; background: var(--np-bg-soft); border-left: 4px solid var(--np-accent); border-radius: 4px; font-size: 13.5px; }
+.callout.warn { border-left-color: var(--np-warn); }
+.callout.danger { border-left-color: var(--np-danger); }
+.callout .ttl { font-weight: 700; display: block; margin-bottom: 2px; }
+
+/* ---------- legend ---------- */
+.legend { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; margin: 4px 0 24px; font-size: 12.5px; }
+.legend .item { display: inline-flex; align-items: center; gap: 7px; }
+.swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.swatch.accent { background: var(--np-accent); }
+.swatch.alt { background: var(--np-highlight); }
+.tag-accent { color: var(--np-accent-hover); font-weight: 700; }
+.tag-alt { color: var(--np-highlight-tx); font-weight: 700; }
+
+/* ---------- diagram base ---------- */
+.diagram { background: var(--np-bg-soft); border: 1px solid var(--np-border); border-radius: 12px; padding: 22px 18px 14px; margin: 14px 0 8px; }
+.diagram .body { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 4px; }
+/* shared caption rule — every figure-like block uses the same cap */
+.diagram .cap, .d2-fig .cap, .mockup figcaption, .mockup .mk-cap {
+  margin-top: 12px; padding-top: 8px; border-top: 1px dashed var(--np-border);
+  font-family: var(--np-mono); font-size: 10.5px; text-transform: uppercase;
+  letter-spacing: .08em; color: var(--np-text-muted); text-align: center;
+}
+.mockup figcaption, .mockup .mk-cap { margin-top: 0; padding: 8px 12px; }
+
+/* nodes + arrows */
+.node {
+  font-family: var(--np-sans); font-size: 12.5px; line-height: 1.25;
+  padding: 8px 11px; border: 1px solid var(--np-border); border-radius: 7px;
+  background: var(--np-bg); color: var(--np-text); text-align: center; min-width: 84px; max-width: 170px;
+}
+.node .sk { font-family: var(--np-mono); font-size: 10px; color: var(--np-text-muted); display: block; margin-top: 3px; }
+.node.accent { border-color: var(--np-accent); }
+.node.accent .sk { color: var(--np-accent-hover); }
+.node.alt { border-color: var(--np-highlight); }
+.node.alt .sk { color: var(--np-highlight-tx); }
+.node.primary { background: var(--np-accent-bg); border: 1px solid var(--np-accent); color: var(--np-accent-hover); font-weight: 600; }
+.node.warning { border-color: var(--np-warn); }
+.node.muted { color: var(--np-text-muted); border-style: dashed; }
+.node.artifact { background: var(--np-bg-soft); border-style: dashed; }
+.node.term { border-radius: 99px; font-size: 11px; min-width: 0; padding: 6px 12px; }
+.node.mono { font-family: var(--np-mono); font-size: 11.5px; }
+.node-stack { display: flex; flex-direction: column; gap: 6px; }
+.arrow { display: inline-flex; align-items: center; color: var(--np-text-muted); flex: 0 0 auto; }
+.arrow.accent { color: var(--np-accent); }
+.arrow.alt { color: var(--np-highlight); }
+.arrow.danger { color: var(--np-danger); }
+.arrow.down { transform: rotate(90deg); }
+.arrow svg { display: block; }
+.flow-row { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 4px; }
+.flow-note { font-size: 11px; color: var(--np-text-muted); font-style: italic; margin-top: 6px; text-align: center; }
+
+/* ---------- diag-compare ---------- */
+.diag-compare { display: grid; grid-template-columns: 1fr 40px 1fr; align-items: stretch; gap: 0; margin: 14px 0; }
+.diag-compare .pane { background: var(--np-bg-soft); border: 1px solid var(--np-border); border-radius: 12px; padding: 16px 16px 18px; }
+.diag-compare .pane.a { border-top: 3px solid var(--np-highlight); }
+.diag-compare .pane.b { border-top: 3px solid var(--np-accent); }
+.diag-compare .pane h4 { margin: 0 0 10px; font-family: var(--np-display); font-size: 15px; display: flex; align-items: center; gap: 8px; }
+.diag-compare .pane ul { margin: 0; padding-left: 18px; font-size: 13px; }
+.diag-compare .pane li { margin: 5px 0; }
+.diag-compare .vs { display: flex; align-items: center; justify-content: center; font-family: var(--np-mono); font-size: 11px; color: var(--np-text-muted); }
+@media (max-width: 680px) { .diag-compare { grid-template-columns: 1fr; gap: 10px; } .diag-compare .vs { padding: 4px; } }
+
+/* ---------- diag-stack ---------- */
+.diag-stack { display: grid; gap: 8px; margin: 14px 0; }
+.layer { border: 1px solid var(--np-border); border-radius: 9px; padding: 12px 14px; background: var(--np-bg); }
+.layer .ttl { font-weight: 700; font-size: 13px; display: flex; gap: 8px; align-items: center; }
+.layer .desc { font-size: 12.5px; color: var(--np-text-muted); margin-top: 3px; }
+.layer.pure { border-left: 4px solid var(--np-accent); }
+.layer.muted { background: var(--np-bg-soft); border-left: 4px solid var(--np-text-muted); }
+.layer .chips { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 5px; }
+
+/* ---------- diag-tree ---------- */
+.diag-tree { font-family: var(--np-mono); font-size: 12.5px; line-height: 1.8; }
+.diag-tree .indent { padding-left: 22px; position: relative; }
+.diag-tree .indent::before { content: '├── '; color: var(--np-text-muted); position: absolute; left: 0; }
+.diag-tree .indent.last::before { content: '└── '; }
+.diag-tree .key { color: var(--np-accent-hover); }
+.diag-tree .val { color: var(--np-text-muted); }
+.diag-tree .out-of-scope { text-decoration: line-through; opacity: .5; }
+
+/* ---------- diag-kinds ---------- */
+.kinds { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 14px 0; }
+.kind-card { border: 1px solid var(--np-border); border-radius: 10px; padding: 14px; background: var(--np-bg-soft); }
+.kind-card.a { border-top: 3px solid var(--np-highlight); }
+.kind-card.b { border-top: 3px solid var(--np-accent); }
+.kind-card h4 { margin: 0 0 4px; font-size: 13px; font-family: var(--np-mono); text-transform: uppercase; letter-spacing: .06em; }
+.kind-card.a h4 { color: var(--np-highlight-tx); }
+.kind-card.b h4 { color: var(--np-accent-hover); }
+.kind-card .grp { margin: 9px 0 0; }
+.kind-card .grp .gh { font-size: 11px; font-family: var(--np-mono); text-transform: uppercase; letter-spacing: .05em; color: var(--np-text-muted); }
+.kind-card .grp .gl { font-size: 12.5px; margin-top: 2px; }
+@media (max-width: 680px) { .kinds { grid-template-columns: 1fr; } }
+
+/* ---------- diag-pool ---------- */
+.pool-box { border: 1.5px dashed var(--np-accent); border-radius: 10px; padding: 12px 14px; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.refs-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 12px; }
+.ref-box { border: 1px solid var(--np-border); border-radius: 8px; padding: 8px 12px; background: var(--np-bg); font-size: 12px; }
+.chip { display: inline-block; padding: 2px 9px; font-family: var(--np-mono); font-size: 11px; border: 1px solid var(--np-border); border-radius: 5px; background: var(--np-bg); }
+
+/* ---------- diag-timeline (versions / migration chips) ---------- */
+.diag-timeline { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px; }
+.ver-tag { font-family: var(--np-mono); font-size: 12px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--np-border); background: var(--np-bg); }
+.ver-tag.old { color: var(--np-text-muted); }
+.ver-tag.bump { border-color: var(--np-accent); color: var(--np-accent-hover); font-weight: 700; }
+.ver-tag.new { border-color: var(--np-success); color: var(--np-add-text); }
+
+/* ---------- vertical timeline (plans, post-mortems) ---------- */
+.timeline { margin: 14px 0; padding: 0; list-style: none; }
+.timeline > li { display: grid; grid-template-columns: 92px 22px 1fr; gap: 0 8px; }
+.timeline .when { font-family: var(--np-mono); font-size: 11.5px; color: var(--np-text-muted); text-align: right; padding-top: 3px; }
+.timeline .dotcol { position: relative; }
+.timeline .dotcol::before { content: ''; position: absolute; left: 50%; top: 4px; bottom: -4px; width: 1.5px; background: var(--np-border); transform: translateX(-50%); }
+.timeline > li:last-child .dotcol::before { display: none; }
+.timeline .dotcol::after { content: ''; position: absolute; left: 50%; top: 6px; width: 9px; height: 9px; border-radius: 99px; background: var(--np-accent); transform: translateX(-50%); }
+.timeline > li.muted .dotcol::after { background: var(--np-border); }
+.timeline .body { padding-bottom: 22px; }
+.timeline .body .ttl { font-weight: 700; font-size: 14px; }
+.timeline .body .desc { font-size: 13px; color: var(--np-text-muted); margin-top: 2px; }
+.timeline .body .tags { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 5px; }
+@media (max-width: 680px) { .timeline > li { grid-template-columns: 64px 18px 1fr; } }
+
+/* ---------- compare table ---------- */
+.ctable { border: 1px solid var(--np-border); border-radius: 12px; overflow: hidden; margin: 12px 0; }
+.crow { display: grid; grid-template-columns: 168px 1fr 1fr; }
+.crow > div { padding: 11px 13px; border-bottom: 1px solid var(--np-border); font-size: 13px; }
+.crow:last-child > div { border-bottom: 0; }
+.crow .axis { font-weight: 700; background: var(--np-bg-soft); border-right: 1px solid var(--np-border); font-size: 12.5px; }
+.crow .ca { border-right: 1px solid var(--np-border); }
+.crow.head > div { background: var(--np-bg-soft); font-family: var(--np-display); font-weight: 800; font-size: 13.5px; }
+.crow.head .ca { color: var(--np-highlight-tx); }
+.crow.head .cb { color: var(--np-accent-hover); }
+@media (max-width: 760px) {
+  .crow { grid-template-columns: 1fr; }
+  .crow > div { border-right: 0 !important; }
+  .crow .axis { border-bottom: 0; }
+}
+
+/* ---------- twocol (what-worked / what-didnt, conv / div) ---------- */
+.twocol { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 14px 0; }
+.twocol .col { border: 1px solid var(--np-border); border-radius: 12px; padding: 16px; background: var(--np-bg-soft); }
+.twocol .col.good { border-top: 3px solid var(--np-success); }
+.twocol .col.bad { border-top: 3px solid var(--np-highlight); }
+.twocol .col h4 { margin: 0 0 10px; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+.twocol .col ul { margin: 0; padding-left: 18px; font-size: 13px; }
+.twocol .col li { margin: 7px 0; }
+@media (max-width: 680px) { .twocol { grid-template-columns: 1fr; } }
+
+/* ---------- risk grid ---------- */
+.risk-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 14px 0; }
+.risk { border: 1px solid var(--np-border); border-radius: 10px; padding: 13px 15px; background: var(--np-bg-soft); }
+.risk .ttl { font-weight: 700; font-size: 13.5px; display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+.risk .desc { font-size: 12.5px; color: var(--np-text-muted); margin-top: 5px; }
+.risk .mit { font-size: 12.5px; margin-top: 7px; padding-top: 7px; border-top: 1px dashed var(--np-border); }
+.risk .mit::before { content: '↳ '; color: var(--np-accent); }
+
+/* ---------- svg semantic classes ---------- */
+.dsvg { width: 100%; height: auto; }
+.dsvg text { font-family: var(--np-mono); }
+.dsvg .disp { font-family: var(--np-display); font-weight: 700; }
+.dsvg .t-mut { fill: var(--np-text-muted); }
+.dsvg .t-acc { fill: var(--np-accent-hover); }
+.dsvg .t-dan { fill: var(--np-danger); }
+.dsvg .t-suc { fill: var(--np-success); }
+.dsvg .t-txt { fill: var(--np-text); }
+.dsvg .ax { stroke: var(--np-border); }
+.dsvg .band { fill: var(--np-accent-bg); }
+.dsvg .zl { stroke: var(--np-accent); }
+.dsvg .curve { fill: none; stroke: var(--np-highlight); }
+.dsvg .badbox { fill: var(--np-del-bg); stroke: var(--np-del-border); }
+.dsvg .goodbox { fill: var(--np-accent-bg); stroke: var(--np-accent); }
+.dsvg .box { fill: var(--np-bg); stroke: var(--np-border); }
+.dsvg .grid { fill: none; stroke: var(--np-border); }
+.dsvg .conn { stroke: var(--np-text-muted); fill: none; }
+.dsvg .conn-dashed { stroke: var(--np-text-muted); fill: none; stroke-dasharray: 4 3; }
+
+/* ---------- pills ---------- */
+.pill { display: inline-block; padding: 1px 8px; font-size: 11px; font-weight: 600; line-height: 1.6; border-radius: 999px; border: 1px solid var(--np-border); background: var(--np-bg-soft); color: var(--np-text-muted); letter-spacing: .01em; white-space: nowrap; }
+.pill.success { background: var(--np-add-bg); color: var(--np-add-text); border-color: var(--np-add-border); }
+.pill.warn { background: var(--np-edit-bg); color: var(--np-edit-text); border-color: var(--np-edit-border); }
+.pill.danger { background: var(--np-del-bg); color: var(--np-del-text); border-color: var(--np-del-border); }
+.pill.accent { background: var(--np-accent-bg); color: var(--np-accent-hover); border-color: var(--np-accent); }
+.pill.alt { background: var(--np-highlight-bg); color: var(--np-highlight-tx); border-color: var(--np-highlight); }
+.pill.mono { font-family: var(--np-mono); font-size: 10.5px; }
+
+/* ---------- code blocks ---------- */
+.code-block { margin: 14px 0; border: 1px solid var(--np-border); border-radius: var(--np-radius); overflow: hidden; background: var(--np-bg-soft); }
+.code-block__head { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: var(--np-bg); border-bottom: 1px solid var(--np-border); font-family: var(--np-mono); font-size: 12px; color: var(--np-text-muted); }
+.code-block__file { flex: 1; font-weight: 600; color: var(--np-text); }
+.code-block__lang { font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--np-accent-hover); padding: 1px 6px; background: var(--np-accent-bg); border-radius: 3px; }
+.code-block__copy { font: inherit; font-size: 11px; padding: 2px 8px; background: transparent; border: 1px solid var(--np-border); border-radius: 4px; color: var(--np-text-muted); cursor: pointer; }
+.code-block__copy:hover { color: var(--np-accent-hover); border-color: var(--np-accent); }
+.code-block__copy.is-copied { color: var(--np-add-text); border-color: var(--np-add-border); }
+pre { margin: 0 0 14px; padding: 14px 16px; background: var(--np-bg-soft); border: 1px solid var(--np-border); border-radius: var(--np-radius); overflow-x: auto; font-family: var(--np-mono); font-size: 12.5px; line-height: 1.65; color: var(--np-text); tab-size: 2; }
+.code-block pre { margin: 0; border: 0; border-radius: 0; }
+pre code, pre code.hljs { background: transparent; padding: 0; font: inherit; color: inherit; }
+:not(pre) > code { font-family: var(--np-mono); font-size: .88em; padding: 1px 6px; background: var(--np-bg-soft); border: 1px solid var(--np-border); border-radius: 4px; color: var(--np-text); }
+
+/* ---------- diff ---------- */
+.diff { margin: 14px 0; font-family: var(--np-mono); font-size: 12.5px; line-height: 1.5; background: var(--np-bg-soft); border: 1px solid var(--np-border); border-radius: var(--np-radius); overflow: hidden; }
+.diff[data-file]::before { content: attr(data-file); display: block; padding: 8px 12px; background: var(--np-bg); border-bottom: 1px solid var(--np-border); font-weight: 600; }
+.diff .line { display: block; padding: 0 12px; white-space: pre; }
+.diff .line.hunk { color: var(--np-text-muted); background: var(--np-bg); }
+.diff .line.add { background: var(--np-add-bg); color: var(--np-add-text); }
+.diff .line.add::before { content: '+ '; opacity: .7; }
+.diff .line.del { background: var(--np-del-bg); color: var(--np-del-text); }
+.diff .line.del::before { content: '- '; opacity: .7; }
+.diff .line.ctx::before { content: '  '; }
+
+/* ---------- file tree ---------- */
+.file-tree { margin: 14px 0; font-family: var(--np-mono); font-size: 13px; line-height: 1.7; }
+.file-tree ul { list-style: none; margin: 0; padding-left: 18px; }
+.file-tree > ul { padding-left: 0; }
+.file-tree li { position: relative; }
+.file-tree li::before { position: absolute; left: -14px; color: var(--np-text-muted); }
+.file-tree li.dir::before { content: '▸'; }
+.file-tree li.file::before { content: '·'; }
+.file-tree .action { display: inline-block; margin-left: 8px; padding: 1px 6px; font-size: 10px; font-weight: 700; border-radius: 3px; letter-spacing: .04em; }
+.file-tree .action.create { background: var(--np-add-bg); color: var(--np-add-text); border: 1px solid var(--np-add-border); }
+.file-tree .action.edit { background: var(--np-edit-bg); color: var(--np-edit-text); border: 1px solid var(--np-edit-border); }
+.file-tree .action.delete { background: var(--np-del-bg); color: var(--np-del-text); border: 1px solid var(--np-del-border); }
+
+/* ---------- d2 (build-time rendered, light/dark variants) ---------- */
+.d2-fig { margin: 14px 0 8px; background: var(--np-bg-soft); border: 1px solid var(--np-border); border-radius: 12px; padding: 16px 12px 10px; }
+.d2-fig .d2-light, .d2-fig .d2-dark { display: flex; justify-content: center; }
+.d2-fig .d2-dark { display: none; }
+[data-theme="dark"] .d2-fig .d2-light { display: none; }
+[data-theme="dark"] .d2-fig .d2-dark { display: flex; }
+.d2-fig .d2-light > svg, .d2-fig .d2-dark > svg { max-width: 100%; height: auto; }
+
+/* ---------- mermaid ---------- */
+.mermaid { margin: 8px 0; text-align: center; background: var(--np-bg-soft); border: 1px solid var(--np-border); border-radius: 12px; padding: 18px; }
+.mermaid svg { max-width: 100%; height: auto; }
+
+/* ---------- mockup tile ---------- */
+.mockup { margin: 14px 0; border: 1px solid var(--np-border); border-radius: 10px; overflow: hidden; background: var(--np-bg); }
+.mockup .mk-bar { display: flex; gap: 5px; padding: 7px 10px; background: var(--np-bg-soft); border-bottom: 1px solid var(--np-border); }
+.mockup .mk-bar i { width: 9px; height: 9px; border-radius: 99px; background: var(--np-border); }
+.mockup .mk-body { padding: 16px; }
+
+/* ---------- next steps ---------- */
+.next-steps { border: 1px solid var(--np-border); border-radius: 12px; padding: 16px 18px; background: var(--np-bg-soft); }
+.next-steps ul { list-style: none; margin: 0 0 12px; padding: 0; }
+.next-steps li { display: flex; gap: 10px; align-items: flex-start; padding: 7px 0; border-bottom: 1px solid var(--np-border-soft); font-size: 13.5px; }
+.next-steps li:last-of-type { border-bottom: 0; }
+.next-steps li .mk { color: var(--np-accent); flex: 0 0 auto; font-family: var(--np-mono); }
+
+/* ---------- buttons ---------- */
+.np-btn { font: inherit; font-size: 13px; padding: 8px 18px; border-radius: 7px; cursor: pointer; border: 1px solid var(--np-border); background: var(--np-bg-soft); color: var(--np-text); }
+.np-btn.primary { background: var(--np-accent); border-color: var(--np-accent); color: var(--np-bg); font-weight: 700; }
+.np-btn.primary:hover { background: var(--np-accent-hover); border-color: var(--np-accent-hover); }
+.np-btn.outline { background: transparent; border: 1px solid var(--np-accent); color: var(--np-accent-hover); }
+.np-btn.outline:hover { background: var(--np-accent-bg); }
+.np-btn.ghost { background: transparent; color: var(--np-text-muted); }
+.np-btn.ghost:hover { color: var(--np-danger); border-color: var(--np-danger); }
+.copy-btn { font: inherit; font-size: 12px; padding: 6px 12px; background: transparent; border: 1px solid var(--np-accent); border-radius: 6px; color: var(--np-accent-hover); cursor: pointer; }
+.copy-btn:hover { background: var(--np-accent-bg); }
+.copy-btn.is-copied { color: var(--np-add-text); border-color: var(--np-add-border); }
+
+/* ---------- tabs (runtime builds the tab-list from [data-tab] children) ---------- */
+.tabs { margin: 14px 0; }
+.tabs .tab-list { display: flex; gap: 2px; flex-wrap: wrap; border-bottom: 1px solid var(--np-border); }
+.tabs .tab-btn { font: inherit; font-size: 13px; font-weight: 600; padding: 7px 14px; margin-bottom: -1px; background: transparent; border: 0; border-bottom: 2px solid transparent; color: var(--np-text-muted); cursor: pointer; }
+.tabs .tab-btn:hover { color: var(--np-text); }
+.tabs .tab-btn.active { color: var(--np-accent-hover); border-bottom-color: var(--np-accent); }
+.tabs > [data-tab] { padding-top: 14px; }
+.tabs.tabs-ready > [data-tab] { display: none; }
+.tabs.tabs-ready > [data-tab].active { display: block; }
+/* no-JS fallback: panels stack, each labelled by its data-tab */
+.tabs:not(.tabs-ready) > [data-tab]::before { content: attr(data-tab); display: block; font-family: var(--np-mono); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--np-text-muted); margin: 14px 0 6px; }
+
+/* ---------- collapse (native details) ---------- */
+details.fold { border: 1px solid var(--np-border); border-radius: var(--np-radius); background: var(--np-bg-soft); margin: 10px 0; }
+details.fold > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-size: 13.5px; list-style: none; display: flex; align-items: center; gap: 8px; }
+details.fold > summary::before { content: '▸'; color: var(--np-text-muted); transition: transform .15s; }
+details.fold[open] > summary::before { transform: rotate(90deg); }
+details.fold > .fold-body { padding: 0 14px 12px; font-size: 13.5px; }
+
+/* ---------- board (data-island rendered) ---------- */
+.board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(200px, 1fr); gap: 12px; margin: 14px 0; overflow-x: auto; padding-bottom: 6px; }
+.board .bcol { background: var(--np-bg-soft); border: 1px solid var(--np-border); border-radius: 10px; padding: 10px; min-height: 120px; }
+.board .bcol > h4 { margin: 0 0 8px; font-family: var(--np-mono); font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--np-text-muted); display: flex; justify-content: space-between; }
+.board .bcol.drag-over { border-color: var(--np-accent); background: var(--np-accent-bg); }
+.board .bcard { background: var(--np-bg); border: 1px solid var(--np-border); border-radius: 8px; padding: 9px 11px; margin-bottom: 8px; cursor: grab; font-size: 13px; box-shadow: var(--np-shadow-soft); }
+.board .bcard:active { cursor: grabbing; }
+.board .bcard .ttl { font-weight: 600; }
+.board .bcard .desc { font-size: 12px; color: var(--np-text-muted); margin-top: 3px; }
+.board .bcard .tags { margin-top: 6px; display: flex; gap: 4px; flex-wrap: wrap; }
+.board-actions { display: flex; gap: 8px; margin: 4px 0 14px; }
+
+/* ---------- rich mode ---------- */
+.rp-gate { position: fixed; bottom: 0; left: 0; right: 0; z-index: 60; display: flex; justify-content: flex-end; gap: 10px; padding: 12px 24px; background: var(--np-bg); border-top: 1px solid var(--np-border); box-shadow: var(--np-shadow-bar); }
+[contenteditable="true"]:hover { outline: 1px dashed var(--np-border); border-radius: 3px; }
+[contenteditable="true"]:focus { outline: 2px solid var(--np-accent); border-radius: 3px; background: var(--np-bg-edit); }
+[data-np-edited="1"] { background: var(--np-bg-edit); border-radius: 3px; }
+form.rich-question { border: 1px solid var(--np-border); border-radius: 12px; padding: 16px 18px; background: var(--np-bg-soft); margin: 14px 0; }
+form.rich-question .q { font-weight: 700; font-size: 14.5px; margin-bottom: 6px; }
+form.rich-question .recommended { background: var(--np-bg); border-left: 4px solid var(--np-accent); border-radius: 4px; padding: 9px 13px; font-size: 13px; margin: 10px 0; }
+form.rich-question .recommended::before { content: 'Recommandé'; display: block; font-family: var(--np-mono); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--np-accent-hover); margin-bottom: 3px; }
+form.rich-question label.opt { display: flex; gap: 9px; align-items: flex-start; padding: 7px 9px; border-radius: 6px; font-size: 13.5px; cursor: pointer; }
+form.rich-question label.opt:hover { background: var(--np-bg); }
+form.rich-question input[type="radio"], form.rich-question input[type="checkbox"] { accent-color: var(--np-accent); margin-top: 3px; }
+form.rich-question textarea { width: 100%; min-height: 64px; font: inherit; font-size: 13px; padding: 8px 10px; border: 1px solid var(--np-border); border-radius: 6px; background: var(--np-bg); color: var(--np-text); resize: vertical; }
+
+/* ---------- pages / router (multipage feel — one view, no long scroll) ---------- */
+.np-paged .np-page { display: none; }
+.np-paged .np-page.active { display: block; animation: np-page-in .18s ease both; }
+@keyframes np-page-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.np-paged .np-page > section:first-child { margin-top: 6px; }
+.np-paged header { margin-bottom: 10px; }
+/* sidebar as router: page links + (when a page holds several sections) sub-links */
+.sidebar nav.np-router a.pg { font-weight: 600; color: var(--np-text); }
+.sidebar nav.np-router a.pg.active { background: var(--np-bg-soft); color: var(--np-accent-hover); }
+.sidebar nav.np-router .subs { display: none; margin: 1px 0 6px 22px; padding-left: 9px; border-left: 1px solid var(--np-border); flex-direction: column; gap: 1px; }
+.sidebar nav.np-router a.pg.active + .subs { display: flex; }
+.sidebar nav.np-router a.sub { font-size: 11.5px; padding: 3px 8px; }
+/* per-page prev/next footer */
+.np-page-nav { display: flex; justify-content: space-between; gap: 12px; margin-top: 44px; padding-top: 16px; border-top: 1px solid var(--np-border); }
+.np-page-nav a { display: flex; flex-direction: column; gap: 1px; max-width: 46%; overflow: hidden; padding: 8px 13px; border: 1px solid var(--np-border); border-radius: 8px; text-decoration: none; color: var(--np-text); font-size: 13.5px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+.np-page-nav a.next { margin-left: auto; text-align: right; }
+.np-page-nav a:hover { border-color: var(--np-accent); background: var(--np-bg-soft); color: var(--np-accent-hover); }
+.np-page-nav a .hint { font-family: var(--np-mono); font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--np-text-muted); font-weight: 500; }
+
+/* ---------- questions overview (rich, >=3 questions) ---------- */
+.rq-index { border: 1px solid var(--np-border); border-radius: 12px; background: var(--np-bg-soft); margin: 18px 0 26px; }
+.rq-index > summary { cursor: pointer; padding: 12px 16px; font-size: 14px; list-style: none; display: flex; align-items: center; gap: 10px; }
+.rq-index > summary::-webkit-details-marker { display: none; }
+.rq-index > summary::before { content: '▸'; color: var(--np-text-muted); transition: transform .15s; }
+.rq-index[open] > summary::before { transform: rotate(90deg); }
+.rq-index .rq-meta { font-family: var(--np-mono); font-size: 11px; color: var(--np-text-muted); }
+.rq-index ol { margin: 0; padding: 0 8px 8px; list-style: none; counter-reset: none; }
+.rq-index li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, auto); align-items: baseline; gap: 12px; padding: 5px 8px; border-top: 1px solid var(--np-border-soft); }
+.rq-index li .jump { display: flex; align-items: baseline; gap: 8px; text-decoration: none; color: var(--np-text); font-size: 13px; min-width: 0; }
+.rq-index li .jump:hover .qt { color: var(--np-accent-hover); }
+.rq-index li .num { font-family: var(--np-mono); font-size: 10.5px; color: var(--np-text-muted); flex: 0 0 auto; }
+.rq-index li .qt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.rq-index li .dot { width: 7px; height: 7px; border-radius: 99px; background: var(--np-border); flex: 0 0 auto; align-self: center; }
+.rq-index li.changed .dot { background: var(--np-accent); }
+.rq-index li .ans { font-family: var(--np-mono); font-size: 11px; color: var(--np-text-muted); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 46%; }
+.rq-index li.changed .ans { color: var(--np-accent-hover); }
+/* per-domain collapsible groups (many questions → an index of domains, not a flat wall) */
+.rq-index .rq-group { border-top: 1px solid var(--np-border); }
+.rq-index .rq-group > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; padding: 8px 10px; font-family: var(--np-mono); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--np-text-muted); }
+.rq-index .rq-group > summary::-webkit-details-marker { display: none; }
+.rq-index .rq-group > summary::before { content: '▸'; transition: transform .15s; }
+.rq-index .rq-group[open] > summary::before { transform: rotate(90deg); }
+.rq-index .rq-group .gname { font-weight: 700; color: var(--np-text); }
+.rq-index .rq-group .gcount { margin-left: auto; }
+.rq-index .rq-group > ol { padding: 0 8px 8px 14px; }
+form.rich-question.rq-flash { box-shadow: 0 0 0 2px var(--np-accent); transition: box-shadow .2s; }
+form.rich-question::before { content: 'Q' attr(data-qn); position: absolute; margin: -8px 0 0 -8px; font-family: var(--np-mono); font-size: 10px; color: var(--np-text-muted); }
+form.rich-question { position: relative; }
+/* recommended option: pre-checked, flagged inline so the default is obvious */
+form.rich-question label.opt[data-recommended] { border: 1px solid var(--np-accent); background: var(--np-accent-bg); }
+form.rich-question label.opt[data-recommended]::after { content: 'reco'; margin-left: auto; align-self: center; flex: 0 0 auto; font-family: var(--np-mono); font-size: 9.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--np-accent-hover); padding: 1px 6px; border: 1px solid var(--np-accent); border-radius: 99px; }
+.rp-gate .rp-progress { margin-right: auto; align-self: center; font-family: var(--np-mono); font-size: 12px; color: var(--np-text-muted); }
+
+/* ---------- rich question — compare-axes table (architectural / weighty choices) ----------
+   Options = columns (<th scope=col>), axes = rows (<th scope=row>): Comportement / Coût /
+   Conséquence… The reader sweeps ONE dimension across all options. Per-cell inline example +
+   colour-coded consequence make each choice decidable in full knowledge. A real <table> so it
+   is self-aligning (no cell-count desync), screen-reader-navigable (scope), and degrades to a
+   horizontal scroll — not a scramble — when narrow. Zero runtime change: the radio's
+   <label class="opt"> wraps only .cax-name, so the overview answer stays clean ("Redis").
+   Scales down: 2 cols + 1-2 rows for binary; bare .opt list for trivial yes/no. */
+.rich-question .rq-stake { font-size: 13px; color: var(--np-text-muted); margin: 2px 0 12px; line-height: 1.5; max-width: 82ch; }
+.rich-question .rq-schema { margin: 4px 0 14px; }
+.rich-question .rq-schema .diagram, .rich-question .rq-schema .d2-fig, .rich-question .rq-schema .mermaid { margin: 0; }
+.rich-question .rq-grid { width: 100%; table-layout: fixed; border-collapse: collapse; border: 1px solid var(--np-border); border-radius: var(--np-radius); overflow: hidden; margin: 12px 0 0; }
+.rich-question .rq-grid th, .rich-question .rq-grid td { border: 1px solid var(--np-border); padding: 10px 12px; font-size: 13px; line-height: 1.45; vertical-align: top; text-align: left; }
+.rich-question .rq-corner, .rich-question .rq-axis { width: 122px; background: var(--np-bg-soft); }
+.rich-question .rq-axis { font-family: var(--np-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--np-text-muted); font-weight: 700; vertical-align: middle; }
+.rich-question .rq-head { background: var(--np-bg-soft); text-transform: none; }
+.rich-question .rq-head label.opt { display: inline-flex; margin: 0; padding: 2px 7px; gap: 7px; font-size: 13px; align-items: center; max-width: 100%; }
+.rich-question .rq-head .cax-name { font-family: var(--np-display); font-weight: 800; font-size: 13.5px; color: var(--np-text); text-transform: none; letter-spacing: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rich-question .rq-head:has(label.opt[data-recommended]) { background: var(--np-accent-bg); }   /* reco column (fallback: inherited .opt[data-recommended] accent chip + ::after badge) */
+.rich-question .rq-head:has(input:checked) { box-shadow: inset 0 -3px 0 var(--np-accent); }     /* picked column underline (progressive) */
+.rich-question .rq-cell .ex { display: block; margin-top: 6px; font-family: var(--np-mono); font-size: 11px; color: var(--np-text-muted); background: var(--np-bg-soft); border: 1px solid var(--np-border-soft); border-radius: 4px; padding: 3px 7px; white-space: normal; word-break: break-word; }
+.rich-question .rq-cell.is-ok { border-left: 3px solid var(--np-success); }
+.rich-question .rq-cell.is-warn { border-left: 3px solid var(--np-warn); }
+.rich-question .rq-cell.is-bad { border-left: 3px solid var(--np-danger); }
+@media (max-width: 720px) {           /* keep the 2D compare — scroll horizontally, never scramble columns */
+  .rich-question.rq-axes { overflow-x: auto; }
+  .rich-question .rq-grid { min-width: 560px; }
+}
+
+/* ---------- theme toggle ---------- */
+.np-theme-toggle { position: fixed; top: 14px; right: 16px; z-index: 50; width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--np-border); background: var(--np-bg-soft); color: var(--np-text); cursor: pointer; font-size: 15px; box-shadow: var(--np-shadow-soft); }
+
+/* ---------- print ---------- */
+@media print {
+  .np-theme-toggle, .rp-gate, .sidebar, .copy-btn, .code-block__copy, .tabs .tab-list, .np-page-nav { display: none !important; }
+  .layout.has-sidebar { grid-template-columns: 1fr; }
+  .tabs.tabs-ready > [data-tab] { display: block !important; }
+  .tabs.tabs-ready > [data-tab]::before { content: attr(data-tab); display: block; font-family: var(--np-mono); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--np-text-muted); margin: 14px 0 6px; }
+  .np-paged .np-page { display: block !important; animation: none; }
+  .rq-index { display: none; }
+  body { font-size: 12px; }
+}
+</style>
+</head>
+<body data-mode="rich">
+<div class="layout">
+<aside class="sidebar"></aside>
+<main class="main">
+<style>
+.tk { border: 1px solid var(--np-border); border-radius: var(--np-radius); padding: 14px 16px; margin: 16px 0; background: var(--np-bg-soft); }
+.tk h3 { margin: 0 0 8px; font-size: 1rem; line-height: 1.35; }
+.tk-key { display: inline-block; font-family: var(--np-mono); font-size: .78rem; color: var(--np-text-muted); margin-right: .4em; }
+.tk .meta { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.tk p { margin: 0 0 8px; }
+.tk .tk-blk { font-size: .9rem; color: var(--np-text-muted); }
+.gate td, .gate th { border-bottom: 1px solid var(--np-border-soft); padding: 8px 10px; text-align: left; vertical-align: top; }
+.gate { width: 100%; border-collapse: collapse; }
+.gate th { font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: var(--np-text-muted); }
+</style>
+
+<header>
+  <div class="eyebrow">Découpage · pare-feu de zone · avant publication Plane</div>
+  <h1>Une épique, huit tickets, deux frontières</h1>
+  <p class="dek">Le spec validé devient une épique <code>INFRA</code> de sept tickets et un ticket d'adoption sous l'épique existante <code>MINA-7</code>. Rien n'est écrit dans Plane avant l'approbation de ce document.</p>
+</header>
+
+<div class="tldr">
+  <p>Deux tickets démarrent immédiatement : la préfacto des rulesets et la lecture du fichier de configuration. Tout le reste en dépend. Les quatre générateurs se parallélisent ensuite, la documentation ferme l'épique, et l'adoption studiobymina n'attend que le plafond amont et les plafonds d'invocation.</p>
+</div>
+
+<div class="strip">
+  <div class="cell"><div class="k">épique créée</div><div class="v">1</div></div>
+  <div class="cell"><div class="k">tickets</div><div class="v">8</div></div>
+  <div class="cell"><div class="k">frontière</div><div class="v">2<small> démarrables</small></div></div>
+  <div class="cell"><div class="k">grille agent</div><div class="v">8<small>/8 ok</small></div></div>
+  <div class="cell"><div class="k">décisions à trancher</div><div class="v">4</div></div>
+</div>
+
+<section id="graphe" data-group="Vue d'ensemble">
+  <h2><span class="num">01</span>Le graphe de dépendances</h2>
+  <p class="lead">Les arêtes sont ce qui est soumis à ton jugement : elles décident de ce qui peut être pris en parallèle.</p>
+
+  <div class="mermaid">flowchart TD
+  subgraph INFRA["core-infra — épique pare-feu de zone"]
+    T1["T1 · Les familles de rulesets<br/>coexistent"]
+    T2["T2 · nextnode.toml lit et<br/>refuse"]
+    T3["T3 · La rafale meurt au bord"]
+    T4["T4 · Seuls les chemins<br/>déclarés sont publics"]
+    T5["T5 · Chaque worker est borné"]
+    T6["T6 · Le limiteur est un<br/>binding typé"]
+    T7["T7 · La doc décrit les<br/>quatre barrières"]
+  end
+  subgraph MINA["studiobymina — sous MINA-7"]
+    T8["T8 · Les formulaires sont<br/>plafonnés, l'api sort<br/>d'Internet"]
+  end
+  T1 --> T3
+  T1 --> T4
+  T2 --> T3
+  T2 --> T4
+  T2 --> T5
+  T2 --> T6
+  T3 --> T7
+  T4 --> T7
+  T5 --> T7
+  T6 --> T7
+  T3 --> T8
+  T5 --> T8
+  classDef frontier stroke-width:3px
+  class T1,T2 frontier</div>
+
+  <p>Deux nœuds n'ont aucun bloqueur, en trait épais. <code>T1</code> ouvre la couture Terraform, <code>T2</code> ouvre la surface de configuration : ils ne se touchent pas et peuvent être pris ensemble. Les quatre générateurs (<code>T3</code>, <code>T4</code>, <code>T5</code>, <code>T6</code>) se parallélisent dès que leurs bloqueurs sont livrés — <code>T5</code> et <code>T6</code> n'attendent même pas la préfacto, puisqu'ils ne produisent aucun ruleset.</p>
+  <div class="callout"><span class="ttl">Une arête n'est pas dans le graphe</span> La fusion de la PR #18 de studiobymina bloque réellement <code>T8</code>, mais elle n'est pas un élément de Plane. Elle est écrite dans les pièges du ticket ; la question 4 propose d'en faire une arête native.</div>
+</section>
+
+<section id="epique-infra" data-group="core-infra">
+  <h2><span class="num">02</span>L'épique <code>INFRA</code></h2>
+  <p class="lead">Workers — pare-feu de zone : un projet déclare ses barrières Cloudflare dans nextnode.toml</p>
+  <details class="fold"><summary>Corps exact publié dans Plane</summary><div class="fold-body">
+<figure class="code-block" data-file="épique — description_html" data-lang="html">
+<pre><code class="language-html">&lt;div&gt;
+&lt;h3&gt;Intention&lt;/h3&gt;
+&lt;p&gt;Ouvrir dans &lt;code&gt;nextnode.toml&lt;/code&gt; les quatre canaux qui n'existent pas aujourd'hui sur la cible &lt;code&gt;cloudflare-workers&lt;/code&gt; : le plafond amont (règle de rate limiting de zone), la porte publique (custom rule deny-par-défaut par chemins), les plafonds d'invocation (&lt;code&gt;limits&lt;/code&gt; wrangler) et le limiteur applicatif (binding Rate Limit). La configuration wrangler et le Terraform étant entièrement générés, un projet ne peut aujourd'hui rien ajouter par lui-même : l'exposition d'un worker est en tout-ou-rien et aucune barrière n'existe en amont de la facturation.&lt;/p&gt;
+&lt;h3&gt;Valeur livrée&lt;/h3&gt;
+&lt;p&gt;À la fin, un projet coupe une rafale au bord de Cloudflare sans jamais la facturer, n'ouvre à Internet que les chemins qu'il nomme, borne le coût de chaque invocation, et lit un limiteur de débit comme un binding typé — le tout en déclaratif. Sans cette épique, la seule barrière possible est du code exécuté après facturation, ce qui ne plafonne aucune dépense.&lt;/p&gt;
+&lt;h3&gt;Terminée quand&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Un &lt;code&gt;nextnode.toml&lt;/code&gt; qui déclare &lt;code&gt;rate_limit&lt;/code&gt;, &lt;code&gt;public_paths&lt;/code&gt;, &lt;code&gt;limits&lt;/code&gt; et &lt;code&gt;rate_limiters&lt;/code&gt; se charge sans erreur, et chaque violation du plan Free échoue au chargement avec un message citant la contrainte.&lt;/li&gt;
+&lt;li&gt;Le &lt;code&gt;main.tf.json&lt;/code&gt; généré pour la production porte un ruleset &lt;code&gt;http_ratelimit&lt;/code&gt; et un ruleset &lt;code&gt;http_request_firewall_custom&lt;/code&gt;, et les Redirect Rules existantes sont intactes.&lt;/li&gt;
+&lt;li&gt;Le &lt;code&gt;main.tf.json&lt;/code&gt; généré pour le développement ne porte ni l'un ni l'autre.&lt;/li&gt;
+&lt;li&gt;La configuration wrangler générée porte &lt;code&gt;limits&lt;/code&gt; sur chaque worker, et &lt;code&gt;ratelimits&lt;/code&gt; sur ceux qui en déclarent ; les types de bindings générés portent le type &lt;code&gt;RateLimit&lt;/code&gt; correspondant.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;pnpm --filter @nextnode-solutions/infrastructure test&lt;/code&gt;, &lt;code&gt;lint&lt;/code&gt; et &lt;code&gt;type-check&lt;/code&gt; passent.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Périmètre de fichiers&lt;/h3&gt;
+&lt;p&gt;&lt;code&gt;packages/infrastructure/src/domain/cloudflare/workers/terraform-main-config.ts&lt;/code&gt;, &lt;code&gt;terraform-resources.ts&lt;/code&gt;, &lt;code&gt;terraform-redirects.ts&lt;/code&gt;, &lt;code&gt;terraform-config.ts&lt;/code&gt;, &lt;code&gt;wrangler-document.ts&lt;/code&gt;, &lt;code&gt;wrangler-config.ts&lt;/code&gt;, &lt;code&gt;worker-env-types.ts&lt;/code&gt;, &lt;code&gt;packages/infrastructure/src/config/types.ts&lt;/code&gt;, &lt;code&gt;src/config/validation/deploy-worker-services.ts&lt;/code&gt;, &lt;code&gt;src/config/validation/providers/cloudflare-workers.ts&lt;/code&gt;, &lt;code&gt;src/config/load.test.ts&lt;/code&gt;, &lt;code&gt;packages/infrastructure/CLAUDE.md&lt;/code&gt;&lt;/p&gt;
+&lt;h3&gt;Hors périmètre&lt;/h3&gt;
+&lt;p&gt;Les autres briques WAF (bot management, listes, règles managées), une grammaire de custom rules arbitraires dans le TOML, la détection du plan Cloudflare à l'exécution, et l'adoption par un projet client — qui vit dans son propre dépôt.&lt;/p&gt;
+&lt;/div&gt;</code></pre>
+</figure>
+  </div></details>
+  <p>Sept tickets, une seule sortie observable : un projet déclare ses barrières et l'infra les provisionne. L'épique est purement technique du point de vue des utilisateurs finaux ; son <code>Intention</code> l'assume, ses bénéficiaires sont les projets qui consomment le paquet.</p>
+</section>
+
+<section id="tickets-infra" data-group="core-infra">
+  <h2><span class="num">03</span>Les sept tickets</h2>
+  <p class="lead">Chaque corps est le HTML exact qui partira dans Plane — repliés pour rester lisibles, dépliables pour être vérifiés.</p>
+<div class="tk">
+  <h3><span class="tk-key">T1</span> Plusieurs familles de rulesets Terraform coexistent sans qu’aucune n’efface les autres</h3>
+  <div class="meta"><span class="pill danger">high</span><span class="pill mono">INFRA</span><span class="pill success">frontière</span></div>
+  <p>La couture qui rend possible tout ajout de ruleset : types ouverts et assemblage par accumulation.</p>
+  <p class="tk-blk"><b>Bloquée par</b> — <b>aucune — démarrable immédiatement</b></p>
+  <details class="fold"><summary>Corps exact publié dans Plane</summary><div class="fold-body">
+<figure class="code-block" data-file="T1 — description_html" data-lang="html">
+<pre><code class="language-html">&lt;div&gt;
+&lt;h3&gt;Ticket technique — justification&lt;/h3&gt;
+&lt;p&gt;Aucune valeur utilisateur directe. Sans lui, ajouter un ruleset de rate limiting &lt;strong&gt;efface&lt;/strong&gt; les Redirect Rules &lt;code&gt;.fr → .com&lt;/code&gt; au premier &lt;code&gt;terraform apply&lt;/code&gt; : &lt;code&gt;buildResourceBlock&lt;/code&gt; affecte &lt;code&gt;resource.cloudflare_ruleset&lt;/code&gt; au lieu de le compléter. Et la règle de rate limiting n'est pas typable sans affaiblir le type de la redirection, figé sur &lt;code&gt;action: 'redirect'&lt;/code&gt;.&lt;/p&gt;
+&lt;h3&gt;Objectif&lt;/h3&gt;
+&lt;p&gt;&lt;code&gt;RulesetRule&lt;/code&gt; est une union discriminée par son action, &lt;code&gt;RulesetResource&lt;/code&gt; n'impose plus une phase unique, et le bloc de ressources assemble les familles de rulesets au lieu d'en affecter une seule.&lt;/p&gt;
+&lt;h3&gt;Critères d'acceptation&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Étant donné un projet qui déclare &lt;code&gt;redirect_domains&lt;/code&gt;, quand &lt;code&gt;buildTerraformMainConfig&lt;/code&gt; est appelé pour la production, alors le &lt;code&gt;main.tf.json&lt;/code&gt; produit est &lt;strong&gt;identique&lt;/strong&gt; à celui d'avant ce ticket (les tests existants de &lt;code&gt;terraform-config.test.ts&lt;/code&gt; passent sans modification de leurs attentes).&lt;/li&gt;
+&lt;li&gt;Étant donné deux familles de rulesets aux clés distinctes, quand elles sont assemblées par la fonction d'assemblage exportée, alors la map résultante contient les entrées des deux familles.&lt;/li&gt;
+&lt;li&gt;Les clés de ruleset sont préfixées par famille (&lt;code&gt;redirect_*&lt;/code&gt; pour l'existant), de sorte qu'une collision de clés entre familles est impossible par construction ; un test le pin.&lt;/li&gt;
+&lt;li&gt;Ajouter une branche à l'union &lt;code&gt;RulesetRule&lt;/code&gt; ne demande aucune modification de la branche &lt;code&gt;redirect&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;pnpm --filter @nextnode-solutions/infrastructure test&lt;/code&gt; passe.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;pnpm --filter @nextnode-solutions/infrastructure type-check&lt;/code&gt; passe.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Notes techniques&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;État de départ, vérifié le 2026-07-26 : &lt;code&gt;src/domain/cloudflare/workers/terraform-main-config.ts&lt;/code&gt; déclare &lt;code&gt;RulesetRule&lt;/code&gt; avec &lt;code&gt;action: 'redirect'&lt;/code&gt; et &lt;code&gt;action_parameters.from_value&lt;/code&gt;, et &lt;code&gt;RulesetResource&lt;/code&gt; avec &lt;code&gt;kind: 'zone'&lt;/code&gt; et &lt;code&gt;phase: 'http_request_dynamic_redirect'&lt;/code&gt;. &lt;code&gt;TerraformResourceBlock.cloudflare_ruleset&lt;/code&gt; est un &lt;code&gt;Readonly&amp;lt;Record&amp;lt;string, RulesetResource&amp;gt;&amp;gt;&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;État de départ : dans &lt;code&gt;src/domain/cloudflare/workers/terraform-resources.ts&lt;/code&gt;, &lt;code&gt;buildResourceBlock&lt;/code&gt; écrit &lt;code&gt;resource.cloudflare_dns_record = dns&lt;/code&gt; et &lt;code&gt;resource.cloudflare_ruleset = rulesets&lt;/code&gt; dans le bloc &lt;code&gt;if (derived.redirectDomains.length &amp;gt; 0)&lt;/code&gt;. Les deux affectations sont à remplacer par une accumulation.&lt;/li&gt;
+&lt;li&gt;Art antérieur à imiter : &lt;code&gt;src/domain/cloudflare/workers/terraform-redirects.ts&lt;/code&gt; — un constructeur pur par famille qui rend &lt;code&gt;Record&amp;lt;string, RulesetResource&amp;gt;&lt;/code&gt;, sans effet de bord.&lt;/li&gt;
+&lt;li&gt;Contrat de l'assemblage : fonction pure exportée, entrée &lt;code&gt;ReadonlyArray&amp;lt;Record&amp;lt;string, RulesetResource&amp;gt;&amp;gt;&lt;/code&gt;, sortie &lt;code&gt;Record&amp;lt;string, RulesetResource&amp;gt;&lt;/code&gt;. Elle ne trie pas, ne renomme pas, ne valide pas.&lt;/li&gt;
+&lt;li&gt;La couche domaine est 100 % pure : ce ticket ne touche aucun adaptateur et n'ajoute aucune entrée-sortie.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Pièges&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;L'affectation actuelle est la cause du bug : remplacer &lt;code&gt;resource.cloudflare_ruleset = rulesets&lt;/code&gt; par une accumulation, jamais par un second &lt;code&gt;if&lt;/code&gt; qui affecte à nouveau.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;kind&lt;/code&gt; doit rester &lt;code&gt;'zone'&lt;/code&gt; : le point d'entrée de phase d'une zone est de kind zone, et l'API Cloudflare rejette &lt;code&gt;'root'&lt;/code&gt; sur un ruleset de zone. Le commentaire de &lt;code&gt;terraform-redirects.ts&lt;/code&gt; le documente déjà.&lt;/li&gt;
+&lt;li&gt;Les rulesets de redirection portent sur la zone du domaine redirigé (&lt;code&gt;redirectZoneLabel&lt;/code&gt;), pas sur la zone principale. Ne pas uniformiser les &lt;code&gt;zone_id&lt;/code&gt; en croyant corriger une incohérence.&lt;/li&gt;
+&lt;li&gt;Ne pas élargir &lt;code&gt;phase&lt;/code&gt; en &lt;code&gt;string&lt;/code&gt; : la garder en union littérale des phases réellement émises, sinon le générateur accepte une phase inexistante.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Bloquée par&lt;/h3&gt;
+&lt;p&gt;Aucune, peut démarrer immédiatement.&lt;/p&gt;
+&lt;/div&gt;</code></pre>
+</figure>
+  </div></details>
+</div>
+<div class="tk">
+  <h3><span class="tk-key">T2</span> nextnode.toml accepte les quatre blocs de pare-feu et refuse ce que le plan Free interdit</h3>
+  <div class="meta"><span class="pill danger">high</span><span class="pill mono">INFRA</span><span class="pill success">frontière</span></div>
+  <p>La surface de configuration et toutes ses erreurs de chargement, avant tout générateur.</p>
+  <p class="tk-blk"><b>Bloquée par</b> — <b>aucune — démarrable immédiatement</b></p>
+  <details class="fold"><summary>Corps exact publié dans Plane</summary><div class="fold-body">
+<figure class="code-block" data-file="T2 — description_html" data-lang="html">
+<pre><code class="language-html">&lt;div&gt;
+&lt;h3&gt;Ticket technique — justification&lt;/h3&gt;
+&lt;p&gt;Aucune valeur utilisateur directe : ce ticket n'émet rien. Sans lui, les quatre générateurs n'ont aucune entrée à lire, et les contraintes du plan Free (une seule règle de rate limiting par zone, cinq custom rules) ne seraient découvertes qu'au &lt;code&gt;terraform apply&lt;/code&gt;, après provisionnement.&lt;/p&gt;
+&lt;h3&gt;Objectif&lt;/h3&gt;
+&lt;p&gt;Chaque &lt;code&gt;WorkerServiceConfig&lt;/code&gt; chargé porte &lt;code&gt;rateLimit&lt;/code&gt;, &lt;code&gt;publicPaths&lt;/code&gt;, &lt;code&gt;limits&lt;/code&gt; et &lt;code&gt;rateLimiters&lt;/code&gt;, et tout ce qui violerait une contrainte du plan Free ou la dérivation de l'hôte échoue au chargement du fichier.&lt;/p&gt;
+&lt;h3&gt;Critères d'acceptation&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Étant donné un &lt;code&gt;nextnode.toml&lt;/code&gt; déclarant &lt;code&gt;[deploy.services.web.rate_limit]&lt;/code&gt; avec &lt;code&gt;paths&lt;/code&gt; et &lt;code&gt;requests_per_period&lt;/code&gt;, quand il est chargé, alors &lt;code&gt;config.deploy.services['web'].rateLimit&lt;/code&gt; vaut &lt;code&gt;{ paths, requestsPerPeriod, period: 60, mitigationTimeout: 600 }&lt;/code&gt; — les deux derniers étant les valeurs par défaut.&lt;/li&gt;
+&lt;li&gt;Étant donné &lt;code&gt;public_paths = ["/webhooks/*"]&lt;/code&gt; sur un worker routé, quand le fichier est chargé, alors &lt;code&gt;publicPaths&lt;/code&gt; vaut ce tableau ; &lt;code&gt;public_paths = []&lt;/code&gt; est accepté et signifie « aucun chemin public ».&lt;/li&gt;
+&lt;li&gt;Étant donné un worker sans &lt;code&gt;url&lt;/code&gt; portant &lt;code&gt;rate_limit&lt;/code&gt; ou &lt;code&gt;public_paths&lt;/code&gt;, quand le fichier est chargé, alors le chargement échoue avec un message nommant le service et disant qu'aucun hôte n'est dérivable sans &lt;code&gt;url&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Étant donné deux blocs &lt;code&gt;rate_limit&lt;/code&gt; sur deux workers, quand le fichier est chargé, alors le chargement échoue avec un message citant le plafond d'une règle de rate limiting par zone sur le plan Free.&lt;/li&gt;
+&lt;li&gt;Étant donné six workers portant &lt;code&gt;public_paths&lt;/code&gt;, quand le fichier est chargé, alors le chargement échoue avec un message citant le plafond de cinq custom rules par zone sur le plan Free.&lt;/li&gt;
+&lt;li&gt;Sont refusés au chargement : une &lt;code&gt;period&lt;/code&gt; hors de 10, 60, 120, 300, 600, 3600 ; un &lt;code&gt;mitigation_timeout&lt;/code&gt; hors de 0, 10, 60, 120, 300, 600, 3600, 86400 ; un &lt;code&gt;paths&lt;/code&gt; vide ; un chemin ne commençant pas par &lt;code&gt;/&lt;/code&gt; ; une méthode HTTP inconnue ; un &lt;code&gt;cpu_ms&lt;/code&gt; ou un &lt;code&gt;subrequests&lt;/code&gt; non entier positif ; une &lt;code&gt;period&lt;/code&gt; de &lt;code&gt;rate_limiters&lt;/code&gt; autre que 10 ou 60 ; un &lt;code&gt;name&lt;/code&gt; de &lt;code&gt;rate_limiters&lt;/code&gt; ne respectant pas &lt;code&gt;KEBAB_IDENTIFIER_PATTERN&lt;/code&gt; ; deux &lt;code&gt;rate_limiters&lt;/code&gt; de même &lt;code&gt;name&lt;/code&gt; sur un même worker.&lt;/li&gt;
+&lt;li&gt;Chaque cas ci-dessus a un test dans &lt;code&gt;src/config/load.test.ts&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;pnpm --filter @nextnode-solutions/infrastructure test&lt;/code&gt; passe.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Notes techniques&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;État de départ, vérifié le 2026-07-26 : &lt;code&gt;src/config/types.ts&lt;/code&gt; déclare &lt;code&gt;WorkerServiceConfig&lt;/code&gt; avec exactement &lt;code&gt;url?&lt;/code&gt;, &lt;code&gt;secrets&lt;/code&gt;, &lt;code&gt;needs&lt;/code&gt;, &lt;code&gt;dependsOn&lt;/code&gt;, &lt;code&gt;entry&lt;/code&gt;, &lt;code&gt;observability&lt;/code&gt;. &lt;code&gt;KEBAB_IDENTIFIER_PATTERN&lt;/code&gt; y est déjà exporté.&lt;/li&gt;
+&lt;li&gt;État de départ : &lt;code&gt;src/config/validation/deploy-worker-services.ts&lt;/code&gt; porte &lt;code&gt;workerServiceSchema(name)&lt;/code&gt; (valibot), &lt;code&gt;containerFieldsForbidden(name)&lt;/code&gt; et &lt;code&gt;toWorkerService(parsed)&lt;/code&gt;. C'est là que se branchent les nouveaux champs.&lt;/li&gt;
+&lt;li&gt;État de départ : &lt;code&gt;src/config/validation/providers/cloudflare-workers.ts&lt;/code&gt; porte &lt;code&gt;validateWorkerServiceUrls(services, domain)&lt;/code&gt;, la seule validation qui voit &lt;strong&gt;tous&lt;/strong&gt; les services à la fois. Les comptages (une règle de rate limiting, cinq custom rules) y vont — un schéma par service ne peut pas voir ses frères.&lt;/li&gt;
+&lt;li&gt;Art antérieur à imiter : &lt;code&gt;CONTAINER_FIELD_REASONS&lt;/code&gt; + &lt;code&gt;containerFieldsForbidden&lt;/code&gt; pour un message d'erreur qui explique &lt;em&gt;pourquoi&lt;/em&gt;, et &lt;code&gt;validateWorkerServiceUrls&lt;/code&gt; pour une validation croisée.&lt;/li&gt;
+&lt;li&gt;Tests : &lt;code&gt;src/config/load.test.ts&lt;/code&gt; charge des fixtures via &lt;code&gt;loadConfig(fixture('…'))&lt;/code&gt; ; la fixture de la cible est &lt;code&gt;src/config/fixtures/cloudflare-workers-app.toml&lt;/code&gt;. Suivre la convention du fichier pour les cas d'erreur.&lt;/li&gt;
+&lt;li&gt;Contrat de nommage : le TOML est en &lt;code&gt;snake_case&lt;/code&gt; (&lt;code&gt;requests_per_period&lt;/code&gt;), la config chargée en &lt;code&gt;camelCase&lt;/code&gt; (&lt;code&gt;requestsPerPeriod&lt;/code&gt;) — c'est déjà la règle de &lt;code&gt;depends_on&lt;/code&gt; → &lt;code&gt;dependsOn&lt;/code&gt;.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Pièges&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Le plafond « une règle de rate limiting par zone » est un plafond de &lt;strong&gt;projet&lt;/strong&gt; ici, puisqu'un projet a une zone : le compter dans le validateur de provider, pas dans le schéma par service.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;cf.colo.id&lt;/code&gt; ne se déclare jamais dans le fichier de configuration : c'est une constante du générateur. Ne pas exposer &lt;code&gt;characteristics&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Ne pas exposer &lt;code&gt;action&lt;/code&gt; ni &lt;code&gt;response&lt;/code&gt; : le plan Free n'autorise pas l'action &lt;code&gt;log&lt;/code&gt; sur les custom rules, et la réponse personnalisée y est annoncée comme réservée aux plans payants. Le générateur décide.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;public_paths = []&lt;/code&gt; ne doit pas être confondu avec l'absence de &lt;code&gt;public_paths&lt;/code&gt; : le premier bloque tout, le second n'émet aucune règle. Utiliser &lt;code&gt;optional()&lt;/code&gt; sans valeur par défaut.&lt;/li&gt;
+&lt;li&gt;Un champ oublié dans &lt;code&gt;toWorkerService&lt;/code&gt; se charge silencieusement en &lt;code&gt;undefined&lt;/code&gt; et le générateur n'émet rien : ajouter un test qui lit la valeur chargée, pas seulement l'absence d'erreur.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Bloquée par&lt;/h3&gt;
+&lt;p&gt;Aucune, peut démarrer immédiatement.&lt;/p&gt;
+&lt;/div&gt;</code></pre>
+</figure>
+  </div></details>
+</div>
+<div class="tk">
+  <h3><span class="tk-key">T3</span> Une rafale sur un chemin déclaré meurt au bord de Cloudflare, sans invocation facturée</h3>
+  <div class="meta"><span class="pill danger">high</span><span class="pill mono">INFRA</span></div>
+  <p>Le ruleset http_ratelimit émis par Terraform, en production seulement.</p>
+  <p class="tk-blk"><b>Bloquée par</b> — <code>T1</code> — Plusieurs familles de rulesets Terraform coexistent sans qu’aucune n’efface les autres · <code>T2</code> — nextnode.toml accepte les quatre blocs de pare-feu et refuse ce que le plan Free interdit</p>
+  <details class="fold"><summary>Corps exact publié dans Plane</summary><div class="fold-body">
+<figure class="code-block" data-file="T3 — description_html" data-lang="html">
+<pre><code class="language-html">&lt;div&gt;
+&lt;h3&gt;Récit&lt;/h3&gt;
+&lt;p&gt;En tant que développeur d'un projet workers, je veux déclarer un seuil de requêtes sur un ensemble de chemins, afin qu'une rafale soit coupée avant d'entrer dans le worker — donc avant d'être facturée.&lt;/p&gt;
+&lt;h3&gt;Valeur&lt;/h3&gt;
+&lt;p&gt;Sur Cloudflare la facturation démarre à l'entrée dans le worker : toute barrière écrite en code est déjà payée quand elle rejette. Sans ce ticket, un projet n'a aucun moyen de plafonner une dépense, et Cloudflare n'offre pas de plafond de dépense.&lt;/p&gt;
+&lt;h3&gt;Critères d'acceptation&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Étant donné un worker routé &lt;code&gt;url = "exemple.com"&lt;/code&gt; portant &lt;code&gt;rate_limit&lt;/code&gt; avec &lt;code&gt;paths = ["/api/contact"]&lt;/code&gt;, &lt;code&gt;methods = ["POST"]&lt;/code&gt;, &lt;code&gt;requests_per_period = 5&lt;/code&gt;, quand &lt;code&gt;buildTerraformMainConfig(config, 'production')&lt;/code&gt; est appelé, alors &lt;code&gt;resource.cloudflare_ruleset&lt;/code&gt; contient une entrée de &lt;code&gt;kind: "zone"&lt;/code&gt;, &lt;code&gt;phase: "http_ratelimit"&lt;/code&gt;, &lt;code&gt;zone_id&lt;/code&gt; pointant sur la zone principale, dont l'unique règle porte &lt;code&gt;action: "block"&lt;/code&gt;, &lt;code&gt;ratelimit.characteristics: ["ip.src", "cf.colo.id"]&lt;/code&gt;, &lt;code&gt;ratelimit.period: 60&lt;/code&gt;, &lt;code&gt;ratelimit.requests_per_period: 5&lt;/code&gt;, &lt;code&gt;ratelimit.mitigation_timeout: 600&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;L'expression produite est &lt;code&gt;(http.host eq "exemple.com" and (http.request.uri.path eq "/api/contact") and http.request.method in {"POST"})&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Étant donné plusieurs &lt;code&gt;paths&lt;/code&gt;, quand la règle est produite, alors les chemins sont joints par &lt;code&gt;or&lt;/code&gt; dans l'ordre déclaré.&lt;/li&gt;
+&lt;li&gt;Étant donné un chemin terminé par &lt;code&gt;*&lt;/code&gt;, quand la règle est produite, alors il devient &lt;code&gt;starts_with(http.request.uri.path, "&amp;lt;préfixe&amp;gt;")&lt;/code&gt; — le &lt;code&gt;*&lt;/code&gt; retiré, le reste littéral.&lt;/li&gt;
+&lt;li&gt;Étant donné aucun &lt;code&gt;methods&lt;/code&gt;, quand la règle est produite, alors l'expression ne contient aucune clause de méthode.&lt;/li&gt;
+&lt;li&gt;La règle porte &lt;code&gt;action_parameters.response&lt;/code&gt; avec &lt;code&gt;status_code: 429&lt;/code&gt;, &lt;code&gt;content_type: "application/json"&lt;/code&gt; et &lt;code&gt;content: {"error":"rate_limited"}&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Étant donné le même config, quand &lt;code&gt;buildTerraformMainConfig(config, 'development')&lt;/code&gt; est appelé, alors aucun ruleset &lt;code&gt;http_ratelimit&lt;/code&gt; n'est émis.&lt;/li&gt;
+&lt;li&gt;Étant donné un projet qui déclare aussi &lt;code&gt;redirect_domains&lt;/code&gt;, quand la production est générée, alors les entrées &lt;code&gt;redirect_*&lt;/code&gt; et l'entrée de rate limiting coexistent dans &lt;code&gt;cloudflare_ruleset&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Étant donné l'hôte d'un worker en développement, quand la règle serait produite, alors elle ne l'est pas — donc &lt;code&gt;dev.&lt;/code&gt; n'apparaît jamais dans une expression.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;pnpm --filter @nextnode-solutions/infrastructure test&lt;/code&gt; passe.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Notes techniques&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;État de départ, vérifié le 2026-07-26 : &lt;code&gt;deriveWorkersResources(config, environment)&lt;/code&gt; dans &lt;code&gt;src/domain/cloudflare/workers/terraform-resources.ts&lt;/code&gt; ne lit aujourd'hui que &lt;code&gt;config.project&lt;/code&gt; et &lt;code&gt;config.services&lt;/code&gt; ; les workers (&lt;code&gt;config.deploy.services&lt;/code&gt;) n'y entrent pas. &lt;code&gt;WorkersDerivedResources&lt;/code&gt; doit gagner les règles de zone dérivées, calculées &lt;strong&gt;en production seulement&lt;/strong&gt;, exactement comme &lt;code&gt;redirectDomains&lt;/code&gt; l'est déjà.&lt;/li&gt;
+&lt;li&gt;État de départ : &lt;code&gt;MAIN_ZONE_ID_REF = '${data.cloudflare_zone.zone_main.id}'&lt;/code&gt; et &lt;code&gt;MAIN_ZONE_LABEL = 'zone_main'&lt;/code&gt; sont des constantes de module non exportées de &lt;code&gt;terraform-resources.ts&lt;/code&gt; ; &lt;code&gt;buildZoneData&lt;/code&gt; garantit que la zone principale existe toujours.&lt;/li&gt;
+&lt;li&gt;À créer : un module frère de &lt;code&gt;terraform-redirects.ts&lt;/code&gt; — même forme, un constructeur pur qui rend &lt;code&gt;Record&amp;lt;string, RulesetResource&amp;gt;&lt;/code&gt; sous une clé préfixée &lt;code&gt;ratelimit_&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Contrat : entrée = nom du worker, hôte résolu, et le &lt;code&gt;rateLimit&lt;/code&gt; chargé ; sortie = un &lt;code&gt;RulesetResource&lt;/code&gt;. Aucune valeur par défaut n'est appliquée ici : elles l'ont été au chargement du fichier.&lt;/li&gt;
+&lt;li&gt;L'hôte vient de &lt;code&gt;resolveDeployDomain(service.url, environment)&lt;/code&gt; (&lt;code&gt;src/domain/deploy/domain.ts&lt;/code&gt;) — jamais du domaine du projet, un worker pouvant être routé sur un sous-domaine.&lt;/li&gt;
+&lt;li&gt;Tests : &lt;code&gt;src/domain/cloudflare/workers/terraform-config.test.ts&lt;/code&gt;, par valeurs, sans mock.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Pièges&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;cf.colo.id&lt;/code&gt; est &lt;strong&gt;obligatoire&lt;/strong&gt; dans &lt;code&gt;characteristics&lt;/code&gt; et &lt;strong&gt;interdit&lt;/strong&gt; dans l'expression. Le poser en constante du générateur.&lt;/li&gt;
+&lt;li&gt;Une zone n'a qu'un ruleset d'entrée par phase : si les workspaces dev et prod émettaient tous les deux ce ruleset, chaque &lt;code&gt;apply&lt;/code&gt; écraserait les règles de l'autre. D'où la production seule — même raison que pour les Redirect Rules.&lt;/li&gt;
+&lt;li&gt;Le guillemet double doit être échappé dans l'expression JSON, et le &lt;code&gt;content&lt;/code&gt; de la réponse est lui-même du JSON : double échappement. Écrire la valeur en TypeScript et laisser la sérialisation faire le reste, ne jamais concaténer du JSON à la main.&lt;/li&gt;
+&lt;li&gt;La réponse personnalisée peut être refusée par l'API Cloudflare sur le plan Free (la documentation l'annonce Pro et au-dessus pour les custom rules ; la table des paramètres du rate limiting ne pose pas cette restriction). Si l'&lt;code&gt;apply&lt;/code&gt; la refuse, repli décidé : émettre l'action sans &lt;code&gt;action_parameters&lt;/code&gt; et rien d'autre — ne pas changer de plan, ne pas changer d'action.&lt;/li&gt;
+&lt;li&gt;Ne pas ajouter de dépendance à la zone : elle est déjà un &lt;code&gt;data&lt;/code&gt;, jamais une ressource gérée.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Bloquée par&lt;/h3&gt;
+&lt;p&gt;À compléter à la publication.&lt;/p&gt;
+&lt;/div&gt;</code></pre>
+</figure>
+  </div></details>
+</div>
+<div class="tk">
+  <h3><span class="tk-key">T4</span> Seuls les chemins déclarés d’un worker routé sont joignables depuis Internet</h3>
+  <div class="meta"><span class="pill danger">high</span><span class="pill mono">INFRA</span></div>
+  <p>Le ruleset http_request_firewall_custom deny-par-défaut, une règle par worker déclarant.</p>
+  <p class="tk-blk"><b>Bloquée par</b> — <code>T1</code> — Plusieurs familles de rulesets Terraform coexistent sans qu’aucune n’efface les autres · <code>T2</code> — nextnode.toml accepte les quatre blocs de pare-feu et refuse ce que le plan Free interdit</p>
+  <details class="fold"><summary>Corps exact publié dans Plane</summary><div class="fold-body">
+<figure class="code-block" data-file="T4 — description_html" data-lang="html">
+<pre><code class="language-html">&lt;div&gt;
+&lt;h3&gt;Récit&lt;/h3&gt;
+&lt;p&gt;En tant que développeur d'une api majoritairement privée, je veux nommer les seuls chemins joignables depuis Internet, afin de garder un domaine public sans exposer le reste de mes routes ni les faire facturer.&lt;/p&gt;
+&lt;h3&gt;Valeur&lt;/h3&gt;
+&lt;p&gt;Aujourd'hui l'exposition est en tout-ou-rien : &lt;code&gt;url&lt;/code&gt; présent publie le worker entier, &lt;code&gt;url&lt;/code&gt; absent le réserve au service binding. Une api dont neuf chemins sur dix devraient rester privés n'a aucune façon de le dire, et chaque scan de ses chemins privés est facturé.&lt;/p&gt;
+&lt;h3&gt;Critères d'acceptation&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Étant donné un worker routé &lt;code&gt;url = "api.exemple.com"&lt;/code&gt; portant &lt;code&gt;public_paths = ["/webhooks/*", "/health"]&lt;/code&gt;, quand &lt;code&gt;buildTerraformMainConfig(config, 'production')&lt;/code&gt; est appelé, alors &lt;code&gt;resource.cloudflare_ruleset&lt;/code&gt; contient une entrée de &lt;code&gt;kind: "zone"&lt;/code&gt;, &lt;code&gt;phase: "http_request_firewall_custom"&lt;/code&gt;, dont une règle porte &lt;code&gt;action: "block"&lt;/code&gt; et l'expression &lt;code&gt;(http.host eq "api.exemple.com" and not (starts_with(http.request.uri.path, "/webhooks/") or http.request.uri.path eq "/health"))&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;La règle ne porte &lt;strong&gt;aucun&lt;/strong&gt; &lt;code&gt;action_parameters&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Étant donné &lt;code&gt;public_paths = []&lt;/code&gt;, quand la règle est produite, alors l'expression est &lt;code&gt;(http.host eq "api.exemple.com")&lt;/code&gt; — tout est refusé.&lt;/li&gt;
+&lt;li&gt;Étant donné deux workers déclarant &lt;code&gt;public_paths&lt;/code&gt;, quand la production est générée, alors le ruleset porte deux règles, ordonnées par nom de service, et chacune a un &lt;code&gt;ref&lt;/code&gt; distinct.&lt;/li&gt;
+&lt;li&gt;Étant donné le même config, quand le développement est généré, alors aucun ruleset &lt;code&gt;http_request_firewall_custom&lt;/code&gt; n'est émis.&lt;/li&gt;
+&lt;li&gt;Étant donné un projet portant aussi &lt;code&gt;redirect_domains&lt;/code&gt; et un &lt;code&gt;rate_limit&lt;/code&gt;, quand la production est générée, alors les trois familles coexistent dans &lt;code&gt;cloudflare_ruleset&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;pnpm --filter @nextnode-solutions/infrastructure test&lt;/code&gt; passe.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Notes techniques&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;État de départ, vérifié le 2026-07-26 : aucun ruleset de phase &lt;code&gt;http_request_firewall_custom&lt;/code&gt; n'existe dans le paquet ; le seul &lt;code&gt;cloudflare_ruleset&lt;/code&gt; émis est celui des redirections (&lt;code&gt;terraform-redirects.ts&lt;/code&gt;).&lt;/li&gt;
+&lt;li&gt;À créer : un module frère de &lt;code&gt;terraform-redirects.ts&lt;/code&gt;, un constructeur pur rendant &lt;code&gt;Record&amp;lt;string, RulesetResource&amp;gt;&lt;/code&gt; sous une clé préfixée &lt;code&gt;firewall_&lt;/code&gt;, avec toutes les règles dans &lt;strong&gt;un seul&lt;/strong&gt; &lt;code&gt;RulesetResource&lt;/code&gt; — une zone n'a qu'un point d'entrée par phase.&lt;/li&gt;
+&lt;li&gt;Grammaire des chemins identique à celle du plafond amont : égalité exacte, &lt;code&gt;*&lt;/code&gt; en suffixe traduit en &lt;code&gt;starts_with&lt;/code&gt;. Extraire la traduction dans une fonction pure partagée par les deux générateurs plutôt que la dupliquer.&lt;/li&gt;
+&lt;li&gt;L'hôte vient de &lt;code&gt;resolveDeployDomain(service.url, environment)&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Le plan Free autorise cinq custom rules par zone et toutes les actions sauf &lt;code&gt;log&lt;/code&gt; — le comptage est déjà refusé au chargement du fichier, ce ticket n'a pas à le revalider.&lt;/li&gt;
+&lt;li&gt;Tests : &lt;code&gt;src/domain/cloudflare/workers/terraform-config.test.ts&lt;/code&gt;, par valeurs, sans mock.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Pièges&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;La règle bloque la &lt;strong&gt;négation&lt;/strong&gt; de ce qui est ouvert : un &lt;code&gt;*&lt;/code&gt; trop large rouvre l'arbre entier sans que rien ne casse. Aucun test ne peut rattraper ça côté infra — c'est la documentation qui doit le dire.&lt;/li&gt;
+&lt;li&gt;Un service binding remet la requête sans résoudre l'hôte : il ne traverse ni DNS ni les rulesets de la zone. Cette règle ne coupe donc jamais un appel worker-to-worker, et il ne faut surtout pas ajouter d'exception pour les workers frères.&lt;/li&gt;
+&lt;li&gt;Ne pas utiliser l'action &lt;code&gt;log&lt;/code&gt; : indisponible sur le plan Free.&lt;/li&gt;
+&lt;li&gt;Ne pas émettre de réponse personnalisée : la documentation Cloudflare l'annonce réservée aux plans Pro et au-dessus pour les custom rules.&lt;/li&gt;
+&lt;li&gt;Le ruleset est un point d'entrée de zone : toutes les règles de tous les workers vont dans la même ressource, jamais une ressource par worker.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Bloquée par&lt;/h3&gt;
+&lt;p&gt;À compléter à la publication.&lt;/p&gt;
+&lt;/div&gt;</code></pre>
+</figure>
+  </div></details>
+</div>
+<div class="tk">
+  <h3><span class="tk-key">T5</span> Chaque worker déployé porte un plafond de temps CPU et de sous-requêtes</h3>
+  <div class="meta"><span class="pill warn">medium</span><span class="pill mono">INFRA</span></div>
+  <p>Le bloc limits dans la configuration wrangler générée, avec défauts et surcharge par worker.</p>
+  <p class="tk-blk"><b>Bloquée par</b> — <code>T2</code> — nextnode.toml accepte les quatre blocs de pare-feu et refuse ce que le plan Free interdit</p>
+  <details class="fold"><summary>Corps exact publié dans Plane</summary><div class="fold-body">
+<figure class="code-block" data-file="T5 — description_html" data-lang="html">
+<pre><code class="language-html">&lt;div&gt;
+&lt;h3&gt;Récit&lt;/h3&gt;
+&lt;p&gt;En tant que développeur d'un projet workers, je veux que chaque worker déployé porte un plafond de temps CPU et de sous-requêtes, afin qu'une boucle infinie ou un fan-out incontrôlé meure au lieu de facturer.&lt;/p&gt;
+&lt;h3&gt;Valeur&lt;/h3&gt;
+&lt;p&gt;Les règles de zone bornent le &lt;em&gt;nombre&lt;/em&gt; d'invocations ; rien ne borne aujourd'hui le &lt;em&gt;coût&lt;/em&gt; de chacune. Une invocation légitime qui part en boucle consomme sans limite haute.&lt;/p&gt;
+&lt;h3&gt;Critères d'acceptation&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Étant donné un worker sans bloc &lt;code&gt;limits&lt;/code&gt;, quand la configuration wrangler est générée, alors elle porte &lt;code&gt;"limits": { "cpu_ms": 1000, "subrequests": 50 }&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Étant donné &lt;code&gt;[deploy.services.api.limits]&lt;/code&gt; avec &lt;code&gt;cpu_ms = 5000&lt;/code&gt; seul, quand la configuration est générée, alors elle porte &lt;code&gt;{ "cpu_ms": 5000, "subrequests": 50 }&lt;/code&gt; — la surcharge est champ par champ.&lt;/li&gt;
+&lt;li&gt;Le bloc est émis dans les deux environnements.&lt;/li&gt;
+&lt;li&gt;Étant donné un worker quelconque, quand &lt;code&gt;renderWorkerEnvTypes&lt;/code&gt; est appelé, alors le fichier de types produit est inchangé : &lt;code&gt;limits&lt;/code&gt; n'est pas un binding.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;pnpm --filter @nextnode-solutions/infrastructure test&lt;/code&gt; passe.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Notes techniques&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;État de départ, vérifié le 2026-07-26 : &lt;code&gt;src/domain/cloudflare/workers/wrangler-document.ts&lt;/code&gt; déclare &lt;code&gt;WranglerDocument&lt;/code&gt; sans &lt;code&gt;limits&lt;/code&gt;. &lt;code&gt;buildWranglerConfig&lt;/code&gt; (&lt;code&gt;wrangler-config.ts&lt;/code&gt;) construit un &lt;code&gt;WranglerDocumentDraft&lt;/code&gt; puis n'ajoute les clés optionnelles que lorsqu'elles portent des entrées.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;limits&lt;/code&gt; est &lt;strong&gt;toujours&lt;/strong&gt; émis, comme &lt;code&gt;observability&lt;/code&gt; et &lt;code&gt;workers_dev&lt;/code&gt; : l'état est explicite dans la configuration générée plutôt que laissé au défaut de wrangler. Suivre le commentaire déjà présent sur &lt;code&gt;observability&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Les deux valeurs par défaut sont des constantes nommées de &lt;code&gt;wrangler-document.ts&lt;/code&gt;, à côté de &lt;code&gt;DEFAULT_WORKERS_COMPATIBILITY_DATE&lt;/code&gt; — l'infra les tient, le développeur ne les épelle pas.&lt;/li&gt;
+&lt;li&gt;Tests : &lt;code&gt;src/domain/cloudflare/workers/wrangler-config.test.ts&lt;/code&gt; et &lt;code&gt;worker-env-types.test.ts&lt;/code&gt;.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Pièges&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;limits&lt;/code&gt; n'est pas un binding : ne pas l'ajouter à &lt;code&gt;bindingMembers()&lt;/code&gt; dans &lt;code&gt;worker-env-types.ts&lt;/code&gt;, sinon un &lt;code&gt;env.limits&lt;/code&gt; fantôme apparaît dans les types générés et commités des projets consommateurs.&lt;/li&gt;
+&lt;li&gt;Les projets consommateurs ont un fichier wrangler de développement local (par exemple &lt;code&gt;apps/api/wrangler.dev.jsonc&lt;/code&gt; chez studiobymina) que l'infra ne génère pas : le comportement local ne suivra pas automatiquement. C'est au ticket d'adoption de le refléter s'il le veut.&lt;/li&gt;
+&lt;li&gt;Ne pas rendre &lt;code&gt;subrequests&lt;/code&gt; configurable par environnement : la surcharge est par worker, pas par environnement.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Bloquée par&lt;/h3&gt;
+&lt;p&gt;À compléter à la publication.&lt;/p&gt;
+&lt;/div&gt;</code></pre>
+</figure>
+  </div></details>
+</div>
+<div class="tk">
+  <h3><span class="tk-key">T6</span> Un worker lit un limiteur de débit nommé comme binding typé</h3>
+  <div class="meta"><span class="pill warn">medium</span><span class="pill mono">INFRA</span></div>
+  <p>Le binding Rate Limit, son namespace_id dérivé par hachage, et son type dans worker-configuration.d.ts.</p>
+  <p class="tk-blk"><b>Bloquée par</b> — <code>T2</code> — nextnode.toml accepte les quatre blocs de pare-feu et refuse ce que le plan Free interdit</p>
+  <details class="fold"><summary>Corps exact publié dans Plane</summary><div class="fold-body">
+<figure class="code-block" data-file="T6 — description_html" data-lang="html">
+<pre><code class="language-html">&lt;div&gt;
+&lt;h3&gt;Récit&lt;/h3&gt;
+&lt;p&gt;En tant que développeur d'un worker, je veux déclarer un limiteur de débit nommé et le lire comme un binding typé, afin de protéger une base ou un appel payant situé &lt;em&gt;derrière&lt;/em&gt; le worker, avec des compteurs séparés entre développement et production.&lt;/p&gt;
+&lt;h3&gt;Valeur&lt;/h3&gt;
+&lt;p&gt;Les règles de zone ne savent compter que par adresse IP, et seulement à l'entrée. Ce qu'un worker doit protéger derrière lui — un quota d'envoi d'emails, un appel facturé au tiers, une base — se compte par une clé métier, dans le code. Sans binding, un projet réécrit un compteur en mémoire d'isolate, dont le seuil réel est « N par clé &lt;strong&gt;et par isolate&lt;/strong&gt; » : il ne borne rien.&lt;/p&gt;
+&lt;h3&gt;Critères d'acceptation&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Étant donné &lt;code&gt;[[deploy.services.api.rate_limiters]]&lt;/code&gt; avec &lt;code&gt;name = "forms"&lt;/code&gt;, &lt;code&gt;limit = 5&lt;/code&gt;, &lt;code&gt;period = 60&lt;/code&gt;, quand la configuration wrangler est générée, alors elle porte une entrée &lt;code&gt;ratelimits&lt;/code&gt; avec &lt;code&gt;"name": "RL_FORMS"&lt;/code&gt; et &lt;code&gt;"simple": { "limit": 5, "period": 60 }&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Le &lt;code&gt;namespace_id&lt;/code&gt; émis est le hachage FNV-1a 32 bits, en décimal, de &lt;code&gt;&amp;lt;projet&amp;gt;-&amp;lt;environnement&amp;gt;-&amp;lt;worker&amp;gt;-&amp;lt;nom&amp;gt;&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Étant donné le même limiteur, quand la configuration est générée pour &lt;code&gt;development&lt;/code&gt; puis pour &lt;code&gt;production&lt;/code&gt;, alors les deux &lt;code&gt;namespace_id&lt;/code&gt; diffèrent.&lt;/li&gt;
+&lt;li&gt;Étant donné la même entrée, quand le hachage est appelé deux fois, alors il rend la même valeur — un test le pin sur une valeur littérale.&lt;/li&gt;
+&lt;li&gt;Étant donné ce même worker, quand &lt;code&gt;renderWorkerEnvTypes&lt;/code&gt; est appelé, alors le fichier produit contient &lt;code&gt;readonly RL_FORMS: RateLimit&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Étant donné un worker sans &lt;code&gt;rate_limiters&lt;/code&gt;, quand la configuration est générée, alors elle ne porte aucune clé &lt;code&gt;ratelimits&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;pnpm --filter @nextnode-solutions/infrastructure test&lt;/code&gt; passe.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Notes techniques&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;État de départ, vérifié le 2026-07-26 : &lt;code&gt;toBindingName(alias)&lt;/code&gt; existe déjà dans &lt;code&gt;wrangler-document.ts&lt;/code&gt; (majuscules, tirets en soulignés) et sert déjà aux bindings KV/R2/Queue et aux bindings de service. Le nom du binding est &lt;code&gt;RL_&lt;/code&gt; suivi de &lt;code&gt;toBindingName(name)&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;État de départ : &lt;code&gt;bindingMembers(document)&lt;/code&gt; dans &lt;code&gt;worker-env-types.ts&lt;/code&gt; mappe chaque famille de bindings du document vers son type (&lt;code&gt;Fetcher&lt;/code&gt;, &lt;code&gt;D1Database&lt;/code&gt;, &lt;code&gt;KVNamespace&lt;/code&gt;, &lt;code&gt;R2Bucket&lt;/code&gt;, &lt;code&gt;Queue&lt;/code&gt;). Une branche &lt;code&gt;ratelimits&lt;/code&gt; → &lt;code&gt;RateLimit&lt;/code&gt; s'y ajoute. Les types sont produits depuis le &lt;strong&gt;même&lt;/strong&gt; document que celui déployé : un binding ne peut pas exister dans la configuration sans exister dans les types.&lt;/li&gt;
+&lt;li&gt;À créer : la fonction de hachage, pure et exportée, dans la couche domaine. FNV-1a 32 bits : &lt;code&gt;offset = 2166136261&lt;/code&gt;, &lt;code&gt;prime = 16777619&lt;/code&gt;, XOR puis multiplication par octet, résultat non signé rendu en décimal.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;RateLimit&lt;/code&gt; est le type fourni par &lt;code&gt;@cloudflare/workers-types&lt;/code&gt;, déjà référencé en tête du fichier de types généré — rien à déclarer.&lt;/li&gt;
+&lt;li&gt;Tests : &lt;code&gt;wrangler-config.test.ts&lt;/code&gt;, &lt;code&gt;worker-env-types.test.ts&lt;/code&gt;, plus un test dédié au hachage.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Pièges&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;namespace_id&lt;/code&gt; est unique &lt;strong&gt;à l'échelle du compte&lt;/strong&gt; : deux bindings de même identifiant, dans deux projets ou deux environnements, partagent leurs compteurs. C'est pour ça que la clé hachée contient le projet &lt;em&gt;et&lt;/em&gt; l'environnement — ne jamais la réduire au nom du limiteur.&lt;/li&gt;
+&lt;li&gt;Les types de bindings générés sont commités dans les dépôts consommateurs et leur CI échoue sur toute dérive : tout projet qui déclare un limiteur régénère ses types dans le même commit.&lt;/li&gt;
+&lt;li&gt;La période d'un binding Rate Limit ne vaut que 10 ou 60 secondes ; c'est déjà refusé au chargement du fichier, ne pas la revalider ici.&lt;/li&gt;
+&lt;li&gt;Le limiteur s'exécute &lt;strong&gt;dans&lt;/strong&gt; le worker : la requête est déjà facturée quand il rejette. Ne jamais le présenter comme un plafond de dépense.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Bloquée par&lt;/h3&gt;
+&lt;p&gt;À compléter à la publication.&lt;/p&gt;
+&lt;/div&gt;</code></pre>
+</figure>
+  </div></details>
+</div>
+<div class="tk">
+  <h3><span class="tk-key">T7</span> La documentation du paquet décrit les quatre barrières et leurs plafonds de plan</h3>
+  <div class="meta"><span class="pill alt">low</span><span class="pill mono">INFRA</span></div>
+  <p>La section de CLAUDE.md qui rend les quatre canaux découvrables sans lire le code.</p>
+  <p class="tk-blk"><b>Bloquée par</b> — <code>T3</code> — Une rafale sur un chemin déclaré meurt au bord de Cloudflare, sans invocation facturée · <code>T4</code> — Seuls les chemins déclarés d’un worker routé sont joignables depuis Internet · <code>T5</code> — Chaque worker déployé porte un plafond de temps CPU et de sous-requêtes · <code>T6</code> — Un worker lit un limiteur de débit nommé comme binding typé</p>
+  <details class="fold"><summary>Corps exact publié dans Plane</summary><div class="fold-body">
+<figure class="code-block" data-file="T7 — description_html" data-lang="html">
+<pre><code class="language-html">&lt;div&gt;
+&lt;h3&gt;Ticket technique — justification&lt;/h3&gt;
+&lt;p&gt;Aucune valeur utilisateur directe. &lt;code&gt;packages/infrastructure/CLAUDE.md&lt;/code&gt; est la seule description de la surface de &lt;code&gt;nextnode.toml&lt;/code&gt; : un canal qui n'y figure pas n'est trouvé qu'en lisant les schémas de validation. Les quatre blocs livrés par cette épique y seraient invisibles.&lt;/p&gt;
+&lt;h3&gt;Objectif&lt;/h3&gt;
+&lt;p&gt;Une section de &lt;code&gt;packages/infrastructure/CLAUDE.md&lt;/code&gt; décrit les quatre blocs, leurs valeurs par défaut, les plafonds du plan Free et les deux propriétés surprenantes de l'émission (production seule, destruction avec l'environnement).&lt;/p&gt;
+&lt;h3&gt;Critères d'acceptation&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;packages/infrastructure/CLAUDE.md&lt;/code&gt; porte une nouvelle section de niveau &lt;code&gt;##&lt;/code&gt; consacrée au pare-feu de zone, au même niveau que &lt;code&gt;## R2 buckets &amp;amp; public CDN URLs&lt;/code&gt; et &lt;code&gt;## Scheduled jobs: [[deploy.cron]]&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;La section contient un exemple TOML complet des quatre blocs, avec les valeurs par défaut annotées.&lt;/li&gt;
+&lt;li&gt;La section énonce : une seule règle de rate limiting par zone et cinq custom rules par zone sur le plan Free ; l'adresse IP est la seule caractéristique de comptage disponible ; l'action &lt;code&gt;log&lt;/code&gt; et la réponse personnalisée des custom rules ne sont pas disponibles sur ce plan.&lt;/li&gt;
+&lt;li&gt;La section énonce que les deux rulesets ne sont émis qu'en production, et pourquoi : une zone n'a qu'un point d'entrée par phase.&lt;/li&gt;
+&lt;li&gt;La section énonce qu'un &lt;code&gt;terraform destroy&lt;/code&gt; retire les règles avec l'environnement.&lt;/li&gt;
+&lt;li&gt;La section énonce que &lt;code&gt;public_paths&lt;/code&gt; décrit ce qui est &lt;strong&gt;ouvert&lt;/strong&gt;, et qu'un worker sans appelant externe se protège mieux en n'ayant pas d'&lt;code&gt;url&lt;/code&gt; du tout.&lt;/li&gt;
+&lt;li&gt;La section énonce que le limiteur applicatif s'exécute dans le worker, donc après facturation, et qu'il ne plafonne aucune dépense.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;pnpm --filter @nextnode-solutions/infrastructure format:check&lt;/code&gt; passe.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Notes techniques&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;État de départ, vérifié le 2026-07-26 : &lt;code&gt;packages/infrastructure/CLAUDE.md&lt;/code&gt; fait 337 lignes et porte notamment &lt;code&gt;## Config Format&lt;/code&gt;, &lt;code&gt;## R2 buckets &amp;amp; public CDN URLs&lt;/code&gt;, &lt;code&gt;## Scheduled jobs: [[deploy.cron]]&lt;/code&gt;, &lt;code&gt;## Secrets: global pool &amp;amp; auto-generation&lt;/code&gt;, &lt;code&gt;## Worker binding types: generate-worker-types&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Art antérieur à imiter : la section &lt;code&gt;## R2 buckets &amp;amp; public CDN URLs&lt;/code&gt; — un exemple TOML, ce que l'infra en dérive, et les contraintes qu'un lecteur ne devinerait pas.&lt;/li&gt;
+&lt;li&gt;Ce ticket ne modifie aucun code : il est pris en dernier pour décrire ce qui a réellement été livré.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Pièges&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Ne pas dupliquer les valeurs par défaut : elles vivent en constantes nommées dans le code, la documentation les cite en pointant leur emplacement.&lt;/li&gt;
+&lt;li&gt;Si le repli sur la réponse par défaut a été appliqué au plafond amont (réponse personnalisée refusée par l'API), le documenter tel qu'il a été livré, pas tel qu'il était prévu.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Bloquée par&lt;/h3&gt;
+&lt;p&gt;À compléter à la publication.&lt;/p&gt;
+&lt;/div&gt;</code></pre>
+</figure>
+  </div></details>
+</div>
+</section>
+
+<section id="questions-infra" data-group="core-infra">
+  <h2><span class="num">04</span>Trois arbitrages de découpage</h2>
+  <p class="lead">Les seuls endroits où une autre coupe se défend. Le reste du découpage n'a pas d'alternative sérieuse.</p>
+
+  <form class="rich-question rq-axes" data-question-id="fusion-t3-t4">
+    <div class="q">T3 et T4 : un ticket ou deux ?</div>
+    <p class="rq-stake">Les deux produisent un ruleset de zone, partagent la traduction des chemins et la contrainte production-seule. Ils diffèrent par la phase, l'action et la forme de l'expression.</p>
+    <table class="rq-grid">
+      <thead><tr>
+        <td class="rq-corner"></td>
+        <th class="rq-head" scope="col"><label class="opt" data-recommended><input type="radio" name="fusion-t3-t4" value="deux"><span class="cax-name">Deux tickets</span></label></th>
+        <th class="rq-head" scope="col"><label class="opt"><input type="radio" name="fusion-t3-t4" value="un"><span class="cax-name">Un seul</span></label></th>
+      </tr></thead>
+      <tbody>
+        <tr><th class="rq-axis" scope="row">Taille</th>
+          <td class="rq-cell">~4 fichiers chacun.<span class="ex">un module générateur + son test</span></td>
+          <td class="rq-cell">~7 fichiers, deux générateurs, deux jeux d'expressions.<span class="ex">à la limite d'un contexte</span></td></tr>
+        <tr><th class="rq-axis" scope="row">Vérifiable seul</th>
+          <td class="rq-cell">Oui : chacun se démontre sur un <code>main.tf.json</code> généré.<span class="ex">phase http_ratelimit isolée</span></td>
+          <td class="rq-cell">Oui, mais la démonstration mélange deux phases.<span class="ex">un seul test géant</span></td></tr>
+        <tr><th class="rq-axis" scope="row">Duplication</th>
+          <td class="rq-cell">La traduction des chemins doit être extraite pour être partagée.<span class="ex">une fonction pure commune</span></td>
+          <td class="rq-cell">L'extraction se fait naturellement dans le même contexte.<span class="ex">zéro coordination</span></td></tr>
+        <tr><th class="rq-axis" scope="row">Conséquence</th>
+          <td class="rq-cell is-ok">Deux livraisons indépendantes, parallélisables, chacune démontrable.</td>
+          <td class="rq-cell is-warn">Une seule revue, mais un ticket lourd et un rollback tout-ou-rien.</td></tr>
+      </tbody>
+    </table>
+  </form>
+
+  <form class="rich-question" data-question-id="split-t2">
+    <div class="q">T2 découpé en deux ?</div>
+    <div class="recommended">Un seul ticket — les quatre blocs vivent dans le même schéma valibot, le même fichier de types et le même fichier de tests. Les séparer force deux passes sur les mêmes lignes.</div>
+    <label class="opt" data-recommended><input type="radio" name="split-t2" value="un"> Un seul ticket pour les quatre blocs</label>
+    <label class="opt"><input type="radio" name="split-t2" value="deux"> Deux tickets : règles de zone d'un côté, propriétés du worker de l'autre</label>
+  </form>
+
+  <form class="rich-question" data-question-id="doc-t7">
+    <div class="q">Documentation : ticket ou clause ?</div>
+    <div class="recommended">Un ticket séparé, pris en dernier — la section décrit les quatre barrières ensemble et leurs interactions. Répartie en quatre clauses d'acceptation, elle produit quatre fragments qui ne se relisent jamais.</div>
+    <label class="opt" data-recommended><input type="radio" name="doc-t7" value="ticket"> Ticket séparé, bloqué par les quatre générateurs</label>
+    <label class="opt"><input type="radio" name="doc-t7" value="clause"> Une clause de documentation dans chacun des quatre tickets</label>
+  </form>
+</section>
+
+<section id="epique-mina" data-group="studiobymina">
+  <h2><span class="num">05</span>L'adoption, sous une épique qui existe déjà</h2>
+  <p class="lead">Le ticket est créé sous <code>MINA-7</code> — « Fiabilité des échanges publics : notifications atelier, vraies erreurs, anti-abus » — qui n'est ni modifiée ni fermée.</p>
+<div class="tk">
+  <h3><span class="tk-key">T8</span> Les trois formulaires publics sont plafonnés au bord et l’api quitte Internet</h3>
+  <div class="meta"><span class="pill danger">high</span><span class="pill mono">MINA</span></div>
+  <p>L'adoption côté studiobymina : plafond amont sur la vitrine, api sans route publique, limiteur maison supprimé.</p>
+  <p class="tk-blk"><b>Bloquée par</b> — <code>T3</code> — Une rafale sur un chemin déclaré meurt au bord de Cloudflare, sans invocation facturée · <code>T5</code> — Chaque worker déployé porte un plafond de temps CPU et de sous-requêtes</p>
+  <details class="fold"><summary>Corps exact publié dans Plane</summary><div class="fold-body">
+<figure class="code-block" data-file="T8 — description_html" data-lang="html">
+<pre><code class="language-html">&lt;div&gt;
+&lt;h3&gt;Récit&lt;/h3&gt;
+&lt;p&gt;En tant que Mina, je veux que mes trois formulaires publics soient plafonnés en amont et que mon api ne soit plus joignable depuis Internet, afin qu'une rafale ne fasse ni monter ma facture, ni consommer mon quota d'envoi d'emails.&lt;/p&gt;
+&lt;h3&gt;Valeur&lt;/h3&gt;
+&lt;p&gt;Le limiteur en place rejette &lt;em&gt;après&lt;/em&gt; l'entrée dans le worker : l'invocation est déjà payée. Son compteur vit en mémoire d'isolate, donc le seuil réel est « 5 par IP &lt;strong&gt;et par isolate&lt;/strong&gt; » et le quota d'envoi d'emails n'est pas borné. Par ailleurs &lt;code&gt;api.studiobymina.com&lt;/code&gt; est une route publique qu'aucun appelant n'utilise : elle n'offre qu'une surface facturable.&lt;/p&gt;
+&lt;h3&gt;Critères d'acceptation&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Étant donné &lt;code&gt;nextnode.toml&lt;/code&gt;, quand il est modifié, alors &lt;code&gt;[deploy.services.api]&lt;/code&gt; ne porte plus de &lt;code&gt;url&lt;/code&gt;, et &lt;code&gt;[deploy.services.web.rate_limit]&lt;/code&gt; déclare &lt;code&gt;paths = ["/api/contact", "/api/acquisition", "/api/newsletter"]&lt;/code&gt;, &lt;code&gt;methods = ["POST"]&lt;/code&gt; et &lt;code&gt;requests_per_period = 5&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Étant donné cette configuration, quand la configuration est chargée, alors elle se charge sans erreur (les trois workers restent déclarés, &lt;code&gt;web&lt;/code&gt; et &lt;code&gt;admin&lt;/code&gt; gardent &lt;code&gt;needs = ["api"]&lt;/code&gt;).&lt;/li&gt;
+&lt;li&gt;Les fichiers &lt;code&gt;apps/api/src/middleware/rate-limit.ts&lt;/code&gt; et &lt;code&gt;apps/api/test/rate-limit.test.ts&lt;/code&gt; n'existent plus.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;PublicRoutesOptions&lt;/code&gt; (&lt;code&gt;apps/api/src/routes/options.ts&lt;/code&gt;) ne porte plus &lt;code&gt;throttle&lt;/code&gt;, et les trois routes &lt;code&gt;POST&lt;/code&gt; de &lt;code&gt;acquisition.ts&lt;/code&gt;, &lt;code&gt;contact.ts&lt;/code&gt; et &lt;code&gt;newsletter.ts&lt;/code&gt; ne prennent plus de middleware de bridage.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;apps/api/src/index.ts&lt;/code&gt; ne porte plus l'import de &lt;code&gt;createRateLimit&lt;/code&gt;, ni les constantes &lt;code&gt;SUBMISSIONS_PER_TEN_MINUTES&lt;/code&gt; et &lt;code&gt;TEN_MINUTES_MS&lt;/code&gt;, ni l'option &lt;code&gt;throttle&lt;/code&gt; passée à &lt;code&gt;createPublicRoutes&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Le leurre reste en place : &lt;code&gt;packages/domain/src/honeypot.ts&lt;/code&gt; et &lt;code&gt;packages/ui/src/components/Honeypot.tsx&lt;/code&gt; sont inchangés, et les tests qui le couvrent passent toujours.&lt;/li&gt;
+&lt;li&gt;Le worker &lt;code&gt;api&lt;/code&gt; ne déclare ni &lt;code&gt;public_paths&lt;/code&gt; ni &lt;code&gt;rate_limiters&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;pnpm test&lt;/code&gt; passe à la racine du dépôt.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;pnpm type-check&lt;/code&gt; passe à la racine du dépôt.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;CLAUDE.md&lt;/code&gt; ne présente plus &lt;code&gt;api.studiobymina.com&lt;/code&gt; comme un domaine du projet.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Notes techniques&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;État de départ, vérifié le 2026-07-26 : le limiteur, son test et le câblage vivent sur la branche &lt;code&gt;feat/fiabilite-echanges&lt;/code&gt; (PR #18, &lt;strong&gt;ouverte&lt;/strong&gt;), pas sur &lt;code&gt;main&lt;/code&gt;. &lt;code&gt;apps/api/src/index.ts&lt;/code&gt; y construit &lt;code&gt;throttle: createRateLimit({ limit: SUBMISSIONS_PER_TEN_MINUTES, windowMs: TEN_MINUTES_MS, now: () =&amp;gt; Date.now() })&lt;/code&gt; et le passe à &lt;code&gt;createPublicRoutes&lt;/code&gt;. Les trois routes l'appliquent : &lt;code&gt;routes.post('/contact-messages', throttle, …)&lt;/code&gt;, &lt;code&gt;routes.post('/acquisition-requests', throttle, …)&lt;/code&gt;, &lt;code&gt;routes.post('/newsletter/subscribe', throttle, …)&lt;/code&gt;. &lt;code&gt;apps/api/test/public-routes.test.ts&lt;/code&gt; construit lui aussi un &lt;code&gt;throttle&lt;/code&gt; qu'il faudra retirer.&lt;/li&gt;
+&lt;li&gt;Les chemins du plafond amont sont ceux de la &lt;strong&gt;vitrine&lt;/strong&gt;, pas ceux de l'api : le navigateur poste sur les routes Astro &lt;code&gt;apps/web/src/pages/api/contact.ts&lt;/code&gt;, &lt;code&gt;acquisition.ts&lt;/code&gt; et &lt;code&gt;newsletter.ts&lt;/code&gt;, qui reforwardent par le service binding. Les chemins de l'api (&lt;code&gt;/contact-messages&lt;/code&gt;, …) ne sont jamais atteints depuis Internet.&lt;/li&gt;
+&lt;li&gt;Retirer &lt;code&gt;url&lt;/code&gt; ne coupe aucun appel interne : &lt;code&gt;needs = ["api"]&lt;/code&gt; génère le binding &lt;code&gt;env.API&lt;/code&gt;, et &lt;code&gt;apps/web/src/lib/api/gateway.ts&lt;/code&gt; construit ses URL sur l'origine interne factice &lt;code&gt;https://studiobymina-api.internal&lt;/code&gt;, jamais résolue. Le cron &lt;code&gt;expire-reservations&lt;/code&gt; est un trigger natif, sans requête HTTP. Vérifié : dans tout le dépôt, &lt;code&gt;api.studiobymina.com&lt;/code&gt; n'apparaît que dans &lt;code&gt;nextnode.toml&lt;/code&gt; et dans une phrase de &lt;code&gt;CLAUDE.md&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Aucun bloc &lt;code&gt;[deploy.services.*.limits]&lt;/code&gt; n'est nécessaire : l'infra émet les plafonds d'invocation par défaut sur tous les workers.&lt;/li&gt;
+&lt;li&gt;Fichiers touchés attendus : &lt;code&gt;nextnode.toml&lt;/code&gt;, &lt;code&gt;CLAUDE.md&lt;/code&gt;, &lt;code&gt;apps/api/src/index.ts&lt;/code&gt;, &lt;code&gt;apps/api/src/routes/options.ts&lt;/code&gt;, &lt;code&gt;apps/api/src/routes/acquisition.ts&lt;/code&gt;, &lt;code&gt;contact.ts&lt;/code&gt;, &lt;code&gt;newsletter.ts&lt;/code&gt;, &lt;code&gt;apps/api/test/public-routes.test.ts&lt;/code&gt;, plus deux suppressions.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Pièges&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;La PR #18 doit être fusionnée avant de prendre ce ticket, sinon les fichiers à supprimer n'existent pas sur &lt;code&gt;main&lt;/code&gt; — et le ticket MINA-45 est marqué Done alors que la PR est encore ouverte.&lt;/li&gt;
+&lt;li&gt;Le plafond s'applique à l'hôte de la vitrine : ne pas le déclarer sur &lt;code&gt;api&lt;/code&gt;, qui n'aura plus d'&lt;code&gt;url&lt;/code&gt; et dont la déclaration serait refusée au chargement.&lt;/li&gt;
+&lt;li&gt;Le seuil est de 5 requêtes par 60 secondes par adresse IP et par datacenter, avec 600 secondes de blocage : ce n'est pas l'équivalent exact de l'ancien « 5 par 10 minutes ». C'est voulu — l'ancien seuil n'était de toute façon pas tenu.&lt;/li&gt;
+&lt;li&gt;Le ruleset n'est émis qu'en production : l'environnement de développement n'est pas protégé, et c'est structurel (une zone n'a qu'un point d'entrée par phase).&lt;/li&gt;
+&lt;li&gt;Ne pas toucher au leurre ni au refus des requêtes cross-origin de &lt;code&gt;createJsonForwarder&lt;/code&gt; : ce sont les deux autres barrières, et elles restent.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Bloquée par&lt;/h3&gt;
+&lt;p&gt;À compléter à la publication.&lt;/p&gt;
+&lt;/div&gt;</code></pre>
+</figure>
+  </div></details>
+</div>
+
+  <form class="rich-question" data-question-id="pr18">
+    <div class="q">La PR #18 devient-elle un bloqueur ?</div>
+    <div class="recommended">La citer en piège suffit : elle est ouverte, son ticket MINA-45 est déjà marqué Done, et créer un ticket « fusionner la PR » ajoute une ligne au tracker pour une action de quelques minutes.</div>
+    <label class="opt" data-recommended><input type="radio" name="pr18" value="piege"> Piège dans le corps de T8, aucune arête Plane</label>
+    <label class="opt"><input type="radio" name="pr18" value="ticket"> Un ticket MINA « la branche fiabilité des échanges est fusionnée », posé en bloqueur de T8</label>
+    <label class="opt"><input type="radio" name="pr18" value="rouvrir"> Rouvrir MINA-45 plutôt que d'en créer un neuf</label>
+  </form>
+</section>
+
+<section id="gate" data-group="Contrôle">
+  <h2><span class="num">06</span>La grille « prêt pour un agent »</h2>
+  <p class="lead">Onze contrôles par ticket. Un échec n'est pas un détail : c'est l'endroit où un agent s'arrêterait pour demander à un humain.</p>
+
+  <table class="gate">
+    <thead><tr><th>Ticket</th><th>Résultat</th><th>Point le plus fragile, et comment il est tenu</th></tr></thead>
+    <tbody>
+      <tr><td><code>T1</code></td><td><span class="pill success">ok</span></td><td>Fonction d’assemblage pure exportée, testable seule ; non-régression des redirections.</td></tr>
+      <tr><td><code>T2</code></td><td><span class="pill success">ok</span></td><td>Chaque refus a son test dans <code>src/config/load.test.ts</code>, fixture existante.</td></tr>
+      <tr><td><code>T3</code></td><td><span class="pill success">ok</span></td><td>Repli décidé si l’API refuse la réponse personnalisée — aucune question ouverte.</td></tr>
+      <tr><td><code>T4</code></td><td><span class="pill success">ok</span></td><td>Grammaire de chemins partagée avec T3, extraite plutôt que dupliquée.</td></tr>
+      <tr><td><code>T5</code></td><td><span class="pill success">ok</span></td><td>Critère explicite que les types générés restent inchangés.</td></tr>
+      <tr><td><code>T6</code></td><td><span class="pill success">ok</span></td><td>Hachage pin sur une valeur littérale ; séparation dev/prod vérifiée par test.</td></tr>
+      <tr><td><code>T7</code></td><td><span class="pill success">ok</span></td><td>Décrit ce qui a été livré, pris en dernier ; <code>format:check</code> comme contrôle.</td></tr>
+      <tr><td><code>T8</code></td><td><span class="pill success">ok</span></td><td>Fichiers et symboles relus sur <code>origin/feat/fiabilite-echanges</code> le 2026-07-26.</td></tr>
+    </tbody>
+  </table>
+
+  <p>Les contrôles structurels sont tenus par construction : au moins un ticket sans bloqueur (<code>T1</code> et <code>T2</code>), chaque corps porte au moins une commande exécutable du dépôt, aucun corps ne renvoie à l'épique ni ne contient de décision en suspens, et tout chemin, symbole ou script cité a été relu aujourd'hui.</p>
+
+  <details class="fold"><summary>Ce que la grille ne couvre pas</summary><div class="fold-body">
+  <p>La grille vérifie qu'un agent peut démarrer sans poser de question ; elle ne vérifie pas que la décision technique est la bonne. Deux points restent à la charge de l'implémentation, et sont écrits comme tels dans les tickets : le repli si l'API Cloudflare refuse la réponse personnalisée du plafond amont sur le plan Free, et le fait qu'un <code>public_paths</code> trop large échoue en silence — aucun test d'infra ne peut le rattraper.</p>
+  </div></details>
+</section>
+
+<div class="next-steps" id="next">
+  <ul>
+    <li><span class="mk">→</span> Répondre aux quatre questions — chacune est déjà pré-remplie sur la recommandation.</li>
+    <li><span class="mk">→</span> Approuver : l'épique et les huit tickets partent dans Plane immédiatement, épique d'abord, puis les tickets dans l'ordre des dépendances, puis les arêtes <code>blocked_by</code>.</li>
+    <li><span class="mk">→</span> Rejeter : les annotations sont reprises et le découpage revient corrigé, sans rien écrire dans le tracker.</li>
+  </ul>
+  <button class="copy-btn" type="button" data-copy="#next">Copier</button>
+</div>
+</main>
+</div>
+<script>
+/* ============================================================
+   np.js — NextNode HTML deliverables runtime
+   Inlined at end of <body> by scripts/build.sh.
+   Every module is a no-op when its target markup is absent.
+   Zero CDN except lazy-loaded highlight.js / mermaid, and only
+   when the page actually contains their target blocks.
+   ============================================================ */
+(function () {
+  'use strict';
+  var $  = function (s, c) { return (c || document).querySelector(s); };
+  var $$ = function (s, c) { return Array.prototype.slice.call((c || document).querySelectorAll(s)); };
+  var esc = function (s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  };
+
+  /* ---------- 1. theme toggle (button auto-injected; anti-FOUC ran in <head>) ---------- */
+  var toggle = document.createElement('button');
+  toggle.className = 'np-theme-toggle';
+  toggle.type = 'button';
+  toggle.setAttribute('aria-label', 'Toggle theme');
+  function paintToggle() {
+    toggle.textContent = (document.documentElement.getAttribute('data-theme') === 'dark') ? '☀' : '☾';
+  }
+  paintToggle();
+  toggle.addEventListener('click', function () {
+    var next = (document.documentElement.getAttribute('data-theme') === 'dark') ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    try { localStorage.setItem('np-theme', next); } catch (e) {}
+    paintToggle();
+    document.dispatchEvent(new CustomEvent('np:theme-change', { detail: { theme: next } }));
+  });
+  document.body.appendChild(toggle);
+
+  /* ---------- 2. arrows — empty .arrow spans get the canonical SVG ---------- */
+  var ARROW = '<svg width="34" height="10" viewBox="0 0 34 10" aria-hidden="true"><line x1="0" y1="5" x2="26" y2="5" stroke="currentColor" stroke-width="1.5"/><path d="M26 1 L32 5 L26 9 Z" fill="currentColor"/></svg>';
+  var ARROW_DASHED = '<svg width="34" height="10" viewBox="0 0 34 10" aria-hidden="true"><line x1="0" y1="5" x2="26" y2="5" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 3"/><path d="M26 1 L32 5 L26 9 Z" fill="currentColor"/></svg>';
+  $$('.arrow').forEach(function (el) {
+    if (el.textContent.trim() === '') el.innerHTML = el.classList.contains('dashed') ? ARROW_DASHED : ARROW;
+  });
+
+  /* ---------- 3. navigation — scrollspy sidebar OR multipage router ----------
+     scroll mode : anchor links + scrollspy. Short / sequential docs.
+     pages mode  : each domain (section[data-group]) — or each section when
+                   no groups — becomes a swappable page. The sidebar is a
+                   router, not a scrollbar: one viewport per view, no long
+                   scroll. Auto-on when any section carries data-group or
+                   there are >=6 sections; force with body[data-nav].         */
+  (function () {
+    var layout = $('.layout'), main = $('.main'), aside = $('.sidebar');
+    if (!layout || !main || !aside) return;
+    var secs = $$(':scope > section[id]', main).filter(function (s) { return s.querySelector('h2'); });
+    var want = document.body.getAttribute('data-sidebar');   // on | off | (auto)
+    var navAttr = document.body.getAttribute('data-nav');    // pages | scroll | (auto)
+    if (want === 'off') return;
+    var hasGroups = secs.some(function (s) { return s.getAttribute('data-group'); });
+    var paged = navAttr === 'pages' || (navAttr !== 'scroll' && hasGroups);  // domains drive multipage
+    if (!paged && want !== 'on' && secs.length < 6) return;   // tiny scroll doc: no chrome
+
+    var brand = document.body.getAttribute('data-brand') || 'NextNode';
+    function secTitle(s) {
+      var h = s.querySelector('h2').cloneNode(true);
+      var n = h.querySelector('.num'); if (n) n.remove();
+      return h.textContent.trim();
+    }
+    function slug(s) {
+      return String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    }
+    var head = '<div class="brand">' + esc(brand) + '<span class="dot">.</span></div>'
+             + '<div class="sub">' + esc(document.title) + '</div>';
+
+    /* ---- scroll mode ---- */
+    if (!paged) {
+      layout.classList.add('has-sidebar');
+      var html = head + '<nav>';
+      secs.forEach(function (s, i) {
+        html += '<a href="#' + s.id + '"><span class="n">' + String(i + 1).padStart(2, '0') + '</span>' + esc(secTitle(s)) + '</a>';
+      });
+      aside.innerHTML = html + '</nav>';
+      var links = $$('nav a', aside), map = {};
+      links.forEach(function (a) { map[a.getAttribute('href').slice(1)] = a; });
+      var obs = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (!e.isIntersecting) return;
+          links.forEach(function (l) { l.classList.remove('active'); });
+          if (map[e.target.id]) map[e.target.id].classList.add('active');
+        });
+      }, { rootMargin: '-20% 0px -70% 0px' });
+      secs.forEach(function (s) { obs.observe(s); });
+      return;
+    }
+
+    /* ---- pages mode: partition main's children into pages ----
+       A section with data-group joins/continues that group's page; a run
+       of same-group sections is one page. Sections without a group are one
+       page each. The header + any loose intro blocks (tldr, strip) become
+       the first "overview" page. style/script stay global (unwrapped).      */
+    var pages = [], cur = null, curKey = null;
+    $$(':scope > *', main).forEach(function (node) {
+      var tag = node.tagName;
+      if (tag === 'STYLE' || tag === 'LINK') return;
+      if (tag === 'SCRIPT' && node.getAttribute('data-np') !== 'board') return;
+      if (tag === 'SECTION' && node.id && node.querySelector('h2')) {
+        var g = node.getAttribute('data-group');
+        var key = g || ('__' + node.id);
+        if (!cur || key !== curKey) { cur = { label: g || secTitle(node), group: g, nodes: [], sections: [] }; curKey = key; pages.push(cur); }
+        cur.sections.push(node); cur.nodes.push(node);
+      } else {
+        if (!cur) { cur = { label: '', group: null, nodes: [], sections: [] }; curKey = '__intro'; pages.push(cur); }
+        cur.nodes.push(node);
+      }
+    });
+    if (pages.length < 2) return;   // nothing to page — leave as plain scroll
+    layout.classList.add('has-sidebar');
+    document.body.classList.add('np-paged');
+
+    var seen = {};
+    pages.forEach(function (p, i) {
+      if (!p.label) { var h1 = p.nodes.map(function (n) { return n.querySelector ? n.querySelector('h1') : null; }).filter(Boolean)[0]; p.label = h1 ? h1.textContent.trim() : 'Aperçu'; }
+      var base = 'page-' + (slug(p.label) || (i + 1)), id = base, k = 2;
+      while (seen[id]) id = base + '-' + (k++);
+      seen[id] = 1; p.id = id;
+      var wrap = document.createElement('div');
+      wrap.className = 'np-page'; wrap.id = id;
+      p.nodes[0].parentNode.insertBefore(wrap, p.nodes[0]);
+      p.nodes.forEach(function (n) { wrap.appendChild(n); });
+      p.el = wrap;
+    });
+
+    var nhtml = head + '<nav class="np-router">';
+    pages.forEach(function (p, i) {
+      nhtml += '<a class="pg" href="#' + p.id + '" data-page="' + p.id + '"><span class="n">' + String(i + 1).padStart(2, '0') + '</span>' + esc(p.label) + '</a>';
+      if (p.sections.length > 1) {
+        nhtml += '<div class="subs">';
+        p.sections.forEach(function (s) { nhtml += '<a class="sub" href="#' + s.id + '" data-page="' + p.id + '" data-sec="' + s.id + '">' + esc(secTitle(s)) + '</a>'; });
+        nhtml += '</div>';
+      }
+    });
+    aside.innerHTML = nhtml + '</nav>';
+
+    pages.forEach(function (p, i) {
+      var f = document.createElement('nav'); f.className = 'np-page-nav';
+      f.innerHTML = (i > 0 ? '<a class="prev" href="#' + pages[i - 1].id + '" data-page="' + pages[i - 1].id + '"><span class="hint">Précédent</span>' + esc(pages[i - 1].label) + '</a>' : '<span></span>')
+                  + (i < pages.length - 1 ? '<a class="next" href="#' + pages[i + 1].id + '" data-page="' + pages[i + 1].id + '"><span class="hint">Suivant</span>' + esc(pages[i + 1].label) + '</a>' : '<span></span>');
+      p.el.appendChild(f);
+    });
+
+    var byId = {}; pages.forEach(function (p) { byId[p.id] = p; });
+    var pgLinks = $$('a.pg[data-page]', aside);
+    function show(id, secId, push) {
+      var p = byId[id] || pages[0]; id = p.id;
+      pages.forEach(function (q) { q.el.classList.toggle('active', q === p); });
+      pgLinks.forEach(function (a) { a.classList.toggle('active', a.getAttribute('data-page') === id); });
+      if (push !== false) { try { history.replaceState(null, '', '#' + (secId || id)); } catch (e) {} }
+      var target = secId && document.getElementById(secId);
+      if (target) target.scrollIntoView({ block: 'start' }); else window.scrollTo(0, 0);
+      document.dispatchEvent(new CustomEvent('np:tab-shown', { detail: { panel: p.el } }));
+      document.dispatchEvent(new CustomEvent('np:page-shown', { detail: { page: p.el, id: id } }));
+    }
+    function resolve() {
+      var h = location.hash.slice(1);
+      if (byId[h]) return show(h, null, false);
+      var el = h && document.getElementById(h);
+      var wrap = el && el.closest('.np-page');
+      if (wrap) return show(wrap.id, h, false);
+      show(pages[0].id, null, false);
+    }
+    document.addEventListener('click', function (ev) {
+      var a = ev.target.closest('a[data-page]'); if (!a) return;
+      ev.preventDefault();
+      show(a.getAttribute('data-page'), a.getAttribute('data-sec') || null, true);
+    });
+    window.addEventListener('hashchange', resolve);
+    resolve();
+  })();
+
+  /* ---------- 4. code-block heads — built from data-file / data-lang ---------- */
+  $$('figure.code-block').forEach(function (fig) {
+    if (fig.querySelector('.code-block__head')) {
+      if (!fig.querySelector('.code-block__copy')) {
+        var head = fig.querySelector('.code-block__head');
+        var b = document.createElement('button');
+        b.className = 'code-block__copy'; b.type = 'button'; b.textContent = 'Copy';
+        head.appendChild(b);
+      }
+      return;
+    }
+    var cap = document.createElement('figcaption');
+    cap.className = 'code-block__head';
+    var file = fig.getAttribute('data-file');
+    var lang = fig.getAttribute('data-lang')
+            || (fig.querySelector('code[class*="language-"]') || { className: '' }).className.replace(/.*language-(\w+).*/, '$1');
+    cap.innerHTML = (file ? '<span class="code-block__file"></span>' : '<span class="code-block__file" style="opacity:.5">snippet</span>')
+                  + (lang ? '<span class="code-block__lang"></span>' : '')
+                  + '<button class="code-block__copy" type="button" aria-label="Copy code">Copy</button>';
+    if (file) cap.querySelector('.code-block__file').textContent = file;
+    if (lang) cap.querySelector('.code-block__lang').textContent = lang;
+    fig.insertBefore(cap, fig.firstChild);
+  });
+  function flashCopied(btn, label) {
+    var prev = btn.textContent;
+    btn.textContent = label || 'Copié ✓';
+    btn.classList.add('is-copied');
+    setTimeout(function () { btn.textContent = prev; btn.classList.remove('is-copied'); }, 1300);
+  }
+  document.addEventListener('click', function (ev) {
+    var btn = ev.target.closest('.code-block__copy');
+    if (!btn) return;
+    var code = btn.closest('.code-block');
+    code = code && code.querySelector('pre code');
+    if (!code) return;
+    navigator.clipboard.writeText(code.innerText).then(function () { flashCopied(btn, 'Copied'); }).catch(function () {});
+  });
+
+  /* ---------- 5. diff parser ---------- */
+  $$('.diff').forEach(function (el) {
+    var raw = el.textContent.replace(/^\n/, '').trimEnd();
+    el.innerHTML = raw.split('\n').map(function (l) {
+      var cls = l.indexOf('@@') === 0 ? 'hunk' : l.charAt(0) === '+' ? 'add' : l.charAt(0) === '-' ? 'del' : 'ctx';
+      var body = (cls === 'add' || cls === 'del') ? l.slice(1) : l;
+      return '<span class="line ' + cls + '">' + esc(body) + '</span>';
+    }).join('');
+  });
+
+  /* ---------- 5b. tabs — <div class="tabs" data-np="tabs"> ----------
+     Children carry data-tab="Label"; the runtime builds the tab-list.
+     data-active on a child preselects it (default: first). Without JS
+     the panels stack, labelled via CSS ::before.                      */
+  $$('.tabs[data-np="tabs"]').forEach(function (box) {
+    var panels = $$(':scope > [data-tab]', box);
+    if (!panels.length) return;
+    var list = document.createElement('div');
+    list.className = 'tab-list';
+    list.setAttribute('role', 'tablist');
+    var btns = panels.map(function (p, i) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'tab-btn';
+      b.setAttribute('role', 'tab');
+      b.textContent = p.getAttribute('data-tab');
+      b.addEventListener('click', function () { activate(i); });
+      list.appendChild(b);
+      p.setAttribute('role', 'tabpanel');
+      return b;
+    });
+    function activate(i) {
+      panels.forEach(function (p, j) {
+        p.classList.toggle('active', j === i);
+        btns[j].classList.toggle('active', j === i);
+        btns[j].setAttribute('aria-selected', j === i ? 'true' : 'false');
+      });
+      document.dispatchEvent(new CustomEvent('np:tab-shown', { detail: { panel: panels[i] } }));
+    }
+    list.addEventListener('keydown', function (ev) {
+      if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
+      var cur = btns.indexOf(document.activeElement);
+      if (cur < 0) return;
+      var next = (cur + (ev.key === 'ArrowRight' ? 1 : btns.length - 1)) % btns.length;
+      btns[next].focus();
+      activate(next);
+    });
+    box.insertBefore(list, box.firstChild);
+    box.classList.add('tabs-ready');
+    var pre = panels.filter(function (p) { return p.hasAttribute('data-active'); });
+    activate(pre.length ? panels.indexOf(pre[0]) : 0);
+  });
+
+  /* ---------- 6. generic copy buttons ----------
+     <button class="copy-btn" data-copy="#selector">  → copies innerText of target
+     <button class="copy-btn" data-copy-text="...">   → copies the literal payload   */
+  document.addEventListener('click', function (ev) {
+    var btn = ev.target.closest('[data-copy], [data-copy-text]');
+    if (!btn) return;
+    var txt = btn.getAttribute('data-copy-text');
+    if (txt == null) {
+      var target = $(btn.getAttribute('data-copy'));
+      if (!target) return;
+      txt = target.innerText;
+    }
+    navigator.clipboard.writeText(txt).then(function () { flashCopied(btn); }).catch(function () {});
+  });
+
+  /* ---------- 7. highlight.js — lazy CDN, only if a language-tagged block exists ---------- */
+  (function () {
+    if (!$('pre > code[class*="language-"]')) return;
+    var base = 'https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/';
+    ['light', 'dark'].forEach(function (t) {
+      var l = document.createElement('link');
+      l.id = 'hljs-' + t; l.rel = 'stylesheet';
+      l.href = base + 'styles/atom-one-' + t + '.min.css';
+      document.head.appendChild(l);
+    });
+    function applyTheme(t) {
+      $('#hljs-light').disabled = (t === 'dark');
+      $('#hljs-dark').disabled = (t !== 'dark');
+    }
+    var s = document.createElement('script');
+    s.src = base + 'highlight.min.js';
+    s.onload = function () {
+      window.hljs.highlightAll();
+      applyTheme(document.documentElement.getAttribute('data-theme') || 'light');
+    };
+    document.head.appendChild(s);
+    document.addEventListener('np:theme-change', function (e) { if (window.hljs) applyTheme(e.detail.theme); });
+  })();
+
+  /* ---------- 8. mermaid — lazy CDN, only if a .mermaid block exists ---------- */
+  (function () {
+    if (!$('.mermaid')) return;
+    import('https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs').then(function (mod) {
+      var mermaid = mod.default;
+      function themed(t) {
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: t === 'dark' ? 'dark' : 'default',
+          themeVariables: { fontFamily: 'DM Sans, sans-serif' }
+        });
+        mermaid.run({ querySelector: '.mermaid' });
+      }
+      themed(document.documentElement.getAttribute('data-theme') || 'light');
+      document.addEventListener('np:theme-change', function (e) {
+        $$('.mermaid').forEach(function (el) {
+          var src = el.getAttribute('data-source') || el.textContent;
+          el.removeAttribute('data-processed');
+          el.setAttribute('data-source', src);
+          el.textContent = src;
+        });
+        themed(e.detail.theme);
+      });
+      /* diagrams rendered while their tab was hidden have a broken size — re-render on first show */
+      document.addEventListener('np:tab-shown', function (e) {
+        var stale = $$('.mermaid', e.detail.panel).filter(function (el) {
+          var svg = el.querySelector('svg');
+          return svg && svg.getBoundingClientRect().width === 0;
+        });
+        if (!stale.length) return;
+        stale.forEach(function (el) {
+          var src = el.getAttribute('data-source') || el.textContent;
+          el.removeAttribute('data-processed');
+          el.setAttribute('data-source', src);
+          el.textContent = src;
+        });
+        mermaid.run({ nodes: stale });
+      });
+    }).catch(function () {});
+  })();
+
+  /* ---------- 9. board — rendered from a JSON data-island ----------
+     script[type="application/json"][data-np="board"] containing
+     {"columns":["Now","Next"], "cards":[{id,title,desc?,tags?,col}]}
+     Drag cards between columns; export as markdown or JSON.
+     NOTE: this file is inlined inside a script tag — never write a
+     literal closing script tag anywhere in it, comments included.  */
+  $$('script[type="application/json"][data-np="board"]').forEach(function (island, bi) {
+    var data;
+    try { data = JSON.parse(island.textContent); } catch (e) { return; }
+    var wrap = document.createElement('div');
+    var board = document.createElement('div');
+    board.className = 'board';
+    var byId = {};
+    (data.cards || []).forEach(function (c) { byId[c.id] = c; });
+    data.columns.forEach(function (col) {
+      var bcol = document.createElement('div');
+      bcol.className = 'bcol';
+      bcol.setAttribute('data-col', col);
+      bcol.innerHTML = '<h4><span>' + esc(col) + '</span><span class="cnt"></span></h4>';
+      (data.cards || []).filter(function (c) { return c.col === col; }).forEach(function (c) {
+        bcol.appendChild(renderCard(c));
+      });
+      bcol.addEventListener('dragover', function (ev) { ev.preventDefault(); bcol.classList.add('drag-over'); });
+      bcol.addEventListener('dragleave', function () { bcol.classList.remove('drag-over'); });
+      bcol.addEventListener('drop', function (ev) {
+        ev.preventDefault();
+        bcol.classList.remove('drag-over');
+        var id = ev.dataTransfer.getData('text/plain');
+        var card = board.querySelector('[data-id="' + id + '"]');
+        if (card) { bcol.appendChild(card); if (byId[id]) byId[id].col = col; counts(); }
+      });
+      board.appendChild(bcol);
+    });
+    function renderCard(c) {
+      var el = document.createElement('div');
+      el.className = 'bcard';
+      el.draggable = true;
+      el.setAttribute('data-id', c.id);
+      el.innerHTML = '<div class="ttl"></div>'
+        + (c.desc ? '<div class="desc"></div>' : '')
+        + (c.tags && c.tags.length ? '<div class="tags">' + c.tags.map(function (t) { return '<span class="pill mono">' + esc(t) + '</span>'; }).join('') + '</div>' : '');
+      el.querySelector('.ttl').textContent = c.title;
+      if (c.desc) el.querySelector('.desc').textContent = c.desc;
+      el.addEventListener('dragstart', function (ev) { ev.dataTransfer.setData('text/plain', c.id); });
+      return el;
+    }
+    function counts() {
+      $$('.bcol', board).forEach(function (bcol) {
+        bcol.querySelector('.cnt').textContent = $$('.bcard', bcol).length;
+      });
+    }
+    function state() {
+      return data.columns.map(function (col) {
+        var bcol = board.querySelector('[data-col="' + col + '"]');
+        return { column: col, cards: $$('.bcard', bcol).map(function (el) { return byId[el.getAttribute('data-id')]; }) };
+      });
+    }
+    var actions = document.createElement('div');
+    actions.className = 'board-actions';
+    actions.innerHTML = '<button class="copy-btn" type="button" data-board-md>Copier en markdown</button>'
+                      + '<button class="copy-btn" type="button" data-board-json>Copier en JSON</button>';
+    actions.querySelector('[data-board-md]').addEventListener('click', function (ev) {
+      var md = state().map(function (g) {
+        return '## ' + g.column + '\n' + g.cards.map(function (c) { return '- ' + c.title + (c.desc ? ' — ' + c.desc : ''); }).join('\n');
+      }).join('\n\n');
+      navigator.clipboard.writeText(md).then(function () { flashCopied(ev.target); }).catch(function () {});
+    });
+    actions.querySelector('[data-board-json]').addEventListener('click', function (ev) {
+      navigator.clipboard.writeText(JSON.stringify(state(), null, 2)).then(function () { flashCopied(ev.target); }).catch(function () {});
+    });
+    wrap.appendChild(board);
+    wrap.appendChild(actions);
+    island.parentNode.replaceChild(wrap, island);
+    counts();
+    window.__npBoards = window.__npBoards || [];
+    window.__npBoards[bi] = state;
+  });
+
+  /* ---------- 10. rich mode — <body data-mode="rich"> ----------
+     Auto-instruments prose as contenteditable (outside skip-zones),
+     collects forms .rich-question, [data-token] inputs, boards and
+     edits, then POSTs to ./submit with approval_mode. Approve and
+     Reject map to explicit next-action contracts for Claude.      */
+  (function () {
+    if (document.body.getAttribute('data-mode') !== 'rich') return;
+    var SKIP = 'pre, table, .mermaid, .diff, .file-tree, .diagram, .mockup, form, .static, [contenteditable]';
+    $$('section p, section li').forEach(function (el) {
+      if (el.closest(SKIP)) return;
+      el.setAttribute('contenteditable', 'true');
+      el.setAttribute('data-np-orig', el.innerText);
+      el.addEventListener('input', function () {
+        el.setAttribute('data-np-edited', el.innerText !== el.getAttribute('data-np-orig') ? '1' : '0');
+      });
+    });
+    function collectState() {
+      var out = { decisions: {}, edits: {}, tokens: {}, freeform: '' };
+      $$('form.rich-question').forEach(function (f, i) {
+        var id = f.getAttribute('data-question-id') || (f.querySelector('[name]') || {}).name || 'q' + (i + 1);
+        var radios = $$('input[type="radio"]:checked', f).map(function (r) { return r.value; });
+        var checks = $$('input[type="checkbox"]:checked', f).map(function (c) { return c.value; });
+        var text = $$('textarea', f).map(function (t) { return t.value.trim(); }).filter(Boolean).join('\n');
+        var v = {};
+        if (radios.length) v.choice = radios[0];
+        if (checks.length) v.choices = checks;
+        if (text) v.freetext = text;
+        out.decisions[id] = v;
+      });
+      $$('[data-np-edited="1"]').forEach(function (el, i) {
+        var id = el.id || (el.closest('section[id]') || {}).id || 'edit';
+        out.edits[id + '/' + i] = el.innerText;
+      });
+      $$('[data-token]').forEach(function (inp) { out.tokens[inp.getAttribute('data-token')] = inp.value; });
+      var ff = $('[data-freeform]');
+      if (ff && ff.value.trim()) out.freeform = ff.value.trim();
+      if (window.__npBoards) out.boards = window.__npBoards.map(function (fn) { return fn(); });
+      return out;
+    }
+    function submit(mode) {
+      var payload = collectState();
+      payload.approval_mode = mode;
+      fetch('./submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).then(function (res) {
+        if (!res.ok) throw new Error('submit failed');
+        document.body.innerHTML = '<main style="padding:4rem;font-family:var(--np-sans)"><h1>✓ ' + (mode === 'rejected' ? 'Rejected' : 'Submitted') + '</h1><p>Return to Claude — you can close this tab.</p></main>';
+      }).catch(function () {
+        navigator.clipboard.writeText(JSON.stringify(payload, null, 2)).catch(function () {});
+        alert('Pas de serveur ./submit — la submission JSON a été copiée dans le presse-papier, colle-la dans Claude.');
+      });
+    }
+    var gate = document.createElement('footer');
+    gate.className = 'rp-gate';
+    gate.innerHTML = '<span class="rp-progress" aria-live="polite"></span>'
+                   + '<button type="button" class="np-btn ghost" id="rp-reject">Reject</button>'
+                   + '<button type="button" class="np-btn primary" id="rp-approve">Approve</button>';
+    document.body.appendChild(gate);
+    $('#rp-approve').addEventListener('click', function () { submit('approved'); });
+    $('#rp-reject').addEventListener('click', function () { submit('rejected'); });
+
+    /* ---- questions: pre-pick the recommendation, scannable overview, live
+            progress. Answering becomes "review the defaults, override the few
+            you disagree with" instead of "fill N blank forms". ---- */
+    var main = $('.main');
+    var qs = $$('form.rich-question');
+    function answerOf(f) {
+      var picks = $$('input:checked', f).map(function (inp) {
+        var l = inp.closest('label'); var n = l && l.querySelector('.cax-name');  // compare-axes: read only the option name
+        return ((n || l || inp).textContent || inp.value).trim();
+      });
+      var notes = $$('textarea', f).map(function (t) { return t.value.trim(); }).filter(Boolean);
+      return picks.concat(notes).join(' · ') || '—';
+    }
+    qs.forEach(function (f, i) {
+      f.setAttribute('data-qn', i + 1);
+      if (!f.id) f.id = 'rq-' + (f.getAttribute('data-question-id') || (i + 1));
+      var rec = $('label.opt[data-recommended] input', f);
+      if (rec && !$$('input:checked', f).length) rec.checked = true;     // land on the reco
+    });
+    var snapshot = qs.map(answerOf);
+    var idxMeta = null, prog = $('.rp-progress', gate), groups = null;
+    function buildLi(f, i) {
+      var qt = ((f.querySelector('.q') || {}).textContent || ('Décision ' + (i + 1))).trim();
+      var li = document.createElement('li');
+      li.innerHTML = '<a class="jump" href="#' + f.id + '" data-jump="' + f.id + '"><span class="dot"></span><span class="num">' + (i + 1) + '</span><span class="qt"></span></a><span class="ans"></span>';
+      li.querySelector('.qt').textContent = qt;
+      f._li = li;
+      return li;
+    }
+    if (qs.length >= 3 && main) {
+      var idx = document.createElement('details');
+      idx.className = 'rq-index'; idx.open = true;
+      idx.innerHTML = '<summary><b>' + qs.length + ' décisions</b> <span class="rq-meta"></span></summary>';
+      // group by enclosing section[data-group] (fallback: section h2, then "Décisions")
+      groups = []; var gmap = {};
+      qs.forEach(function (f, i) {
+        var sec = f.closest('section[data-group]') || f.closest('section[id]');
+        var h2 = sec && sec.querySelector('h2');
+        var key = (sec && sec.getAttribute('data-group')) || (h2 && h2.textContent.trim()) || (sec && sec.id) || 'Décisions';
+        if (!gmap[key]) { gmap[key] = { name: key, items: [], meta: null }; groups.push(gmap[key]); }
+        gmap[key].items.push({ f: f, i: i });
+      });
+      if (groups.length < 2) {                       // single domain → flat list
+        var ol = document.createElement('ol');
+        groups[0].items.forEach(function (it) { ol.appendChild(buildLi(it.f, it.i)); });
+        idx.appendChild(ol);
+      } else {                                        // many domains → collapsible per-domain index
+        var collapsed = qs.length > 14;               // huge interview → folded by default
+        groups.forEach(function (g) {
+          var d = document.createElement('details');
+          d.className = 'rq-group'; if (!collapsed) d.open = true;
+          d.innerHTML = '<summary><span class="gname"></span><span class="gcount"></span></summary>';
+          d.querySelector('.gname').textContent = g.name;
+          var gol = document.createElement('ol');
+          g.items.forEach(function (it) { gol.appendChild(buildLi(it.f, it.i)); });
+          d.appendChild(gol); idx.appendChild(d);
+          g.meta = d.querySelector('.gcount');
+        });
+      }
+      var hdr = main.querySelector('header');
+      if (hdr && hdr.parentNode) hdr.parentNode.insertBefore(idx, hdr.nextSibling);
+      else main.insertBefore(idx, main.firstChild);
+      idxMeta = $('.rq-meta', idx);
+      document.addEventListener('click', function (ev) {
+        var a = ev.target.closest('a[data-jump]'); if (!a) return;
+        var f = document.getElementById(a.getAttribute('data-jump'));
+        if (f) f.classList.add('rq-flash'), setTimeout(function () { f.classList.remove('rq-flash'); }, 900);
+      });
+    }
+    function refresh() {
+      var changed = 0;
+      qs.forEach(function (f, i) {
+        var now = answerOf(f), diff = now !== snapshot[i];
+        if (diff) changed++;
+        if (f._li) { f._li.classList.toggle('changed', diff); f._li.querySelector('.ans').textContent = now; }
+      });
+      var msg = qs.length + ' décision' + (qs.length > 1 ? 's' : '') + (changed ? ' · ' + changed + ' modifiée' + (changed > 1 ? 's' : '') : ' · toutes sur la reco');
+      if (prog) prog.textContent = msg;
+      if (idxMeta) idxMeta.textContent = changed ? changed + ' modifiée' + (changed > 1 ? 's' : '') : 'toutes sur la reco';
+      if (groups) groups.forEach(function (g) {
+        if (!g.meta) return;
+        var ch = g.items.reduce(function (n, it) { return n + (answerOf(it.f) !== snapshot[it.i] ? 1 : 0); }, 0);
+        g.meta.textContent = g.items.length + (ch ? ' · ' + ch + ' modif.' : '');
+      });
+    }
+    if (qs.length) { document.addEventListener('input', refresh); document.addEventListener('change', refresh); refresh(); }
+  })();
+})();
+</script>
+</body>
+</html>

@@ -9,6 +9,12 @@ export function redirectZoneLabel(redirectDomain: string): string {
 	return `zone_redirect_${toTerraformLabel(redirectDomain)}`
 }
 
+// Both a resource key and an interpolation target (`bucket_name`, the
+// `r2_buckets` output): two spellings would emit a reference to no resource.
+export function r2BucketLabel(bucketName: string): string {
+	return `r2_${toTerraformLabel(bucketName)}`
+}
+
 export function indexBy<T>(
 	names: ReadonlyArray<string>,
 	entry: (name: string) => readonly [string, T],
