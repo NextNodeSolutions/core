@@ -6,6 +6,7 @@ import {
 	computeR2ServiceBuckets,
 } from '#/domain/services/r2.ts'
 
+import { buildFirewallResources } from './terraform-firewall.ts'
 import {
 	indexBy,
 	r2BucketLabel,
@@ -24,10 +25,12 @@ import {
 	MAIN_ZONE_LABEL,
 } from './terraform-refs.ts'
 import { mergeRulesetFamilies } from './terraform-rulesets.ts'
+import { deriveZoneRules } from './zone-rules.ts'
 
 import type { R2BucketConfig } from '#/config/service-config.ts'
 import type { CloudflareWorkersDeployableConfig } from '#/config/types.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
+import type { WorkerPublicPathsRule } from './terraform-firewall.ts'
 import type {
 	D1DatabaseResource,
 	KvNamespaceResource,
@@ -53,30 +56,8 @@ export interface WorkersDerivedResources {
 	readonly hasPlanetscale: boolean
 	readonly redirectDomains: ReadonlyArray<string>
 	readonly rateLimitRules: ReadonlyArray<WorkerRateLimitRule>
+	readonly publicPathsRules: ReadonlyArray<WorkerPublicPathsRule>
 	readonly hasAccountResource: boolean
-}
-
-// A zone owns ONE ruleset entry point per phase, so dev and prod workspaces
-// would overwrite each other's rules if both emitted this family - hence
-// production only, the same reason the Redirect Rules are production only.
-function deriveRateLimitRules(
-	config: CloudflareWorkersDeployableConfig,
-	environment: AppEnvironment,
-): ReadonlyArray<WorkerRateLimitRule> {
-	if (environment !== 'production') return []
-	return Object.entries(config.deploy.services).flatMap(
-		([serviceName, service]) => {
-			const { url, rateLimit } = service
-			if (!rateLimit || typeof url === 'undefined') return []
-			return [
-				{
-					serviceName,
-					host: resolveDeployDomain(url, environment),
-					rateLimit,
-				},
-			]
-		},
-	)
 }
 
 export function deriveWorkersResources(
@@ -93,6 +74,7 @@ export function deriveWorkersResources(
 	)
 	const hasD1 = Boolean(config.services.d1)
 	const hasPlanetscale = Boolean(config.services.planetscale)
+	const zoneRules = deriveZoneRules(config, environment)
 
 	return {
 		projectName,
@@ -111,7 +93,8 @@ export function deriveWorkersResources(
 		// omitted in development.
 		redirectDomains:
 			environment === 'production' ? config.project.redirectDomains : [],
-		rateLimitRules: deriveRateLimitRules(config, environment),
+		rateLimitRules: zoneRules.rateLimitRules,
+		publicPathsRules: zoneRules.publicPathsRules,
 		hasAccountResource:
 			hasD1 ||
 			hasPlanetscale ||
@@ -245,6 +228,7 @@ export function buildResourceBlock(
 	const rulesets = mergeRulesetFamilies([
 		redirects.rulesets,
 		buildRateLimitResources(derived.rateLimitRules),
+		buildFirewallResources(derived.publicPathsRules),
 	])
 	if (Object.keys(redirects.dns).length > 0) {
 		resource.cloudflare_dns_record = redirects.dns
