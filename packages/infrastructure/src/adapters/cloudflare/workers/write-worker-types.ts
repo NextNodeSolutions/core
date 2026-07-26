@@ -8,6 +8,10 @@ const logger = createLogger()
 // The consumer's tsconfig picks the file up from the app package root (its
 // `include` covers `**/*`), so it replaces the hand-written `env.d.ts`.
 const TYPES_FILENAME = 'worker-configuration.d.ts'
+// Sits next to the types, listing the keys a local run must supply itself. The
+// `.example` suffix is load-bearing: the developer's own `.dev.vars` - real
+// local secrets, unrecoverable if overwritten - is never touched.
+const DEV_VARS_EXAMPLE_FILENAME = '.dev.vars.example'
 const PACKAGE_MANIFEST = 'package.json'
 
 // The app package root the generated types belong to: the nearest ancestor of
@@ -33,16 +37,29 @@ export interface WriteWorkerTypesInput {
 	// config dir by the caller. Only its directory is read - the file itself need
 	// not exist yet (types are generated before the build).
 	readonly entryPath: string
-	readonly content: string
+	readonly types: string
+	readonly devVarsExample: string
 }
 
-// Write one worker's `worker-configuration.d.ts` into its app package root and
-// return the written path. Returns the path so the caller can log which file was
-// generated for which service.
-export function writeWorkerTypes(input: WriteWorkerTypesInput): string {
+// Write one worker's generated files into its app package root and return the
+// written paths, so the caller can log which files were generated for which
+// service. Both land in the same directory: they describe the same worker, and
+// resolving that directory is knowledge this module keeps to itself.
+export function writeWorkerTypes(
+	input: WriteWorkerTypesInput,
+): ReadonlyArray<string> {
 	const packageDir = resolvePackageDir(input.entryPath)
-	const target = join(packageDir, TYPES_FILENAME)
-	writeFileSync(target, input.content)
-	logger.info(`Generated ${TYPES_FILENAME} in ${packageDir}`)
-	return target
+	const files: ReadonlyArray<readonly [string, string]> = [
+		[TYPES_FILENAME, input.types],
+		[DEV_VARS_EXAMPLE_FILENAME, input.devVarsExample],
+	]
+	const written = files.map(([filename, content]) => {
+		const target = join(packageDir, filename)
+		writeFileSync(target, content)
+		return target
+	})
+	logger.info(
+		`Generated ${TYPES_FILENAME} + ${DEV_VARS_EXAMPLE_FILENAME} in ${packageDir}`,
+	)
+	return written
 }

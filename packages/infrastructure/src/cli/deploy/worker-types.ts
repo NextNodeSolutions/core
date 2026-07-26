@@ -6,6 +6,7 @@ import {
 	isCloudflareWorkersDeployableConfig,
 	isDeployableConfig,
 } from '#/config/types.ts'
+import { renderDevVarsExample } from '#/domain/cloudflare/workers/dev-vars-example.ts'
 import { renderWorkerEnvTypes } from '#/domain/cloudflare/workers/worker-env-types.ts'
 
 import type { DeployableConfig } from '#/config/types.ts'
@@ -17,18 +18,20 @@ export function generateWorkerTypes(
 	if (!isCloudflareWorkersDeployableConfig(config)) return []
 
 	const workerServices = config.deploy.services
-	return Object.entries(workerServices).map(([serviceName, service]) =>
-		writeWorkerTypes({
+	return Object.entries(workerServices).flatMap(([serviceName, service]) => {
+		const envInput = {
+			serviceName,
+			service,
+			services: config.services,
+			workerServices,
+			secretNames: service.secrets,
+		}
+		return writeWorkerTypes({
 			entryPath: resolve(configDir, service.entry),
-			content: renderWorkerEnvTypes({
-				serviceName,
-				service,
-				services: config.services,
-				workerServices,
-				secretNames: service.secrets,
-			}),
-		}),
-	)
+			types: renderWorkerEnvTypes(envInput),
+			devVarsExample: renderDevVarsExample(envInput),
+		})
+	})
 }
 
 export function generateWorkerTypesFromFile(
