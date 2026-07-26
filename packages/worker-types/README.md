@@ -25,8 +25,28 @@ from what is deployed.
 ```gitignore
 # generated, not committed
 worker-configuration.d.ts
+
+# local secrets, never committed - keep the pattern exact: a `.dev.vars*` glob
+# would also swallow the generated .dev.vars.example, which IS committed
+.dev.vars
 ```
 
 `worker-types gen` reads `./nextnode.toml` (override with `--config <path>`), and
-writes one `worker-configuration.d.ts` into each worker's package directory. A
-non-`cloudflare-workers` project is a no-op.
+writes two files into each worker's package directory. A non-`cloudflare-workers`
+project is a no-op.
+
+## `.dev.vars.example`
+
+Beside the types, each worker gets a `.dev.vars.example` listing every key it
+will read from `env` once deployed — the injected vars (`SITE_URL`, each routed
+peer's `<NAME>_URL`, the backing resource keys) plus its secret names, one
+`KEY=""` per line, sorted. Bindings are absent: the local runtime provides those,
+a `.dev.vars` never could.
+
+Commit it — unlike `.dev.vars`, it carries no values, and it is how the next
+developer discovers what to fill in. Which local channel to fill is yours to
+pick: `.dev.vars`, or the `vars` block of a `wrangler.dev.jsonc`.
+
+It is an example and nothing more: nothing checks that your actual `.dev.vars`
+matches it, so a key you skip still surfaces as an `undefined` at runtime while
+the generated types promise a `string`.

@@ -308,10 +308,16 @@ wrangler config yet be missing from the generated `Env`, or vice versa. Siblings
 in `needs` are `Fetcher`; D1/KV/R2/Queues get their Cloudflare types; public vars
 and secrets are `string`; `@cloudflare/workers-types` supplies the globals.
 
-The generated file is COMMITTED in the consumer repo (unlike the deploy-only
-wrangler config): types are needed at typecheck time, locally and in every CI
-job, with no infra dependency at build. CI regenerates and `git diff
---exit-code` guards drift, so nextnode.toml stays authoritative.
+The generated `worker-configuration.d.ts` is NOT committed: the consumer
+gitignores it and regenerates it from `nextnode.toml` on every `prebuild` /
+`pretype-check`, which is what keeps the config authoritative.
+
+The command writes a second file beside it, `.dev.vars.example`: every key the
+deployed worker reads from `env` (public vars + secret names, never a binding),
+one `KEY=""` per line. That one IS committed — it holds no values and is how a
+developer discovers what to put in a local `.dev.vars`, which the generated types
+promise as `string` but nothing supplies locally. A consumer gitignoring
+`.dev.vars*` rather than `.dev.vars` would swallow it.
 
 ## How It Runs
 
