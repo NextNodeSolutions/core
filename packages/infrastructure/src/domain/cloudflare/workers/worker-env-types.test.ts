@@ -4,7 +4,7 @@ import { renderWorkerEnvTypes } from './worker-env-types.ts'
 
 import type { ServicesConfig } from '#/config/service-config.ts'
 import type { WorkerServiceConfig } from '#/config/types.ts'
-import type { WorkerEnvTypesInput } from './worker-env-types.ts'
+import type { WorkerEnvInput } from './worker-env-document.ts'
 
 const FULL_SERVICES: ServicesConfig = {
 	d1: { migrationsFolder: 'drizzle' },
@@ -24,9 +24,7 @@ const service = (
 	...overrides,
 })
 
-const input = (
-	overrides: Partial<WorkerEnvTypesInput> = {},
-): WorkerEnvTypesInput => ({
+const input = (overrides: Partial<WorkerEnvInput> = {}): WorkerEnvInput => ({
 	serviceName: 'web',
 	service: service(),
 	services: {},
