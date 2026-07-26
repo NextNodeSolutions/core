@@ -52,8 +52,7 @@ const EMPTY_BACKING: WorkersBackingConfig = {
 	cdnBucketAliases: [],
 }
 
-// web + admin routed, api internal - the project every peer-URL expectation
-// below is written against.
+// web + admin routed, api internal.
 const WEB_WORKER = worker({ url: 'example.com' })
 const ADMIN_WORKER = worker({ url: 'admin.example.com' })
 const API_WORKER = worker()

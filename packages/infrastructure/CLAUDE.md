@@ -316,8 +316,9 @@ The command writes a second file beside it, `.dev.vars.example`: every key the
 deployed worker reads from `env` (public vars + secret names, never a binding),
 one `KEY=""` per line. That one IS committed — it holds no values and is how a
 developer discovers what to put in a local `.dev.vars`, which the generated types
-promise as `string` but nothing supplies locally. A consumer gitignoring
-`.dev.vars*` rather than `.dev.vars` would swallow it.
+promise as `string` but nothing supplies locally. The consumer's gitignore needs
+`.dev.vars*` (wrangler also reads `.dev.vars.<environment>`, real secrets) plus
+`!.dev.vars.example` to keep this one tracked.
 
 ## How It Runs
 

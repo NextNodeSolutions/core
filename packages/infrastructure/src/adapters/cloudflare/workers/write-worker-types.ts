@@ -41,10 +41,8 @@ export interface WriteWorkerTypesInput {
 	readonly devVarsExample: string
 }
 
-// Write one worker's generated files into its app package root and return the
-// written paths, so the caller can log which files were generated for which
-// service. Both land in the same directory: they describe the same worker, and
-// resolving that directory is knowledge this module keeps to itself.
+// Both files land in the same directory: they describe the same worker, and
+// resolving that directory stays knowledge this module keeps to itself.
 export function writeWorkerTypes(
 	input: WriteWorkerTypesInput,
 ): ReadonlyArray<string> {

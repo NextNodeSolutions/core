@@ -26,9 +26,11 @@ from what is deployed.
 # generated, not committed
 worker-configuration.d.ts
 
-# local secrets, never committed - keep the pattern exact: a `.dev.vars*` glob
-# would also swallow the generated .dev.vars.example, which IS committed
-.dev.vars
+# local secrets, never committed - the glob covers wrangler's per-environment
+# `.dev.vars.<environment>` files too; the negation keeps the generated example,
+# which IS committed
+.dev.vars*
+!.dev.vars.example
 ```
 
 `worker-types gen` reads `./nextnode.toml` (override with `--config <path>`), and

@@ -11,8 +11,8 @@ import { join } from 'node:path'
 import { generateWorkerTypesFromFile } from '@nextnode-solutions/infrastructure/worker-types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Three workers: two routed, one internal. The internal one is what proves the
-// URL block follows `url`, not mere declaration.
+// Three workers: two routed, one internal - an internal one contributes no
+// `<NAME>_URL`.
 const WORKERS_CONFIG = `
 [project]
 name = "acme"
