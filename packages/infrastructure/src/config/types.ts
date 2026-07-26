@@ -1,6 +1,7 @@
 import {
 	SERVICE_NAMES,
 	SERVICE_REQUIRES_INFRA_STORAGE,
+	TARGET_REALISES_BACKING_SERVICES,
 } from './service-config.ts'
 
 import type { ServicesConfig } from './service-config.ts'
@@ -295,6 +296,14 @@ export const KEBAB_IDENTIFIER_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/
 
 export function requiresInfraStorage(config: DeployableConfig): boolean {
 	if (isHetznerDeployableConfig(config)) return true
+	// A target that realises its own backing services (cloudflare-workers, via
+	// one Terraform apply whose state lives in the HCP workspace) never touches
+	// the R2 state/certs buckets: `resolveServices` returns [] for it, so no
+	// Service ever consumes the S3 credentials. Requiring them anyway makes
+	// every command that resolves a deploy context - migrate-remote, deploy -
+	// die on `R2_ACCESS_KEY_ID env var is required`, and makes provision rotate
+	// the org-wide R2 token on every run.
+	if (TARGET_REALISES_BACKING_SERVICES[config.deploy.target]) return false
 	for (const name of SERVICE_NAMES) {
 		if (config.services[name] && SERVICE_REQUIRES_INFRA_STORAGE[name]) {
 			return true
