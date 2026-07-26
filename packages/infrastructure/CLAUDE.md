@@ -180,6 +180,26 @@ The dev declares only NAMES — values always live in GitHub (Secrets / Variable
       (`--env-file .env`) read a SHARED `.env` carrying the BACKING env only
       (`POSTGRES_*`, `R2_*`, `DATABASE_URL`) — never the app's user secrets.
 
+### Peer URLs: `<NAME>_URL` (both targets)
+
+Every service that declares a `url` contributes one `<NAME>_URL` env var
+(`admin-api` → `ADMIN_API_URL`), valued `https://` + the env-resolved host, so a
+development deploy links to `https://dev.admin.example.com` and never to
+production. `buildServiceUrlEnv` is the single derivation, shared by the
+hetzner-vps `.env.<name>` files and the cloudflare-workers `vars` block.
+
+The block is **symmetric**: the same map lands in EVERY service of the project,
+its own `<NAME>_URL` included, and it is NOT filtered by `needs`. On workers that
+is the point — the service binding (`env.<NAME>`, a `Fetcher`) is the only way to
+CALL a sibling and stays gated by `needs`, while `<NAME>_URL` only DESIGNATES a
+peer's public host, which needs no binding. An internal service (no `url`)
+contributes no key: it has no public host, and inventing one would advertise an
+unreachable address.
+
+A service name is therefore a reserved env key on the workers target: one that
+derives a key the infra already injects, or one that is not a valid identifier,
+is rejected at config load (`config/validation/worker-env-keys.ts`).
+
 ## R2 buckets & public CDN URLs
 
 `[services.r2]` declares buckets as a table-array; each bucket opts into a
