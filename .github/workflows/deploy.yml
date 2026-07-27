@@ -56,6 +56,29 @@ jobs:
                   PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
                   PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
 
+    check-secrets:
+        name: Check secrets
+        needs: plan
+        runs-on: ubuntu-latest
+        # `environment:` is what makes GitHub inject the env-scoped secrets into
+        # `toJSON(secrets)`. Without it the check would see the repo-level
+        # snapshot only and flag every environment secret as missing.
+        environment:
+            name: ${{ inputs.environment }}
+        steps:
+            - uses: NextNodeSolutions/core/.github/actions/setup@main
+              with:
+                  infra: 'true'
+                  deps: 'false'
+
+            - name: Check declared secrets
+              run: node src/index.ts check-secrets
+              working-directory: .infra/packages/infrastructure
+              env:
+                  PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
+                  PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
+                  ALL_SECRETS: ${{ toJSON(secrets) }}
+
     quality:
         name: ${{ matrix.task.name }}
         needs: plan
@@ -77,7 +100,7 @@ jobs:
 
     provision:
         name: Provision
-        needs: [plan, quality]
+        needs: [plan, quality, check-secrets]
         runs-on: ubuntu-latest
         # `ensureGeneratedSecrets` skips regeneration only when the secret is
         # already present in `ALL_SECRETS` (toJSON(secrets) of THIS job). The
@@ -162,7 +185,7 @@ jobs:
 
     build-image:
         name: Build image
-        needs: [plan, quality]
+        needs: [plan, quality, check-secrets]
         if: needs.plan.outputs.image_source == 'build'
         env:
             PACKAGE_DIR: ${{ needs.plan.outputs.package_dir }}

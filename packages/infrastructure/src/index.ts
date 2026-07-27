@@ -1,6 +1,7 @@
 /* eslint-disable import/max-dependencies -- this file is the command registry; its import count scales with the number of registered commands by design */
 import { createLogger } from '@nextnode-solutions/logger'
 
+import { checkSecretsCommand } from './cli/deploy/check-secrets.command.ts'
 import { computeImageRefCommand } from './cli/deploy/compute-image-ref.command.ts'
 import { deployCommand } from './cli/deploy/deploy.command.ts'
 import { dnsCommand } from './cli/deploy/dns.command.ts'
@@ -40,6 +41,7 @@ const PLAN_COMMANDS: Record<string, ConfigCommand> = {
 }
 
 const DEPLOY_COMMANDS: Record<string, DeployCommand> = {
+	'check-secrets': checkSecretsCommand,
 	provision: provisionCommand,
 	'plan-infra': planInfraCommand,
 	'migrate-remote': migrateRemoteCommand,
