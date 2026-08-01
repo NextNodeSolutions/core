@@ -9,6 +9,7 @@ import { maxProps } from './rules/max-props.js'
 import { noBarrelFile } from './rules/no-barrel-file.js'
 import { noBooleanParams } from './rules/no-boolean-params.js'
 import { noConfusableChars } from './rules/no-confusable-chars.js'
+import { noDetachedTailwind } from './rules/no-detached-tailwind.js'
 import { noEmDash } from './rules/no-em-dash.js'
 import { noEmptyObjectTernary } from './rules/no-empty-object-ternary.js'
 import { noEnum } from './rules/no-enum.js'
@@ -36,6 +37,7 @@ const plugin = {
 		'boolean-naming': booleanNaming,
 		'no-generic-names': noGenericNames,
 		'no-em-dash': noEmDash,
+		'no-detached-tailwind': noDetachedTailwind,
 		'no-confusable-chars': noConfusableChars,
 		'no-use-effect': noUseEffect,
 		'max-props': maxProps,
