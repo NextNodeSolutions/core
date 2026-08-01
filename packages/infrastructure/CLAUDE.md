@@ -270,6 +270,16 @@ secrets = [
   `ALL_SECRETS` snapshot (GitHub freezes secrets at job start), so the flow is
   _provision → re-trigger deploy_ — the same contract every auto-generated
   secret uses.
+- **Fail fast** (`cli/deploy/check-secrets.command.ts`): the `check-secrets`
+  job runs right after `plan`, in parallel with the quality matrix, and fails
+  the run when a must-exist declared secret is absent from `ALL_SECRETS` —
+  reporting EVERY missing name at once instead of dying one secret at a time in
+  `pickSecrets` at the end of the pipeline. Generated secrets are excluded (they
+  legitimately do not exist before their first provision). The job declares
+  `environment:` — that is what makes GitHub inject env-scoped secrets into
+  `toJSON(secrets)`; without it every environment secret would read as missing.
+  `provision` / `build-image` depend on it, so nothing is created before the
+  secret pool is known complete.
 
 ## Worker binding types: `generate-worker-types`
 
