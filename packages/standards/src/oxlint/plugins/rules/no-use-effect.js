@@ -6,6 +6,10 @@
  * external systems (WebSocket, ResizeObserver, non-React widgets). The
  * warning forces the question "why does this code run?" - user interaction
  * → event handler; derived value → compute during render.
+ *
+ * When the effect is a genuine external-sync (with cleanup), silence the
+ * nag on that line rather than reaching for a heavier primitive:
+ *   // oxlint-disable-next-line nextnode/no-use-effect
  */
 const isUseEffectCallee = callee => {
 	if (callee.type === 'Identifier') {
