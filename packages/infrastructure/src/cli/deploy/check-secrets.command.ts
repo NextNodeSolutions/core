@@ -13,9 +13,10 @@ const logger = createLogger()
 
 /**
  * Fail the pipeline at its first stage when a secret declared in
- * `[deploy].secrets` was never set in GitHub - the same check `pickSecrets`
- * runs inside `deploy`, hoisted so the run dies in seconds instead of after
- * quality, provision, build and migrate. Reports EVERY missing name at once.
+ * `[deploy].secrets` was never set in GitHub - a fail-fast gate ahead of the
+ * deploy-time `pickSecrets` presence check, so the run dies in seconds instead
+ * of after quality, provision, build and migrate. Reports EVERY missing name at
+ * once, and excludes generated secrets (absent until provision pushes them).
  */
 export function checkSecretsCommand(config: DeployableConfig): void {
 	const environment = resolveEnvironment(
