@@ -105,6 +105,37 @@ export const tagline = 'fast - reliable'
 `,
 	},
 
+	// tailwind - class lists live inline (className/class) or in a cva/cn call, never detached in a variable
+	{
+		rule: 'nextnode(no-detached-tailwind)',
+		severity: 'error',
+		ext: 'tsx',
+		bad: `export const CAPTION = 'text-cartel tracking-label relative px-2.5 py-2 font-mono uppercase'
+`,
+		// a styles object hides the same detached classes and fires too
+		edge: `export const styles = {
+	caption: 'flex items-center gap-2 px-4',
+}
+`,
+		edgeExpect: 'fire',
+		// cva variants and inline className are the sanctioned homes
+		good: `import { cva } from 'class-variance-authority'
+
+export const caption = cva('relative px-2.5 py-2 font-mono uppercase', {
+	variants: {
+		tone: {
+			over: 'from-ink/80 to-ink/0 bg-gradient-to-t pt-6 text-cream',
+			guide: 'text-cartel pb-2',
+		},
+	},
+})
+
+export const Badge = (): unknown => (
+	<span className="text-cartel relative px-2.5 py-2">x</span>
+)
+`,
+	},
+
 	// coding quick-ref \u2014 ASCII lookalikes (curly quotes, NBSP, zero-width)
 	{
 		rule: 'nextnode(no-confusable-chars)',
