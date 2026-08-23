@@ -14,6 +14,7 @@ import { noEmDash } from './rules/no-em-dash.js'
 import { noEmptyObjectTernary } from './rules/no-empty-object-ternary.js'
 import { noEnum } from './rules/no-enum.js'
 import { noGenericNames } from './rules/no-generic-names.js'
+import { noGenericRuntimeGuard } from './rules/no-generic-runtime-guard.js'
 import { noGrabBagFiles } from './rules/no-grab-bag-files.js'
 import { noInlineTypeExport } from './rules/no-inline-type-export.js'
 import { noLeadingSemicolon } from './rules/no-leading-semicolon.js'
@@ -36,6 +37,7 @@ const plugin = {
 		'no-boolean-params': noBooleanParams,
 		'boolean-naming': booleanNaming,
 		'no-generic-names': noGenericNames,
+		'no-generic-runtime-guard': noGenericRuntimeGuard,
 		'no-em-dash': noEmDash,
 		'no-detached-tailwind': noDetachedTailwind,
 		'no-confusable-chars': noConfusableChars,

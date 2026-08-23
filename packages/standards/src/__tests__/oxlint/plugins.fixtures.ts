@@ -613,4 +613,99 @@ const forwarded = { ...Astro.props }
 <pre>{JSON.stringify(forwarded)}</pre>
 `,
 	},
+
+	// validation - generic representation guards belong in schemas at I/O boundaries
+	{
+		rule: 'nextnode(no-generic-runtime-guard)',
+		severity: 'error',
+		bad: `export function isDictionary(
+	candidate: unknown,
+): candidate is Record<string, unknown> {
+	return typeof candidate === 'object' && candidate !== null
+}
+`,
+		// named function expressions and object/class methods are declarations too
+		edge: `const validate = function isString(
+	candidate: unknown,
+): candidate is string {
+	return typeof candidate === 'string'
+}
+
+export const guards = {
+	isRecord(candidate: unknown): candidate is Record<string, unknown> {
+		return typeof candidate === 'object' && candidate !== null
+	},
+}
+
+export class Guards {
+	isArray(candidate: unknown): candidate is Array<unknown> {
+		return Array.isArray(candidate)
+	}
+}
+`,
+		edgeExpect: 'fire',
+		// domain predicates and anonymous callback predicates carry distinct semantics
+		good: `type Token = { kind: 'number' }
+
+export function isNumber(token: Token): boolean {
+	return token.kind === 'number'
+}
+
+export function isProjectType(candidate: unknown): candidate is 'app' | 'site' {
+	return candidate === 'app' || candidate === 'site'
+}
+
+export const strings = ['app', null].filter(
+	(candidate): candidate is string => candidate !== null,
+)
+`,
+	},
+	{
+		rule: 'nextnode(no-generic-runtime-guard)',
+		severity: 'error',
+		badFile: 'nextnode-no-generic-runtime-guard-properties.bad.ts',
+		edgeFile: 'nextnode-no-generic-runtime-guard-properties.edge.ts',
+		goodFile: 'nextnode-no-generic-runtime-guard-properties.good.ts',
+		bad: `export const guards = {
+	isString: (candidate: unknown): candidate is string =>
+		typeof candidate === 'string',
+}
+`,
+		edge: `export class Guards {
+	isRecord = (
+		candidate: unknown,
+	): candidate is Record<string, unknown> =>
+		typeof candidate === 'object' && candidate !== null
+}
+`,
+		edgeExpect: 'fire',
+		good: `type Token = { kind: 'number' }
+
+export const tokenPredicates = {
+	isNumber: (token: Token): boolean => token.kind === 'number',
+}
+`,
+	},
+	{
+		rule: 'nextnode(no-generic-runtime-guard)',
+		severity: 'error',
+		badFile: 'nextnode-no-generic-runtime-guard-default.bad.ts',
+		edgeFile: 'nextnode-no-generic-runtime-guard-default.edge.ts',
+		goodFile: 'nextnode-no-generic-runtime-guard-default.good.ts',
+		bad: `export default (
+	candidate: unknown,
+): candidate is string => typeof candidate === 'string'
+`,
+		edge: `export default function isDictionary(
+	candidate: unknown,
+): candidate is Record<string, unknown> {
+	return typeof candidate === 'object' && candidate !== null
+}
+`,
+		edgeExpect: 'fire',
+		good: `type Token = { kind: 'number' }
+
+export default (token: Token): boolean => token.kind === 'number'
+`,
+	},
 ]
