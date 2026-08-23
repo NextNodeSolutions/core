@@ -86,6 +86,10 @@ export default defineConfig({
 		'typescript/switch-exhaustiveness-check': 'error',
 		'typescript/no-for-in-array': 'error',
 		'typescript/prefer-optional-chain': 'error',
+		'typescript/no-unnecessary-condition': [
+			'error',
+			{ checkTypePredicates: true },
+		],
 		'typescript/consistent-type-imports': [
 			'error',
 			{ prefer: 'type-imports', fixStyle: 'separate-type-imports' },

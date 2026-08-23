@@ -203,7 +203,7 @@ function checkInternalCompatibility(
 			'project.internal is not supported with deploy target "cloudflare-workers" (a Worker runs on Cloudflare\'s edge with no tailnet to join - pin an internal project to a dedicated VPS with deploy target "hetzner-vps")',
 		]
 	}
-	if (deploy.target === 'hetzner-vps' && deploy.vps === null) {
+	if (deploy.vps === null) {
 		return [
 			'deploy.vps is required when project.internal = true (internal projects must pin to a dedicated VPS so they never share with public projects)',
 		]
