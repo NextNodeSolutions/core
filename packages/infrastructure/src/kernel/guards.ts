@@ -8,6 +8,7 @@
  * so `value.key` access downstream is sound. The single canonical record guard
  * for the whole package.
  */
+// oxlint-disable-next-line nextnode/no-generic-runtime-guard -- canonical low-level guard shared by schema-free kernel consumers
 export function isRecord(
 	candidate: unknown,
 ): candidate is Record<string, unknown> {

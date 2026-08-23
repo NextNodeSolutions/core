@@ -175,6 +175,7 @@ const actRender = async (): Promise<{ container: HTMLElement }> => {
 	await act(async () => {
 		rendered = render(<Overview seed={SEED} />)
 	})
+	// oxlint-disable-next-line typescript/no-unnecessary-condition -- React's async act callback is not statically guaranteed to run before this return
 	if (rendered === null) throw new Error('render did not complete')
 	return rendered
 }

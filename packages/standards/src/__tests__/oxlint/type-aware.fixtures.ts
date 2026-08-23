@@ -198,4 +198,36 @@ export function city(user: User | undefined): string | undefined {
 }
 `,
 	},
+
+	// validation - parsed schema output is already typed; do not narrow it again
+	{
+		rule: 'typescript-eslint(no-unnecessary-condition)',
+		severity: 'error',
+		bad: `type Configuration = { name: string }
+
+declare function parseConfiguration(input: unknown): Configuration
+declare function isString(candidate: unknown): candidate is string
+
+const configuration = parseConfiguration({ name: 'nextnode' })
+if (isString(configuration.name)) {
+	console.log(configuration.name)
+}
+`,
+		// unknown values still need their first validation/narrowing at the boundary
+		edge: `declare function isString(candidate: unknown): candidate is string
+
+declare const input: unknown
+if (isString(input)) {
+	console.log(input)
+}
+`,
+		edgeExpect: 'clean',
+		good: `type Configuration = { name: string }
+
+declare function parseConfiguration(input: unknown): Configuration
+
+const configuration = parseConfiguration({ name: 'nextnode' })
+console.log(configuration.name)
+`,
+	},
 ]

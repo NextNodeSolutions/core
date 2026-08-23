@@ -53,10 +53,11 @@ export const keyOf = (params: WindowParams): string => {
 	return JSON.stringify(key)
 }
 
-const toStringList = (raw: unknown): ReadonlyArray<string> =>
-	Array.isArray(raw)
-		? raw.filter((entry): entry is string => typeof entry === 'string')
-		: []
+const toStringList = (raw: unknown): ReadonlyArray<string> => {
+	if (!Array.isArray(raw)) return []
+	// oxlint-disable-next-line typescript/no-unnecessary-condition -- Array.isArray narrows untrusted API input to any[]; the predicate validates its elements
+	return raw.filter((entry): entry is string => typeof entry === 'string')
+}
 
 /** Client trust boundary for the `facets` field of /api/logs. */
 const coerceFacets = (raw: unknown): LogFacets => {

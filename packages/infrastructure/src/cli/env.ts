@@ -1,5 +1,10 @@
-import { isRecord } from '#/kernel/guards.ts'
 import { parseJsonOrThrow } from '#/kernel/json.ts'
+import { custom, pipe, record, safeParse, string } from 'valibot'
+
+const STRING_RECORD_SCHEMA = pipe(
+	custom(input => !Array.isArray(input)),
+	record(string(), string()),
+)
 
 export function requireEnv(name: string): string {
 	const rawEnv = process.env[name]
@@ -13,15 +18,6 @@ export function getEnv(name: string): string | undefined {
 	return process.env[name]
 }
 
-function isStringRecord(
-	candidate: unknown,
-): candidate is Record<string, string> {
-	return (
-		isRecord(candidate) &&
-		Object.values(candidate).every(v => typeof v === 'string')
-	)
-}
-
 // Read an env var holding a JSON object of string values - the shape GitHub
 // Actions emits for `toJSON(secrets)` / `toJSON(vars)`. Absent or empty → `{}`
 // (a repo with no secrets/variables is valid; the consumer fails loud later if
@@ -29,11 +25,12 @@ function isStringRecord(
 export function readJsonRecordEnv(name: string): Record<string, string> {
 	const raw = getEnv(name)
 	if (!raw) return {}
-	const parsed: unknown = parseJsonOrThrow(raw, name)
-	if (!isStringRecord(parsed)) {
+	const parsed = parseJsonOrThrow(raw, name)
+	const parsedRecord = safeParse(STRING_RECORD_SCHEMA, parsed)
+	if (!parsedRecord.success) {
 		throw new Error(`${name} must be a JSON object with string values`)
 	}
-	return parsed
+	return parsedRecord.output
 }
 
 export function requireB64Env(name: string): string {

@@ -86,6 +86,10 @@ export default defineConfig({
 		'typescript/switch-exhaustiveness-check': 'error',
 		'typescript/no-for-in-array': 'error',
 		'typescript/prefer-optional-chain': 'error',
+		'typescript/no-unnecessary-condition': [
+			'error',
+			{ checkTypePredicates: true },
+		],
 		'typescript/consistent-type-imports': [
 			'error',
 			{ prefer: 'type-imports', fixStyle: 'separate-type-imports' },
@@ -115,6 +119,7 @@ export default defineConfig({
 		'nextnode/no-boolean-params': 'error',
 		'nextnode/boolean-naming': 'error',
 		'nextnode/no-generic-names': 'warn',
+		'nextnode/no-generic-runtime-guard': 'error',
 		'nextnode/no-em-dash': 'error',
 		'nextnode/no-detached-tailwind': 'error',
 		'nextnode/no-confusable-chars': 'error',

@@ -28,7 +28,10 @@ const parseDevice = (candidate: unknown): TaggedDevice | null => {
 	const ipv4 = firstIpv4(candidate.addresses)
 	if (ipv4 === null) return null
 	const tags = Array.isArray(candidate.tags)
-		? candidate.tags.filter((tag): tag is string => typeof tag === 'string')
+		? candidate.tags.filter(
+				// oxlint-disable-next-line typescript/no-unnecessary-condition -- Array.isArray narrows untrusted API input to any[]; the predicate validates its elements
+				(tag): tag is string => typeof tag === 'string',
+			)
 		: []
 	return { hostname: candidate.hostname, ipv4, tags }
 }
