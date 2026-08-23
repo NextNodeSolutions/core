@@ -115,6 +115,7 @@ export default defineConfig({
 		'nextnode/no-boolean-params': 'error',
 		'nextnode/boolean-naming': 'error',
 		'nextnode/no-generic-names': 'warn',
+		'nextnode/no-generic-runtime-guard': 'error',
 		'nextnode/no-em-dash': 'error',
 		'nextnode/no-detached-tailwind': 'error',
 		'nextnode/no-confusable-chars': 'error',
