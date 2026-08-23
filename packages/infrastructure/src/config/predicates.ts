@@ -13,10 +13,6 @@ export function isPostgresMode(candidate: unknown): candidate is PostgresMode {
 	return typeof candidate === 'string' && POSTGRES_MODE_SET.has(candidate)
 }
 
-export function isBoolean(candidate: unknown): candidate is boolean {
-	return typeof candidate === 'boolean'
-}
-
 export function isProjectType(candidate: unknown): candidate is ProjectType {
 	return typeof candidate === 'string' && PROJECT_TYPE_SET.has(candidate)
 }

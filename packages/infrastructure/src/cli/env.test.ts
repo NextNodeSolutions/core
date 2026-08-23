@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { getEnumEnv, isEnvSet } from './env.ts'
+import { getEnumEnv, isEnvSet, readJsonRecordEnv } from './env.ts'
 
 const VAR = 'NEXTNODE_TEST_ENV_VAR'
 
@@ -25,6 +25,44 @@ describe('isEnvSet', () => {
 			expect(isEnvSet(VAR)).toBe(true)
 		},
 	)
+})
+
+describe('readJsonRecordEnv', () => {
+	afterEach(() => {
+		vi.unstubAllEnvs()
+	})
+
+	it('returns a validated string record', () => {
+		vi.stubEnv(VAR, JSON.stringify({ token: 'secret', region: 'eu' }))
+		expect(readJsonRecordEnv(VAR)).toEqual({
+			token: 'secret',
+			region: 'eu',
+		})
+	})
+
+	it.each([undefined, ''])(
+		'returns an empty record when the var is %s',
+		raw => {
+			if (raw) vi.stubEnv(VAR, raw)
+			expect(readJsonRecordEnv(VAR)).toEqual({})
+		},
+	)
+
+	it('throws when JSON is malformed', () => {
+		vi.stubEnv(VAR, '{not-json')
+		expect(() => readJsonRecordEnv(VAR)).toThrow()
+	})
+
+	it.each([
+		['an array', JSON.stringify(['secret'])],
+		['null', 'null'],
+		['a record with a non-string value', JSON.stringify({ token: 1 })],
+	])('throws when the value is %s', (_description, raw) => {
+		vi.stubEnv(VAR, raw)
+		expect(() => readJsonRecordEnv(VAR)).toThrow(
+			`${VAR} must be a JSON object with string values`,
+		)
+	})
 })
 
 describe('getEnumEnv', () => {
