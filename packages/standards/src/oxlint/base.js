@@ -57,6 +57,9 @@ export default defineConfig({
 			'warn',
 			{ allow: ['__dirname', '__filename'] },
 		],
+		// Express-specific rule whose syntax-only detection also flags Hono handlers.
+		// Express 4 projects can opt in locally when they need rejection forwarding.
+		'oxc/no-async-endpoint-handlers': 'off',
 		// warn, not error: the rule also flags the sanctioned `task().catch(report)`
 		// detach idiom; hard fire-and-forget ban is typescript/no-floating-promises
 		'promise/prefer-await-to-then': 'warn',
