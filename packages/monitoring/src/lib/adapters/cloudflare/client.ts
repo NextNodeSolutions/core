@@ -177,10 +177,12 @@ export const listAll = async (
 	}
 	const first = await fetchPage(1)
 	if (first.totalPages <= 1) return first.items
+	// page 1 is already fetched; follow-up pages start right after it
+	const FIRST_FOLLOW_UP_PAGE = 2
 	const pending: Array<
 		Promise<{ items: ReadonlyArray<unknown>; totalPages: number }>
 	> = []
-	for (let page = 2; page <= first.totalPages; page++) {
+	for (let page = FIRST_FOLLOW_UP_PAGE; page <= first.totalPages; page++) {
 		pending.push(fetchPage(page))
 	}
 	const rest = await Promise.all(pending)
