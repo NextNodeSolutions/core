@@ -40,6 +40,23 @@ export function sortedLabels(orders: Order[]): string[] {
 }
 `
 
+/** Hono-style async handlers must not trigger an Express-specific diagnostic. */
+const HONO_ROUTE_MODULE = `type Context = {
+	json: (body: { ok: boolean }) => Response
+}
+
+type Router = {
+	post: (path: string, handler: (context: Context) => Promise<Response>) => void
+}
+
+export function registerRoute(router: Router): void {
+	router.post('/', async context => {
+		await Promise.resolve()
+		return context.json({ ok: true })
+	})
+}
+`
+
 /** Vitest test DSL: describe > it > callback nesting must stay legal in specs. */
 const VITEST_DSL_SPEC = `import { describe, expect, it } from 'vitest'
 
@@ -61,6 +78,7 @@ describe('non-functional', () => {
 		run = await lintFixtures([], {
 			extraFiles: {
 				'exemplary.ts': EXEMPLARY_MODULE,
+				'hono-route.ts': HONO_ROUTE_MODULE,
 				'vitest-dsl.spec.ts': VITEST_DSL_SPEC,
 			},
 		})
@@ -82,6 +100,12 @@ describe('non-functional', () => {
 
 	it('resolves the full ruleset (native + custom plugin)', () => {
 		expect(run.numberOfRules).toBeGreaterThan(180)
+	})
+
+	it('does not apply the Express async-handler rule to Hono-style routes', () => {
+		expect(run.codesFor('hono-route.ts')).not.toContain(
+			'oxc(no-async-endpoint-handlers)',
+		)
 	})
 
 	it('tolerates the vitest DSL nesting in spec files', () => {
