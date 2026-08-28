@@ -27,9 +27,6 @@ export default defineConfig({
 		'eslint/no-else-return': 'error',
 		'eslint/no-lonely-if': 'error',
 		'eslint/no-negated-condition': 'error',
-		// A ternary nested inside another ternary hides its branching: the
-		// reader can no longer tell which `?` belongs to which condition.
-		// Ban it so this logic is written as flat early-return ifs instead.
 		'eslint/no-nested-ternary': 'error',
 		'eslint/max-depth': ['error', { max: 2 }],
 		'eslint/max-nested-callbacks': ['error', { max: 3 }],
