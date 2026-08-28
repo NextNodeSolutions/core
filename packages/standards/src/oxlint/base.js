@@ -27,8 +27,6 @@ export default defineConfig({
 		'eslint/no-else-return': 'error',
 		'eslint/no-lonely-if': 'error',
 		'eslint/no-negated-condition': 'error',
-		// nested ternaries hide the branching; an early-return if stays flat
-		// and gives each condition its own line (same family as the two above)
 		'eslint/no-nested-ternary': 'error',
 		'eslint/max-depth': ['error', { max: 2 }],
 		'eslint/max-nested-callbacks': ['error', { max: 3 }],
