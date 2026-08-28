@@ -274,7 +274,7 @@ Every mechanizable rule from the `coding`, `javascript`, `typescript` and `react
 
 ### Added native rules
 
-- **Control flow (coding R1/R2/R9)**: `no-else-return`, `no-lonely-if`, `no-negated-condition`, `max-depth: 2`, `max-nested-callbacks: 3` (off in tests — vitest DSL)
+- **Control flow (coding R1/R2/R9)**: `no-else-return`, `no-lonely-if`, `no-negated-condition`, `no-nested-ternary` (a ternary never hides an if-chain — flatten with early returns), `max-depth: 2`, `max-nested-callbacks: 3` (off in tests — vitest DSL)
 - **Size (coding R3/R13)**: `max-lines-per-function: 50`, `max-lines: 250` (both skip blanks/comments, off in tests)
 - **Immutability (coding R7)**: `no-param-reassign` (props: true), `unicorn/no-array-sort` (toSorted)
 - **Dead code / errors (coding R10/R11, js)**: `no-empty`, `no-empty-function` (arrows allowed), `preserve-caught-error`, `no-eval`, `prefer-rest-params`

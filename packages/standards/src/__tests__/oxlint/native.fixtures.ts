@@ -97,6 +97,29 @@ export const NATIVE_CASES: RuleCase[] = [
 `,
 	},
 
+	// coding RULE 9 - flat branching: a ternary never hides an if-chain
+	{
+		rule: 'eslint(no-nested-ternary)',
+		severity: 'error',
+		bad: `export function tier(score: number): string {
+	const level = score > 80 ? 'high' : score > 40 ? 'mid' : 'low'
+	return level
+}
+`,
+		edge: `export function tier(score: number): string {
+	if (score > 80) return 'high'
+	if (score > 40) return 'mid'
+
+	return 'low'
+}
+`,
+		edgeExpect: 'clean',
+		good: `export function tier(score: number): string {
+	return score > 80 ? 'high' : 'low'
+}
+`,
+	},
+
 	// coding RULE 2 - maximum nesting depth: 2
 	{
 		rule: 'eslint(max-depth)',
