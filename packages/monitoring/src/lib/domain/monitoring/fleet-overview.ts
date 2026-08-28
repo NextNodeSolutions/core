@@ -249,12 +249,9 @@ function cpuStat(input: FleetSummaryInput): FleetStat {
 		}
 	}
 	const severity = severityForPercent(input.cpuWindowAverage)
-	const tone: Tone =
-		severity === 'critical'
-			? 'danger'
-			: severity === 'warning'
-				? 'warning'
-				: 'neutral'
+	let tone: Tone = 'neutral'
+	if (severity === 'critical') tone = 'danger'
+	else if (severity === 'warning') tone = 'warning'
 	return {
 		label,
 		value: formatPercent(input.cpuWindowAverage),
