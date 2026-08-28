@@ -70,9 +70,25 @@ export default defineConfig({
 		'import/no-default-export': 'error',
 		// god-module smell (ARCH 1): a module importing the world does too much
 		'import/max-dependencies': ['warn', { max: 20 }],
+		// Guide (AI & humans): extract every unexplained literal into a named
+		// `const`; named value sets use an `as const` object, NOT an enum
+		// (nextnode/no-enum). Never dodge with Number('…') casts, `let`
+		// declarations or oxlint-disable - data modules get a preset override.
+		//
+		//   ❌ const delay = 5000
+		//      const TIME = [0, 10, 20, 30]        (bare literals)
+		//      let RETRY_DELAY_MS = 5000           (mutable "constant")
+		//      const delay = Number('5000')        (cast to dodge the rule)
+		//      enum Backoff { FIRST = 10, … }      (forbidden: nextnode/no-enum)
+		//      // oxlint-disable no-magic-numbers  (inline opt-out)
+		//
+		//   ✅ const RETRY_DELAY_MS = 5000
+		//      const BACKOFF_STEP = { FIRST: 10, SECOND: 20, THIRD: 30 } as const
+		//      const TIME = [0, BACKOFF_STEP.FIRST, BACKOFF_STEP.SECOND, BACKOFF_STEP.THIRD]
 		'eslint/no-magic-numbers': [
 			'error',
 			{
+				enforceConst: true,
 				ignore: [0, 1, -1],
 				ignoreEnums: true,
 				ignoreReadonlyClassProperties: true,
