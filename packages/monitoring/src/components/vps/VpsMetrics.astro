@@ -207,18 +207,19 @@ const ioCurrent = lastValue(diskIoSeries)
 const latencyCurrent = lastValue(diskLatencySeries)
 const loadCurrent = gauges.load1 ?? lastValue(loadSeries)
 
-const memSub =
-	memoryGb === null
-		? EMPTY_LABEL
-		: host.memoryPercent === null
-			? `${memoryGb} GB`
-			: `${((host.memoryPercent / PCT_FULL) * memoryGb).toFixed(1)} / ${memoryGb} GB`
-const diskSub =
-	diskGb === null
-		? EMPTY_LABEL
-		: host.diskPercent === null
-			? `${diskGb} GB`
-			: `${((host.diskPercent / PCT_FULL) * diskGb).toFixed(0)} / ${diskGb} GB`
+const usedStorageSub = (
+	totalGb: number | null,
+	percent: number | null,
+	digits: number,
+): string => {
+	if (totalGb === null) return EMPTY_LABEL
+	if (percent === null) return `${totalGb} GB`
+
+	const usedGb = (percent / PCT_FULL) * totalGb
+	return `${usedGb.toFixed(digits)} / ${totalGb} GB`
+}
+const memSub = usedStorageSub(memoryGb, host.memoryPercent, 1)
+const diskSub = usedStorageSub(diskGb, host.diskPercent, 0)
 
 const windowIn =
 	traffic.inBytes === null

@@ -101,11 +101,9 @@ export const deploymentPipelineSteps = (
 	const building = display === 'building'
 	const ready = display === 'ready'
 	const errored = display === 'error'
-	const finalState: StepState = ready
-		? 'done'
-		: errored
-			? 'failed'
-			: 'pending'
+	let finalState: StepState = 'pending'
+	if (ready) finalState = 'done'
+	else if (errored) finalState = 'failed'
 	const steps: PipelineStep[] = [
 		{ label: 'Queued', state: 'done' },
 		{ label: 'Cloning', state: 'done' },
