@@ -788,7 +788,7 @@ describe('CloudflareWorkersTarget.deploy env & secrets', () => {
 		)
 	})
 
-	it('injects SITE_URL + needs-filtered backing vars, and wires the sibling as a service binding (no peer URL)', async () => {
+	it('injects SITE_URL + the symmetric peer URLs + needs-filtered backing vars, and wires the sibling as a service binding', async () => {
 		const { runner, deploys } = makeEnvWrangler()
 		const target = buildDeployTarget({
 			services: {
@@ -803,17 +803,23 @@ describe('CloudflareWorkersTarget.deploy env & secrets', () => {
 		await target.deploy('my-worker', DEPLOY_INPUT, DEPLOY_ENV)
 
 		const web = deploys.find(d => d.name === 'my-worker-production-web')
-		// No <NAME>_URL anywhere: web reaches api through the service binding only.
 		expect(web?.vars).toEqual({
 			SITE_URL: 'https://example.com',
+			WEB_URL: 'https://example.com',
+			API_URL: 'https://api.example.com',
 			D1_DATABASE_ID: 'db-uuid',
 		})
 		expect(web?.services).toEqual([
 			{ binding: 'API', service: 'my-worker-production-api' },
 		])
 		const api = deploys.find(d => d.name === 'my-worker-production-api')
-		expect(api?.vars).toEqual({ SITE_URL: 'https://example.com' })
-		// api binds no sibling, so it carries no service binding.
+		// api binds no sibling, yet still carries the same URL block: the peer
+		// URLs are symmetric, the service binding is not.
+		expect(api?.vars).toEqual({
+			SITE_URL: 'https://example.com',
+			WEB_URL: 'https://example.com',
+			API_URL: 'https://api.example.com',
+		})
 		expect(api?.services).toEqual([])
 	})
 

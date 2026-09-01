@@ -96,7 +96,9 @@ src/
 | `cli/*`      | `domain/`, `adapters/`, `config/`, `kernel/*`, logger                                         | direct `node:fs`, `fetch`, raw `process.env` outside `cli/env.ts` |
 | `domain/*`   | other `domain/*`, `kernel/*`, `config/schema` (types only)                                    | `process.env`, `node:fs`, `fetch`, logger, any adapter            |
 | `adapters/*` | `kernel/*`, `config/schema` (types), `domain/*` (types + pure formatters/renderers/selectors) | domain business _decisions_, cross-adapter calls                  |
-| `config/*`   | `kernel/*` + stdlib + smol-toml + valibot (nothing else)                                      | domain, cli, adapters                                             |
+| `config/*`   | `kernel/*` + stdlib + smol-toml + valibot (nothing else), plus the one exception below         | domain, cli, adapters                                             |
+
+**The one `config/*` → `domain/*` exception**, held to exactly one file: `config/validation/worker-env-keys.ts` imports `infraInjectedEnvKeys` (`domain/cloudflare/workers/worker-vars.ts`) and `toUrlEnvKey` (`domain/deploy/service-env.ts`). The rule it enforces — a worker service name must not derive an env key the infra already injects — needs the SAME key set the deploy produces, and a second copy of that derivation in `config/` would diverge the first time a backing resource is added. One source of truth beats one import direction here. Keep it to those two queries: `config/` asks the domain WHAT the keys are, it never re-derives HOW they are built. A new `config/` rule needing domain knowledge is a signal to move the rule, not to add an import.
 
 `kernel/*` is the floor below every layer: pure primitives (type guards, generic parsers) with **zero in-app imports** — Node stdlib only, no IO/env/logger. It exists so a runtime helper like `isRecord` can be shared across the `config`↔`domain` boundary that the "types only" rule otherwise blocks, instead of being copy-pasted. Anything provider- or domain-specific does NOT belong here — it stays in its layer.
 
@@ -177,6 +179,26 @@ The dev declares only NAMES — values always live in GitHub (Secrets / Variable
       (`${VAR}` compose interpolation) and the ephemeral migrate container
       (`--env-file .env`) read a SHARED `.env` carrying the BACKING env only
       (`POSTGRES_*`, `R2_*`, `DATABASE_URL`) — never the app's user secrets.
+
+### Peer URLs: `<NAME>_URL` (both targets)
+
+Every service that declares a `url` contributes one `<NAME>_URL` env var
+(`admin-api` → `ADMIN_API_URL`), valued `https://` + the env-resolved host, so a
+development deploy links to `https://dev.admin.example.com` and never to
+production. `buildServiceUrlEnv` is the single derivation, shared by the
+hetzner-vps `.env.<name>` files and the cloudflare-workers `vars` block.
+
+The block is **symmetric**: the same map lands in EVERY service of the project,
+its own `<NAME>_URL` included, and it is NOT filtered by `needs`. On workers that
+is the point — the service binding (`env.<NAME>`, a `Fetcher`) is the only way to
+CALL a sibling and stays gated by `needs`, while `<NAME>_URL` only DESIGNATES a
+peer's public host, which needs no binding. An internal service (no `url`)
+contributes no key: it has no public host, and inventing one would advertise an
+unreachable address.
+
+A service name is therefore a reserved env key on the workers target: one that
+derives a key the infra already injects, or one that is not a valid identifier,
+is rejected at config load (`config/validation/worker-env-keys.ts`).
 
 ## R2 buckets & public CDN URLs
 
@@ -296,10 +318,17 @@ wrangler config yet be missing from the generated `Env`, or vice versa. Siblings
 in `needs` are `Fetcher`; D1/KV/R2/Queues get their Cloudflare types; public vars
 and secrets are `string`; `@cloudflare/workers-types` supplies the globals.
 
-The generated file is COMMITTED in the consumer repo (unlike the deploy-only
-wrangler config): types are needed at typecheck time, locally and in every CI
-job, with no infra dependency at build. CI regenerates and `git diff
---exit-code` guards drift, so nextnode.toml stays authoritative.
+The generated `worker-configuration.d.ts` is NOT committed: the consumer
+gitignores it and regenerates it from `nextnode.toml` on every `prebuild` /
+`pretype-check`, which is what keeps the config authoritative.
+
+The command writes a second file beside it, `.dev.vars.example`: every key the
+deployed worker reads from `env` (public vars + secret names, never a binding),
+one `KEY=""` per line. That one IS committed — it holds no values and is how a
+developer discovers what to put in a local `.dev.vars`, which the generated types
+promise as `string` but nothing supplies locally. The consumer's gitignore needs
+`.dev.vars*` (wrangler also reads `.dev.vars.<environment>`, real secrets) plus
+`!.dev.vars.example` to keep this one tracked.
 
 ## How It Runs
 

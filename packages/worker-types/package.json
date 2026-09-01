@@ -28,6 +28,7 @@
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "lint": "oxlint --type-aware",
+    "test": "vitest run",
     "type-check": "tsgo --noEmit"
   },
   "dependencies": {
@@ -43,7 +44,8 @@
     "oxfmt": "^0.43.0",
     "oxlint": "^1.62.0",
     "oxlint-tsgolint": "^0.23.0",
-    "tsdown": "^0.21.9"
+    "tsdown": "^0.21.9",
+    "vitest": "^3.0.0"
   },
   "engines": {
     "node": ">=24.0.0"

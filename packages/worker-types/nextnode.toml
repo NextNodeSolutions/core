@@ -4,7 +4,7 @@ type = "package"
 filter = "@nextnode-solutions/worker-types"
 
 [scripts]
-test = false
+test = true
 
 [package]
 access = "public"

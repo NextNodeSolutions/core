@@ -2208,6 +2208,139 @@ describe('parseConfig', () => {
 		})
 	})
 
+	describe('cloudflare-workers service name env keys', () => {
+		it('rejects a service name that yields the infra-injected SITE_URL', () => {
+			const parsed = parseConfig(
+				workersConfig({ site: { url: 'example.com' } }),
+			)
+
+			expect(parsed.ok).toBe(false)
+			if (parsed.ok) return
+
+			expect(parsed.errors).toContain(
+				'deploy.services.site: the service name yields env key "SITE_URL", already injected by the infra - rename the service',
+			)
+		})
+
+		it('rejects a service name that yields a backing resource key', () => {
+			const parsed = parseConfig(
+				workersConfig(
+					{
+						web: { url: 'example.com', needs: ['r2'] },
+						'r2-bucket-medias': {},
+					},
+					{},
+					{ r2: { buckets: [{ name: 'medias', cdn: true }] } },
+				),
+			)
+
+			expect(parsed.ok).toBe(false)
+			if (parsed.ok) return
+
+			expect(parsed.errors).toContain(
+				'deploy.services.r2-bucket-medias: the service name yields env key "R2_BUCKET_MEDIAS_URL", already injected by the infra - rename the service',
+			)
+		})
+
+		it('rejects a service name that yields a declared secret name', () => {
+			const parsed = parseConfig(
+				workersConfig({
+					web: { url: 'example.com' },
+					api: { secrets: ['WEB_URL'] },
+				}),
+			)
+
+			expect(parsed.ok).toBe(false)
+			if (parsed.ok) return
+
+			expect(parsed.errors).toContain(
+				'deploy.services.web: the service name yields env key "WEB_URL", already injected by the infra - rename the service',
+			)
+		})
+
+		it('rejects a service name that yields a sibling service binding name', () => {
+			const parsed = parseConfig(
+				workersConfig({
+					web: { url: 'example.com', needs: ['api-url'] },
+					api: { url: 'api.example.com' },
+					'api-url': {},
+				}),
+			)
+
+			expect(parsed.ok).toBe(false)
+			if (parsed.ok) return
+
+			expect(parsed.errors).toContain(
+				'deploy.services.api: the service name yields env key "API_URL", already injected by the infra - rename the service',
+			)
+		})
+
+		it('rejects a service name that yields a backing binding name', () => {
+			const parsed = parseConfig(
+				workersConfig(
+					{
+						web: { url: 'example.com', needs: ['r2'] },
+						'r2-medias': { url: 'medias.example.com' },
+					},
+					{},
+					{ r2: { buckets: [{ name: 'medias-url' }] } },
+				),
+			)
+
+			expect(parsed.ok).toBe(false)
+			if (parsed.ok) return
+
+			expect(parsed.errors).toContain(
+				'deploy.services.r2-medias: the service name yields env key "R2_MEDIAS_URL", already injected by the infra - rename the service',
+			)
+		})
+
+		it('rejects a service name that yields an invalid identifier', () => {
+			const parsed = parseConfig(
+				workersConfig({ '2fa': { url: 'example.com' } }),
+			)
+
+			expect(parsed.ok).toBe(false)
+			if (parsed.ok) return
+
+			expect(parsed.errors).toContain(
+				'deploy.services.2fa: the service name yields env key "2FA_URL", which is not a valid identifier - a service name must start with a letter',
+			)
+		})
+
+		it('reserves the name of an internal worker too, so adding a url later stays safe', () => {
+			const parsed = parseConfig(
+				workersConfig({
+					web: { url: 'example.com' },
+					site: {},
+				}),
+			)
+
+			expect(parsed.ok).toBe(false)
+			if (parsed.ok) return
+
+			expect(parsed.errors).toContain(
+				'deploy.services.site: the service name yields env key "SITE_URL", already injected by the infra - rename the service',
+			)
+		})
+
+		it('accepts the three-worker example fixture', () => {
+			expect(() =>
+				loadConfig(fixture('cloudflare-workers-app.toml')),
+			).not.toThrow()
+		})
+
+		// The rule is workers-only for now: the hetzner service table is out of
+		// this guard's scope, so a name colliding there still loads.
+		it('does not reach a hetzner-vps service named site', () => {
+			const parsed = parseConfig(
+				appConfig({ site: { port: 3000, url: 'example.com' } }),
+			)
+
+			expect(parsed.ok).toBe(true)
+		})
+	})
+
 	describe('cloudflare-workers backing services', () => {
 		it('accepts [services.d1] with default migrations folder', () => {
 			const parsed = parseConfig(

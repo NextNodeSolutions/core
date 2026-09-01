@@ -21,6 +21,7 @@ import {
 	hasAnyService,
 	validateServicesSection,
 } from './validation/services.ts'
+import { checkWorkerServiceEnvKeys } from './validation/worker-env-keys.ts'
 
 import type { ServicesConfig } from './service-config.ts'
 import type {
@@ -116,6 +117,7 @@ function assembleDeployable({
 	const compatibilityErrors = [
 		...checkServicesTargetCompatibility(services, deployResult.section),
 		...checkInternalCompatibility(project, deployResult.section),
+		...checkWorkerEnvKeys(services, deployResult.section),
 	]
 	if (compatibilityErrors.length > 0) {
 		return { ok: false, errors: compatibilityErrors }
@@ -150,6 +152,18 @@ function withImpliedServices(
 		...services,
 		...Object.fromEntries(implied.map(name => [name, {}])),
 	}
+}
+
+// The workers target derives an env key from every worker service name, so the
+// rule needs [deploy.services] AND the backing [services.*] block - the pair is
+// available only here, after withImpliedServices and out of reach of the
+// provider validator, which never receives the backing section.
+function checkWorkerEnvKeys(
+	services: ServicesConfig,
+	deploy: DeploySection,
+): string[] {
+	if (deploy.target !== 'cloudflare-workers') return []
+	return checkWorkerServiceEnvKeys(deploy.services, services)
 }
 
 // A backing service only validates against the deploy targets that can realise

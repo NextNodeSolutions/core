@@ -36,5 +36,5 @@ export function generateWorkerTypesCommand(config: DeployableConfig): void {
 		)
 		return
 	}
-	logger.info(`Generated worker types for ${written.length} service(s)`)
+	logger.info(`Generated ${written.length} worker file(s)`)
 }

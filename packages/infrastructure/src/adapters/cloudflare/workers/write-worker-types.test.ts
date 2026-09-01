@@ -32,27 +32,53 @@ function makePackage(relativeDir: string): string {
 }
 
 describe('writeWorkerTypes', () => {
-	it('writes the types into the app package root above the entry', () => {
+	it('writes both generated files into the app package root above the entry', () => {
 		const appDir = makePackage('apps/web')
 
 		const written = writeWorkerTypes({
 			entryPath: join(appDir, 'dist/server/entry.mjs'),
-			content: 'declare const x: 1\n',
+			types: 'declare const x: 1\n',
+			devVarsExample: 'SITE_URL=""\n',
 		})
 
-		expect(written).toBe(join(appDir, 'worker-configuration.d.ts'))
-		expect(readFileSync(written, 'utf-8')).toBe('declare const x: 1\n')
+		expect(written).toEqual([
+			join(appDir, 'worker-configuration.d.ts'),
+			join(appDir, '.dev.vars.example'),
+		])
+		expect(
+			readFileSync(join(appDir, 'worker-configuration.d.ts'), 'utf-8'),
+		).toBe('declare const x: 1\n')
+		expect(readFileSync(join(appDir, '.dev.vars.example'), 'utf-8')).toBe(
+			'SITE_URL=""\n',
+		)
 	})
 
-	it('places the file even when the entry does not exist yet', () => {
+	it('leaves an existing .dev.vars untouched', () => {
+		const appDir = makePackage('apps/web')
+		const devVars = join(appDir, '.dev.vars')
+		writeFileSync(devVars, 'SITE_URL="http://localhost:4321"\n')
+
+		writeWorkerTypes({
+			entryPath: join(appDir, 'dist/server/entry.mjs'),
+			types: 'x',
+			devVarsExample: 'SITE_URL=""\n',
+		})
+
+		expect(readFileSync(devVars, 'utf-8')).toBe(
+			'SITE_URL="http://localhost:4321"\n',
+		)
+	})
+
+	it('places the files even when the entry does not exist yet', () => {
 		const appDir = makePackage('apps/api')
 
 		const written = writeWorkerTypes({
 			entryPath: join(appDir, 'src/index.ts'),
-			content: 'x',
+			types: 'x',
+			devVarsExample: 'y',
 		})
 
-		expect(written).toBe(join(appDir, 'worker-configuration.d.ts'))
+		expect(written).toContain(join(appDir, 'worker-configuration.d.ts'))
 	})
 
 	it('resolves to the nearest package root, not a higher one', () => {
@@ -61,10 +87,14 @@ describe('writeWorkerTypes', () => {
 
 		const written = writeWorkerTypes({
 			entryPath: join(appDir, 'dist/server/entry.mjs'),
-			content: 'x',
+			types: 'x',
+			devVarsExample: 'y',
 		})
 
-		expect(written).toBe(join(appDir, 'worker-configuration.d.ts'))
+		expect(written).toEqual([
+			join(appDir, 'worker-configuration.d.ts'),
+			join(appDir, '.dev.vars.example'),
+		])
 	})
 
 	it('throws when no package.json sits above the entry', () => {
@@ -74,7 +104,8 @@ describe('writeWorkerTypes', () => {
 		expect(() =>
 			writeWorkerTypes({
 				entryPath: join(orphan, 'dist/entry.mjs'),
-				content: 'x',
+				types: 'x',
+				devVarsExample: 'y',
 			}),
 		).toThrow(/found no package\.json/)
 	})
