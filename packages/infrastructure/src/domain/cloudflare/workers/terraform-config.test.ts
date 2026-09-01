@@ -10,6 +10,7 @@ import {
 import type { ServicesConfig } from '#/config/service-config.ts'
 import type { CloudflareWorkersDeployableConfig } from '#/config/types.ts'
 import type { WorkerServiceConfig } from '#/config/types.ts'
+import type { WorkerRateLimitConfig } from '#/config/worker-firewall.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 import type { TerraformMainConfig } from './terraform-main-config.ts'
 
@@ -23,6 +24,16 @@ const worker = (
 	dependsOn: [],
 	entry: 'dist/server/entry.mjs',
 	observability: true,
+	...overrides,
+})
+
+const rateLimit = (
+	overrides: Partial<WorkerRateLimitConfig> = {},
+): WorkerRateLimitConfig => ({
+	paths: ['/api/contact'],
+	requestsPerPeriod: 5,
+	period: 60,
+	mitigationTimeout: 600,
 	...overrides,
 })
 
@@ -376,6 +387,201 @@ describe('buildTerraformMainConfig', () => {
 				},
 			},
 		})
+	})
+
+	it('emits the upstream rate limiting ruleset for a routed worker', () => {
+		const tfConfig = build('example.com', 'production', {
+			workers: {
+				web: worker('example.com', {
+					rateLimit: rateLimit({ methods: ['POST'] }),
+				}),
+			},
+		})
+
+		expect(
+			tfConfig.resource?.cloudflare_ruleset?.['ratelimit_web'],
+		).toEqual({
+			zone_id: '${data.cloudflare_zone.zone_main.id}',
+			name: 'ratelimit-web',
+			kind: 'zone',
+			phase: 'http_ratelimit',
+			rules: [
+				{
+					ref: 'ratelimit_web',
+					description:
+						'Rate limit example.com to 5 requests per 60 seconds',
+					expression:
+						'(http.host eq "example.com" and (http.request.uri.path eq "/api/contact") and http.request.method in {"POST"})',
+					action: 'block',
+					action_parameters: {
+						response: {
+							status_code: 429,
+							content_type: 'application/json',
+							content: '{"error":"rate_limited"}',
+						},
+					},
+					ratelimit: {
+						characteristics: ['ip.src', 'cf.colo.id'],
+						period: 60,
+						requests_per_period: 5,
+						mitigation_timeout: 600,
+					},
+				},
+			],
+		})
+	})
+
+	it('joins the declared paths with or and turns a trailing star into a prefix match', () => {
+		const tfConfig = build('example.com', 'production', {
+			workers: {
+				web: worker('example.com', {
+					rateLimit: rateLimit({
+						paths: ['/api/contact', '/api/upload/*'],
+					}),
+				}),
+			},
+		})
+
+		expect(
+			tfConfig.resource?.cloudflare_ruleset?.['ratelimit_web']?.rules[0]
+				?.expression,
+		).toBe(
+			'(http.host eq "example.com" and (http.request.uri.path eq "/api/contact" or starts_with(http.request.uri.path, "/api/upload/")))',
+		)
+	})
+
+	it('omits the rate limiting ruleset in development, where the zone entry point is shared', () => {
+		const tfConfig = build('example.com', 'development', {
+			workers: {
+				web: worker('example.com', {
+					rateLimit: rateLimit(),
+				}),
+			},
+		})
+
+		expect(tfConfig.resource?.cloudflare_ruleset).toBeUndefined()
+	})
+
+	it('keeps the redirect and rate limiting families side by side in production', () => {
+		const tfConfig = build('studiobymina.com', 'production', {
+			redirectDomains: ['studiobymina.fr'],
+			workers: {
+				web: worker('studiobymina.com', {
+					rateLimit: rateLimit(),
+				}),
+			},
+		})
+
+		expect(
+			Object.keys(tfConfig.resource?.cloudflare_ruleset ?? {}).toSorted(),
+		).toEqual(['ratelimit_web', 'redirect_studiobymina_fr'])
+	})
+
+	it('blocks everything outside the declared public paths of a routed worker', () => {
+		const tfConfig = build('example.com', 'production', {
+			workers: {
+				api: worker('api.example.com', {
+					publicPaths: ['/webhooks/*', '/health'],
+				}),
+			},
+		})
+
+		expect(
+			tfConfig.resource?.cloudflare_ruleset?.['firewall_public_paths'],
+		).toEqual({
+			zone_id: '${data.cloudflare_zone.zone_main.id}',
+			name: 'firewall-public-paths',
+			kind: 'zone',
+			phase: 'http_request_firewall_custom',
+			rules: [
+				{
+					ref: 'firewall_api',
+					description:
+						'Block every path of api.example.com but /webhooks/*, /health',
+					expression:
+						'(http.host eq "api.example.com" and not (starts_with(http.request.uri.path, "/webhooks/") or http.request.uri.path eq "/health"))',
+					action: 'block',
+				},
+			],
+		})
+	})
+
+	it('blocks the whole host when public_paths is empty', () => {
+		const tfConfig = build('example.com', 'production', {
+			workers: { api: worker('api.example.com', { publicPaths: [] }) },
+		})
+
+		expect(
+			tfConfig.resource?.cloudflare_ruleset?.['firewall_public_paths']
+				?.rules[0]?.expression,
+		).toBe('(http.host eq "api.example.com")')
+	})
+
+	it('gathers every worker rule in the single zone entry point, ordered by service name', () => {
+		const tfConfig = build('example.com', 'production', {
+			workers: {
+				web: worker('example.com', { publicPaths: ['/'] }),
+				api: worker('api.example.com', { publicPaths: ['/health'] }),
+			},
+		})
+
+		expect(
+			tfConfig.resource?.cloudflare_ruleset?.[
+				'firewall_public_paths'
+			]?.rules.map(rule => rule.ref),
+		).toEqual(['firewall_api', 'firewall_web'])
+	})
+
+	it('omits the firewall ruleset in development', () => {
+		const tfConfig = build('example.com', 'development', {
+			workers: {
+				api: worker('api.example.com', { publicPaths: ['/health'] }),
+			},
+		})
+
+		expect(tfConfig.resource?.cloudflare_ruleset).toBeUndefined()
+	})
+
+	it('keeps the redirect, rate limiting and firewall families side by side', () => {
+		const tfConfig = build('studiobymina.com', 'production', {
+			redirectDomains: ['studiobymina.fr'],
+			workers: {
+				web: worker('studiobymina.com', {
+					rateLimit: rateLimit(),
+				}),
+				api: worker('api.studiobymina.com', {
+					publicPaths: ['/health'],
+				}),
+			},
+		})
+
+		expect(
+			Object.keys(tfConfig.resource?.cloudflare_ruleset ?? {}).toSorted(),
+		).toEqual([
+			'firewall_public_paths',
+			'ratelimit_web',
+			'redirect_studiobymina_fr',
+		])
+	})
+
+	it('prefixes every ruleset label with its family so two families cannot collide', () => {
+		const tfConfig = build('studiobymina.com', 'production', {
+			redirectDomains: ['studiobymina.fr'],
+			workers: {
+				'studiobymina-fr': worker('fr.studiobymina.com', {
+					rateLimit: rateLimit(),
+					publicPaths: ['/health'],
+				}),
+			},
+		})
+
+		expect(
+			Object.keys(tfConfig.resource?.cloudflare_ruleset ?? {}).toSorted(),
+		).toEqual([
+			'firewall_public_paths',
+			'ratelimit_studiobymina_fr',
+			'redirect_studiobymina_fr',
+		])
 	})
 
 	it('never emits a cloudflare_zone resource - the zone is always a data lookup', () => {

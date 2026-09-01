@@ -6,6 +6,7 @@ import {
 	computeR2ServiceBuckets,
 } from '#/domain/services/r2.ts'
 
+import { buildFirewallResources } from './terraform-firewall.ts'
 import {
 	indexBy,
 	r2BucketLabel,
@@ -16,12 +17,20 @@ import {
 	buildHyperdriveConfig,
 	buildPlanetscaleBranchRole,
 } from './terraform-planetscale-resources.ts'
+import { buildRateLimitResources } from './terraform-rate-limit.ts'
 import { buildRedirectResources } from './terraform-redirects.ts'
-import { ACCOUNT_ID_REF } from './terraform-refs.ts'
+import {
+	ACCOUNT_ID_REF,
+	MAIN_ZONE_ID_REF,
+	MAIN_ZONE_LABEL,
+} from './terraform-refs.ts'
+import { mergeRulesetFamilies } from './terraform-rulesets.ts'
+import { deriveZoneRules } from './zone-rules.ts'
 
 import type { R2BucketConfig } from '#/config/service-config.ts'
 import type { CloudflareWorkersDeployableConfig } from '#/config/types.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
+import type { WorkerPublicPathsRule } from './terraform-firewall.ts'
 import type {
 	D1DatabaseResource,
 	KvNamespaceResource,
@@ -31,9 +40,7 @@ import type {
 	TerraformResourceDraft,
 	ZoneDataSource,
 } from './terraform-main-config.ts'
-
-const MAIN_ZONE_LABEL = 'zone_main'
-const MAIN_ZONE_ID_REF = '${data.cloudflare_zone.zone_main.id}'
+import type { WorkerRateLimitRule } from './terraform-rate-limit.ts'
 
 export interface WorkersDerivedResources {
 	readonly projectName: string
@@ -47,6 +54,8 @@ export interface WorkersDerivedResources {
 	readonly hasD1: boolean
 	readonly hasPlanetscale: boolean
 	readonly redirectDomains: ReadonlyArray<string>
+	readonly rateLimitRules: ReadonlyArray<WorkerRateLimitRule>
+	readonly publicPathsRules: ReadonlyArray<WorkerPublicPathsRule>
 	readonly hasAccountResource: boolean
 }
 
@@ -64,6 +73,7 @@ export function deriveWorkersResources(
 	)
 	const hasD1 = Boolean(config.services.d1)
 	const hasPlanetscale = Boolean(config.services.planetscale)
+	const zoneRules = deriveZoneRules(config, environment)
 
 	return {
 		projectName,
@@ -82,6 +92,8 @@ export function deriveWorkersResources(
 		// omitted in development.
 		redirectDomains:
 			environment === 'production' ? config.project.redirectDomains : [],
+		rateLimitRules: zoneRules.rateLimitRules,
+		publicPathsRules: zoneRules.publicPathsRules,
 		hasAccountResource:
 			hasD1 ||
 			hasPlanetscale ||
@@ -211,14 +223,21 @@ export function buildResourceBlock(
 	if (derived.cdnBuckets.length > 0) {
 		resource.cloudflare_r2_custom_domain = r2CustomDomainResources(derived)
 	}
-	if (derived.redirectDomains.length > 0) {
-		const { dns, rulesets } = buildRedirectResources(
-			derived.domain,
-			derived.environment,
-			derived.resolvedDomain,
-			derived.redirectDomains,
-		)
-		resource.cloudflare_dns_record = dns
+	const redirects = buildRedirectResources(
+		derived.domain,
+		derived.environment,
+		derived.resolvedDomain,
+		derived.redirectDomains,
+	)
+	const rulesets = mergeRulesetFamilies([
+		redirects.rulesets,
+		buildRateLimitResources(derived.rateLimitRules),
+		buildFirewallResources(derived.publicPathsRules),
+	])
+	if (Object.keys(redirects.dns).length > 0) {
+		resource.cloudflare_dns_record = redirects.dns
+	}
+	if (Object.keys(rulesets).length > 0) {
 		resource.cloudflare_ruleset = rulesets
 	}
 	return resource

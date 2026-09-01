@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
+import { computeRateLimiterNamespaceId } from './rate-limiter-namespace.ts'
 import { buildWranglerConfig } from './wrangler-config.ts'
 import {
+	DEFAULT_WORKER_CPU_MS,
+	DEFAULT_WORKER_SUBREQUESTS,
 	DEFAULT_WORKERS_COMPATIBILITY_DATE,
 	WORKERS_COMPATIBILITY_FLAGS,
 } from './wrangler-document.ts'
@@ -395,5 +398,82 @@ describe('buildWranglerConfig', () => {
 		)
 
 		expect(document.observability).toEqual({ enabled: false })
+	})
+
+	it('binds a declared rate limiter under RL_<NAME>', () => {
+		const document = buildWranglerConfig(
+			input({
+				serviceName: 'api',
+				service: service({
+					rateLimiters: [{ name: 'forms', limit: 5, period: 60 }],
+				}),
+			}),
+		)
+
+		expect(document.ratelimits).toEqual([
+			{
+				name: 'RL_FORMS',
+				namespace_id: computeRateLimiterNamespaceId(
+					'proj',
+					'production',
+					'api',
+					'forms',
+				),
+				simple: { limit: 5, period: 60 },
+			},
+		])
+	})
+
+	it('gives development and production separate counters', () => {
+		const limiters = [{ name: 'forms', limit: 5, period: 60 } as const]
+		const production = buildWranglerConfig(
+			input({ service: service({ rateLimiters: limiters }) }),
+		)
+		const development = buildWranglerConfig(
+			input({
+				environment: 'development',
+				service: service({ rateLimiters: limiters }),
+			}),
+		)
+
+		expect(development.ratelimits?.[0]?.namespace_id).not.toBe(
+			production.ratelimits?.[0]?.namespace_id,
+		)
+	})
+
+	it('emits no ratelimits key when the service declares none', () => {
+		expect(buildWranglerConfig(input()).ratelimits).toBeUndefined()
+	})
+
+	it('caps cpu time and subrequests with the infra defaults', () => {
+		expect(buildWranglerConfig(input()).limits).toEqual({
+			cpu_ms: DEFAULT_WORKER_CPU_MS,
+			subrequests: DEFAULT_WORKER_SUBREQUESTS,
+		})
+	})
+
+	it('overrides the caps field by field', () => {
+		const document = buildWranglerConfig(
+			input({ service: service({ limits: { cpuMs: 5000 } }) }),
+		)
+
+		expect(document.limits).toEqual({
+			cpu_ms: 5000,
+			subrequests: DEFAULT_WORKER_SUBREQUESTS,
+		})
+	})
+
+	it('emits the caps in development too', () => {
+		const document = buildWranglerConfig(
+			input({
+				environment: 'development',
+				service: service({ limits: { subrequests: 10 } }),
+			}),
+		)
+
+		expect(document.limits).toEqual({
+			cpu_ms: DEFAULT_WORKER_CPU_MS,
+			subrequests: 10,
+		})
 	})
 })
