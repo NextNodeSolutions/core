@@ -2274,7 +2274,7 @@ describe('parseConfig', () => {
 			expect(parsed.config.services.planetscale).toEqual({})
 		})
 
-		it('accepts [[services.kv.namespaces]] and [[services.queues]]', () => {
+		it('accepts KV namespaces and queues service arrays', () => {
 			const parsed = parseConfig(
 				workersConfig(
 					{ web: { url: 'example.com' } },
