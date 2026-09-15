@@ -71,7 +71,7 @@ export const defaultWranglerRunner: WranglerRunner = (args, options) =>
 	new Promise<ExecResult>((resolve, reject) => {
 		const child = execFile(
 			'npx',
-			['--yes', '--package=wrangler', 'wrangler', ...args],
+			['--yes', '--package=wrangler', '--', 'wrangler', ...args],
 			{
 				cwd: options?.cwd,
 				env: process.env,
