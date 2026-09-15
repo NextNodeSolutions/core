@@ -63,13 +63,15 @@ function timeoutMessage(args: ReadonlyArray<string>): string {
 
 // Auth is ambient: wrangler reads CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID
 // from the forwarded process env, never from argv (a token in argv leaks to
-// `ps` and CI logs). `npx --yes` resolves the project's local wrangler
-// devDependency first, falling back to a one-off download.
+// `ps` and CI logs). `npx --yes --package=wrangler wrangler` resolves the
+// project's local wrangler first, falling back to a one-off download. The
+// explicit package and executable are required because Wrangler publishes
+// multiple bins.
 export const defaultWranglerRunner: WranglerRunner = (args, options) =>
 	new Promise<ExecResult>((resolve, reject) => {
 		const child = execFile(
 			'npx',
-			['--yes', 'wrangler', ...args],
+			['--yes', '--package=wrangler', 'wrangler', ...args],
 			{
 				cwd: options?.cwd,
 				env: process.env,
