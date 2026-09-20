@@ -44,6 +44,65 @@ function validateWorkerServiceUrls(
 	return errors
 }
 
+// What the Cloudflare Free plan allows PER ZONE - and a project owns one zone,
+// so these are project ceilings. Counted here rather than per service: a
+// per-service schema cannot see its siblings, and the alternative is
+// discovering the refusal at `terraform apply`, after provisioning.
+const FREE_PLAN_RATE_LIMIT_RULES = 1
+const FREE_PLAN_CUSTOM_RULES = 5
+
+// A zone rule matches on the host, so a worker declaring one without `url` has
+// no host to match and no rule to emit; and the whole project shares one zone,
+// so the plan ceiling counts the workers declaring the barrier.
+interface ZoneBarrier {
+	readonly field: string
+	readonly isDeclaredBy: (service: WorkerServiceConfig) => boolean
+	readonly ceiling: number
+	readonly ceilingReason: string
+}
+
+function zoneBarrierErrors(
+	services: Record<string, WorkerServiceConfig>,
+	{ field, isDeclaredBy, ceiling, ceilingReason }: ZoneBarrier,
+): string[] {
+	const declaring = Object.entries(services).filter(([, service]) =>
+		isDeclaredBy(service),
+	)
+	const hostless = declaring
+		.filter(([, service]) => typeof service.url === 'undefined')
+		.map(
+			([name]) =>
+				`deploy.services.${name}.${field} requires deploy.services.${name}.url - a zone rule matches on the host, and no host is derivable for a worker without url`,
+		)
+	if (declaring.length <= ceiling) return hostless
+	const names = declaring.map(([name]) => name).join(', ')
+	return [
+		...hostless,
+		`deploy.services declares ${declaring.length} ${field} blocks (${names}) but ${ceilingReason}`,
+	]
+}
+
+function validateZoneBarriers(
+	services: Record<string, WorkerServiceConfig>,
+): string[] {
+	return [
+		...zoneBarrierErrors(services, {
+			field: 'rate_limit',
+			isDeclaredBy: service => typeof service.rateLimit !== 'undefined',
+			ceiling: FREE_PLAN_RATE_LIMIT_RULES,
+			ceilingReason:
+				'the Cloudflare Free plan allows a single rate limiting rule per zone - keep one',
+		}),
+		...zoneBarrierErrors(services, {
+			field: 'public_paths',
+			isDeclaredBy: service => typeof service.publicPaths !== 'undefined',
+			ceiling: FREE_PLAN_CUSTOM_RULES,
+			ceilingReason:
+				'the Cloudflare Free plan allows five custom rules per zone',
+		}),
+	]
+}
+
 // Fields a VPS deploy carries that a Worker cannot honour: there is no host to
 // pin (`vps`), no filesystem to mount (`[[deploy.volumes]]`), and no server to
 // size (`[deploy.hetzner]`). Reject them explicitly rather than parse-and-ignore,
@@ -89,6 +148,7 @@ export const cloudflareWorkers: DeployProviderValidator = {
 		const serviceErrors = [
 			...unsupportedContainerFieldErrors(deployRecord),
 			...validateWorkerServiceUrls(workerServices, domain),
+			...validateZoneBarriers(workerServices),
 			...(cronResult.ok ? [] : cronResult.errors),
 		]
 

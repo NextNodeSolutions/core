@@ -7,7 +7,7 @@ Commands: `plan` (quality matrix), `provision` (infra setup via DeployTarget), `
 
 **This CLI package is NEVER published to npm.** The CI/CD orchestrator is consumed directly from the monorepo by GitHub Actions workflows — do not add `publishConfig`, `.releaserc.json`, or a `[package]` section to its `nextnode.toml`.
 
-That ban is on *this* package, not on the infra domain. A pure, reusable slice of it may be extracted into its own thin, semver-published package that projects install as a devDependency (e.g. `@nextnode-solutions/worker-types`, which bundles this package's `./worker-types` entry). Such a package keeps a single source of truth with the deploy path while giving consumers a versioned install instead of an unversioned `@main` coupling.
+That ban is on _this_ package, not on the infra domain. A pure, reusable slice of it may be extracted into its own thin, semver-published package that projects install as a devDependency (e.g. `@nextnode-solutions/worker-types`, which bundles this package's `./worker-types` entry). Such a package keeps a single source of truth with the deploy path while giving consumers a versioned install instead of an unversioned `@main` coupling.
 
 ## Architecture — STRICT LAYERED RULE (ABSOLUTE BAN)
 
@@ -206,6 +206,84 @@ bucket additionally gets `R2_BUCKET_<ALIAS>_URL` (its `https://` CDN URL).
 Custom domains are detached on `project`-scope teardown. Requires the
 project's zone to live in the same Cloudflare account (already true for any
 project with `project.domain`).
+
+## Zone firewall: the four barriers around a Worker (cloudflare-workers)
+
+A `cloudflare-workers` project declares its barriers per worker. Two of them
+are ZONE rules Terraform emits (upstream ceiling, public gate); two are wrangler
+keys the deploy carries (invocation ceilings, in-Worker limiter):
+
+```toml
+[deploy.services.web]
+url = "example.com"
+public_paths = ["/webhooks/*", "/health"]  # absent = the whole worker is public
+
+[deploy.services.web.rate_limit]
+paths = ["/api/contact"]         # exact path, or a trailing "*" for a prefix;
+                                 # a "*" elsewhere is refused at load
+methods = ["POST"]               # optional; absent = every method counts
+requests_per_period = 5
+period = 60                      # default: DEFAULT_RATE_LIMIT_PERIOD
+mitigation_timeout = 600         # default: DEFAULT_RATE_LIMIT_MITIGATION_TIMEOUT
+
+[deploy.services.web.limits]
+cpu_ms = 5000                    # default: DEFAULT_WORKER_CPU_MS
+subrequests = 50                 # default: DEFAULT_WORKER_SUBREQUESTS
+
+[[deploy.services.web.rate_limiters]]
+name = "forms"                   # -> env.RL_FORMS, typed RateLimit
+limit = 5
+period = 60                      # 10 or 60 only
+```
+
+The defaults live as named constants in the code (`config/worker-firewall.ts`
+for the zone rule, `domain/cloudflare/workers/wrangler-document.ts` for the
+wrangler keys) — the dev never spells them, and this file does not restate
+their values.
+
+**Free plan ceilings**, refused at load rather than at `terraform apply`: ONE
+rate limiting rule per zone (so one worker may declare `rate_limit`), FIVE
+custom rules per zone (so at most five workers may declare `public_paths`), and
+`ip.src` is the only counting characteristic available (the generator adds the
+mandatory `cf.colo.id`, which the expression may never mention). The `log`
+action and a custom response on a custom rule are Pro-and-above, so the public
+gate blocks with no `action_parameters` at all.
+
+**`rate_limit` needs a Pro zone or above.** The public gate (`public_paths`)
+applies on a Free zone; the upstream ceiling as generated does not. Cloudflare's
+rate-limiting-rules availability table gives a Free zone only the `Path` field
+in the rule expression (`Host` is Pro, `Method` is Business), a single counting
+period of 10 s, a single mitigation timeout of 10 s, and no custom block
+response — while the generated rule carries `http.host`, the declared `period` /
+`mitigation_timeout`, and a `429 application/json` body. On a Free zone the
+`cloudflare_ruleset.ratelimit_*` create is refused at apply. `public_paths`,
+`limits` and `rate_limiters` are unaffected.
+
+**`limits` needs Workers Paid.** `wrangler deploy` rejects a config carrying
+`limits.cpu_ms` on a Workers Free account (`code: 100328`), and the block is
+emitted for every worker. The Workers plan is account-scoped and independent
+from the zone plan. `limits.subrequests` additionally requires wrangler >= 4.62.
+
+**Both rulesets are emitted in production only.** A zone owns a single ruleset
+entry point per phase, so a development workspace and a production workspace
+would overwrite each other's rules on every apply — the same reason the
+Redirect Rules are production only. A `terraform destroy` therefore removes the
+rules along with the environment: the zone keeps no barrier of its own. The
+development deployment is consequently ungated: the same worker answers on
+`dev.<host>` with no rate limiting and no public-path gate.
+
+`public_paths` names what is **open**, and the rule blocks its negation: a
+wildcard that is one segment too wide silently reopens the whole tree, and no
+test can catch that. A worker with no external caller is better protected by
+having no `url` at all — a service binding never resolves the host, so it
+crosses neither DNS nor the zone's rulesets and is unaffected by these rules.
+
+The `rate_limiters` binding runs INSIDE the Worker: the request is already
+billed when it rejects. It protects what sits behind the Worker (a database, a
+paid third-party call) by a business key — it is not a spend ceiling. Its
+`namespace_id` is a hash of project + environment + worker + limiter name,
+because the id is unique account-wide and two bindings sharing one share their
+counters.
 
 ## Scheduled jobs: `[[deploy.cron]]`
 

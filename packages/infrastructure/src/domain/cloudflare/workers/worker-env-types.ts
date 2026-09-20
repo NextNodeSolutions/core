@@ -68,6 +68,10 @@ function bindingMembers(document: WranglerDocument): ReadonlyArray<EnvMember> {
 			name: binding.binding,
 			type: 'Queue',
 		})),
+		...(document.ratelimits ?? []).map(binding => ({
+			name: binding.name,
+			type: 'RateLimit',
+		})),
 	]
 }
 

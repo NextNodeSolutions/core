@@ -1,5 +1,6 @@
 import { computeSiteUrl } from '#/domain/deploy/domain.ts'
 
+import { buildHostExpression } from './ruleset-expressions.ts'
 import { redirectZoneLabel, toTerraformLabel } from './terraform-labels.ts'
 
 import type { AppEnvironment } from '#/domain/environment.ts'
@@ -56,7 +57,7 @@ function redirectRuleset(
 			{
 				ref: `redirect_${label}`,
 				description: `Redirect ${redirectDomain} and www.${redirectDomain} to ${resolvedDomain}`,
-				expression: `(http.host eq "${redirectDomain}" or http.host eq "www.${redirectDomain}")`,
+				expression: `(${buildHostExpression(redirectDomain)} or ${buildHostExpression(`www.${redirectDomain}`)})`,
 				action: 'redirect',
 				action_parameters: {
 					from_value: {

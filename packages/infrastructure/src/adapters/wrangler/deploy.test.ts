@@ -14,6 +14,7 @@ const DOCUMENT: WranglerDocument = {
 	compatibility_flags: ['nodejs_compat'],
 	assets: { directory: 'dist/client', binding: 'ASSETS' },
 	observability: { enabled: true },
+	limits: { cpu_ms: 1000, subrequests: 50 },
 }
 
 interface Captured {

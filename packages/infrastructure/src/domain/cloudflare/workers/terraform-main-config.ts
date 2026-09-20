@@ -111,10 +111,13 @@ export interface DnsRecordResource {
 	readonly proxied: boolean
 }
 
-export interface RulesetRule {
+interface RulesetRuleCommon {
 	readonly ref: string
 	readonly description: string
 	readonly expression: string
+}
+
+export interface RedirectRulesetRule extends RulesetRuleCommon {
 	readonly action: 'redirect'
 	readonly action_parameters: {
 		readonly from_value: {
@@ -125,11 +128,54 @@ export interface RulesetRule {
 	}
 }
 
+// The custom response a rule returns instead of the origin's. `content` is a
+// body serialised by the generator (JSON for `application/json`), never
+// hand-concatenated into the surrounding JSON.
+export interface RulesetResponse {
+	readonly status_code: number
+	readonly content_type: string
+	readonly content: string
+}
+
+// The counting parameters of a rate limiting rule. `characteristics` is what
+// the counter is keyed by; `period` counts, `mitigation_timeout` blocks for.
+export interface RateLimitParameters {
+	readonly characteristics: ReadonlyArray<string>
+	readonly period: number
+	readonly requests_per_period: number
+	readonly mitigation_timeout: number
+}
+
+export interface RateLimitRulesetRule extends RulesetRuleCommon {
+	readonly action: 'block'
+	readonly action_parameters: { readonly response: RulesetResponse }
+	readonly ratelimit: RateLimitParameters
+}
+
+// A plain deny. No `action_parameters`: the Free plan reserves the custom
+// response of a firewall custom rule to Pro and above, and rejects `log`.
+export interface BlockRulesetRule extends RulesetRuleCommon {
+	readonly action: 'block'
+}
+
+export type RulesetRule =
+	| RedirectRulesetRule
+	| RateLimitRulesetRule
+	| BlockRulesetRule
+
+// The phases a generated ruleset may enter. A zone owns ONE entry point per
+// phase, so the label a family emits under and its phase move together; a phase
+// absent from this union is a phase nothing emits.
+export type RulesetPhase =
+	| 'http_request_dynamic_redirect'
+	| 'http_ratelimit'
+	| 'http_request_firewall_custom'
+
 export interface RulesetResource {
 	readonly zone_id: string
 	readonly name: string
 	readonly kind: 'zone'
-	readonly phase: 'http_request_dynamic_redirect'
+	readonly phase: RulesetPhase
 	readonly rules: ReadonlyArray<RulesetRule>
 }
 

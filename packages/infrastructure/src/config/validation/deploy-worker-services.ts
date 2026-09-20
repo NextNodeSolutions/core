@@ -6,6 +6,10 @@ import { isRecord } from '#/kernel/guards.ts'
 import { boolean, object, optional } from 'valibot'
 
 import {
+	toWorkerFirewall,
+	workerFirewallFields,
+} from './deploy-worker-firewall.ts'
+import {
 	forbiddenField,
 	nonEmptyString,
 	optionalNonEmpty,
@@ -15,6 +19,7 @@ import {
 
 import type { WorkerServiceConfig } from '#/config/types.ts'
 import type { GenericSchema } from 'valibot'
+import type { ParsedWorkerFirewall } from './deploy-worker-firewall.ts'
 
 const containerFieldRejection = (
 	name: string,
@@ -23,7 +28,7 @@ const containerFieldRejection = (
 ): string =>
 	`deploy.services.${name}.${field} is not supported with deploy target "cloudflare-workers" (a Worker is not a container: ${why})`
 
-type ParsedWorkerService = {
+type ParsedWorkerService = ParsedWorkerFirewall & {
 	url?: string | undefined
 	secrets: string[]
 	needs: string[]
@@ -96,6 +101,7 @@ const workerServiceSchema = (
 			boolean(`deploy.services.${name}.observability must be a boolean`),
 			true,
 		),
+		...workerFirewallFields(name),
 		...containerFieldsForbidden(name),
 	})
 
@@ -110,6 +116,7 @@ function toWorkerService(parsed: ParsedWorkerService): WorkerServiceConfig {
 		dependsOn: parsed.depends_on,
 		entry: parsed.entry,
 		observability: parsed.observability,
+		...toWorkerFirewall(parsed),
 	}
 	if (parsed.url) workerService.url = parsed.url
 	return workerService

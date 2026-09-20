@@ -15,6 +15,16 @@ export const DEFAULT_WORKERS_COMPATIBILITY_DATE = '2026-06-01'
 export const WORKERS_COMPATIBILITY_FLAGS = ['nodejs_compat'] as const
 
 /**
+ * The per-invocation ceilings every generated config carries. They bound the
+ * COST of one invocation (the zone rules bound their number): a runaway loop
+ * dies at `cpu_ms`, an uncontrolled fan-out at `subrequests`. Held by the infra
+ * so no project has to spell them; a service overrides either through
+ * `[deploy.services.<name>.limits]`.
+ */
+export const DEFAULT_WORKER_CPU_MS = 1000
+export const DEFAULT_WORKER_SUBREQUESTS = 50
+
+/**
  * The binding a Worker reads its static-asset fetcher under (`env.ASSETS`). Set
  * whenever the service ships assets (the @astrojs/cloudflare `server`/`client`
  * convention, or the historic `_worker.js/` one).
@@ -104,6 +114,16 @@ export interface WranglerHyperdrive {
 	readonly id: string
 }
 
+// A Rate Limit binding: `env.<name>` exposes a limiter counting `limit` hits
+// per `period` seconds under whatever key the Worker code passes. It runs
+// INSIDE the Worker, so the request is already billed when it rejects - it
+// protects what sits behind the Worker, never the Worker's own bill.
+export interface WranglerRateLimit {
+	readonly name: string
+	readonly namespace_id: string
+	readonly simple: { readonly limit: number; readonly period: number }
+}
+
 export interface WranglerQueues {
 	readonly producers: ReadonlyArray<WranglerQueueProducer>
 }
@@ -118,6 +138,13 @@ export interface WranglerTriggers {
 // config rather than relying on wrangler's own default.
 export interface WranglerObservability {
 	readonly enabled: boolean
+}
+
+// Per-invocation ceilings. Always emitted so the bound is explicit in the
+// generated config rather than left to wrangler's own default.
+export interface WranglerLimits {
+	readonly cpu_ms: number
+	readonly subrequests: number
 }
 
 /**
@@ -145,8 +172,12 @@ export interface WranglerDocument {
 	readonly r2_buckets?: ReadonlyArray<WranglerR2Bucket>
 	readonly hyperdrive?: ReadonlyArray<WranglerHyperdrive>
 	readonly queues?: WranglerQueues
+	readonly ratelimits?: ReadonlyArray<WranglerRateLimit>
 	readonly triggers?: WranglerTriggers
 	// Always emitted so Workers Logs are on by default; a service sets
 	// `observability = false` in nextnode.toml to opt out.
 	readonly observability: WranglerObservability
+	// Always emitted: an invocation with no ceiling has no upper bound on what
+	// it can spend. Overridden field by field through `[deploy.services.*.limits]`.
+	readonly limits: WranglerLimits
 }

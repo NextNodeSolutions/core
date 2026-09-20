@@ -161,6 +161,26 @@ describe('renderWorkerEnvTypes', () => {
 		expect(dts).toContain(member('STRIPE_KEY', 'string'))
 	})
 
+	it('types a declared rate limiter as RateLimit', () => {
+		const dts = renderWorkerEnvTypes(
+			input({
+				service: service({
+					rateLimiters: [{ name: 'forms', limit: 5, period: 60 }],
+				}),
+			}),
+		)
+
+		expect(dts).toContain(member('RL_FORMS', 'RateLimit'))
+	})
+
+	it('never types the invocation limits: they are a deploy ceiling, not a binding', () => {
+		const dts = renderWorkerEnvTypes(
+			input({ service: service({ limits: { cpuMs: 5000 } }) }),
+		)
+
+		expect(dts).not.toContain('limits')
+	})
+
 	it('emits members sorted by name for a stable file', () => {
 		const dts = renderWorkerEnvTypes(
 			input({

@@ -2,9 +2,12 @@ import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
 
 import { deriveWorkerAssetsDirectory } from './assets-directory.ts'
 import { deriveWorkersBackingConfig } from './outputs-env.ts'
+import { computeRateLimiterNamespaceId } from './rate-limiter-namespace.ts'
 import { deriveBoundSiblings } from './service-bindings.ts'
 import { computeWorkerScriptName } from './worker-name.ts'
 import {
+	DEFAULT_WORKER_CPU_MS,
+	DEFAULT_WORKER_SUBREQUESTS,
 	DEFAULT_WORKERS_COMPATIBILITY_DATE,
 	toBindingName,
 	WORKERS_ASSETS_BINDING,
@@ -23,8 +26,10 @@ import type {
 	WranglerDocument,
 	WranglerHyperdrive,
 	WranglerKvNamespace,
+	WranglerLimits,
 	WranglerQueueProducer,
 	WranglerR2Bucket,
+	WranglerRateLimit,
 	WranglerRoute,
 	WranglerServiceBinding,
 } from './wrangler-document.ts'
@@ -201,6 +206,30 @@ function serviceBindings(
 	}))
 }
 
+function rateLimiters(
+	input: WranglerConfigInput,
+): ReadonlyArray<WranglerRateLimit> | undefined {
+	const declared = input.service.rateLimiters
+	if (!declared?.length) return undefined
+	return declared.map(limiter => ({
+		name: `RL_${toBindingName(limiter.name)}`,
+		namespace_id: computeRateLimiterNamespaceId(
+			input.projectName,
+			input.environment,
+			input.serviceName,
+			limiter.name,
+		),
+		simple: { limit: limiter.limit, period: limiter.period },
+	}))
+}
+
+function workerLimits(service: WorkerServiceConfig): WranglerLimits {
+	return {
+		cpu_ms: service.limits?.cpuMs ?? DEFAULT_WORKER_CPU_MS,
+		subrequests: service.limits?.subrequests ?? DEFAULT_WORKER_SUBREQUESTS,
+	}
+}
+
 /**
  * Build the wrangler configuration document for one service. Pure: the caller
  * (adapter) writes it to an ephemeral file and runs `wrangler deploy`. Name is
@@ -225,6 +254,7 @@ export function buildWranglerConfig(
 	const kv = kvNamespaces(input, backing)
 	const r2 = r2Buckets(input, backing)
 	const queues = queueProducers(input, backing)
+	const limiters = rateLimiters(input)
 
 	const document: WranglerDocumentDraft = {
 		name: computeWorkerScriptName(
@@ -237,6 +267,7 @@ export function buildWranglerConfig(
 		compatibility_flags: [...WORKERS_COMPATIBILITY_FLAGS],
 		workers_dev: false,
 		observability: { enabled: input.service.observability },
+		limits: workerLimits(input.service),
 	}
 	if (routes) document.routes = routes
 	if (assets) document.assets = assets
@@ -247,6 +278,7 @@ export function buildWranglerConfig(
 	if (kv) document.kv_namespaces = kv
 	if (r2) document.r2_buckets = r2
 	if (queues) document.queues = { producers: queues }
+	if (limiters) document.ratelimits = limiters
 	if (crons.length > 0) document.triggers = { crons }
 	return document
 }
