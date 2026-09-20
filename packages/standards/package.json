@@ -102,7 +102,10 @@
       "types": "./src/oxlint/base.d.ts",
       "default": "./src/oxlint/base.js"
     },
-    "./oxfmt": "./src/oxfmt/base.js",
+    "./oxfmt": {
+      "types": "./src/oxfmt/base.d.ts",
+      "default": "./src/oxfmt/base.js"
+    },
     "./tsdown": {
       "types": "./src/tsdown/base.d.ts",
       "default": "./src/tsdown/base.js"
