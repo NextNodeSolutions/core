@@ -445,11 +445,8 @@ describe('buildWranglerConfig', () => {
 		expect(buildWranglerConfig(input()).ratelimits).toBeUndefined()
 	})
 
-	it('caps cpu time and subrequests with the infra defaults', () => {
-		expect(buildWranglerConfig(input()).limits).toEqual({
-			cpu_ms: DEFAULT_WORKER_CPU_MS,
-			subrequests: DEFAULT_WORKER_SUBREQUESTS,
-		})
+	it('omits limits when the service declares none for Workers Free', () => {
+		expect(buildWranglerConfig(input()).limits).toBeUndefined()
 	})
 
 	it('overrides the caps field by field', () => {

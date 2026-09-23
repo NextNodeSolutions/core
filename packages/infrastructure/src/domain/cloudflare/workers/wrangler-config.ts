@@ -267,8 +267,8 @@ export function buildWranglerConfig(
 		compatibility_flags: [...WORKERS_COMPATIBILITY_FLAGS],
 		workers_dev: false,
 		observability: { enabled: input.service.observability },
-		limits: workerLimits(input.service),
 	}
+	if (input.service.limits) document.limits = workerLimits(input.service)
 	if (routes) document.routes = routes
 	if (assets) document.assets = assets
 	if (Object.keys(input.vars).length > 0) document.vars = input.vars

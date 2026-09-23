@@ -15,11 +15,9 @@ export const DEFAULT_WORKERS_COMPATIBILITY_DATE = '2026-06-01'
 export const WORKERS_COMPATIBILITY_FLAGS = ['nodejs_compat'] as const
 
 /**
- * The per-invocation ceilings every generated config carries. They bound the
- * COST of one invocation (the zone rules bound their number): a runaway loop
- * dies at `cpu_ms`, an uncontrolled fan-out at `subrequests`. Held by the infra
- * so no project has to spell them; a service overrides either through
- * `[deploy.services.<name>.limits]`.
+ * Default values for omitted fields when a paid-plan service explicitly
+ * declares `[deploy.services.<name>.limits]`. Workers Free cannot set CPU
+ * limits, so services without a limits declaration emit no limits block.
  */
 export const DEFAULT_WORKER_CPU_MS = 1000
 export const DEFAULT_WORKER_SUBREQUESTS = 50
@@ -140,8 +138,7 @@ export interface WranglerObservability {
 	readonly enabled: boolean
 }
 
-// Per-invocation ceilings. Always emitted so the bound is explicit in the
-// generated config rather than left to wrangler's own default.
+// Per-invocation ceilings for services that explicitly declare limits.
 export interface WranglerLimits {
 	readonly cpu_ms: number
 	readonly subrequests: number
@@ -177,7 +174,7 @@ export interface WranglerDocument {
 	// Always emitted so Workers Logs are on by default; a service sets
 	// `observability = false` in nextnode.toml to opt out.
 	readonly observability: WranglerObservability
-	// Always emitted: an invocation with no ceiling has no upper bound on what
-	// it can spend. Overridden field by field through `[deploy.services.*.limits]`.
-	readonly limits: WranglerLimits
+	// Omitted unless `[deploy.services.*.limits]` is declared; Workers Free
+	// rejects a CPU limits block.
+	readonly limits?: WranglerLimits
 }
