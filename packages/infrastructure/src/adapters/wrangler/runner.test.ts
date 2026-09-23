@@ -57,6 +57,19 @@ describe('wranglerDelete', () => {
 		})
 	})
 
+	it('maps a missing Worker service [code: 10090] to "already gone"', async () => {
+		const runner = runnerReturning({
+			exitCode: 1,
+			stdout: '',
+			stderr: 'This Worker does not exist on this account. [code: 10090]',
+		})
+
+		await expect(wranglerDelete('worker-a', runner)).resolves.toEqual({
+			handled: false,
+			detail: 'already gone "worker-a"',
+		})
+	})
+
 	it('throws the wrangler stderr verbatim on any other failure', async () => {
 		const runner = runnerReturning({
 			exitCode: 1,
