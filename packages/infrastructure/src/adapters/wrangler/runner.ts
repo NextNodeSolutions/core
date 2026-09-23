@@ -16,11 +16,12 @@ export const WRANGLER_TIMEOUT_MS = 300_000
 
 const WRANGLER_MAX_BUFFER_BYTES = 67_108_864
 
-// wrangler wraps a missing-script API failure as `workers.api.error.script_not_found`
-// (`[code: 10007]`); either fingerprint means the Worker is already gone.
+// Wrangler reports a missing Worker as script_not_found (10007) or, for a
+// missing service, code 10090. Both mean teardown has nothing left to delete.
 const SCRIPT_NOT_FOUND_FINGERPRINTS = [
 	'workers.api.error.script_not_found',
 	'[code: 10007]',
+	'[code: 10090]',
 ]
 
 // Cloudflare rejects an under-scoped or wrong-account token with API error 10000
@@ -103,7 +104,7 @@ export const defaultWranglerRunner: WranglerRunner = (args, options) =>
  * Delete a deployed Worker script by name. `--force` skips wrangler's
  * interactive confirmation (and its Durable-Objects prompt) so the command
  * never hangs in CI. A missing script is a valid teardown state, not a failure:
- * wrangler errors with `script_not_found`, which we map to
+ * wrangler errors with `script_not_found` or code 10090, which we map to
  * `{ handled: false, detail: 'already gone' }` - the same "already gone"
  * contract the Pages teardown uses. Any other non-zero exit throws the wrangler
  * stderr verbatim.
