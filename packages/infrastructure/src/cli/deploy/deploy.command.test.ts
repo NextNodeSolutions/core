@@ -2,19 +2,6 @@ import { readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import ssh2 from 'ssh2'
-import {
-	afterEach,
-	beforeAll,
-	beforeEach,
-	describe,
-	expect,
-	it,
-	vi,
-} from 'vitest'
-
-const { utils: sshUtils } = ssh2
-
 import {
 	APP_UPSTREAM_PRIVATE,
 	APP_UPSTREAM_PUBLIC,
@@ -26,6 +13,7 @@ import {
 	STATIC_WITH_SECRETS,
 } from '#/cli/fixtures.ts'
 import { okJson } from '#/test-fetch.ts'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { deployCommand } from './deploy.command.ts'
 
@@ -96,6 +84,11 @@ vi.mock(import('#/cli/r2/load-runtime.ts'), async () => ({
 		stateBucket: 'nextnode-state',
 		certsBucket: 'nextnode-certs',
 	})),
+}))
+
+// Key parsing is covered by derive-public-key tests, not deploy orchestration.
+vi.mock('#/adapters/hetzner/ssh/derive-public-key.ts', () => ({
+	derivePublicKey: vi.fn(() => 'ssh-ed25519 test-public-key'),
 }))
 
 // Mock HetznerVpsTarget class (network boundary: SSH, R2, Hetzner Cloud API)
@@ -367,17 +360,11 @@ describe('deployCommand', () => {
 			durationMs: 42,
 		}
 
-		let testPrivateKey: string
-
-		beforeAll(() => {
-			testPrivateKey = sshUtils.generateKeyPairSync('ed25519').private
-		})
-
 		beforeEach(() => {
 			vi.stubEnv('HETZNER_API_TOKEN', 'hcloud-token')
 			vi.stubEnv(
 				'DEPLOY_SSH_PRIVATE_KEY_B64',
-				Buffer.from(testPrivateKey).toString('base64'),
+				Buffer.from('test-private-key').toString('base64'),
 			)
 			vi.stubEnv('TAILSCALE_AUTH_KEY', 'tskey-auth-test')
 			vi.stubEnv('GHCR_TOKEN', 'ghs_fake_token')
