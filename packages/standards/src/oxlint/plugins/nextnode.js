@@ -10,6 +10,7 @@ import { noBarrelFile } from './rules/no-barrel-file.js'
 import { noBooleanParams } from './rules/no-boolean-params.js'
 import { noConfusableChars } from './rules/no-confusable-chars.js'
 import { noDetachedTailwind } from './rules/no-detached-tailwind.js'
+import { noDuplicateGuardReturn } from './rules/no-duplicate-guard-return.js'
 import { noEmDash } from './rules/no-em-dash.js'
 import { noEmptyObjectTernary } from './rules/no-empty-object-ternary.js'
 import { noEnum } from './rules/no-enum.js'
@@ -40,6 +41,7 @@ const plugin = {
 		'no-generic-runtime-guard': noGenericRuntimeGuard,
 		'no-em-dash': noEmDash,
 		'no-detached-tailwind': noDetachedTailwind,
+		'no-duplicate-guard-return': noDuplicateGuardReturn,
 		'no-confusable-chars': noConfusableChars,
 		'no-use-effect': noUseEffect,
 		'max-props': maxProps,
