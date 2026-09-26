@@ -708,4 +708,34 @@ export const tokenPredicates = {
 export default (token: Token): boolean => token.kind === 'number'
 `,
 	},
+
+	// coding - the smaller return is the early guard; a tie keeps its
+	// negative guard instead of flipping for nothing
+	{
+		rule: 'nextnode(prefer-early-return)',
+		severity: 'warning',
+		bad: `export function pick(mode: string): string {
+	if (mode === 'on') {
+		return 'a much longer string while enabled'
+	}
+	return 'off'
+}
+`,
+		// tie: both returns the same size, guard already negated - preferred shape
+		edge: `export function pick(mode: string | undefined): string {
+	if (!mode) {
+		return 'missing'
+	}
+	return 'present'
+}
+`,
+		edgeExpect: 'clean',
+		good: `export function pick(mode: string | undefined): string {
+	if (!mode) {
+		return 'missing'
+	}
+	return 'a much longer default string'
+}
+`,
+	},
 ]

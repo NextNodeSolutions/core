@@ -27,6 +27,7 @@ import { noTernarySpread } from './rules/no-ternary-spread.js'
 import { noTypeAssertion } from './rules/no-type-assertion.js'
 import { noUndefinedComparison } from './rules/no-undefined-comparison.js'
 import { noUseEffect } from './rules/no-use-effect.js'
+import { preferEarlyReturn } from './rules/prefer-early-return.js'
 
 const plugin = {
 	meta: {
@@ -57,6 +58,7 @@ const plugin = {
 		'no-single-use-passthrough': noSingleUsePassthrough,
 		'no-undefined-comparison': noUndefinedComparison,
 		'no-ternary-spread': noTernarySpread,
+		'prefer-early-return': preferEarlyReturn,
 		'astro-props-destructuring': astroPropsDestructuring,
 	},
 }
