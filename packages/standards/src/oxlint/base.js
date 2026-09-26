@@ -160,6 +160,9 @@ export default defineConfig({
 		'nextnode/no-single-use-passthrough': 'error',
 		'nextnode/no-undefined-comparison': 'error',
 		'nextnode/no-ternary-spread': 'error',
+		// warn, not error: branch choice (smaller return first) is the substance;
+		// the negated-condition tie-break stays a style preference
+		'nextnode/prefer-early-return': 'warn',
 		'nextnode/astro-props-destructuring': 'error',
 	},
 	overrides: [
