@@ -154,6 +154,9 @@ export default defineConfig({
 		'nextnode/no-nullish-ternary-return': 'error',
 		'nextnode/no-empty-object-ternary': 'error',
 		'nextnode/no-sentinel-consequent': 'error',
+		// Distinct validation guards can merit separate explanations; warn rather
+		// than force every pair with the same fallback into one condition.
+		'nextnode/no-duplicate-guard-return': 'warn',
 		'nextnode/no-single-use-passthrough': 'error',
 		'nextnode/no-undefined-comparison': 'error',
 		'nextnode/no-ternary-spread': 'error',
