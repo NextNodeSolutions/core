@@ -153,7 +153,9 @@ export interface WranglerLimits {
  */
 export interface WranglerDocument {
 	readonly name: string
-	readonly main: string
+	// The worker script. Omitted for a static-assets-only Worker (no `main`, no
+	// script env): wrangler deploys the assets with no code to invoke.
+	readonly main?: string
 	readonly compatibility_date: string
 	readonly compatibility_flags: ReadonlyArray<string>
 	// Always emitted `false`: no worker (routed or internal) may answer on

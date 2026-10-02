@@ -3,7 +3,7 @@ import {
 	KEBAB_IDENTIFIER_PATTERN,
 } from '#/config/types.ts'
 import { isRecord } from '#/kernel/guards.ts'
-import { boolean, object, optional } from 'valibot'
+import { boolean, literal, object, optional, union } from 'valibot'
 
 import {
 	toWorkerFirewall,
@@ -33,7 +33,8 @@ type ParsedWorkerService = ParsedWorkerFirewall & {
 	secrets: string[]
 	needs: string[]
 	depends_on: string[]
-	entry: string
+	entry: string | false
+	assets?: string | undefined
 	observability: boolean
 	port?: undefined
 	source?: undefined
@@ -88,10 +89,19 @@ const workerServiceSchema = (
 			`deploy.services.${name}.depends_on entries must be non-empty strings`,
 		),
 		entry: optional(
-			nonEmptyString(
-				`deploy.services.${name}.entry must be a non-empty string`,
-			),
+			union([
+				nonEmptyString(
+					`deploy.services.${name}.entry must be a non-empty string`,
+				),
+				// `entry = false` opts out of the script entirely: a
+				// static-assets-only Worker (assets required, see the cross-field
+				// check below).
+				literal(false),
+			]),
 			DEFAULT_WORKER_ENTRY,
+		),
+		assets: optionalNonEmpty(
+			`deploy.services.${name}.assets must be a non-empty string`,
 		),
 		// Workers Logs default on: a silent-by-default Worker retains no
 		// invocation logs and is a debugging trap. Opt out with
@@ -119,6 +129,8 @@ function toWorkerService(parsed: ParsedWorkerService): WorkerServiceConfig {
 		...toWorkerFirewall(parsed),
 	}
 	if (parsed.url) workerService.url = parsed.url
+	if (typeof parsed.assets !== 'undefined')
+		workerService.assets = parsed.assets
 	return workerService
 }
 
@@ -152,6 +164,22 @@ export function validateWorkerServices(
 		const validation = runSchema(workerServiceSchema(name), rawService)
 		if (!validation.ok) {
 			errors.push(...validation.errors)
+			continue
+		}
+		// The assets directory has exactly one source per service shape: declared
+		// for a static-assets-only Worker, derived from the entry otherwise - so
+		// the two forms are mutually exclusive and `false` carries its directory.
+		const { entry, assets } = validation.section
+		if (entry === false && typeof assets === 'undefined') {
+			errors.push(
+				`deploy.services.${name}: \`entry = false\` (static-assets-only Worker) requires \`assets\` - declare the built assets directory`,
+			)
+			continue
+		}
+		if (entry !== false && typeof assets !== 'undefined') {
+			errors.push(
+				`deploy.services.${name}: \`assets\` is only valid with \`entry = false\` - a scripted Worker derives its assets directory from its entry`,
+			)
 			continue
 		}
 		services[name] = toWorkerService(validation.section)

@@ -207,6 +207,24 @@ Custom domains are detached on `project`-scope teardown. Requires the
 project's zone to live in the same Cloudflare account (already true for any
 project with `project.domain`).
 
+## Worker services: `entry` vs `assets` (cloudflare-workers)
+
+A `[deploy.services.<name>]` service is either scripted or static-assets-only:
+
+- `entry = "dist/..."` (default `dist/server/entry.mjs`, the
+  @astrojs/cloudflare v14 output): wrangler deploys the script as `main`, and
+  the static-assets directory is DERIVED from the entry
+  (`deriveWorkerAssetsDirectory` — the `/server/` → `/client/` and the historic
+  `/_worker.js/` markers). Declaring `assets` beside a string `entry` is
+  refused at load: the entry owns the derivation, a second source would drift.
+- `entry = false` + `assets = "dist"`: a static-assets-only Worker — no script
+  is deployed, requests are answered by the assets alone. The right shape for a
+  pure-static site: a pass-through worker would add an invocation hop that
+  serves nothing the assets don't already serve. `assets` is required in this
+  form; the generated config carries no `main` and no `vars` (there is no
+  script env to project) and `generate-worker-types` skips the service (no
+  `Env` to render).
+
 ## Zone firewall: the four barriers around a Worker (cloudflare-workers)
 
 A `cloudflare-workers` project declares its barriers per worker. Two of them

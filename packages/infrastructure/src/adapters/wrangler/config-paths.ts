@@ -36,6 +36,15 @@ function resolveD1Paths(
 	}
 }
 
+function resolveMainPath(
+	main: WranglerDocument['main'],
+	cwd: string,
+): Pick<WranglerDocument, 'main'> | undefined {
+	// `main` is omitted for a static-assets-only Worker - absolutise nothing.
+	if (typeof main === 'undefined') return undefined
+	return { main: absolutise(main, cwd) }
+}
+
 /**
  * Absolutise every filesystem path a generated wrangler config carries (`main`,
  * `assets.directory`, each `d1_databases[].migrations_dir`) against the project
@@ -50,7 +59,7 @@ export function resolveDocumentPaths(
 ): WranglerDocument {
 	return {
 		...document,
-		main: absolutise(document.main, cwd),
+		...resolveMainPath(document.main, cwd),
 		...resolveAssetsPath(document.assets, cwd),
 		...resolveD1Paths(document.d1_databases, cwd),
 	}
