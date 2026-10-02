@@ -221,8 +221,9 @@ A `[deploy.services.<name>]` service is either scripted or static-assets-only:
   is deployed, requests are answered by the assets alone. The right shape for a
   pure-static site: a pass-through worker would add an invocation hop that
   serves nothing the assets don't already serve. `assets` is required in this
-  form; the generated config carries no `main` and no `vars` (there is no
-  script env to project) and `generate-worker-types` skips the service (no
+  form; the generated config carries no `main`, no `vars` (there is no script
+  env to project) and no `ASSETS` binding (nothing can consume it — wrangler
+  refuses the combination), and `generate-worker-types` skips the service (no
   `Env` to render).
 
 ## Zone firewall: the four barriers around a Worker (cloudflare-workers)

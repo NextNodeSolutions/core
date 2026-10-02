@@ -484,10 +484,8 @@ describe('buildWranglerConfig', () => {
 
 		expect(document.main).toBeUndefined()
 		expect(document.vars).toBeUndefined()
-		expect(document.assets).toEqual({
-			directory: 'dist',
-			binding: 'ASSETS',
-		})
+		// No ASSETS binding: nothing can consume it without a script.
+		expect(document.assets).toEqual({ directory: 'dist' })
 	})
 
 	it('keeps main and vars for a scripted Worker', () => {
