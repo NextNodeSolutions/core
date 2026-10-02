@@ -45,7 +45,9 @@ function detectAssets(
 				'a static-assets-only Worker (entry = false) must declare `assets`',
 			)
 		}
-		return { directory: service.assets, binding: WORKERS_ASSETS_BINDING }
+		// No ASSETS binding: it exists so a SCRIPT can fetch assets, and wrangler
+		// refuses a binding on an assets-only Worker (nothing can consume it).
+		return { directory: service.assets }
 	}
 	const directory = deriveWorkerAssetsDirectory(service.entry)
 	if (typeof directory === 'undefined') return undefined

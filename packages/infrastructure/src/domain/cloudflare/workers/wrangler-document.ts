@@ -23,9 +23,11 @@ export const DEFAULT_WORKER_CPU_MS = 1000
 export const DEFAULT_WORKER_SUBREQUESTS = 50
 
 /**
- * The binding a Worker reads its static-asset fetcher under (`env.ASSETS`). Set
- * whenever the service ships assets (the @astrojs/cloudflare `server`/`client`
- * convention, or the historic `_worker.js/` one).
+ * The binding a Worker script reads its static-asset fetcher under
+ * (`env.ASSETS`). Set on a scripted Worker shipping assets (the
+ * @astrojs/cloudflare `server`/`client` convention, or the historic
+ * `_worker.js/` one) - never on a static-assets-only Worker, where nothing
+ * could consume it (wrangler refuses the combination).
  */
 export const WORKERS_ASSETS_BINDING = 'ASSETS'
 
@@ -68,7 +70,10 @@ export interface WranglerRoute {
 // files; `binding` exposes the asset fetcher to Worker code.
 export interface WranglerAssets {
 	readonly directory: string
-	readonly binding: string
+	// The `env.ASSETS` fetcher a script uses to read assets back. Present on a
+	// scripted Worker only - wrangler refuses a binding on an assets-only
+	// Worker ("Cannot use assets with a binding in an assets-only Worker").
+	readonly binding?: string
 }
 
 export interface WranglerD1Database {

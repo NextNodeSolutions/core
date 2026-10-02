@@ -45,7 +45,7 @@ interface EnvMember {
 
 function bindingMembers(document: WranglerDocument): ReadonlyArray<EnvMember> {
 	return [
-		...(document.assets
+		...(document.assets?.binding
 			? [{ name: document.assets.binding, type: 'Fetcher' }]
 			: []),
 		...(document.services ?? []).map(binding => ({
