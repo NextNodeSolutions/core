@@ -282,7 +282,17 @@ export interface WorkerServiceConfig {
 	readonly secrets: ReadonlyArray<string>
 	readonly needs: ReadonlyArray<string>
 	readonly dependsOn: ReadonlyArray<string>
-	readonly entry: string
+	// The bundle `entry` wrangler deploys as `main`, or `false` for a
+	// static-assets-only Worker: no script exists, requests are answered by the
+	// static assets alone (the recommended shape for a pure-static site). When
+	// omitted it defaults to DEFAULT_WORKER_ENTRY; `assets` is required in the
+	// `false` form and forbidden otherwise - a scripted Worker derives its
+	// assets directory from its entry (see deriveWorkerAssetsDirectory).
+	readonly entry: string | false
+	// The static-assets directory of a static-assets-only Worker
+	// (`entry = false`), relative to the project. Single source of truth for
+	// that mode's assets root - never an override of the derived one.
+	readonly assets?: string
 	readonly observability: boolean
 	readonly rateLimit?: WorkerRateLimitConfig
 	readonly publicPaths?: ReadonlyArray<string>

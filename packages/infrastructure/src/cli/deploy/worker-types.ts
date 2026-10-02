@@ -17,18 +17,24 @@ export function generateWorkerTypes(
 	if (!isCloudflareWorkersDeployableConfig(config)) return []
 
 	const serviceNames = Object.keys(config.deploy.services)
-	return Object.entries(config.deploy.services).map(
-		([serviceName, service]) =>
-			writeWorkerTypes({
-				entryPath: resolve(configDir, service.entry),
-				content: renderWorkerEnvTypes({
-					serviceName,
-					service,
-					services: config.services,
-					serviceNames,
-					secretNames: service.secrets,
+	return Object.entries(config.deploy.services).flatMap(
+		([serviceName, service]) => {
+			// A static-assets-only Worker (entry = false) has no script and no
+			// script env - there is no `Env` interface to render types for.
+			if (service.entry === false) return []
+			return [
+				writeWorkerTypes({
+					entryPath: resolve(configDir, service.entry),
+					content: renderWorkerEnvTypes({
+						serviceName,
+						service,
+						services: config.services,
+						serviceNames,
+						secretNames: service.secrets,
+					}),
 				}),
-			}),
+			]
+		},
 	)
 }
 

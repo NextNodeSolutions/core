@@ -1,6 +1,13 @@
 import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
 
 import { deriveWorkerAssetsDirectory } from './assets-directory.ts'
+import {
+	d1Databases,
+	hyperdrive,
+	kvNamespaces,
+	queueProducers,
+	r2Buckets,
+} from './backing-bindings.ts'
 import { deriveWorkersBackingConfig } from './outputs-env.ts'
 import { computeRateLimiterNamespaceId } from './rate-limiter-namespace.ts'
 import { deriveBoundSiblings } from './service-bindings.ts'
@@ -12,59 +19,35 @@ import {
 	toBindingName,
 	WORKERS_ASSETS_BINDING,
 	WORKERS_COMPATIBILITY_FLAGS,
-	WORKERS_D1_BINDING,
-	WORKERS_HYPERDRIVE_BINDING,
 } from './wrangler-document.ts'
 
-import type { ServicesConfig } from '#/config/service-config.ts'
-import type { CronJobConfig, WorkerServiceConfig } from '#/config/types.ts'
+import type { WorkerServiceConfig } from '#/config/types.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
-import type { WorkersTerraformOutputs } from './outputs-env.ts'
+import type { WranglerConfigInput } from './wrangler-config-input.ts'
 import type {
 	WranglerAssets,
-	WranglerD1Database,
 	WranglerDocument,
-	WranglerHyperdrive,
-	WranglerKvNamespace,
 	WranglerLimits,
-	WranglerQueueProducer,
-	WranglerR2Bucket,
 	WranglerRateLimit,
 	WranglerRoute,
 	WranglerServiceBinding,
 } from './wrangler-document.ts'
 
-export interface WranglerConfigInput {
-	readonly projectName: string
-	readonly environment: AppEnvironment
-	readonly serviceName: string
-	readonly service: WorkerServiceConfig
-	// The whole [services.*] block: which backing resources exist (D1/KV/R2/
-	// Queues) is read from here, then filtered by the service's own `needs`.
-	readonly services: ServicesConfig
-	// The provision outputs (ids Terraform emitted). Read straight through - this
-	// stays a re-parse-free consumer of `WorkersTerraformOutputs`.
-	readonly outputs: WorkersTerraformOutputs
-	readonly cron: ReadonlyArray<CronJobConfig>
-	// Declaration order of every service, so cron's "primary = first service"
-	// default resolves identically to the schema's own rule.
-	readonly serviceNames: ReadonlyArray<string>
-	// Public runtime vars. Empty for now; US-3.2 fills SITE_URL + peer URLs +
-	// backing env. Emitted only when non-empty.
-	readonly vars: Readonly<Record<string, string>>
-}
-
-function requireOutput(emitted: string | undefined, what: string): string {
-	if (typeof emitted === 'undefined') {
-		throw new Error(
-			`${what} is missing from the provision outputs but a service declares it in \`needs\` - run \`infrastructure provision\` before deploy so Terraform creates the resource and emits its output.`,
-		)
+function detectAssets(
+	service: WorkerServiceConfig,
+): WranglerAssets | undefined {
+	// A static-assets-only Worker declares its assets directory explicitly - the
+	// config validator requires it, so an undefined `assets` here means a
+	// service bypassed validation, and failing loud beats an empty string.
+	if (service.entry === false) {
+		if (typeof service.assets === 'undefined') {
+			throw new Error(
+				'a static-assets-only Worker (entry = false) must declare `assets`',
+			)
+		}
+		return { directory: service.assets, binding: WORKERS_ASSETS_BINDING }
 	}
-	return emitted
-}
-
-function detectAssets(entry: string): WranglerAssets | undefined {
-	const directory = deriveWorkerAssetsDirectory(entry)
+	const directory = deriveWorkerAssetsDirectory(service.entry)
 	if (typeof directory === 'undefined') return undefined
 	return { directory, binding: WORKERS_ASSETS_BINDING }
 }
@@ -87,99 +70,6 @@ function serviceCrons(input: WranglerConfigInput): ReadonlyArray<string> {
 	return input.cron
 		.filter(job => (job.service ?? primary) === input.serviceName)
 		.map(job => job.schedule)
-}
-
-function d1Databases(
-	input: WranglerConfigInput,
-): ReadonlyArray<WranglerD1Database> | undefined {
-	const { d1 } = input.services
-	if (!d1 || !input.service.needs.includes('d1')) return undefined
-	const database: WranglerD1DatabaseDraft = {
-		binding: WORKERS_D1_BINDING,
-		database_name: `${input.projectName}-${input.environment}-d1`,
-		database_id: requireOutput(
-			input.outputs.d1DatabaseId,
-			'd1_database_id',
-		),
-	}
-	if (typeof d1.migrationsFolder !== 'undefined') {
-		database.migrations_dir = d1.migrationsFolder
-	}
-	return [database]
-}
-
-type WranglerD1DatabaseDraft = {
-	-readonly [K in keyof WranglerD1Database]: WranglerD1Database[K]
-}
-
-function hyperdrive(
-	input: WranglerConfigInput,
-): ReadonlyArray<WranglerHyperdrive> | undefined {
-	if (
-		!input.services.planetscale ||
-		!input.service.needs.includes('planetscale')
-	) {
-		return undefined
-	}
-	return [
-		{
-			binding: WORKERS_HYPERDRIVE_BINDING,
-			id: requireOutput(
-				input.outputs.hyperdriveConfigId,
-				'hyperdrive_config_id',
-			),
-		},
-	]
-}
-
-function kvNamespaces(
-	input: WranglerConfigInput,
-	backing: ReturnType<typeof deriveWorkersBackingConfig>,
-): ReadonlyArray<WranglerKvNamespace> | undefined {
-	if (!input.service.needs.includes('kv') || !backing.kvAliases.length) {
-		return undefined
-	}
-	return backing.kvAliases.map(alias => ({
-		binding: `KV_${toBindingName(alias)}`,
-		id: requireOutput(
-			input.outputs.kvNamespaceIds[alias],
-			`kv_namespace_ids["${alias}"]`,
-		),
-	}))
-}
-
-function r2Buckets(
-	input: WranglerConfigInput,
-	backing: ReturnType<typeof deriveWorkersBackingConfig>,
-): ReadonlyArray<WranglerR2Bucket> | undefined {
-	if (!input.service.needs.includes('r2') || !backing.bucketAliases.length) {
-		return undefined
-	}
-	return backing.bucketAliases.map(alias => ({
-		binding: `R2_${toBindingName(alias)}`,
-		bucket_name: requireOutput(
-			input.outputs.r2Buckets[alias],
-			`r2_buckets["${alias}"]`,
-		),
-	}))
-}
-
-function queueProducers(
-	input: WranglerConfigInput,
-	backing: ReturnType<typeof deriveWorkersBackingConfig>,
-): ReadonlyArray<WranglerQueueProducer> | undefined {
-	if (
-		!input.service.needs.includes('queues') ||
-		!backing.queueAliases.length
-	) {
-		return undefined
-	}
-	// The queue producer binds to the queue NAME (materialised the same way
-	// Terraform named it); the provision outputs carry ids, not names.
-	return backing.queueAliases.map(alias => ({
-		binding: `QUEUE_${toBindingName(alias)}`,
-		queue: `${input.projectName}-${input.environment}-${alias}`,
-	}))
 }
 
 // The worker-to-worker service bindings this service declares: one per sibling
@@ -246,7 +136,7 @@ export function buildWranglerConfig(
 ): WranglerDocument {
 	const backing = deriveWorkersBackingConfig(input.services)
 	const routes = buildRoutes(input.service, input.environment)
-	const assets = detectAssets(input.service.entry)
+	const assets = detectAssets(input.service)
 	const crons = serviceCrons(input)
 	const services = serviceBindings(input)
 	const d1 = d1Databases(input)
@@ -262,16 +152,20 @@ export function buildWranglerConfig(
 			input.environment,
 			input.serviceName,
 		),
-		main: input.service.entry,
 		compatibility_date: DEFAULT_WORKERS_COMPATIBILITY_DATE,
 		compatibility_flags: [...WORKERS_COMPATIBILITY_FLAGS],
 		workers_dev: false,
 		observability: { enabled: input.service.observability },
 	}
+	// A static-assets-only Worker has no script: no `main` and no script env,
+	// so the vars block (public env read by the script) is never emitted.
+	if (typeof input.service.entry === 'string') {
+		document.main = input.service.entry
+		if (Object.keys(input.vars).length > 0) document.vars = input.vars
+	}
 	if (input.service.limits) document.limits = workerLimits(input.service)
 	if (routes) document.routes = routes
 	if (assets) document.assets = assets
-	if (Object.keys(input.vars).length > 0) document.vars = input.vars
 	if (services) document.services = services
 	if (d1) document.d1_databases = d1
 	if (hyperdriveBindings) document.hyperdrive = hyperdriveBindings

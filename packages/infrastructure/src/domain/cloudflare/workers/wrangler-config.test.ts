@@ -12,7 +12,7 @@ import {
 import type { ServicesConfig } from '#/config/service-config.ts'
 import type { WorkerServiceConfig } from '#/config/types.ts'
 import type { WorkersTerraformOutputs } from './outputs-env.ts'
-import type { WranglerConfigInput } from './wrangler-config.ts'
+import type { WranglerConfigInput } from './wrangler-config-input.ts'
 
 const EMPTY_OUTPUTS: WorkersTerraformOutputs = {
 	kvNamespaceIds: {},
@@ -472,5 +472,38 @@ describe('buildWranglerConfig', () => {
 			cpu_ms: DEFAULT_WORKER_CPU_MS,
 			subrequests: 10,
 		})
+	})
+
+	it('emits no main and no vars for a static-assets-only Worker', () => {
+		const document = buildWranglerConfig(
+			input({
+				service: service({ entry: false, assets: 'dist' }),
+				vars: { SITE_URL: 'https://example.com' },
+			}),
+		)
+
+		expect(document.main).toBeUndefined()
+		expect(document.vars).toBeUndefined()
+		expect(document.assets).toEqual({
+			directory: 'dist',
+			binding: 'ASSETS',
+		})
+	})
+
+	it('keeps main and vars for a scripted Worker', () => {
+		const document = buildWranglerConfig(
+			input({ vars: { SITE_URL: 'https://example.com' } }),
+		)
+
+		expect(document.main).toBe('dist/server/entry.mjs')
+		expect(document.vars).toEqual({ SITE_URL: 'https://example.com' })
+	})
+
+	it('fails loud when a static-assets-only service bypassed validation', () => {
+		expect(() =>
+			buildWranglerConfig(input({ service: service({ entry: false }) })),
+		).toThrow(
+			/static-assets-only Worker \(entry = false\) must declare `assets`/,
+		)
 	})
 })
