@@ -12,6 +12,15 @@ export interface QualityTask {
 	id: string
 	name: string
 	cmd: string
+	/**
+	 * Whether the command runs the pipeline CLI from core's own checkout.
+	 * The setup action places that checkout at `.infra/` inside the caller's
+	 * workspace, so tasks without it must run in the caller's clean tree:
+	 * a project script such as lint scans the repo root and would otherwise
+	 * fail on core's own sources under core's checkout. Drives the quality
+	 * job's `with: infra:` in the deploy workflows.
+	 */
+	readonly infra: boolean
 }
 
 export function buildQualityMatrix(
@@ -26,6 +35,7 @@ export function buildQualityMatrix(
 			id: 'lint',
 			name: 'Lint',
 			cmd: buildCommand(scripts.lint, project.filter),
+			infra: false,
 		})
 	}
 
@@ -34,6 +44,7 @@ export function buildQualityMatrix(
 			id: 'test',
 			name: 'Test',
 			cmd: buildCommand(scripts.test, project.filter),
+			infra: false,
 		})
 	}
 
@@ -42,6 +53,7 @@ export function buildQualityMatrix(
 			id: 'drizzle-check',
 			name: 'Drizzle Check',
 			cmd: pipeline.drizzleCheckCommand,
+			infra: false,
 		})
 	}
 
@@ -50,6 +62,7 @@ export function buildQualityMatrix(
 			id: 'prod-gate',
 			name: 'Prod Gate',
 			cmd: pipeline.prodGateCommand,
+			infra: true,
 		})
 	}
 

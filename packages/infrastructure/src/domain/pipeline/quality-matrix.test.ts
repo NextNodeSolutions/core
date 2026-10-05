@@ -51,8 +51,8 @@ describe('buildQualityMatrix', () => {
 		const tasks = buildQualityMatrix(scripts, APP_PROJECT, DEV_PIPELINE)
 
 		expect(tasks).toEqual([
-			{ id: 'lint', name: 'Lint', cmd: 'pnpm lint' },
-			{ id: 'test', name: 'Test', cmd: 'pnpm test' },
+			{ id: 'lint', name: 'Lint', cmd: 'pnpm lint', infra: false },
+			{ id: 'test', name: 'Test', cmd: 'pnpm test', infra: false },
 		])
 	})
 
@@ -65,7 +65,9 @@ describe('buildQualityMatrix', () => {
 
 		const tasks = buildQualityMatrix(scripts, APP_PROJECT, DEV_PIPELINE)
 
-		expect(tasks).toEqual([{ id: 'test', name: 'Test', cmd: 'pnpm test' }])
+		expect(tasks).toEqual([
+			{ id: 'test', name: 'Test', cmd: 'pnpm test', infra: false },
+		])
 	})
 
 	it('returns empty array when all scripts are disabled', () => {
@@ -90,8 +92,8 @@ describe('buildQualityMatrix', () => {
 		const tasks = buildQualityMatrix(scripts, APP_PROJECT, DEV_PIPELINE)
 
 		expect(tasks).toEqual([
-			{ id: 'lint', name: 'Lint', cmd: 'pnpm check:lint' },
-			{ id: 'test', name: 'Test', cmd: 'pnpm check:test' },
+			{ id: 'lint', name: 'Lint', cmd: 'pnpm check:lint', infra: false },
+			{ id: 'test', name: 'Test', cmd: 'pnpm check:test', infra: false },
 		])
 	})
 
@@ -116,7 +118,9 @@ describe('buildQualityMatrix', () => {
 
 		const tasks = buildQualityMatrix(scripts, APP_PROJECT, DEV_PIPELINE)
 
-		expect(tasks).toEqual([{ id: 'lint', name: 'Lint', cmd: 'pnpm lint' }])
+		expect(tasks).toEqual([
+			{ id: 'lint', name: 'Lint', cmd: 'pnpm lint', infra: false },
+		])
 	})
 
 	it('uses turbo with filter when project has filter', () => {
@@ -137,11 +141,13 @@ describe('buildQualityMatrix', () => {
 				id: 'lint',
 				name: 'Lint',
 				cmd: 'pnpm turbo run lint --filter=@scope/app',
+				infra: false,
 			},
 			{
 				id: 'test',
 				name: 'Test',
 				cmd: 'pnpm turbo run test --filter=@scope/app',
+				infra: false,
 			},
 		])
 	})
@@ -163,6 +169,7 @@ describe('buildQualityMatrix', () => {
 				id: 'drizzle-check',
 				name: 'Drizzle Check',
 				cmd: 'pnpm drizzle-kit check',
+				infra: false,
 			})
 		})
 
@@ -176,6 +183,7 @@ describe('buildQualityMatrix', () => {
 				id: 'drizzle-check',
 				name: 'Drizzle Check',
 				cmd: 'pnpm prisma migrate diff --exit-code',
+				infra: false,
 			})
 		})
 
@@ -204,6 +212,7 @@ describe('buildQualityMatrix', () => {
 				id: 'prod-gate',
 				name: 'Prod Gate',
 				cmd: PROD_GATE_CMD,
+				infra: true,
 			})
 		})
 
@@ -228,8 +237,13 @@ describe('buildQualityMatrix', () => {
 describe('hasProdGate', () => {
 	it('returns true when prod-gate task is in the matrix', () => {
 		const tasks: QualityTask[] = [
-			{ id: 'lint', name: 'Lint', cmd: 'pnpm lint' },
-			{ id: 'prod-gate', name: 'Prod Gate', cmd: PROD_GATE_CMD },
+			{ id: 'lint', name: 'Lint', cmd: 'pnpm lint', infra: false },
+			{
+				id: 'prod-gate',
+				name: 'Prod Gate',
+				cmd: PROD_GATE_CMD,
+				infra: true,
+			},
 		]
 
 		expect(hasProdGate(tasks)).toBe(true)
@@ -237,8 +251,8 @@ describe('hasProdGate', () => {
 
 	it('returns false when no prod-gate task is present', () => {
 		const tasks: QualityTask[] = [
-			{ id: 'lint', name: 'Lint', cmd: 'pnpm lint' },
-			{ id: 'test', name: 'Test', cmd: 'pnpm test' },
+			{ id: 'lint', name: 'Lint', cmd: 'pnpm lint', infra: false },
+			{ id: 'test', name: 'Test', cmd: 'pnpm test', infra: false },
 		]
 
 		expect(hasProdGate(tasks)).toBe(false)

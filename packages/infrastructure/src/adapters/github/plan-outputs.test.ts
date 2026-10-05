@@ -97,8 +97,8 @@ describe('writePlanOutputs', () => {
 
 	it('writes quality matrix, project name, and project type', () => {
 		const tasks: ReadonlyArray<QualityTask> = [
-			{ id: 'lint', name: 'Lint', cmd: 'pnpm lint' },
-			{ id: 'test', name: 'Test', cmd: 'pnpm test' },
+			{ id: 'lint', name: 'Lint', cmd: 'pnpm lint', infra: false },
+			{ id: 'test', name: 'Test', cmd: 'pnpm test', infra: false },
 		]
 
 		writePlanOutputs({
@@ -111,8 +111,8 @@ describe('writePlanOutputs', () => {
 
 		const output = readFileSync(outputFile, 'utf-8')
 		const matrixJson = JSON.stringify([
-			{ id: 'lint', name: 'Lint', cmd: 'pnpm lint' },
-			{ id: 'test', name: 'Test', cmd: 'pnpm test' },
+			{ id: 'lint', name: 'Lint', cmd: 'pnpm lint', infra: false },
+			{ id: 'test', name: 'Test', cmd: 'pnpm test', infra: false },
 		])
 		expect(output).toBe(
 			`quality_matrix=${matrixJson}\nproject_name=my-app\nproject_type=app\nproject_filter=\npublish=false\ndevelopment_enabled=true\nhas_prod_gate=false\nhas_domain=false\nhas_postgres=false\nhas_d1=false\ndomain=\nbuild_directory=apps/landing/dist\npackage_dir=apps/landing\nimage_source=build\nupstream_image_refs=\n`,
@@ -414,7 +414,7 @@ describe('writePlanOutputs', () => {
 
 		const output = readFileSync(outputFile, 'utf-8')
 		expect(output).toContain(
-			`quality_matrix=${JSON.stringify([{ id: 'skip', name: 'No quality checks', cmd: 'echo skipped' }])}`,
+			`quality_matrix=${JSON.stringify([{ id: 'skip', name: 'No quality checks', cmd: 'echo skipped', infra: false }])}`,
 		)
 	})
 
@@ -468,8 +468,13 @@ describe('writePlanOutputs', () => {
 
 	it('writes has_prod_gate=true when prod-gate is in the matrix', () => {
 		const tasks: ReadonlyArray<QualityTask> = [
-			{ id: 'lint', name: 'Lint', cmd: 'pnpm lint' },
-			{ id: 'prod-gate', name: 'Prod Gate', cmd: 'run-prod-gate' },
+			{ id: 'lint', name: 'Lint', cmd: 'pnpm lint', infra: false },
+			{
+				id: 'prod-gate',
+				name: 'Prod Gate',
+				cmd: 'run-prod-gate',
+				infra: true,
+			},
 		]
 
 		writePlanOutputs({
