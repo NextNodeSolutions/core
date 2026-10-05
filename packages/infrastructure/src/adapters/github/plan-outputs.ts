@@ -12,7 +12,12 @@ import type { ImageRef } from '#/domain/deploy/target.ts'
 import type { QualityTask } from '#/domain/pipeline/quality-matrix.ts'
 
 const SKIP_MATRIX: ReadonlyArray<QualityTask> = [
-	{ id: 'skip', name: 'No quality checks', cmd: 'echo skipped' },
+	{
+		id: 'skip',
+		name: 'No quality checks',
+		cmd: 'echo skipped',
+		infra: false,
+	},
 ]
 
 interface PlanInput {

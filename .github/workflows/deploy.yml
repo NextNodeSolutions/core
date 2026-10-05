@@ -90,7 +90,12 @@ jobs:
         steps:
             - uses: NextNodeSolutions/core/.github/actions/setup@main
               with:
-                  infra: ${{ needs.plan.outputs.has_prod_gate }}
+                  # Per task, not `has_prod_gate`: a project script (lint, test)
+                  # runs in the caller's clean tree, while only pipeline-CLI
+                  # tasks (prod-gate, whose cmd points into .infra) need the
+                  # checkout. A caller lint would otherwise scan core's own
+                  # sources and fail on core's lint rules.
+                  infra: ${{ matrix.task.infra }}
 
             - name: ${{ matrix.task.name }}
               run: ${{ matrix.task.cmd }}
