@@ -162,7 +162,7 @@ describe('buildWorkerVars', () => {
 		})
 	})
 
-	it('keeps SITE_URL from the project domain regardless of the service url', () => {
+	it('derives SITE_URL from the service url when one is declared', () => {
 		expect(
 			buildWorkerVars(
 				input({
@@ -170,6 +170,29 @@ describe('buildWorkerVars', () => {
 					service: worker({ url: 'other.example.com' }),
 				}),
 			)['SITE_URL'],
-		).toBe('https://example.com')
+		).toBe('https://other.example.com')
+	})
+
+	it('dev-prefixes a declared service url in development', () => {
+		expect(
+			buildWorkerVars(
+				input({
+					projectDomain: 'example.com',
+					environment: 'development',
+					service: worker({ url: 'other.example.com' }),
+				}),
+			)['SITE_URL'],
+		).toBe('https://dev.other.example.com')
+	})
+
+	it('falls back to the project domain when the service declares no url', () => {
+		expect(
+			buildWorkerVars(
+				input({
+					projectDomain: 'example.com',
+					environment: 'development',
+				}),
+			)['SITE_URL'],
+		).toBe('https://dev.example.com')
 	})
 })
