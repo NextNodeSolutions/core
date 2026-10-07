@@ -50,7 +50,9 @@ function backingForNeeds(
  *   - the backing env (D1/KV/Queue ids, R2 bucket names + CDN URLs, endpoint)
  *     of the backing services THIS worker declares in `needs` - least-privilege,
  *     never the full backing surface;
- *   - `SITE_URL`, the project's canonical site URL, always authoritative.
+ *   - `SITE_URL`, this worker's canonical site URL: the service-url-derived
+ *     host (dev-prefixed in development) when `[deploy.services.<name>].url` is
+ *     declared, else the project-domain fallback (single-service/apex projects).
  *
  * Worker-to-worker addressing is NOT here: a Worker reaches a sibling only
  * through its service binding (`env.<NAME>`, see `wrangler-config.ts`), never a
@@ -66,8 +68,10 @@ export function buildWorkerVars(
 		backingForNeeds(input.backing, input.service.needs),
 	).public
 
+	const siteUrlDomain = input.service.url ?? input.projectDomain
+
 	return {
 		...backingEnv,
-		SITE_URL: computeSiteUrl(input.projectDomain, input.environment),
+		SITE_URL: computeSiteUrl(siteUrlDomain, input.environment),
 	}
 }

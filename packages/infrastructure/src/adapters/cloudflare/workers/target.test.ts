@@ -812,7 +812,8 @@ describe('CloudflareWorkersTarget.deploy env & secrets', () => {
 			{ binding: 'API', service: 'my-worker-production-api' },
 		])
 		const api = deploys.find(d => d.name === 'my-worker-production-api')
-		expect(api?.vars).toEqual({ SITE_URL: 'https://example.com' })
+		// SITE_URL is service-aware: each worker gets its own declared url.
+		expect(api?.vars).toEqual({ SITE_URL: 'https://api.example.com' })
 		// api binds no sibling, so it carries no service binding.
 		expect(api?.services).toEqual([])
 	})

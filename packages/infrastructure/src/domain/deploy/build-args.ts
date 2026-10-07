@@ -11,6 +11,11 @@ import type { AppEnvironment } from '#/domain/environment.ts'
  * job needs no provisioning state.
  *
  * Today this is `SITE_URL` (environment-aware: `dev.<domain>` vs `<domain>`).
+ * Stays project-level, even though the Workers runtime env derives a
+ * service-aware SITE_URL (see worker-vars.ts): it feeds one canonical site
+ * value (Astro `site:`) shared by the built output; auth and sibling services
+ * consume the runtime env, never the baked build arg. Projects needing a
+ * per-service build-time value declare it in their own `build_args`.
  * Values sourced from deploy-time state (e.g. the R2 endpoint) are NOT here -
  * the build job runs in parallel with provisioning, so that state may not
  * exist yet. Such values stay runtime-only or move to dev-declared `build_args`.
