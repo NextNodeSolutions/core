@@ -27,6 +27,7 @@ import {
 import { mergeRulesetFamilies } from './terraform-rulesets.ts'
 import { deriveZoneRules } from './zone-rules.ts'
 
+import type { OrganizationConfig } from '#/config/organization.ts'
 import type { R2BucketConfig } from '#/config/service-config.ts'
 import type { CloudflareWorkersDeployableConfig } from '#/config/types.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
@@ -201,14 +202,17 @@ function r2CustomDomainResources(
 
 export function buildResourceBlock(
 	derived: WorkersDerivedResources,
+	organization: OrganizationConfig,
 ): TerraformResourceDraft {
 	const resource: TerraformResourceDraft = {}
 	if (derived.hasD1) {
 		resource.cloudflare_d1_database = d1Resources(derived)
 	}
 	if (derived.hasPlanetscale) {
-		resource.planetscale_postgres_branch_role =
-			buildPlanetscaleBranchRole(derived)
+		resource.planetscale_postgres_branch_role = buildPlanetscaleBranchRole(
+			derived,
+			organization.planetscaleOrganization,
+		)
 		resource.cloudflare_hyperdrive_config = buildHyperdriveConfig(derived)
 	}
 	if (derived.kvNames.length > 0) {

@@ -3,9 +3,7 @@ import { isRecord } from '#/kernel/guards.ts'
 
 import { validateD1Service } from './services/d1.ts'
 import { validateKvService } from './services/kv.ts'
-import { validateObservabilityService } from './services/observability.ts'
 import { validatePlanetscaleService } from './services/planetscale.ts'
-import { validatePostgresService } from './services/postgres.ts'
 import { validateQueuesService } from './services/queues.ts'
 import { validateR2Service } from './services/r2.ts'
 
@@ -19,11 +17,6 @@ import type { ValidationResult } from './result.ts'
 type MutableServicesConfig = {
 	-readonly [K in ServiceName]?: ServiceConfigByName[K]
 }
-
-// Validate one optional sub-table: absent -> undefined; present + valid ->
-// its section; present + invalid -> undefined after appending its errors. The
-// caller assigns the section under a LITERAL key so each service keeps its
-// precise type (a union-keyed write would collapse to their intersection).
 function runService<T>(
 	raw: unknown,
 	validate: (raw: unknown) => ValidationResult<T>,
@@ -36,11 +29,6 @@ function runService<T>(
 	return undefined
 }
 
-/**
- * Validate the [services] table. Returns an empty `ServicesConfig` when no
- * services are declared - every backing service lives as an optional sub-table
- * under `[services.<name>]`.
- */
 export function validateServicesSection(
 	raw: unknown,
 ): ValidationResult<ServicesConfig> {
@@ -49,25 +37,13 @@ export function validateServicesSection(
 		return { ok: false, errors: ['[services] must be a table'] }
 	}
 
-	const errors: string[] = []
+	const errors = Object.keys(raw)
+		.filter(name => !SERVICE_NAMES.some(supported => supported === name))
+		.map(name => `Unknown backing service "${name}"`)
 	const services: MutableServicesConfig = {}
 
 	const r2 = runService(raw['r2'], validateR2Service, errors)
 	if (r2) services.r2 = r2
-
-	const postgres = runService(
-		raw['postgres'],
-		validatePostgresService,
-		errors,
-	)
-	if (postgres) services.postgres = postgres
-
-	const observability = runService(
-		raw['observability'],
-		validateObservabilityService,
-		errors,
-	)
-	if (observability) services.observability = observability
 
 	const d1 = runService(raw['d1'], validateD1Service, errors)
 	if (d1) services.d1 = d1

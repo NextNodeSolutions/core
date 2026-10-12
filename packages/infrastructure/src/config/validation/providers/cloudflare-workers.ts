@@ -2,14 +2,6 @@ import { validateCronJobs } from '../cron.ts'
 
 import type { WorkerServiceConfig } from '#/config/types.ts'
 import type { DeployProviderValidator } from './registry.ts'
-
-// Cross-service routing guard: every externally routed Worker `url` must be
-// unique - a duplicate would collide on the same custom domain - and must be
-// project.domain itself or a sub-domain of it, since the zone the routes attach
-// to is project.domain's. Workers without a `url` are internal-only (invoked via
-// service bindings) and contribute nothing here. When `domain` is undefined the
-// missing-domain error is already raised upstream, so ownership is left
-// unchecked rather than double-reported.
 function validateWorkerServiceUrls(
 	services: Record<string, WorkerServiceConfig>,
 	domain: string | undefined,
@@ -43,17 +35,8 @@ function validateWorkerServiceUrls(
 
 	return errors
 }
-
-// What the Cloudflare Free plan allows PER ZONE - and a project owns one zone,
-// so these are project ceilings. Counted here rather than per service: a
-// per-service schema cannot see its siblings, and the alternative is
-// discovering the refusal at `terraform apply`, after provisioning.
 const FREE_PLAN_RATE_LIMIT_RULES = 1
 const FREE_PLAN_CUSTOM_RULES = 5
-
-// A zone rule matches on the host, so a worker declaring one without `url` has
-// no host to match and no rule to emit; and the whole project shares one zone,
-// so the plan ceiling counts the workers declaring the barrier.
 interface ZoneBarrier {
 	readonly field: string
 	readonly isDeclaredBy: (service: WorkerServiceConfig) => boolean
@@ -102,11 +85,6 @@ function validateZoneBarriers(
 		}),
 	]
 }
-
-// Fields a VPS deploy carries that a Worker cannot honour: there is no host to
-// pin (`vps`), no filesystem to mount (`[[deploy.volumes]]`), and no server to
-// size (`[deploy.hetzner]`). Reject them explicitly rather than parse-and-ignore,
-// mirroring how cloudflare-pages rejects `[deploy.services]`/`[[deploy.cron]]`.
 function unsupportedContainerFieldErrors(
 	deployRecord: Record<string, unknown>,
 ): string[] {
@@ -133,14 +111,7 @@ export const cloudflareWorkers: DeployProviderValidator = {
 	requiresDomain: true,
 	requiresServices: true,
 	validate(deployRecord, inputs) {
-		const {
-			secrets,
-			generatedSecrets,
-			vps,
-			volumes,
-			workerServices,
-			domain,
-		} = inputs
+		const { secrets, generatedSecrets, workerServices, domain } = inputs
 		const cronResult = validateCronJobs(
 			deployRecord['cron'],
 			new Set(Object.keys(workerServices)),
@@ -158,8 +129,6 @@ export const cloudflareWorkers: DeployProviderValidator = {
 				target: 'cloudflare-workers',
 				secrets,
 				generatedSecrets,
-				vps,
-				volumes,
 				services: workerServices,
 				cron: cronResult.ok ? cronResult.section : [],
 			},

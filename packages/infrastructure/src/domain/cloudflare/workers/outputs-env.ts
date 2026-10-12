@@ -14,6 +14,12 @@ import type { ServiceEnv } from '#/domain/services/service.ts'
  * declared aliases; values are the ids/URLs Terraform computed.
  */
 export interface WorkersTerraformOutputs {
+	readonly planetscaleMigrator?: Readonly<{
+		host: string
+		database: string
+		user: string
+		password: string
+	}>
 	readonly d1DatabaseId?: string
 	// The `cloudflare_hyperdrive_config` id - consumed by the `hyperdrive` wrangler
 	// binding, never projected as an env var (the Worker reaches Postgres through
@@ -191,6 +197,24 @@ export function parseTerraformOutputs(
 			hyperdrive,
 			'hyperdrive_config_id',
 		)
+	}
+	const host = extractValue(raw, 'planetscale_migrator_host')
+	if (typeof host !== 'undefined') {
+		outputs.planetscaleMigrator = {
+			host: asString(host, 'planetscale_migrator_host'),
+			database: asString(
+				extractValue(raw, 'planetscale_migrator_database'),
+				'planetscale_migrator_database',
+			),
+			user: asString(
+				extractValue(raw, 'planetscale_migrator_user'),
+				'planetscale_migrator_user',
+			),
+			password: asString(
+				extractValue(raw, 'planetscale_migrator_password'),
+				'planetscale_migrator_password',
+			),
+		}
 	}
 	return outputs
 }

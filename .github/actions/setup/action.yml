@@ -55,6 +55,7 @@ runs:
           uses: actions/checkout@v6
           with:
               repository: NextNodeSolutions/core
+              ref: feat/core-cloud-only
               path: .infra
               sparse-checkout: |
                   packages/infrastructure

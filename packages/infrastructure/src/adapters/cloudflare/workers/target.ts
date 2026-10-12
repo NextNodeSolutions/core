@@ -2,6 +2,7 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
 
+import { migratePlanetscale } from '#/adapters/planetscale/migrate.ts'
 import { defaultTerraformRunner } from '#/adapters/terraform/runner.ts'
 import {
 	EMPTY_WORKERS_TERRAFORM_OUTPUTS,
@@ -24,11 +25,8 @@ import { runWorkersProvision } from './workers-provision.ts'
 
 import type { TerraformRunner } from '#/adapters/terraform/runner.ts'
 import type { WranglerRunner } from '#/adapters/wrangler/runner.ts'
+import type { OrganizationConfig } from '#/config/organization.ts'
 import type { CloudflareWorkersDeployableConfig } from '#/config/types.ts'
-import type {
-	AutoRestoreInput,
-	AutoRestoreResult,
-} from '#/domain/deploy/auto-restore.ts'
 import type {
 	DeployEnv,
 	DeployInput,
@@ -37,42 +35,29 @@ import type {
 	MigrateInput,
 	MigrateResult,
 	ProvisionResult,
-	SnapshotInput,
-	SnapshotResult,
 	TargetEnv,
 } from '#/domain/deploy/target.ts'
 import type { TeardownResult } from '#/domain/deploy/teardown-result.ts'
-import type { TeardownTarget } from '#/domain/deploy/teardown-target.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 import type { ServiceEnv } from '#/domain/services/service.ts'
 import type { OutputsReader, WorkersTerraformContext } from './terraform-ops.ts'
 
 export interface CloudflareWorkersTargetConfig {
+	readonly organization: OrganizationConfig
 	readonly accountId: string
 	readonly hcpToken: string
-	// PlanetScale service-token credentials, needed ONLY when the project
-	// declares (or a worker `needs`) planetscale - the create-if-absent DB
-	// adapter and the PlanetScale Terraform provider both authenticate with them.
-	// Optional so projects without Postgres need not supply them; the provision
-	// handler fails loud if planetscale is declared but they are absent.
 	readonly planetscaleServiceTokenId?: string
 	readonly planetscaleServiceToken?: string
 	readonly environment: AppEnvironment
 	readonly config: CloudflareWorkersDeployableConfig
-	// The project package directory `wrangler deploy` runs from - the built
-	// bundle + assets (`main`, `assets.directory`) resolve against it. Resolved
-	// by the CLI factory from PIPELINE_CONFIG_FILE (mirrors plan's package dir).
-	// Optional so provision/teardown-only constructions (and tests) that never
-	// deploy need not supply it; `deploy` fails loud if it is missing.
 	readonly projectDir?: string
-	// Injection point for tests; production shells out to the `terraform` binary.
 	readonly terraformRunner?: TerraformRunner
-	// Injection point for tests; production shells out to `npx wrangler`.
 	readonly wranglerRunner?: WranglerRunner
 }
 
 export class CloudflareWorkersTarget implements DeployTarget {
 	readonly name = 'cloudflare-workers'
+	private readonly organization: OrganizationConfig
 	private readonly accountId: string
 	private readonly hcpToken: string
 	private readonly planetscaleServiceTokenId: string | undefined
@@ -82,12 +67,10 @@ export class CloudflareWorkersTarget implements DeployTarget {
 	private readonly projectDir: string | undefined
 	private readonly runner: TerraformRunner
 	private readonly wrangler: WranglerRunner | undefined
-	// Memoised across loadBackingEnv, deploy and runMigrate so one deploy/migrate
-	// flow reads the provision outputs once. Skips terraform entirely (EMPTY) when
-	// no backing service is declared - the only Terraform-emitted ids live there.
 	private readonly loadTerraformOutputs: OutputsReader
 
 	constructor(config: CloudflareWorkersTargetConfig) {
+		this.organization = config.organization
 		this.accountId = config.accountId
 		this.hcpToken = config.hcpToken
 		this.planetscaleServiceTokenId = config.planetscaleServiceTokenId
@@ -122,6 +105,7 @@ export class CloudflareWorkersTarget implements DeployTarget {
 		const workspaceName = `${projectName}-${this.environment}`
 
 		const outcome = await runWorkersProvision({
+			organization: this.organization,
 			workspaceName,
 			projectName,
 			hcpToken: this.hcpToken,
@@ -154,18 +138,6 @@ export class CloudflareWorkersTarget implements DeployTarget {
 		return buildWorkersBackingEnv(outputs, this.accountId, backing)
 	}
 
-	async reconcileDns(projectName: string, domain: string): Promise<void> {
-		void projectName
-		void domain
-		logger.info(
-			`reconcileDns is a no-op for ${this.name}: apex/redirect DNS is provisioned by Terraform (Redirect Rules + support records) and Worker custom domains are attached by wrangler at deploy - nothing to reconcile here.`,
-		)
-	}
-
-	// Read the provision outputs ONCE, then hand off to `deployWorkers`, which
-	// generates an ephemeral wrangler config per service and runs `wrangler
-	// deploy` sequentially in depends_on order. `input`/`env` (vars + secrets)
-	// are wired in US-3.2.
 	async deploy(
 		projectName: string,
 		input: DeployInput,
@@ -177,6 +149,7 @@ export class CloudflareWorkersTarget implements DeployTarget {
 			projectName,
 			environment: this.environment,
 			domain: this.config.project.domain,
+			isInternal: this.config.project.internal,
 			services: this.config.deploy.services,
 			backingServices: this.config.services,
 			cron: this.config.deploy.cron,
@@ -201,32 +174,22 @@ export class CloudflareWorkersTarget implements DeployTarget {
 	private terraformContext(): WorkersTerraformContext {
 		return {
 			config: this.config,
+			organization: this.organization,
 			environment: this.environment,
 			runner: this.runner,
 			accountId: this.accountId,
 		}
 	}
 
-	prepareRollout(
-		projectName: string,
-		input: DeployInput,
-		env: DeployEnv,
-	): Promise<void> {
-		void projectName
-		void input
-		void env
-		throw new Error(
-			`prepareRollout is not applicable to ${this.name}: there is no database to stage before migrate. D1 migrations run via \`wrangler d1 migrations apply\` with no rollout staging.`,
-		)
-	}
-
 	async runMigrate(input: MigrateInput): Promise<MigrateResult> {
-		if (input.kind !== 'd1') {
-			throw new Error(
-				`runMigrate on ${this.name} expects a d1 migrate input but received "${input.kind}" - a container migrate was routed to the Workers target, which is a wiring bug.`,
+		const outputs = await this.loadTerraformOutputs()
+		if (input.kind === 'planetscale') {
+			return migratePlanetscale(
+				outputs.planetscaleMigrator,
+				input.migrateCommand,
+				this.requireProjectDir(),
 			)
 		}
-		const outputs = await this.loadTerraformOutputs()
 		return migrateWorkers({
 			projectName: input.projectName,
 			environment: this.environment,
@@ -239,42 +202,7 @@ export class CloudflareWorkersTarget implements DeployTarget {
 		})
 	}
 
-	runPreMigrateSnapshot(input: SnapshotInput): Promise<SnapshotResult> {
-		void input
-		throw new Error(
-			`runPreMigrateSnapshot is not applicable to ${this.name}: D1 has no VPS-style backup sidecar to snapshot.`,
-		)
-	}
-
-	runAutoRestore(input: AutoRestoreInput): Promise<AutoRestoreResult> {
-		void input
-		throw new Error(
-			`runAutoRestore is not applicable to ${this.name}: D1 has no embedded database to rehydrate.`,
-		)
-	}
-
-	runFinalBackup(input: SnapshotInput): Promise<SnapshotResult> {
-		void input
-		throw new Error(
-			`runFinalBackup is not applicable to ${this.name}: D1 has no VPS-style backup path to capture before teardown.`,
-		)
-	}
-
-	// The wipe-data gate (D1/R2 data loss) is a domain decision the CLI asserts
-	// before calling teardown; scope/volumes are Hetzner-only, so they are unused
-	// here. The workers-are-deleted-then-Terraform-destroyed sequence lives in
-	// `teardownWorkers`; the HCP workspace is never deleted (state stays
-	// historised) and the zone + other pipelines' records are data-sourced, never
-	// owned, so they survive untouched.
-	teardown(
-		projectName: string,
-		domain: string | undefined,
-		target: TeardownTarget,
-		shouldWipeVolumes: boolean,
-	): Promise<TeardownResult> {
-		void domain
-		void target
-		void shouldWipeVolumes
+	teardown(projectName: string): Promise<TeardownResult> {
 		return teardownWorkers({
 			projectName,
 			environment: this.environment,
@@ -284,18 +212,7 @@ export class CloudflareWorkersTarget implements DeployTarget {
 				destroyWorkersTerraform(this.terraformContext()),
 		})
 	}
-
-	// Full init + plan even with no backing services (the workspace still owns
-	// redirect rules + support DNS records). The context carries the project, so
-	// no projectName is needed; the plan text is returned verbatim.
 	planDiff(): Promise<string> {
 		return planWorkersTerraform(this.terraformContext())
-	}
-
-	recover(projectName: string): Promise<void> {
-		logger.info(
-			`recover is a no-op on ${this.name} for "${projectName}": the Terraform state is the source of truth, so there is nothing to reconcile.`,
-		)
-		return Promise.resolve()
 	}
 }

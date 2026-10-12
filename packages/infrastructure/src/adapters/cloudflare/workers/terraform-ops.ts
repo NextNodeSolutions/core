@@ -14,6 +14,7 @@ import { parseTerraformOutputs } from '#/domain/cloudflare/workers/outputs-env.t
 import { buildTerraformMainConfig } from '#/domain/cloudflare/workers/terraform-config.ts'
 
 import type { TerraformRunner } from '#/adapters/terraform/runner.ts'
+import type { OrganizationConfig } from '#/config/organization.ts'
 import type { CloudflareWorkersDeployableConfig } from '#/config/types.ts'
 import type { WorkersTerraformOutputs } from '#/domain/cloudflare/workers/outputs-env.ts'
 import type { ResourceOutcome } from '#/domain/deploy/resource-outcome.ts'
@@ -22,6 +23,7 @@ import type { AppEnvironment } from '#/domain/environment.ts'
 const WORKDIR_PREFIX = 'nn-workers-tf-'
 
 export interface WorkersTerraformContext {
+	readonly organization: OrganizationConfig
 	readonly config: CloudflareWorkersDeployableConfig
 	readonly environment: AppEnvironment
 	readonly runner: TerraformRunner
@@ -39,7 +41,11 @@ async function withWorkdir<T>(
 	ctx: WorkersTerraformContext,
 	run: (workdir: string, vars: Record<string, string>) => Promise<T>,
 ): Promise<T> {
-	const mainConfig = buildTerraformMainConfig(ctx.config, ctx.environment)
+	const mainConfig = buildTerraformMainConfig(
+		ctx.config,
+		ctx.environment,
+		ctx.organization,
+	)
 	const vars: Record<string, string> = {}
 	if (mainConfig.variable) vars.account_id = ctx.accountId
 	const workdir = await mkdtemp(join(tmpdir(), WORKDIR_PREFIX))

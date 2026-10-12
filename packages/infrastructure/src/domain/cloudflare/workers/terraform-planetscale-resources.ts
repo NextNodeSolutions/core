@@ -3,7 +3,6 @@ import {
 	computePlanetscaleDatabaseName,
 	PLANETSCALE_DEFAULT_BRANCH,
 	PLANETSCALE_HYPERDRIVE_ROLE,
-	PLANETSCALE_ORGANIZATION,
 	PLANETSCALE_POSTGRES_PORT,
 	PLANETSCALE_POSTGRES_SCHEME,
 	PLANETSCALE_ROLE_INHERITED_ROLES,
@@ -22,14 +21,22 @@ export const PLANETSCALE_LABEL = 'planetscale'
 
 // The branch-role attributes the Hyperdrive origin interpolates. Named once so a
 // provider attribute rename is a single edit.
+export const PLANETSCALE_MIGRATOR_LABEL = 'migrator'
+export const PLANETSCALE_MIGRATOR_REF = `planetscale_postgres_branch_role.${PLANETSCALE_MIGRATOR_LABEL}`
+
 const ROLE_REF = `planetscale_postgres_branch_role.${PLANETSCALE_LABEL}`
 
 export function buildPlanetscaleBranchRole(
 	derived: WorkersDerivedResources,
+	organization: string | undefined,
 ): Record<string, PlanetscaleBranchRoleResource> {
+	if (!organization)
+		throw new Error(
+			'PlanetScale organization is required when the service is declared',
+		)
 	return {
 		[PLANETSCALE_LABEL]: {
-			organization: PLANETSCALE_ORGANIZATION,
+			organization,
 			database: computePlanetscaleDatabaseName(
 				derived.projectName,
 				derived.environment,
@@ -37,6 +44,16 @@ export function buildPlanetscaleBranchRole(
 			branch: PLANETSCALE_DEFAULT_BRANCH,
 			name: PLANETSCALE_HYPERDRIVE_ROLE,
 			inherited_roles: [...PLANETSCALE_ROLE_INHERITED_ROLES],
+		},
+		[PLANETSCALE_MIGRATOR_LABEL]: {
+			organization,
+			database: computePlanetscaleDatabaseName(
+				derived.projectName,
+				derived.environment,
+			),
+			branch: PLANETSCALE_DEFAULT_BRANCH,
+			name: PLANETSCALE_MIGRATOR_LABEL,
+			inherited_roles: ['postgres'],
 		},
 	}
 }
