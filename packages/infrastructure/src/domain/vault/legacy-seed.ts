@@ -32,3 +32,26 @@ export function selectSeedSecrets(
 		}),
 	)
 }
+
+// The secrets to copy from the GitHub snapshot into a project folder: a
+// declared name set in GitHub that the folder does not hold yet. A value equal
+// to the platform one is skipped - the pool already resolves it, and a copy
+// would go stale at the next rotation. A value that differs is a repository or
+// environment override of a platform name, and is kept in the project folder so
+// the pool still resolves to it.
+export function selectProjectSeedSecrets(
+	names: ReadonlyArray<string>,
+	legacySecrets: Readonly<Record<string, string>>,
+	platformSecrets: Readonly<Record<string, string>>,
+	projectSecrets: Readonly<Record<string, string>>,
+): Record<string, string> {
+	return Object.fromEntries(
+		names.flatMap((name): Array<[string, string]> => {
+			const legacyValue = legacySecrets[name]
+			const resolvedByVault =
+				name in projectSecrets || platformSecrets[name] === legacyValue
+			if (!legacyValue || resolvedByVault) return []
+			return [[name, legacyValue]]
+		}),
+	)
+}

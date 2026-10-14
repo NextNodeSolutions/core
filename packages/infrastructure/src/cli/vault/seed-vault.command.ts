@@ -15,11 +15,11 @@ import {
 import { resolveEnvironment } from '#/domain/environment.ts'
 import {
 	LEGACY_PLATFORM_SECRET_NAMES,
+	selectProjectSeedSecrets,
 	selectSeedSecrets,
 } from '#/domain/vault/legacy-seed.ts'
 import {
 	PLATFORM_SECRETS_PATH,
-	buildProjectSecretPool,
 	projectSecretsPath,
 } from '#/domain/vault/secret-vault.ts'
 import { createLogger } from '@nextnode-solutions/logger'
@@ -85,20 +85,18 @@ export async function seedVaultCommand(
 	const legacySecrets = readJsonRecordEnv('LEGACY_GITHUB_SECRETS')
 	const platformSecrets = await seedPlatformSecrets(vault, legacySecrets)
 
-	// A declared name the platform folder already resolves is not copied into
-	// the project folder: the pool overlays both, and a copy would go stale at
-	// the next rotation.
 	const projectPath = projectSecretsPath({
 		repo: requireGithubRepository().name,
 		environment,
 	})
-	const projectPool = buildProjectSecretPool(
-		platformSecrets,
-		await vault.listSecrets(projectPath),
-	)
 	await seedFolder(
 		vault,
 		projectPath,
-		selectSeedSecrets(config.deploy.secrets, legacySecrets, projectPool),
+		selectProjectSeedSecrets(
+			config.deploy.secrets,
+			legacySecrets,
+			platformSecrets,
+			await vault.listSecrets(projectPath),
+		),
 	)
 }
