@@ -9,6 +9,10 @@ name: Plan Workers Diff
 #   on:
 #     pull_request:
 #       paths: ['**/nextnode.toml']
+#   permissions:
+#     contents: read
+#     pull-requests: write
+#     id-token: write
 #   jobs:
 #     plan-infra:
 #       uses: NextNodeSolutions/core/.github/workflows/plan-diff.yml@main
@@ -16,8 +20,8 @@ name: Plan Workers Diff
 #         environment: development
 #         config_file: apps/web/nextnode.toml
 #
-# A caller that sets its own `permissions:` must grant `id-token: write`: the
-# job reads its credentials from the vault through GitHub OIDC.
+# `id-token: write` lets the job read its credentials from the vault through
+# GitHub OIDC.
 
 on:
     workflow_call:
@@ -37,10 +41,12 @@ permissions:
     id-token: write
 
 env:
-    # Infisical machine identity the pipeline logs in as through GitHub OIDC -
-    # the vault holds every secret, GitHub none. Org-level Variable (an id, not
-    # a credential).
-    INFISICAL_IDENTITY_ID: ${{ vars.INFISICAL_IDENTITY_ID }}
+    # The CI vault, a dedicated Infisical project, and the machine identity
+    # this workflow logs in as through GitHub OIDC. Organization Variables: ids,
+    # not credentials. The platform identity reads `/ci` only (README, "Vault
+    # setup").
+    INFISICAL_PROJECT_ID: ${{ vars.INFISICAL_PROJECT_ID }}
+    INFISICAL_IDENTITY_ID: ${{ vars.INFISICAL_PLATFORM_IDENTITY_ID }}
 
 jobs:
     plan-infra:

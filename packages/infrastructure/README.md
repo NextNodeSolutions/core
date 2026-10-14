@@ -28,18 +28,33 @@ Deployment credentials live in the vault folder `/ci`: `CLOUDFLARE_API_TOKEN`, `
 
 ## Secrets
 
-The Infisical project `core-vault`, environment `main`, is the only source of secrets. GitHub holds none. GitHub Variables stay in GitHub because they are not secrets.
+An Infisical project dedicated to CI, environment `main`, is the only source of secrets. Its id is the organization Variable `INFISICAL_PROJECT_ID`. No identity other than the two below is a member, so no local or agent session can read it. GitHub holds no secret. GitHub Variables stay in GitHub because they are not secrets.
 
 | Folder                                   | Content                                                    |
 | ---------------------------------------- | ---------------------------------------------------------- |
 | `/ci`                                    | Platform credentials shared by every pipeline, read-only   |
 | `/projects/<owner>/<repo>/<environment>` | One repository's secrets for `development` or `production` |
 
-A project's names resolve against `/ci` overlaid by its own folder, the project folder winning. To add a secret, store it in the project folder and declare its name in `nextnode.toml`. Nothing else: the first provision creates a missing folder, and the single identity below covers every repository of the organization. Never reference `secrets.<NAME>` in a workflow.
+A project's names resolve against `/ci` overlaid by its own folder, the project folder winning. To add a secret, store it in the project folder and declare its name in `nextnode.toml`. Nothing else: the first provision creates a missing folder, and the identities below cover every repository of the organization. Never reference `secrets.<NAME>` in a workflow.
 
 Every job that needs a secret starts with `node src/index.ts load-secrets`. The job trades its GitHub OIDC token for a short-lived vault token, then exposes each `/ci` secret as a masked step output, `steps.vault.outputs.<NAME>`. With `PIPELINE_ENVIRONMENT` set, it also emits the project pool as the `ALL_SECRETS` output. Provision writes generated secrets to the project folder, and later jobs of the same run read them live.
 
-A caller that sets its own `permissions:` block must grant `id-token: write`. Without a block, the called workflow can request it.
+A calling workflow declares its permissions, `id-token: write` included, so it keeps working if the organization's default token becomes read-only:
+
+```yaml
+permissions:
+    contents: read
+    actions: read
+    id-token: write
+
+jobs:
+    deploy:
+        uses: NextNodeSolutions/core/.github/workflows/deploy.yml@main
+        with:
+            environment: development
+```
+
+A caller of `plan-diff.yml` grants `contents: read`, `pull-requests: write` and `id-token: write`. No caller passes `secrets: inherit`.
 
 ### Trust boundary
 
@@ -47,35 +62,48 @@ Any step of a job granted `id-token: write` can mint the job's OIDC token, and t
 
 - Such a job runs core's pipeline CLI only. The caller's dependencies install and its build runs in the `build` job of `deploy.yml`, which holds no credential. `deploy` ships the uploaded result and never installs the caller's dependencies, so the Worker bundle must be self-contained. The exception is a PlanetScale migration, which runs the caller's migrate command in `migrate`.
 - `publish-package.yml` is bound to core. Its `publish` job runs the package's release tooling, caller code by construction, so it refuses any other calling repository. Core's own code and lockfile are the trusted base, like the CLI.
-- The token opens the folder of the repository and environment that minted it, nothing else. The vault policy templates the project folder on the token's `repository` and `environment` claims, and `/ci` is read-only. A job without a GitHub environment, such as plan diff or teardown, reads `/ci` only.
+- `deploy.yml` logs in as the deploy identity, whose token opens the folder of the repository and environment that minted it, nothing else. Its role templates the project folder on the token's `repository` and `environment` claims. Infisical refuses that login from a job without a GitHub environment, so every job of `deploy.yml` that loads secrets declares one.
+- Every other workflow logs in as the platform identity, which reads `/ci` only.
 
-The `job_workflow_ref` claim is what the identity trusts: only core's workflow files on `main` can log in, whichever repository calls them. In a called workflow the claim names the called file. In a workflow run directly, such as Seed Vault or teardown, it names that workflow's own file, so the same glob covers both. This trust is exactly as strong as the protection of core's `main`: no direct push, required checks.
+The `job_workflow_ref` claim is what each identity trusts: only core's workflow files on `main` can log in, whichever repository calls them. In a called workflow the claim names the called file. In a workflow run directly, such as Seed Vault or teardown, it names that workflow's own file. The `repository_owner_id` claim pins the organization by its immutable id. This trust is exactly as strong as the protection of core's `main`: no direct push, required checks.
 
-### Vault identity
+### Vault setup
 
-One machine identity, `github-actions`, in `core-vault`, created once. Its id goes in the organization Variable `INFISICAL_IDENTITY_ID`. No other identity of the project may hold a role on `/ci` or `/projects`.
+Created once. The project holds one environment, slug `main`, and two root folders, `/ci` and `/projects`, created by hand so that no identity needs rights on the root.
 
-OIDC Auth:
+Both identities are organization identities with the organization role No Access, members of the CI project only, with OIDC Auth:
 
-| Field              | Value                                                                             |
-| ------------------ | --------------------------------------------------------------------------------- |
-| OIDC Discovery URL | `https://token.actions.githubusercontent.com`                                     |
-| Issuer             | `https://token.actions.githubusercontent.com`                                     |
-| Subject            | `repo:NextNodeSolutions/*,repo:NextNodeSolutions@*/*`                             |
-| Audiences          | `https://app.infisical.com`                                                       |
-| Claims             | `job_workflow_ref` = `NextNodeSolutions/core/.github/workflows/*@refs/heads/main` |
-| Claim Mapping      | `repository` from claim `repository`, `environment` from claim `environment`      |
-| Access token TTL   | 900                                                                               |
+| Field              | Value                                         |
+| ------------------ | --------------------------------------------- |
+| OIDC Discovery URL | `https://token.actions.githubusercontent.com` |
+| Issuer             | `https://token.actions.githubusercontent.com` |
+| Subject            | `repo:NextNodeSolutions/*`                    |
+| Audiences          | `https://app.infisical.com`                   |
+| Access token TTL   | 900                                           |
 
-The second subject form covers repositories that send the immutable subject format with numeric ids. Claim Mapping sits under Advanced and exposes the two claims to the policies as `{{ identity.auth.oidc.claims.repository }}` and `{{ identity.auth.oidc.claims.environment }}`.
+Infisical matches the Subject as one glob, with no comma list. Claims accept a comma-separated list per claim.
 
-Project role, environment `main`:
+| Setting                     | `github-actions-deploy`                                               | `github-actions-platform`                                    |
+| --------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Claim `repository_owner_id` | `259621712`                                                           | `259621712`                                                  |
+| Claim `job_workflow_ref`    | `NextNodeSolutions/core/.github/workflows/deploy.yml@refs/heads/main` | `NextNodeSolutions/core/.github/workflows/*@refs/heads/main` |
+| Claim Mapping (Advanced)    | `repository` = `repository`, `environment` = `environment`            | none                                                         |
+| Project role                | `ci-deploy`                                                           | `ci-platform`                                                |
+| Organization Variable       | `INFISICAL_DEPLOY_IDENTITY_ID`                                        | `INFISICAL_PLATFORM_IDENTITY_ID`                             |
 
-| Resource       | Actions                                   | Secret path condition                                                                                         |
-| -------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Secrets        | Describe Secret, Read Value               | `$eq` `/ci`                                                                                                   |
-| Secrets        | Describe Secret, Read Value, Create, Edit | `$glob` `/projects/{{ identity.auth.oidc.claims.repository }}/{{ identity.auth.oidc.claims.environment }}/**` |
-| Secret Folders | Read, Create                              | `$glob` `/projects/**`                                                                                        |
+Role `ci-platform`:
+
+| Resource | Actions                     | Secret path condition |
+| -------- | --------------------------- | --------------------- |
+| Secrets  | Describe Secret, Read Value | Equal `/ci`           |
+
+Role `ci-deploy`:
+
+| Resource       | Actions                                   | Secret path condition                                                                                      |
+| -------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Secrets        | Describe Secret, Read Value               | Equal `/ci`                                                                                                |
+| Secrets        | Describe Secret, Read Value, Create, Edit | Glob `/projects/{{ identity.auth.oidc.claims.repository }}/{{ identity.auth.oidc.claims.environment }}/**` |
+| Secret Folders | Read, Create                              | Glob `/projects/**`                                                                                        |
 
 Folder creation is open under `/projects` so a first provision can create a project's folder. A folder name reveals nothing, and secret access stays scoped by the row above.
 
@@ -83,8 +111,8 @@ Folder creation is open under `/projects` so a first provision can create a proj
 
 This is transitional and is removed with the GitHub secrets.
 
-1. Create the identity, its role and the Variable before merging the vault change. Without them, every pipeline fails at `load-secrets`.
-2. Give the identity a temporary additional privilege, one hour, Secrets Create on `$eq` `/ci`, then run the Seed Vault workflow in core once. It copies the platform credentials into `/ci`, never overwrites, and the privilege expires by itself. Storing the eight names of `domain/vault/legacy-seed.ts` by hand replaces the run.
+1. Set up the vault and the three organization Variables before merging the vault change. Without them, every pipeline fails at `load-secrets`.
+2. Give `github-actions-platform` a temporary additional privilege of one hour: Secrets Create and Edit on Equal `/ci`, Secret Folders Read on Equal `/`. Then run the Seed Vault workflow in core once. It copies the platform credentials into `/ci`, never overwrites, and the privilege expires by itself. Storing the eight names of `domain/vault/legacy-seed.ts` by hand replaces the run.
 3. Store each repository's own secrets in its project folders by hand. GitHub repository and environment secrets are not copied.
 4. Delete the GitHub secrets, then `seed-vault.yml`, `cli/vault/seed-platform-secrets.command.ts` and `domain/vault/legacy-seed.ts`. Callers switch to `deploy.yml` and drop their `secrets: inherit` line.
 

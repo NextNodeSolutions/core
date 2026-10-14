@@ -8,11 +8,11 @@ import { requireEnv } from '#/cli/env.ts'
 import type { InfisicalVaultLocation } from '#/adapters/infisical/vault.ts'
 import type { SecretVault } from '#/domain/vault/secret-vault.ts'
 
-// The NextNode vault: Infisical project "core-vault", environment "Main".
-const VAULT_LOCATION: InfisicalVaultLocation = {
-	projectId: 'ce69a081-6aec-472d-9ee8-edbb7ed2b72e',
-	environment: 'main',
-}
+// The CI vault is an Infisical project dedicated to the pipelines: no other
+// identity is a member, so no local or agent session can read it. Its id comes
+// from the workflow (organization Variable, an id, not a credential); all its
+// folders live in one environment.
+const VAULT_ENVIRONMENT = 'main'
 
 // Audience the GitHub OIDC token is minted for. The Infisical machine identity
 // lists it in its allowed audiences, so a token minted for another relying
@@ -20,10 +20,14 @@ const VAULT_LOCATION: InfisicalVaultLocation = {
 const VAULT_OIDC_AUDIENCE = 'https://app.infisical.com'
 
 async function connectVault(): Promise<SecretVault> {
+	const location: InfisicalVaultLocation = {
+		projectId: requireEnv('INFISICAL_PROJECT_ID'),
+		environment: VAULT_ENVIRONMENT,
+	}
 	const identityId = requireEnv('INFISICAL_IDENTITY_ID')
 	const jwt = await requestGithubOidcToken(VAULT_OIDC_AUDIENCE)
 	const accessToken = await loginInfisicalWithOidc(identityId, jwt)
-	return createInfisicalVault(accessToken, VAULT_LOCATION)
+	return createInfisicalVault(accessToken, location)
 }
 
 /**
