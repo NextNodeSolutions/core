@@ -1,4 +1,0 @@
-[project]
-name = "my-site"
-type = "static"
-domain = "example.com"

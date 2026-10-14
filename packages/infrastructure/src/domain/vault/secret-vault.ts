@@ -25,9 +25,9 @@ export function projectSecretsPath(scope: ProjectSecretScope): string {
 
 // The pool `[deploy].secrets` names resolve against (`ALL_SECRETS`): the
 // platform secrets overlaid by the project's own, the project winning on a
-// shared name. A project may therefore declare a platform secret (the
-// monitoring app reads the Cloudflare token) without holding a copy that would
-// go stale at the next rotation.
+// shared name. A project may therefore declare a platform secret without
+// holding a copy that would go stale at the next rotation - the same semantics
+// as `toJSON(secrets)`, which merged org, repo and environment secrets.
 export function buildProjectSecretPool(
 	platformSecrets: Readonly<Record<string, string>>,
 	projectSecrets: Readonly<Record<string, string>>,

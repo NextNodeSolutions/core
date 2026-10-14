@@ -93,9 +93,6 @@ interface AssembleDeployableInput {
 	readonly base: Omit<NextNodeConfig, 'deploy'>
 	readonly declaredServices: ReadonlySet<string>
 }
-
-// Validate the [deploy] section for a deployable project and fold it into the
-// final config, enforcing the project.internal/target compatibility rule.
 function assembleDeployable({
 	raw,
 	type,
@@ -115,7 +112,6 @@ function assembleDeployable({
 
 	const compatibilityErrors = [
 		...checkServicesTargetCompatibility(services, deployResult.section),
-		...checkInternalCompatibility(project, deployResult.section),
 	]
 	if (compatibilityErrors.length > 0) {
 		return { ok: false, errors: compatibilityErrors }
@@ -126,12 +122,6 @@ function assembleDeployable({
 		config: { ...base, services, deploy: deployResult.section },
 	}
 }
-
-// A service flagged SERVICE_IMPLIABLE_FROM_NEEDS has no required config, so a
-// bare `needs = ["<name>"]` provisions it without a `[services.<name>]` table.
-// Synthesise the empty config here so every downstream consumer keeps the
-// invariant "provisioned iff `services.<name>` is present" and needs no special
-// case. An explicit table (overrides) already sets the key, so it is skipped.
 function withImpliedServices(
 	services: ServicesConfig,
 	deploy: DeploySection,
@@ -151,11 +141,6 @@ function withImpliedServices(
 		...Object.fromEntries(implied.map(name => [name, {}])),
 	}
 }
-
-// A backing service only validates against the deploy targets that can realise
-// it (SERVICE_SUPPORTED_TARGETS): D1/KV/Queues are Cloudflare-Workers-only,
-// postgres/observability are VPS-only, R2 spans both. Declaring one under a
-// target that cannot provision it fails loud rather than silently ignoring it.
 function checkServicesTargetCompatibility(
 	services: ServicesConfig,
 	deploy: DeploySection,
@@ -169,9 +154,6 @@ function checkServicesTargetCompatibility(
 			`[services.${name}] is not supported with deploy target "${deploy.target}" (supported: ${SERVICE_SUPPORTED_TARGETS[name].join(', ')})`,
 	)
 }
-
-// A non-deployable project (package/lib) must not carry a [deploy] section;
-// its config pins `deploy: false`.
 function parseNonDeployable(
 	raw: Record<string, unknown>,
 	type: string,
@@ -186,29 +168,6 @@ function parseNonDeployable(
 		}
 	}
 	return { ok: true, config: { ...base, deploy: false } }
-}
-
-function checkInternalCompatibility(
-	project: ProjectSection,
-	deploy: DeploySection,
-): string[] {
-	if (!project.internal) return []
-	if (deploy.target === 'cloudflare-pages') {
-		return [
-			'project.internal is not supported with deploy target "cloudflare-pages"',
-		]
-	}
-	if (deploy.target === 'cloudflare-workers') {
-		return [
-			'project.internal is not supported with deploy target "cloudflare-workers" (a Worker runs on Cloudflare\'s edge with no tailnet to join - pin an internal project to a dedicated VPS with deploy target "hetzner-vps")',
-		]
-	}
-	if (deploy.vps === null) {
-		return [
-			'deploy.vps is required when project.internal = true (internal projects must pin to a dedicated VPS so they never share with public projects)',
-		]
-	}
-	return []
 }
 
 export function loadConfig(configPath: string): NextNodeConfig {

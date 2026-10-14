@@ -1,30 +1,23 @@
-/* eslint-disable import/max-dependencies -- this file is the command registry; its import count scales with the number of registered commands by design */
 import { createLogger } from '@nextnode-solutions/logger'
 
 import { checkSecretsCommand } from './cli/deploy/check-secrets.command.ts'
-import { computeImageRefCommand } from './cli/deploy/compute-image-ref.command.ts'
 import { deployCommand } from './cli/deploy/deploy.command.ts'
-import { dnsCommand } from './cli/deploy/dns.command.ts'
 import { generateWorkerTypesCommand } from './cli/deploy/generate-worker-types.command.ts'
 import { migrateRemoteCommand } from './cli/deploy/migrate-remote.command.ts'
 import { planInfraCommand } from './cli/deploy/plan-infra.command.ts'
 import { provisionCommand } from './cli/deploy/provision.command.ts'
-import { pruneBackupsCommand } from './cli/deploy/prune-backups.ts'
-import { restoreCommand } from './cli/deploy/restore.command.ts'
-import { seoGuardCommand } from './cli/deploy/seo-guard.command.ts'
 import { teardownGuardCommand } from './cli/deploy/teardown-guard.command.ts'
 import { teardownCommand } from './cli/deploy/teardown.command.ts'
 import { requireEnv } from './cli/env.ts'
-import { buildGoldenImageCommand } from './cli/hetzner/build-golden-image.command.ts'
-import { reconcileTailnetAclCommand } from './cli/hetzner/reconcile-tailnet-acl.command.ts'
-import { recoverCommand } from './cli/hetzner/recover.command.ts'
-import { detectMigrationChangesCommand } from './cli/pipeline/detect-migration-changes.command.ts'
 import { planCommand } from './cli/pipeline/plan.command.ts'
 import { prodGateCommand } from './cli/pipeline/prod-gate.command.ts'
 import { publishResultCommand } from './cli/pipeline/publish-result.command.ts'
 import { publishCommand } from './cli/pipeline/publish.command.ts'
 import { loadSecretsCommand } from './cli/vault/load-secrets.command.ts'
-import { seedVaultCommand } from './cli/vault/seed-vault.command.ts'
+import {
+	seedPlatformSecretsCommand,
+	seedVaultCommand,
+} from './cli/vault/seed-vault.command.ts'
 import { loadConfig } from './config/load.ts'
 import { isDeployableConfig } from './config/types.ts'
 
@@ -38,7 +31,6 @@ type StandaloneCommand = () => void | Promise<void>
 
 const PLAN_COMMANDS: Record<string, ConfigCommand> = {
 	plan: planCommand,
-	'detect-migration-changes': detectMigrationChangesCommand,
 	'teardown-guard': teardownGuardCommand,
 }
 
@@ -49,23 +41,16 @@ const DEPLOY_COMMANDS: Record<string, DeployCommand> = {
 	'plan-infra': planInfraCommand,
 	'migrate-remote': migrateRemoteCommand,
 	deploy: deployCommand,
-	'compute-image-ref': computeImageRefCommand,
-	dns: dnsCommand,
 	teardown: teardownCommand,
-	'seo-guard': seoGuardCommand,
 	'generate-worker-types': generateWorkerTypesCommand,
 }
 
 const STANDALONE_COMMANDS: Record<string, StandaloneCommand> = {
 	'load-secrets': loadSecretsCommand,
+	'seed-platform-secrets': seedPlatformSecretsCommand,
 	'prod-gate': prodGateCommand,
 	publish: publishCommand,
 	'publish-result': publishResultCommand,
-	'build-golden-image': buildGoldenImageCommand,
-	recover: recoverCommand,
-	restore: restoreCommand,
-	'prune-backups': pruneBackupsCommand,
-	'reconcile-tailnet-acl': reconcileTailnetAclCommand,
 }
 
 const ALL_COMMAND_NAMES = [

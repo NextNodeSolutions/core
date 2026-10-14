@@ -6,10 +6,13 @@ import { WORKERS_TEARDOWN_RESOURCES } from '#/domain/cloudflare/workers/managed-
 import { computeWorkerScriptName } from '#/domain/cloudflare/workers/worker-name.ts'
 import { executeHandlers } from '#/domain/deploy/execute-handlers.ts'
 
+import { withWorkersTerraformTeardown } from './terraform-ops.ts'
+
 import type { WranglerRunner } from '#/adapters/wrangler/runner.ts'
 import type { ResourceOutcome } from '#/domain/deploy/resource-outcome.ts'
 import type { WorkersTeardownResult } from '#/domain/deploy/teardown-result.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
+import type { WorkersTerraformContext } from './terraform-ops.ts'
 
 export type { WranglerRunner }
 
@@ -18,7 +21,7 @@ export interface WorkersTeardownInput {
 	readonly environment: AppEnvironment
 	readonly serviceNames: ReadonlyArray<string>
 	readonly wranglerRunner: WranglerRunner | undefined
-	readonly destroyTerraform: () => Promise<ResourceOutcome>
+	readonly terraformContext: WorkersTerraformContext
 }
 
 async function deleteWorkerScripts(
@@ -41,21 +44,19 @@ async function deleteWorkerScripts(
 	}
 }
 
-/**
- * Tear down a cloudflare-workers project: delete every Worker script via
- * wrangler FIRST (so no live traffic hits soon-to-be-destroyed backing infra),
- * then run `destroyTerraform` to remove the D1/KV/Queues/R2 + Redirect Rules.
- * The HCP workspace is never deleted - the Terraform state stays historised.
- */
 export async function teardownWorkers(
 	input: WorkersTeardownInput,
 ): Promise<WorkersTeardownResult> {
 	const start = Date.now()
 	const runner = input.wranglerRunner ?? defaultWranglerRunner
-	const outcome = await executeHandlers(WORKERS_TEARDOWN_RESOURCES, {
-		workers: () => deleteWorkerScripts(input, runner),
-		terraform: input.destroyTerraform,
-	})
+	const outcome = await withWorkersTerraformTeardown(
+		input.terraformContext,
+		destroyTerraform =>
+			executeHandlers(WORKERS_TEARDOWN_RESOURCES, {
+				workers: () => deleteWorkerScripts(input, runner),
+				terraform: destroyTerraform,
+			}),
+	)
 	return {
 		kind: 'workers',
 		scope: 'project',

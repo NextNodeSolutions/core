@@ -26,6 +26,10 @@ export function resolveEnvironment(
 export function resolveEnvironment(
 	projectType: ProjectType,
 	rawEnv: string | undefined,
+): PipelineEnvironment
+export function resolveEnvironment(
+	projectType: ProjectType,
+	rawEnv: string | undefined,
 ): PipelineEnvironment {
 	if (projectType === 'package') return 'none'
 

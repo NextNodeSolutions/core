@@ -1,3 +1,8 @@
+import type {
+	AccessApplicationResource,
+	AccessPolicyResource,
+} from './terraform-access.ts'
+
 interface TerraformCloudBlock {
 	readonly organization: string
 	readonly workspaces: { readonly name: string }
@@ -180,6 +185,12 @@ export interface RulesetResource {
 }
 
 export interface TerraformResourceBlock {
+	readonly cloudflare_zero_trust_access_application?: Readonly<
+		Record<string, AccessApplicationResource>
+	>
+	readonly cloudflare_zero_trust_access_policy?: Readonly<
+		Record<string, AccessPolicyResource>
+	>
 	readonly cloudflare_d1_database?: Readonly<
 		Record<string, D1DatabaseResource>
 	>
@@ -206,6 +217,7 @@ export type TerraformResourceDraft = {
 }
 
 export interface OutputValue {
+	readonly sensitive?: boolean
 	readonly value: string | Readonly<Record<string, string>>
 }
 

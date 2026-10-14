@@ -26,22 +26,11 @@ function buildSummaryRows(
 ): ReadonlyArray<SummaryRow> {
 	const rows: Array<SummaryRow> = [['**URL**', env.url]]
 
-	if (env.kind === 'container') {
-		for (const [name, ref] of Object.entries(env.imageRefs)) {
-			rows.push([
-				`**Image (${name})**`,
-				`\`${ref.registry}/${ref.repository}:${ref.tag}\``,
-			])
-		}
-	}
-
-	if (env.kind === 'worker') {
-		for (const worker of env.workers) {
-			rows.push([
-				`**Worker (${worker.name})**`,
-				worker.url === '' ? 'internal (no route)' : worker.url,
-			])
-		}
+	for (const worker of env.workers) {
+		rows.push([
+			`**Worker (${worker.name})**`,
+			worker.url === '' ? 'internal (no route)' : worker.url,
+		])
 	}
 
 	rows.push(['**Target**', targetName])

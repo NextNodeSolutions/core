@@ -1,13 +1,17 @@
+// TRANSITIONAL - delete once the GitHub secrets are removed (see README.md,
+// "Secrets").
+//
+// GitHub secret values are write-only: the only way to carry them over is from
+// inside a workflow run, where `toJSON(secrets)` exposes them. These commands
+// copy into the vault every secret the pipeline consumes that the vault does
+// not hold yet, and never overwrite, so a value edited in the vault is not
+// reverted by a later run.
+
 import {
 	getEnv,
 	readJsonRecordEnv,
 	requireGithubRepository,
 } from '#/cli/env.ts'
-import {
-	POSTGRES_DATABASE_URL_SECRET,
-	POSTGRES_PASSWORD_SECRET,
-} from '#/cli/services/postgres/postgres.service.ts'
-import { isHetznerDeployableConfig } from '#/config/types.ts'
 import { resolveEnvironment } from '#/domain/environment.ts'
 import {
 	LEGACY_PLATFORM_SECRET_NAMES,
@@ -27,27 +31,6 @@ import type { SecretVault } from '#/domain/vault/secret-vault.ts'
 
 const logger = createLogger()
 
-// Every name the pipeline may read from the project pool: the declared
-// `[deploy].secrets` (global + per-service + generated), the postgres
-// credentials, and the registry auth secret of upstream images.
-function collectProjectSecretNames(
-	config: DeployableConfig,
-): ReadonlyArray<string> {
-	const registrySecrets = isHetznerDeployableConfig(config)
-		? Object.values(config.deploy.services).flatMap(service =>
-				service.source === 'upstream' && service.registryAuthSecret
-					? [service.registryAuthSecret]
-					: [],
-			)
-		: []
-	return [
-		...config.deploy.secrets,
-		POSTGRES_PASSWORD_SECRET,
-		POSTGRES_DATABASE_URL_SECRET,
-		...registrySecrets,
-	]
-}
-
 async function seedFolder(
 	vault: SecretVault,
 	path: string,
@@ -64,17 +47,33 @@ async function seedFolder(
 	)
 }
 
-/**
- * TRANSITIONAL - delete once every project has run it in each environment and
- * the GitHub secrets are removed (see MIGRATION.md).
- *
- * GitHub secret values are write-only: the only way to carry them over is from
- * inside a workflow run, where `toJSON(secrets)` exposes them. This copies into
- * the vault every secret the pipeline consumes that the vault does not hold
- * yet - the platform credentials, then what this project declares beyond them -
- * and never overwrites, so a value edited in the vault is not reverted by a
- * later run.
- */
+// Copy the platform credentials the vault does not hold yet. Returns the
+// platform folder as it stands after the copy, so a project seed can skip the
+// names it already resolves.
+async function seedPlatformSecrets(
+	vault: SecretVault,
+	legacySecrets: Readonly<Record<string, string>>,
+): Promise<Record<string, string>> {
+	const platformSecrets = await vault.listSecrets(PLATFORM_SECRETS_PATH)
+	const platformSeed = selectSeedSecrets(
+		LEGACY_PLATFORM_SECRET_NAMES,
+		legacySecrets,
+		platformSecrets,
+	)
+	await seedFolder(vault, PLATFORM_SECRETS_PATH, platformSeed)
+	return { ...platformSecrets, ...platformSeed }
+}
+
+// Platform credentials only - for core's own Seed Vault workflow, which has no
+// deployable project to seed.
+export async function seedPlatformSecretsCommand(
+	vault: SecretVault = openVault(),
+): Promise<void> {
+	await seedPlatformSecrets(vault, readJsonRecordEnv('LEGACY_GITHUB_SECRETS'))
+}
+
+// Platform credentials, then the secrets this project declares beyond them -
+// run from the deploy pipeline of each consumer, once per environment.
 export async function seedVaultCommand(
 	config: DeployableConfig,
 	vault: SecretVault = openVault(),
@@ -84,33 +83,22 @@ export async function seedVaultCommand(
 		getEnv('PIPELINE_ENVIRONMENT'),
 	)
 	const legacySecrets = readJsonRecordEnv('LEGACY_GITHUB_SECRETS')
+	const platformSecrets = await seedPlatformSecrets(vault, legacySecrets)
 
-	const platformSecrets = await vault.listSecrets(PLATFORM_SECRETS_PATH)
-	const platformSeed = selectSeedSecrets(
-		LEGACY_PLATFORM_SECRET_NAMES,
-		legacySecrets,
-		platformSecrets,
-	)
-	await seedFolder(vault, PLATFORM_SECRETS_PATH, platformSeed)
-
-	// A declared name the platform folder already resolves (the monitoring app
-	// reads the Cloudflare token) is not copied into the project folder: the
-	// pool overlays both, and a copy would go stale at the next rotation.
+	// A declared name the platform folder already resolves is not copied into
+	// the project folder: the pool overlays both, and a copy would go stale at
+	// the next rotation.
 	const projectPath = projectSecretsPath({
 		repo: requireGithubRepository().name,
 		environment,
 	})
 	const projectPool = buildProjectSecretPool(
-		{ ...platformSecrets, ...platformSeed },
+		platformSecrets,
 		await vault.listSecrets(projectPath),
 	)
 	await seedFolder(
 		vault,
 		projectPath,
-		selectSeedSecrets(
-			collectProjectSecretNames(config),
-			legacySecrets,
-			projectPool,
-		),
+		selectSeedSecrets(config.deploy.secrets, legacySecrets, projectPool),
 	)
 }

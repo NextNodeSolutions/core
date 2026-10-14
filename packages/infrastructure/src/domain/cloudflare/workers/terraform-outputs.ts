@@ -4,6 +4,7 @@ import {
 } from '#/domain/cloudflare/r2/custom-domain.ts'
 
 import { indexBy, r2BucketLabel, toTerraformLabel } from './terraform-labels.ts'
+import { PLANETSCALE_MIGRATOR_REF } from './terraform-planetscale-resources.ts'
 
 import type { OutputValue } from './terraform-main-config.ts'
 import type { WorkersDerivedResources } from './terraform-resources.ts'
@@ -60,6 +61,17 @@ export function buildOutputs(
 		output['d1_database_id'] = { value: '${cloudflare_d1_database.d1.id}' }
 	}
 	if (derived.hasPlanetscale) {
+		for (const [name, attribute] of Object.entries({
+			host: 'access_host_url',
+			database: 'database_name',
+			user: 'username',
+			password: 'password',
+		})) {
+			output[`planetscale_migrator_${name}`] = {
+				value: `\${${PLANETSCALE_MIGRATOR_REF}.${attribute}}`,
+				sensitive: true,
+			}
+		}
 		output['hyperdrive_config_id'] = {
 			value: '${cloudflare_hyperdrive_config.planetscale.id}',
 		}

@@ -23,6 +23,7 @@ export interface WorkersDeployInput {
 	readonly projectName: string
 	readonly environment: AppEnvironment
 	readonly domain: string
+	readonly isInternal: boolean
 	readonly services: Readonly<Record<string, WorkerServiceConfig>>
 	// The [services.*] block (backing resources); bindings are filtered per
 	// service by `needs` inside `buildWranglerConfig`.
@@ -173,10 +174,12 @@ export async function deployWorkers(
 		)
 	}
 
-	await smokeCheckWorkers(
-		computeSmokeCheckUrls(input.services, input.environment),
-		{ sleep: input.smokeCheckSleep },
-	)
+	if (!input.isInternal) {
+		await smokeCheckWorkers(
+			computeSmokeCheckUrls(input.services, input.environment),
+			{ sleep: input.smokeCheckSleep },
+		)
+	}
 
 	return {
 		projectName: input.projectName,

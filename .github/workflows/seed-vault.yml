@@ -1,13 +1,13 @@
 name: Seed Vault
 
-# TRANSITIONAL - delete with the `seed-vault` command once the GitHub secrets
-# are removed (packages/infrastructure/MIGRATION.md).
+# TRANSITIONAL - delete with the `seed-vault` commands once the GitHub secrets
+# are removed (packages/infrastructure/README.md, "Secrets").
 #
-# One-shot copy of the GitHub secrets into the Infisical vault, run manually
-# right after the vault migration lands: the platform credentials every
-# pipeline needs, plus core's own project secrets (the monitoring stack).
-# Consumer repos seed their project secrets from the `check-secrets` job of
-# their next deploy. Idempotent: a secret the vault already resolves is skipped.
+# One-shot copy of the platform credentials from the GitHub secrets into the
+# Infisical vault, run manually right after the vault migration lands, so that
+# core's own workflows (publish, teardown, plan diff) can read them. Consumer
+# repos seed their project secrets from the `check-secrets` job of their next
+# deploy. Idempotent: a secret the vault already holds is skipped.
 
 on:
     workflow_dispatch:
@@ -26,6 +26,7 @@ jobs:
     seed:
         name: Seed vault from GitHub secrets
         runs-on: ubuntu-latest
+        timeout-minutes: 30
         # Puts the secrets scoped to core's `production` environment in
         # `toJSON(secrets)`, next to the org-level ones.
         environment:
@@ -36,10 +37,8 @@ jobs:
                   infra: 'true'
                   deps: 'false'
 
-            - name: Seed vault
-              run: node src/index.ts seed-vault
+            - name: Seed platform secrets
+              run: node src/index.ts seed-platform-secrets
               working-directory: .infra/packages/infrastructure
               env:
-                  PIPELINE_CONFIG_FILE: ${{ github.workspace }}/packages/monitoring/nextnode.toml
-                  PIPELINE_ENVIRONMENT: production
                   LEGACY_GITHUB_SECRETS: ${{ toJSON(secrets) }}
