@@ -45,7 +45,7 @@ jobs:
         runs-on: ubuntu-latest
         timeout-minutes: 30
         steps:
-            - uses: NextNodeSolutions/core/.github/actions/setup@feat/core-cloud-only
+            - uses: NextNodeSolutions/core/.github/actions/setup@main
               with:
                   infra: 'true'
                   deps: 'false'
@@ -85,6 +85,8 @@ jobs:
               run: node src/index.ts teardown
               working-directory: .infra/packages/infrastructure
               env:
+                  PLANETSCALE_SERVICE_TOKEN_ID: ${{ secrets.PLANETSCALE_SERVICE_TOKEN_ID }}
+                  PLANETSCALE_SERVICE_TOKEN: ${{ secrets.PLANETSCALE_SERVICE_TOKEN }}
                   PIPELINE_CONFIG_FILE: ${{ github.workspace }}/target/${{ inputs.config_file }}
                   PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
                   TEARDOWN_TARGET: project

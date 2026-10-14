@@ -42,7 +42,7 @@ jobs:
             has_migrations: ${{ steps.plan.outputs.has_migrations }}
             package_dir: ${{ steps.plan.outputs.package_dir }}
         steps:
-            - uses: NextNodeSolutions/core/.github/actions/setup@feat/core-cloud-only
+            - uses: NextNodeSolutions/core/.github/actions/setup@main
               with:
                   infra: 'true'
                   deps: 'false'
@@ -66,7 +66,7 @@ jobs:
         environment:
             name: ${{ inputs.environment }}
         steps:
-            - uses: NextNodeSolutions/core/.github/actions/setup@feat/core-cloud-only
+            - uses: NextNodeSolutions/core/.github/actions/setup@main
               with:
                   infra: 'true'
                   deps: 'false'
@@ -89,7 +89,7 @@ jobs:
             matrix:
                 task: ${{ fromJSON(needs.plan.outputs.quality_matrix) }}
         steps:
-            - uses: NextNodeSolutions/core/.github/actions/setup@feat/core-cloud-only
+            - uses: NextNodeSolutions/core/.github/actions/setup@main
               with:
                   # Per task, not `has_prod_gate`: a project script (lint, test)
                   # runs in the caller's clean tree, while only pipeline-CLI
@@ -120,7 +120,7 @@ jobs:
         environment:
             name: ${{ inputs.environment }}
         steps:
-            - uses: NextNodeSolutions/core/.github/actions/setup@feat/core-cloud-only
+            - uses: NextNodeSolutions/core/.github/actions/setup@main
               with:
                   infra: 'true'
                   deps: 'false'
@@ -144,6 +144,8 @@ jobs:
               run: node src/index.ts provision
               working-directory: .infra/packages/infrastructure
               env:
+                  PLANETSCALE_SERVICE_TOKEN_ID: ${{ secrets.PLANETSCALE_SERVICE_TOKEN_ID }}
+                  PLANETSCALE_SERVICE_TOKEN: ${{ secrets.PLANETSCALE_SERVICE_TOKEN }}
                   PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
                   PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
                   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -177,10 +179,9 @@ jobs:
         environment:
             name: ${{ inputs.environment }}
         steps:
-            - uses: NextNodeSolutions/core/.github/actions/setup@feat/core-cloud-only
+            - uses: NextNodeSolutions/core/.github/actions/setup@main
               with:
                   infra: 'true'
-                  deps: 'false'
 
             - name: Setup Terraform
               uses: hashicorp/setup-terraform@v3
@@ -192,6 +193,8 @@ jobs:
               run: node src/index.ts migrate-remote
               working-directory: .infra/packages/infrastructure
               env:
+                  PLANETSCALE_SERVICE_TOKEN_ID: ${{ secrets.PLANETSCALE_SERVICE_TOKEN_ID }}
+                  PLANETSCALE_SERVICE_TOKEN: ${{ secrets.PLANETSCALE_SERVICE_TOKEN }}
                   PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
                   PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
                   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -212,7 +215,7 @@ jobs:
         environment:
             name: ${{ inputs.environment }}
         steps:
-            - uses: NextNodeSolutions/core/.github/actions/setup@feat/core-cloud-only
+            - uses: NextNodeSolutions/core/.github/actions/setup@main
               with:
                   infra: 'true'
                   # deps left at its default 'true' - the caller's site builds
@@ -233,6 +236,8 @@ jobs:
               run: node src/index.ts deploy
               working-directory: .infra/packages/infrastructure
               env:
+                  PLANETSCALE_SERVICE_TOKEN_ID: ${{ secrets.PLANETSCALE_SERVICE_TOKEN_ID }}
+                  PLANETSCALE_SERVICE_TOKEN: ${{ secrets.PLANETSCALE_SERVICE_TOKEN }}
                   PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
                   PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
                   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
