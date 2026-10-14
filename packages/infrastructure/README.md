@@ -46,6 +46,7 @@ A caller that sets its own `permissions:` block must grant `id-token: write`. Wi
 Any step of a job granted `id-token: write` can mint the job's OIDC token, and the vault accepts it. Two rules follow.
 
 - Such a job runs core's pipeline CLI only. The caller's dependencies install and its build runs in the `build` job of `deploy.yml`, which holds no credential. `deploy` ships the uploaded result and never installs the caller's dependencies, so the Worker bundle must be self-contained. The exception is a PlanetScale migration, which runs the caller's migrate command in `migrate`.
+- `publish-package.yml` is bound to core. Its `publish` job runs the package's release tooling, caller code by construction, so it refuses any other calling repository. Core's own code and lockfile are the trusted base, like the CLI.
 - The token opens the folder of the repository and environment that minted it, nothing else. The vault policy templates the project folder on the token's `repository` and `environment` claims, and `/ci` is read-only. A job without a GitHub environment, such as plan diff or teardown, reads `/ci` only.
 
 The `job_workflow_ref` claim is what the identity trusts: only core's workflow files on `main` can log in, whichever repository calls them. In a called workflow the claim names the called file. In a workflow run directly, such as Seed Vault or teardown, it names that workflow's own file, so the same glob covers both. This trust is exactly as strong as the protection of core's `main`: no direct push, required checks.

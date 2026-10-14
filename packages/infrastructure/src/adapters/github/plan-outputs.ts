@@ -22,12 +22,16 @@ interface PlanInput {
 	readonly config: NextNodeConfig
 	readonly tasks: ReadonlyArray<QualityTask>
 	readonly packageDir: string
+	// File name of nextnode.toml inside `packageDir` - the deploy job reads it
+	// from the build artifact, laid out like the package directory.
+	readonly configName: string
 }
 
 export function writePlanOutputs({
 	config,
 	tasks,
 	packageDir,
+	configName,
 }: PlanInput): void {
 	const qualityMatrix = tasks.length > 0 ? tasks : SKIP_MATRIX
 	const matrixJson = JSON.stringify(qualityMatrix)
@@ -49,6 +53,7 @@ export function writePlanOutputs({
 	writeOutput('has_planetscale', String(Boolean(config.services.planetscale)))
 	writeOutput('domain', config.project.domain ?? '')
 	writeOutput('package_dir', packageDir)
+	writeOutput('config_name', configName)
 
 	logger.info(`Quality matrix: ${matrixJson}`)
 	logger.info('Plan outputs written to GITHUB_OUTPUT')

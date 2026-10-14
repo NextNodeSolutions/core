@@ -1,5 +1,12 @@
 name: Publish Package
 
+# Builds and publishes one of core's own packages. Bound to core: `publish`
+# runs the package's release tooling - semantic-release, then the publish
+# hooks of the package - with the npm token and vault access. That is caller
+# code by construction, so the job refuses any other calling repository
+# instead of pretending to isolate it. Core's code and lockfile are the
+# trusted base, like the pipeline CLI itself.
+
 on:
     workflow_call:
         inputs:
@@ -56,7 +63,9 @@ jobs:
     publish:
         name: Publish
         needs: [plan, quality]
-        if: github.ref == 'refs/heads/main' && needs.plan.outputs.publish == 'true'
+        # Core only (see the header). The build stays here: the release runs
+        # from the same installed tree anyway.
+        if: github.repository == 'NextNodeSolutions/core' && github.ref == 'refs/heads/main' && needs.plan.outputs.publish == 'true'
         runs-on: ubuntu-latest
         concurrency:
             group: publish-${{ needs.plan.outputs.project_name }}

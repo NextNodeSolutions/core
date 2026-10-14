@@ -1,4 +1,4 @@
-import { dirname, relative } from 'node:path'
+import { basename, dirname, relative } from 'node:path'
 
 import { writePlanOutputs } from '#/adapters/github/plan-outputs.ts'
 import { getEnv, requireEnv } from '#/cli/env.ts'
@@ -16,10 +16,9 @@ export function planCommand(config: NextNodeConfig): void {
 		getEnv('PIPELINE_ENVIRONMENT'),
 	)
 	const workspace = getEnv('GITHUB_WORKSPACE') ?? process.cwd()
-	const packageDir = relative(
-		workspace,
-		dirname(requireEnv('PIPELINE_CONFIG_FILE')),
-	)
+	const configFile = requireEnv('PIPELINE_CONFIG_FILE')
+	const packageDir = relative(workspace, dirname(configFile))
+	const configName = basename(configFile)
 	const tasks = buildQualityMatrix(config.scripts, config.project, {
 		environment,
 		developmentEnabled: config.environment.development,
@@ -28,5 +27,5 @@ export function planCommand(config: NextNodeConfig): void {
 			drizzleCheckCommand: config.services.d1.checkCommand,
 		}),
 	})
-	writePlanOutputs({ config, tasks, packageDir })
+	writePlanOutputs({ config, tasks, packageDir, configName })
 }

@@ -54,6 +54,7 @@ jobs:
             has_migrations: ${{ steps.plan.outputs.has_migrations }}
             has_planetscale: ${{ steps.plan.outputs.has_planetscale }}
             package_dir: ${{ steps.plan.outputs.package_dir }}
+            config_name: ${{ steps.plan.outputs.config_name }}
         steps:
             - uses: NextNodeSolutions/core/.github/actions/setup@main
               with:
@@ -291,13 +292,16 @@ jobs:
                   infra: 'true'
                   deps: 'false'
 
-            # The bundle built in `build`, laid over the checkout. No caller
-            # dependency is installed here (see the trust boundary above).
+            # The package directory built in `build`, extracted outside the
+            # checkout: laid over the workspace, a caller's artifact could
+            # replace core's CLI under `.infra` before the steps below run it
+            # with vault access. The deploy reads the project from here. No
+            # caller dependency is installed (see the trust boundary above).
             - name: Download build
               uses: actions/download-artifact@v8
               with:
                   name: build-${{ needs.plan.outputs.project_name }}-${{ inputs.environment }}
-                  path: ${{ needs.plan.outputs.package_dir || '.' }}
+                  path: ${{ runner.temp }}/build
 
             - name: Load secrets
               id: vault
@@ -320,7 +324,7 @@ jobs:
               env:
                   PLANETSCALE_SERVICE_TOKEN_ID: ${{ steps.vault.outputs.PLANETSCALE_SERVICE_TOKEN_ID }}
                   PLANETSCALE_SERVICE_TOKEN: ${{ steps.vault.outputs.PLANETSCALE_SERVICE_TOKEN }}
-                  PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
+                  PIPELINE_CONFIG_FILE: ${{ runner.temp }}/build/${{ needs.plan.outputs.config_name }}
                   PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
                   CLOUDFLARE_API_TOKEN: ${{ steps.vault.outputs.CLOUDFLARE_API_TOKEN }}
                   CLOUDFLARE_ACCOUNT_ID: ${{ steps.vault.outputs.CLOUDFLARE_ACCOUNT_ID }}
