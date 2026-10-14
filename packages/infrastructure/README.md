@@ -54,7 +54,7 @@ The machine identity `github-actions` uses OIDC Auth and needs read and write ac
 | Claims             | `job_workflow_ref` = `NextNodeSolutions/core/.github/workflows/*@refs/heads/main` |
 | Access token TTL   | 900                                                                               |
 
-The `job_workflow_ref` claim is the trust boundary: only core's workflow files on `main` can log in, whichever repository calls them. The second subject form covers repositories that send the immutable subject format with numeric ids.
+The `job_workflow_ref` claim is the trust boundary: only core's workflow files on `main` can log in, whichever repository calls them. In a called workflow the claim names the called file. In a workflow run directly, such as Seed Vault or teardown, it names that workflow's own file, so the same glob covers both. The second subject form covers repositories that send the immutable subject format with numeric ids.
 
 ### Moving off GitHub secrets
 
