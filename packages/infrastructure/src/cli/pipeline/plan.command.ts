@@ -11,13 +11,10 @@ const PROD_GATE_COMMAND =
 	'cd .infra/packages/infrastructure && node src/index.ts prod-gate'
 
 export function planCommand(config: NextNodeConfig): void {
-	const environment =
-		config.project.type === 'package'
-			? 'production'
-			: resolveEnvironment(
-					config.project.type,
-					getEnv('PIPELINE_ENVIRONMENT'),
-				)
+	const environment = resolveEnvironment(
+		config.project.type,
+		getEnv('PIPELINE_ENVIRONMENT'),
+	)
 	const workspace = getEnv('GITHUB_WORKSPACE') ?? process.cwd()
 	const packageDir = relative(
 		workspace,
