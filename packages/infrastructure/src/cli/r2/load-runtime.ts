@@ -19,10 +19,10 @@ import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-c
  * does NOT:
  *   - create or check R2 buckets (provision's job)
  *   - rotate or revoke R2 API tokens (provision's job)
- *   - persist creds as GitHub org secrets (provision's job)
+ *   - persist creds to the vault (provision's job)
  *
- * Splitting bootstrap from runtime-load keeps `gh secret set --org` calls
- * out of the deploy job, so deploy does not need an org-admin GH_TOKEN.
+ * Splitting bootstrap from runtime-load keeps vault writes out of the
+ * deploy job.
  * Fails loud on stale creds - the operator should re-run provision to
  * rotate rather than having deploy self-heal silently.
  */

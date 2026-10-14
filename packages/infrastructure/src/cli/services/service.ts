@@ -30,8 +30,8 @@ export interface Service {
  * ensure its two backup buckets (`<project>-backups` wal-g +
  * `<project>-backups-dump` pg_dump).
  *
- * `repoSecrets` is the parsed `ALL_SECRETS` GitHub Secrets payload -
- * services that need user-provided credentials (e.g. postgres
+ * `repoSecrets` is the parsed `ALL_SECRETS` payload (the project's secret
+ * pool, read from the vault by `load-secrets`) - services that need user-provided credentials (e.g. postgres
  * `DATABASE_URL` / `POSTGRES_PASSWORD`) read from here. Always defined
  * (`{}` when the env var is absent) so factories never need to
  * null-check.

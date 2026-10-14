@@ -21,6 +21,12 @@ permissions:
     actions: read
     packages: write
 
+env:
+    # Infisical machine identity the pipeline logs in as through GitHub OIDC -
+    # the vault holds every secret, GitHub none. Org-level Variable (an id, not
+    # a credential).
+    INFISICAL_IDENTITY_ID: ${{ vars.INFISICAL_IDENTITY_ID }}
+
 # Serialise deploys per (config, environment). Two pushes to the same
 # project's environment queue rather than racing — protects DB migrations
 # and traffic swap from concurrent runs without needing a Postgres
@@ -60,9 +66,14 @@ jobs:
         name: Check secrets
         needs: plan
         runs-on: ubuntu-latest
-        # `environment:` is what makes GitHub inject the env-scoped secrets into
-        # `toJSON(secrets)`. Without it the check would see the repo-level
-        # snapshot only and flag every environment secret as missing.
+        permissions:
+            contents: read
+            actions: read
+            packages: write
+            id-token: write
+        # `environment:` is only still here for the transitional seed step: it is
+        # what makes GitHub put the env-scoped secrets in the snapshot that step
+        # copies. The check itself reads the vault.
         environment:
             name: ${{ inputs.environment }}
         steps:
@@ -71,13 +82,31 @@ jobs:
                   infra: 'true'
                   deps: 'false'
 
+            # TRANSITIONAL (packages/infrastructure/MIGRATION.md): copy the GitHub
+            # secrets this pipeline still relies on into the vault, once. Goes
+            # away with the GitHub secrets.
+            - name: Seed vault from GitHub secrets
+              run: node src/index.ts seed-vault
+              working-directory: .infra/packages/infrastructure
+              env:
+                  PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
+                  PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
+                  LEGACY_GITHUB_SECRETS: ${{ toJSON(secrets) }}
+
+            - name: Load secrets
+              id: vault
+              run: node src/index.ts load-secrets
+              working-directory: .infra/packages/infrastructure
+              env:
+                  PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
+
             - name: Check declared secrets
               run: node src/index.ts check-secrets
               working-directory: .infra/packages/infrastructure
               env:
                   PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
                   PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
-                  ALL_SECRETS: ${{ toJSON(secrets) }}
+                  ALL_SECRETS: ${{ steps.vault.outputs.ALL_SECRETS }}
 
     quality:
         name: ${{ matrix.task.name }}
@@ -102,14 +131,17 @@ jobs:
         name: Provision
         needs: [plan, quality, check-secrets]
         runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            actions: read
+            packages: write
+            id-token: write
         # `ensureGeneratedSecrets` skips regeneration only when the secret is
-        # already present in `ALL_SECRETS` (toJSON(secrets) of THIS job). The
-        # generated values are pushed as env-scoped secrets, so provision must
-        # bind to the environment AND receive ALL_SECRETS to see them on a
-        # re-run - otherwise it regenerates and re-pushes every generated
-        # secret on every provision, rotating e.g. BETTER_AUTH_SECRET and
-        # invalidating live sessions (the opposite of the idempotent,
-        # non-rotating contract `ensureGeneratedSecrets` documents).
+        # already present in `ALL_SECRETS`, so provision must load the project's
+        # pool - otherwise it regenerates and re-stores every generated secret
+        # on every provision, rotating e.g. BETTER_AUTH_SECRET and invalidating
+        # live sessions (the opposite of the idempotent, non-rotating contract
+        # `ensureGeneratedSecrets` documents).
         environment:
             name: ${{ inputs.environment }}
         steps:
@@ -118,20 +150,19 @@ jobs:
                   infra: 'true'
                   deps: 'false'
 
+            - name: Load secrets
+              id: vault
+              run: node src/index.ts load-secrets
+              working-directory: .infra/packages/infrastructure
+              env:
+                  PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
+
             - name: Connect runner to tailnet
               uses: tailscale/github-action@v4
               with:
-                  oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-                  oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+                  oauth-client-id: ${{ steps.vault.outputs.TS_OAUTH_CLIENT_ID }}
+                  oauth-secret: ${{ steps.vault.outputs.TS_OAUTH_SECRET }}
                   tags: tag:ci
-
-            - name: Generate GitHub App token
-              id: app-token
-              uses: actions/create-github-app-token@v2
-              with:
-                  app-id: ${{ secrets.NEXTNODE_APP_ID }}
-                  private-key: ${{ secrets.NEXTNODE_APP_PRIVATE_KEY }}
-                  owner: NextNodeSolutions
 
             - name: Provision VPS
               id: provision
@@ -140,14 +171,13 @@ jobs:
               env:
                   PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
                   PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
-                  HETZNER_API_TOKEN: ${{ secrets.HETZNER_API_TOKEN }}
-                  DEPLOY_SSH_PRIVATE_KEY_B64: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY_B64 }}
-                  TAILSCALE_AUTH_KEY: ${{ secrets.TS_OAUTH_SECRET }}
-                  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-                  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-                  R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-                  R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-                  GH_TOKEN: ${{ steps.app-token.outputs.token }}
+                  HETZNER_API_TOKEN: ${{ steps.vault.outputs.HETZNER_API_TOKEN }}
+                  DEPLOY_SSH_PRIVATE_KEY_B64: ${{ steps.vault.outputs.DEPLOY_SSH_PRIVATE_KEY_B64 }}
+                  TAILSCALE_AUTH_KEY: ${{ steps.vault.outputs.TS_OAUTH_SECRET }}
+                  CLOUDFLARE_API_TOKEN: ${{ steps.vault.outputs.CLOUDFLARE_API_TOKEN }}
+                  CLOUDFLARE_ACCOUNT_ID: ${{ steps.vault.outputs.CLOUDFLARE_ACCOUNT_ID }}
+                  R2_ACCESS_KEY_ID: ${{ steps.vault.outputs.R2_ACCESS_KEY_ID }}
+                  R2_SECRET_ACCESS_KEY: ${{ steps.vault.outputs.R2_SECRET_ACCESS_KEY }}
                   # Fleet log shipping, opt-in via repo/org Variables: when
                   # NN_VL_URL is set, convergence configures Vector to push logs
                   # to the sink (logs.monitoring.nextnode.fr, publicly-trusted
@@ -156,18 +186,28 @@ jobs:
                   NN_CLIENT_ID: ${{ vars.NN_CLIENT_ID }}
                   # Lets ensureGeneratedSecrets see already-generated secrets
                   # and skip regeneration (idempotent, non-rotating).
-                  ALL_SECRETS: ${{ toJSON(secrets) }}
+                  ALL_SECRETS: ${{ steps.vault.outputs.ALL_SECRETS }}
 
     dns:
         name: DNS
         needs: [plan, quality, provision]
         if: needs.plan.outputs.has_domain == 'true'
         runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            actions: read
+            packages: write
+            id-token: write
         steps:
             - uses: NextNodeSolutions/core/.github/actions/setup@main
               with:
                   infra: 'true'
                   deps: 'false'
+
+            - name: Load secrets
+              id: vault
+              run: node src/index.ts load-secrets
+              working-directory: .infra/packages/infrastructure
 
             - name: Reconcile DNS
               run: node src/index.ts dns
@@ -175,13 +215,13 @@ jobs:
               env:
                   PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
                   PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
-                  HETZNER_API_TOKEN: ${{ secrets.HETZNER_API_TOKEN }}
-                  DEPLOY_SSH_PRIVATE_KEY_B64: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY_B64 }}
-                  TAILSCALE_AUTH_KEY: ${{ secrets.TS_OAUTH_SECRET }}
-                  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-                  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-                  R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-                  R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+                  HETZNER_API_TOKEN: ${{ steps.vault.outputs.HETZNER_API_TOKEN }}
+                  DEPLOY_SSH_PRIVATE_KEY_B64: ${{ steps.vault.outputs.DEPLOY_SSH_PRIVATE_KEY_B64 }}
+                  TAILSCALE_AUTH_KEY: ${{ steps.vault.outputs.TS_OAUTH_SECRET }}
+                  CLOUDFLARE_API_TOKEN: ${{ steps.vault.outputs.CLOUDFLARE_API_TOKEN }}
+                  CLOUDFLARE_ACCOUNT_ID: ${{ steps.vault.outputs.CLOUDFLARE_ACCOUNT_ID }}
+                  R2_ACCESS_KEY_ID: ${{ steps.vault.outputs.R2_ACCESS_KEY_ID }}
+                  R2_SECRET_ACCESS_KEY: ${{ steps.vault.outputs.R2_SECRET_ACCESS_KEY }}
 
     build-image:
         name: Build image
@@ -272,13 +312,14 @@ jobs:
         # roundtrip is only paid where a schema actually changed.
         if: ${{ !cancelled() && !failure() && needs.plan.outputs.has_postgres == 'true' && needs.detect-migrations.outputs.migrations_changed == 'true' }}
         runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            actions: read
+            packages: write
+            id-token: write
         # migrate-remote renders the SAME per-service `.env` as deploy
         # (resolveDeployContext → pickSecrets over the full `[deploy].secrets`
-        # pool), so it needs the project's Environment secrets in
-        # `toJSON(secrets)`. GitHub only injects env-scoped secrets into a job
-        # that declares `environment:` - without this the migrate of any
-        # postgres-backed project with env-scoped secrets throws
-        # "declared in deploy.secrets but not found in GitHub Secrets".
+        # pool), so it loads the project's pool from the vault like deploy does.
         environment:
             name: ${{ inputs.environment }}
         steps:
@@ -287,11 +328,18 @@ jobs:
                   infra: 'true'
                   deps: 'false'
 
+            - name: Load secrets
+              id: vault
+              run: node src/index.ts load-secrets
+              working-directory: .infra/packages/infrastructure
+              env:
+                  PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
+
             - name: Connect runner to tailnet
               uses: tailscale/github-action@v4
               with:
-                  oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-                  oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+                  oauth-client-id: ${{ steps.vault.outputs.TS_OAUTH_CLIENT_ID }}
+                  oauth-secret: ${{ steps.vault.outputs.TS_OAUTH_SECRET }}
                   tags: tag:ci
 
             - name: Migrate remote
@@ -300,22 +348,27 @@ jobs:
               env:
                   PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
                   PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
-                  HETZNER_API_TOKEN: ${{ secrets.HETZNER_API_TOKEN }}
-                  DEPLOY_SSH_PRIVATE_KEY_B64: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY_B64 }}
-                  TAILSCALE_AUTH_KEY: ${{ secrets.TS_OAUTH_SECRET }}
-                  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-                  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-                  R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-                  R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+                  HETZNER_API_TOKEN: ${{ steps.vault.outputs.HETZNER_API_TOKEN }}
+                  DEPLOY_SSH_PRIVATE_KEY_B64: ${{ steps.vault.outputs.DEPLOY_SSH_PRIVATE_KEY_B64 }}
+                  TAILSCALE_AUTH_KEY: ${{ steps.vault.outputs.TS_OAUTH_SECRET }}
+                  CLOUDFLARE_API_TOKEN: ${{ steps.vault.outputs.CLOUDFLARE_API_TOKEN }}
+                  CLOUDFLARE_ACCOUNT_ID: ${{ steps.vault.outputs.CLOUDFLARE_ACCOUNT_ID }}
+                  R2_ACCESS_KEY_ID: ${{ steps.vault.outputs.R2_ACCESS_KEY_ID }}
+                  R2_SECRET_ACCESS_KEY: ${{ steps.vault.outputs.R2_SECRET_ACCESS_KEY }}
                   IMAGE_REFS: ${{ needs.build-image.outputs.image_refs || needs.plan.outputs.upstream_image_refs }}
                   GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-                  ALL_SECRETS: ${{ toJSON(secrets) }}
+                  ALL_SECRETS: ${{ steps.vault.outputs.ALL_SECRETS }}
 
     deploy:
         name: Deploy
         needs: [plan, provision, build-image, migrate]
         if: ${{ !cancelled() && !failure() }}
         runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            actions: read
+            packages: write
+            id-token: write
         environment:
             name: ${{ inputs.environment }}
         steps:
@@ -324,11 +377,18 @@ jobs:
                   infra: 'true'
                   deps: 'false'
 
+            - name: Load secrets
+              id: vault
+              run: node src/index.ts load-secrets
+              working-directory: .infra/packages/infrastructure
+              env:
+                  PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
+
             - name: Connect runner to tailnet
               uses: tailscale/github-action@v4
               with:
-                  oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-                  oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+                  oauth-client-id: ${{ steps.vault.outputs.TS_OAUTH_CLIENT_ID }}
+                  oauth-secret: ${{ steps.vault.outputs.TS_OAUTH_SECRET }}
                   tags: tag:ci
 
             - name: Deploy
@@ -337,17 +397,17 @@ jobs:
               env:
                   PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
                   PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
-                  HETZNER_API_TOKEN: ${{ secrets.HETZNER_API_TOKEN }}
-                  DEPLOY_SSH_PRIVATE_KEY_B64: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY_B64 }}
-                  TAILSCALE_AUTH_KEY: ${{ secrets.TS_OAUTH_SECRET }}
-                  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-                  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-                  R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-                  R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+                  HETZNER_API_TOKEN: ${{ steps.vault.outputs.HETZNER_API_TOKEN }}
+                  DEPLOY_SSH_PRIVATE_KEY_B64: ${{ steps.vault.outputs.DEPLOY_SSH_PRIVATE_KEY_B64 }}
+                  TAILSCALE_AUTH_KEY: ${{ steps.vault.outputs.TS_OAUTH_SECRET }}
+                  CLOUDFLARE_API_TOKEN: ${{ steps.vault.outputs.CLOUDFLARE_API_TOKEN }}
+                  CLOUDFLARE_ACCOUNT_ID: ${{ steps.vault.outputs.CLOUDFLARE_ACCOUNT_ID }}
+                  R2_ACCESS_KEY_ID: ${{ steps.vault.outputs.R2_ACCESS_KEY_ID }}
+                  R2_SECRET_ACCESS_KEY: ${{ steps.vault.outputs.R2_SECRET_ACCESS_KEY }}
                   IMAGE_REFS: ${{ needs.build-image.outputs.image_refs || needs.plan.outputs.upstream_image_refs }}
                   GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   # Keep the target identical to provision (vector config built
                   # the same way in both). See provision env for the contract.
                   NN_VL_URL: ${{ vars.NN_VL_URL }}
                   NN_CLIENT_ID: ${{ vars.NN_CLIENT_ID }}
-                  ALL_SECRETS: ${{ toJSON(secrets) }}
+                  ALL_SECRETS: ${{ steps.vault.outputs.ALL_SECRETS }}

@@ -11,6 +11,13 @@ on:
 
 permissions:
     contents: read
+    id-token: write
+
+env:
+    # Infisical machine identity the pipeline logs in as through GitHub OIDC -
+    # the vault holds every secret, GitHub none. Org-level Variable (an id, not
+    # a credential).
+    INFISICAL_IDENTITY_ID: ${{ vars.INFISICAL_IDENTITY_ID }}
 
 jobs:
     build:
@@ -22,8 +29,13 @@ jobs:
                   infra: 'true'
                   deps: 'false'
 
+            - name: Load secrets
+              id: vault
+              run: node src/index.ts load-secrets
+              working-directory: .infra/packages/infrastructure
+
             - name: Build golden image
               run: node src/index.ts build-golden-image
               working-directory: .infra/packages/infrastructure
               env:
-                  HETZNER_API_TOKEN: ${{ secrets.HETZNER_API_TOKEN }}
+                  HETZNER_API_TOKEN: ${{ steps.vault.outputs.HETZNER_API_TOKEN }}

@@ -9,7 +9,7 @@ export const ALERT_EMAIL_TO = 'ops@nextnode.fr'
 export const ALERT_EMAIL_FROM = 'alerts@nextnode.fr'
 
 /**
- * GitHub Secret names the observability stack consumes at deploy time
+ * Vault secret names the observability stack consumes at deploy time
  * (declared in the monitoring project's `[deploy].secrets` pool).
  */
 export const RESEND_API_KEY_SECRET = 'RESEND_API_KEY'

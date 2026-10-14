@@ -79,7 +79,7 @@ describe('loadR2Runtime', () => {
 		)
 	})
 
-	it('does not create buckets or tokens, and does not call gh secret set', async () => {
+	it('does not create buckets or tokens', async () => {
 		vi.stubEnv('R2_ACCESS_KEY_ID', 'ak')
 		vi.stubEnv('R2_SECRET_ACCESS_KEY', 'sk')
 		const { urls } = stubFetch({ verifyStatus: 'ok' })

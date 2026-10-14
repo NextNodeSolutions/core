@@ -11,6 +11,12 @@ on:
 permissions:
     contents: read
 
+env:
+    # Infisical machine identity the pipeline logs in as through GitHub OIDC -
+    # the vault holds every secret, GitHub none. Org-level Variable (an id, not
+    # a credential).
+    INFISICAL_IDENTITY_ID: ${{ vars.INFISICAL_IDENTITY_ID }}
+
 jobs:
     plan:
         name: Plan
@@ -64,6 +70,11 @@ jobs:
                   infra: 'true'
                   fetch-depth: '0'
 
+            - name: Load secrets
+              id: vault
+              run: node src/index.ts load-secrets
+              working-directory: .infra/packages/infrastructure
+
             - name: Build
               run: pnpm turbo run build --filter=${{ needs.plan.outputs.project_filter }}
 
@@ -71,8 +82,8 @@ jobs:
               id: app-token
               uses: actions/create-github-app-token@v2
               with:
-                  app-id: ${{ secrets.NEXTNODE_APP_ID }}
-                  private-key: ${{ secrets.NEXTNODE_APP_PRIVATE_KEY }}
+                  app-id: ${{ steps.vault.outputs.NEXTNODE_APP_ID }}
+                  private-key: ${{ steps.vault.outputs.NEXTNODE_APP_PRIVATE_KEY }}
                   owner: NextNodeSolutions
 
             - name: Clear local tags for semantic-release
@@ -88,7 +99,7 @@ jobs:
               env:
                   PACKAGE_DIR: ${{ github.workspace }}/packages/${{ needs.plan.outputs.project_name }}
                   SR_OUTPUT_FILE: /tmp/sr-output.txt
-                  NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+                  NPM_TOKEN: ${{ steps.vault.outputs.NPM_TOKEN }}
                   GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
                   HUSKY: '0'
                   NPM_CONFIG_PROVENANCE: 'true'

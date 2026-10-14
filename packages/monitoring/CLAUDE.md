@@ -241,7 +241,7 @@ Follow the global CLAUDE.md rules verbatim:
   `monitoring.nextnode.fr` to `127.0.0.1:<computeHostPort('production')>`.
 - **Runtime secrets** (`CLOUDFLARE_API_TOKEN`, `TS_OAUTH_SECRET`, etc.) are
   declared PER SERVICE in `[deploy.services.app].secrets` — names only; the
-  values live in GitHub Secrets and the infra pulls exactly those into the
+  values live in the vault and the infra pulls exactly those into the
   service's `.env.app` at deploy (least privilege, no deploy-wide pool).
 - **Build-time config** is inlined into the image via build args, never the
   runtime env (a `.env` does not traverse the Docker build). `SITE_URL` is

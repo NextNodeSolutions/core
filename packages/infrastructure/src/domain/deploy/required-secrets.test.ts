@@ -63,18 +63,13 @@ describe('findMissingSecrets', () => {
 })
 
 describe('formatMissingSecretsError', () => {
-	it('names every missing secret and the command that sets it', () => {
+	it('names every missing secret and the vault folder to add it to', () => {
 		const message = formatMissingSecretsError(
 			['RESEND_API_KEY', 'STRIPE_SECRET_KEY'],
-			'production',
+			'/projects/fleurs/production',
 		)
 
 		expect(message).toContain('RESEND_API_KEY, STRIPE_SECRET_KEY')
-		expect(message).toContain(
-			'gh secret set RESEND_API_KEY --env production',
-		)
-		expect(message).toContain(
-			'gh secret set STRIPE_SECRET_KEY --env production',
-		)
+		expect(message).toContain('"/projects/fleurs/production"')
 	})
 })

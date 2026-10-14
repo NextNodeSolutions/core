@@ -8,8 +8,8 @@ import type {
 	UserServiceConfig,
 } from '#/config/types.ts'
 
-// `[deploy].secrets` entries are either a bare NAME (a must-exist GitHub secret)
-// or a `{ name, generate, length }` table (the infra generates + pushes it at
+// `[deploy].secrets` entries are either a bare NAME (a must-exist vault secret)
+// or a `{ name, generate, length }` table (the infra generates + stores it at
 // provision). `length` is the produced secret's CHARACTER count. The floor of
 // 16 keeps a generated signing key / password above ~95 bits of entropy for
 // the narrowest (alphanumeric) generator - below that the value is too weak to
@@ -139,8 +139,8 @@ export interface ResolvedSecrets<T = UserServiceConfig> {
 const POOLED_SECRET_TARGETS: ReadonlySet<DeployTargetType> =
 	new Set<DeployTargetType>(['hetzner-vps', 'cloudflare-workers'])
 
-// Resolve the secret pool - the set of GitHub Secret NAMES the pipeline pulls
-// for this deploy - and the generation specs, per target:
+// Resolve the secret pool - the set of secret NAMES the pipeline pulls from the
+// vault for this deploy - and the generation specs, per target:
 //   - cloudflare-pages parses [deploy].secrets directly: one deployable unit,
 //     no per-service split, so the pool IS the declared list.
 //   - hetzner-vps and cloudflare-workers treat [deploy].secrets as the GLOBAL
@@ -149,7 +149,7 @@ const POOLED_SECRET_TARGETS: ReadonlySet<DeployTargetType> =
 //     secrets.
 // Either way a `{ name, generate, length }` entry contributes its name to the
 // pool and its spec to `generatedSecrets`. A name declared but absent from
-// GitHub Secrets still fails loud at deploy time in `pickSecrets`.
+// the vault still fails loud at deploy time in `pickSecrets`.
 export function resolveSecrets<T extends { secrets: ReadonlyArray<string> }>(
 	target: DeployTargetType,
 	deployRecord: Record<string, unknown>,

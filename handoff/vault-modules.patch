@@ -1,0 +1,531 @@
+diff --git a/packages/infrastructure/src/adapters/github/output.ts b/packages/infrastructure/src/adapters/github/output.ts
+index 5fcb8b2..8fae49c 100644
+--- a/packages/infrastructure/src/adapters/github/output.ts
++++ b/packages/infrastructure/src/adapters/github/output.ts
+@@ -1,3 +1,4 @@
++import { randomUUID } from 'node:crypto'
+ import { appendFileSync } from 'node:fs'
+ 
+ function requireOutputFile(): string {
+@@ -14,6 +15,32 @@ export function writeOutput(key: string, outputValue: string): void {
+ 	appendFileSync(requireOutputFile(), `${key}=${outputValue}\n`)
+ }
+ 
++/**
++ * Register a value with the runner's log masker. `::add-mask::` is line-based,
++ * so a multi-line secret (a PEM key) is masked line by line - masking it as a
++ * whole would leave every line after the first readable in the logs.
++ */
++export function maskSecret(secretValue: string): void {
++	for (const line of secretValue.split(/\r?\n/)) {
++		if (line.trim()) process.stdout.write(`::add-mask::${line}\n`)
++	}
++}
++
++/**
++ * Write a secret as a step output: mask it first (the mask MUST be emitted
++ * before the value can leak), then append it in the delimiter form so a
++ * multi-line value survives. Unlike GITHUB_ENV, an output reaches only the
++ * steps that reference it explicitly.
++ */
++export function writeSecretOutput(key: string, secretValue: string): void {
++	maskSecret(secretValue)
++	const delimiter = `nextnode_${randomUUID()}`
++	appendFileSync(
++		requireOutputFile(),
++		`${key}<<${delimiter}\n${secretValue}\n${delimiter}\n`,
++	)
++}
++
+ export function writeSummary(markdown: string): void {
+ 	const summaryFile = process.env['GITHUB_STEP_SUMMARY']
+ 	if (!summaryFile) {
+diff --git a/packages/infrastructure/src/domain/vault/secret-vault.ts b/packages/infrastructure/src/domain/vault/secret-vault.ts
+new file mode 100644
+index 0000000..9fe9523
+--- /dev/null
++++ b/packages/infrastructure/src/domain/vault/secret-vault.ts
+@@ -0,0 +1,46 @@
++import type { AppEnvironment } from '#/domain/environment.ts'
++
++/**
++ * The secret vault is the single source of truth for every secret the pipeline
++ * consumes - GitHub holds none. Two folders frame it:
++ *   - `PLATFORM_SECRETS_PATH`: the fleet-wide infra credentials (cloud
++ *     providers, CI identities, registries) the workflows themselves consume.
++ *   - `projectSecretsPath()`: one folder per repo x environment, holding the
++ *     secrets that belong to that project alone.
++ */
++export const PLATFORM_SECRETS_PATH = '/ci'
++const PROJECT_SECRETS_ROOT = '/projects'
++
++// Repo + pipeline environment a project secret is scoped to. Keyed by the
++// GitHub repo (not `project.name`): the runner sets it, so a caller cannot
++// point its pipeline at another project's folder from its own nextnode.toml.
++export interface ProjectSecretScope {
++	readonly repo: string
++	readonly environment: AppEnvironment
++}
++
++export function projectSecretsPath(scope: ProjectSecretScope): string {
++	return `${PROJECT_SECRETS_ROOT}/${scope.repo}/${scope.environment}`
++}
++
++// The pool `[deploy].secrets` names resolve against (`ALL_SECRETS`): the
++// platform secrets overlaid by the project's own, the project winning on a
++// shared name. A project may therefore declare a platform secret (the
++// monitoring app reads the Cloudflare token) without holding a copy that would
++// go stale at the next rotation.
++export function buildProjectSecretPool(
++	platformSecrets: Readonly<Record<string, string>>,
++	projectSecrets: Readonly<Record<string, string>>,
++): Record<string, string> {
++	return { ...platformSecrets, ...projectSecrets }
++}
++
++export interface SecretVault {
++	// Every secret readable at `path`. A folder that does not exist holds none.
++	listSecrets(path: string): Promise<Record<string, string>>
++	// Create or replace each secret at `path`, creating the folder when absent.
++	setSecrets(
++		path: string,
++		secrets: Readonly<Record<string, string>>,
++	): Promise<void>
++}
+diff --git a/packages/infrastructure/src/adapters/infisical/vault.ts b/packages/infrastructure/src/adapters/infisical/vault.ts
+new file mode 100644
+index 0000000..fd775be
+--- /dev/null
++++ b/packages/infrastructure/src/adapters/infisical/vault.ts
+@@ -0,0 +1,234 @@
++import { isRecord } from '#/kernel/guards.ts'
++
++import type { SecretVault } from '#/domain/vault/secret-vault.ts'
++
++const INFISICAL_API_BASE = 'https://app.infisical.com/api'
++const HTTP_NOT_FOUND = 404
++// `error` code Infisical returns when the folder at `secretPath` does not exist.
++const SECRET_PATH_NOT_FOUND = 'SecretPathNotFound'
++const ROOT_PATH = '/'
++
++// Where the secrets live inside Infisical: one project, one environment slug.
++export interface InfisicalVaultLocation {
++	readonly projectId: string
++	readonly environment: string
++}
++
++interface InfisicalSession extends InfisicalVaultLocation {
++	readonly accessToken: string
++}
++
++function authHeaders(accessToken: string): Record<string, string> {
++	return {
++		Authorization: `Bearer ${accessToken}`,
++		'Content-Type': 'application/json',
++	}
++}
++
++async function requireOk(response: Response, context: string): Promise<void> {
++	if (response.ok) return
++	const body = await response.text()
++	throw new Error(
++		`${context}: Infisical API returned ${response.status}: ${body}`,
++	)
++}
++
++/**
++ * Trade a GitHub Actions OIDC token for a short-lived Infisical access token.
++ * Infisical verifies the JWT against GitHub's public keys and the machine
++ * identity's bound claims (audience, subject, `job_workflow_ref`), so a login
++ * rejected here means the running workflow is not one the identity trusts.
++ */
++export async function loginInfisicalWithOidc(
++	identityId: string,
++	jwt: string,
++): Promise<string> {
++	const context = 'Infisical OIDC login'
++	const response = await fetch(
++		`${INFISICAL_API_BASE}/v1/auth/oidc-auth/login`,
++		{
++			method: 'POST',
++			headers: { 'Content-Type': 'application/json' },
++			body: JSON.stringify({ identityId, jwt }),
++		},
++	)
++	await requireOk(response, context)
++
++	const responseBody: unknown = await response.json()
++	if (
++		!isRecord(responseBody) ||
++		typeof responseBody['accessToken'] !== 'string'
++	) {
++		throw new Error(`${context}: response is missing \`accessToken\``)
++	}
++	return responseBody['accessToken']
++}
++
++function parseSecretEntry(
++	rawSecret: unknown,
++	context: string,
++): [string, string] {
++	if (
++		!isRecord(rawSecret) ||
++		typeof rawSecret['secretKey'] !== 'string' ||
++		typeof rawSecret['secretValue'] !== 'string'
++	) {
++		throw new Error(
++			`${context}: a secret is missing \`secretKey\` or \`secretValue\``,
++		)
++	}
++	return [rawSecret['secretKey'], rawSecret['secretValue']]
++}
++
++function parseSecrets(
++	rawSecrets: unknown,
++	context: string,
++): Record<string, string> {
++	if (!Array.isArray(rawSecrets)) {
++		throw new Error(`${context}: \`secrets\` must be an array`)
++	}
++	return Object.fromEntries(
++		rawSecrets.map(rawSecret => parseSecretEntry(rawSecret, context)),
++	)
++}
++
++// Secrets a folder pulls in through Infisical imports (a `/shared` folder
++// linked into several projects). Imports apply in order - a later import
++// overrides an earlier one - and the folder's own secrets override them all.
++function parseImportedSecrets(
++	rawImports: unknown,
++	context: string,
++): Record<string, string> {
++	if (typeof rawImports === 'undefined') return {}
++	if (!Array.isArray(rawImports)) {
++		throw new Error(`${context}: \`imports\` must be an array`)
++	}
++	return Object.assign(
++		{},
++		...rawImports.map(rawImport => {
++			if (!isRecord(rawImport)) {
++				throw new Error(`${context}: an import is not an object`)
++			}
++			return parseSecrets(rawImport['secrets'], context)
++		}),
++	)
++}
++
++async function listSecrets(
++	session: InfisicalSession,
++	path: string,
++): Promise<Record<string, string>> {
++	const context = `Infisical list secrets at "${path}"`
++	const query = new URLSearchParams({
++		projectId: session.projectId,
++		environment: session.environment,
++		secretPath: path,
++	})
++	const response = await fetch(
++		`${INFISICAL_API_BASE}/v4/secrets?${query.toString()}`,
++		{ headers: authHeaders(session.accessToken) },
++	)
++	if (response.status === HTTP_NOT_FOUND) {
++		const body = await response.text()
++		if (body.includes(SECRET_PATH_NOT_FOUND)) return {}
++		throw new Error(`${context}: Infisical API returned 404: ${body}`)
++	}
++	await requireOk(response, context)
++
++	const responseBody: unknown = await response.json()
++	if (!isRecord(responseBody)) {
++		throw new Error(`${context}: response body is not an object`)
++	}
++	return {
++		...parseImportedSecrets(responseBody['imports'], context),
++		...parseSecrets(responseBody['secrets'], context),
++	}
++}
++
++async function folderExists(
++	session: InfisicalSession,
++	parentPath: string,
++	name: string,
++): Promise<boolean> {
++	const context = `Infisical list folders at "${parentPath}"`
++	const query = new URLSearchParams({
++		projectId: session.projectId,
++		environment: session.environment,
++		path: parentPath,
++	})
++	const response = await fetch(
++		`${INFISICAL_API_BASE}/v2/folders?${query.toString()}`,
++		{ headers: authHeaders(session.accessToken) },
++	)
++	await requireOk(response, context)
++
++	const responseBody: unknown = await response.json()
++	if (!isRecord(responseBody) || !Array.isArray(responseBody['folders'])) {
++		throw new Error(`${context}: \`folders\` must be an array`)
++	}
++	return responseBody['folders'].some(
++		folder => isRecord(folder) && folder['name'] === name,
++	)
++}
++
++// Infisical refuses a write into a folder that does not exist, and creating a
++// folder that already exists is an error - so check, then create. Missing
++// parent folders are created by the same call.
++async function ensureFolder(
++	session: InfisicalSession,
++	path: string,
++): Promise<void> {
++	if (path === ROOT_PATH) return
++	const separatorIndex = path.lastIndexOf('/')
++	const parentPath = path.slice(0, separatorIndex) || ROOT_PATH
++	const name = path.slice(separatorIndex + 1)
++	if (await folderExists(session, parentPath, name)) return
++
++	const response = await fetch(`${INFISICAL_API_BASE}/v2/folders`, {
++		method: 'POST',
++		headers: authHeaders(session.accessToken),
++		body: JSON.stringify({
++			projectId: session.projectId,
++			environment: session.environment,
++			name,
++			path: parentPath,
++		}),
++	})
++	await requireOk(response, `Infisical create folder "${path}"`)
++}
++
++async function setSecrets(
++	session: InfisicalSession,
++	path: string,
++	secrets: Readonly<Record<string, string>>,
++): Promise<void> {
++	await ensureFolder(session, path)
++	const response = await fetch(`${INFISICAL_API_BASE}/v4/secrets/batch`, {
++		method: 'PATCH',
++		headers: authHeaders(session.accessToken),
++		body: JSON.stringify({
++			projectId: session.projectId,
++			environment: session.environment,
++			secretPath: path,
++			mode: 'upsert',
++			secrets: Object.entries(secrets).map(
++				([secretKey, secretValue]) => ({
++					secretKey,
++					secretValue,
++				}),
++			),
++		}),
++	})
++	await requireOk(response, `Infisical set secrets at "${path}"`)
++}
++
++export function createInfisicalVault(
++	accessToken: string,
++	location: InfisicalVaultLocation,
++): SecretVault {
++	const session: InfisicalSession = { ...location, accessToken }
++	return {
++		listSecrets: path => listSecrets(session, path),
++		setSecrets: (path, secrets) => setSecrets(session, path, secrets),
++	}
++}
+diff --git a/packages/infrastructure/src/adapters/github/oidc-token.ts b/packages/infrastructure/src/adapters/github/oidc-token.ts
+new file mode 100644
+index 0000000..2ee7cba
+--- /dev/null
++++ b/packages/infrastructure/src/adapters/github/oidc-token.ts
+@@ -0,0 +1,37 @@
++import { isRecord } from '#/kernel/guards.ts'
++
++/**
++ * Request the job's GitHub Actions OIDC token: a short-lived JWT signed by
++ * GitHub that proves which repository and workflow is running. It is what the
++ * pipeline trades for vault access, so no long-lived credential is stored
++ * anywhere. The runner only exposes the request endpoint to a job granted
++ * `permissions: id-token: write`.
++ */
++export async function requestGithubOidcToken(
++	audience: string,
++): Promise<string> {
++	const requestUrl = process.env['ACTIONS_ID_TOKEN_REQUEST_URL']
++	const requestToken = process.env['ACTIONS_ID_TOKEN_REQUEST_TOKEN']
++	if (!requestUrl || !requestToken) {
++		throw new Error(
++			'GitHub OIDC token endpoint is not available - the job must declare `permissions: id-token: write`',
++		)
++	}
++
++	const url = new URL(requestUrl)
++	url.searchParams.set('audience', audience)
++	const response = await fetch(url, {
++		headers: { Authorization: `Bearer ${requestToken}` },
++	})
++	if (!response.ok) {
++		throw new Error(
++			`GitHub OIDC token request returned ${response.status}: ${await response.text()}`,
++		)
++	}
++
++	const responseBody: unknown = await response.json()
++	if (!isRecord(responseBody) || typeof responseBody['value'] !== 'string') {
++		throw new Error('GitHub OIDC token response is missing `value`')
++	}
++	return responseBody['value']
++}
+diff --git a/packages/infrastructure/src/cli/vault/open-vault.ts b/packages/infrastructure/src/cli/vault/open-vault.ts
+new file mode 100644
+index 0000000..c71f2b9
+--- /dev/null
++++ b/packages/infrastructure/src/cli/vault/open-vault.ts
+@@ -0,0 +1,50 @@
++import { requestGithubOidcToken } from '#/adapters/github/oidc-token.ts'
++import {
++	createInfisicalVault,
++	loginInfisicalWithOidc,
++} from '#/adapters/infisical/vault.ts'
++import { requireEnv } from '#/cli/env.ts'
++
++import type { InfisicalVaultLocation } from '#/adapters/infisical/vault.ts'
++import type { SecretVault } from '#/domain/vault/secret-vault.ts'
++
++// The NextNode vault: Infisical project "core-vault", environment "Main".
++const VAULT_LOCATION: InfisicalVaultLocation = {
++	projectId: 'ce69a081-6aec-472d-9ee8-edbb7ed2b72e',
++	environment: 'main',
++}
++
++// Audience the GitHub OIDC token is minted for. The Infisical machine identity
++// lists it in its allowed audiences, so a token minted for another relying
++// party cannot be replayed against the vault.
++const VAULT_OIDC_AUDIENCE = 'https://app.infisical.com'
++
++async function connectVault(): Promise<SecretVault> {
++	const identityId = requireEnv('INFISICAL_IDENTITY_ID')
++	const jwt = await requestGithubOidcToken(VAULT_OIDC_AUDIENCE)
++	const accessToken = await loginInfisicalWithOidc(identityId, jwt)
++	return createInfisicalVault(accessToken, VAULT_LOCATION)
++}
++
++/**
++ * Open the vault lazily: nothing is requested until the first read or write,
++ * and one login then serves every call. A command that turns out to have
++ * nothing to write (every generated secret already present) never logs in.
++ */
++export function openVault(): SecretVault {
++	let connection: Promise<SecretVault> | undefined
++	const connect = (): Promise<SecretVault> => {
++		connection ??= connectVault()
++		return connection
++	}
++	return {
++		listSecrets: async path => {
++			const vault = await connect()
++			return vault.listSecrets(path)
++		},
++		setSecrets: async (path, secrets) => {
++			const vault = await connect()
++			return vault.setSecrets(path, secrets)
++		},
++	}
++}
+diff --git a/packages/infrastructure/src/cli/vault/load-secrets.command.ts b/packages/infrastructure/src/cli/vault/load-secrets.command.ts
+new file mode 100644
+index 0000000..a26317a
+--- /dev/null
++++ b/packages/infrastructure/src/cli/vault/load-secrets.command.ts
+@@ -0,0 +1,92 @@
++import { maskSecret, writeSecretOutput } from '#/adapters/github/output.ts'
++import { getEnv, requireGithubRepository } from '#/cli/env.ts'
++import { APP_ENVIRONMENTS, isAppEnvironment } from '#/domain/environment.ts'
++import {
++	PLATFORM_SECRETS_PATH,
++	buildProjectSecretPool,
++	projectSecretsPath,
++} from '#/domain/vault/secret-vault.ts'
++import { createLogger } from '@nextnode-solutions/logger'
++
++import { openVault } from './open-vault.ts'
++
++import type {
++	ProjectSecretScope,
++	SecretVault,
++} from '#/domain/vault/secret-vault.ts'
++
++const logger = createLogger()
++
++// Step output carrying the project's secret pool as a JSON object - the
++// payload the deploy commands read back as `ALL_SECRETS`.
++const PROJECT_POOL_OUTPUT = 'ALL_SECRETS'
++
++// A job asks for its project's pool by setting PIPELINE_ENVIRONMENT on the
++// step; without it only the platform secrets are loaded (ops workflows that
++// act on the fleet rather than on one project).
++function readProjectSecretScope(): ProjectSecretScope | undefined {
++	const environment = getEnv('PIPELINE_ENVIRONMENT')
++	if (!environment) return undefined
++	if (!isAppEnvironment(environment)) {
++		throw new Error(
++			`PIPELINE_ENVIRONMENT must be one of ${APP_ENVIRONMENTS.join(', ')} (got: ${environment})`,
++		)
++	}
++	return { repo: requireGithubRepository().name, environment }
++}
++
++async function loadPlatformSecrets(
++	vault: SecretVault,
++): Promise<Record<string, string>> {
++	const platformSecrets = await vault.listSecrets(PLATFORM_SECRETS_PATH)
++	const names = Object.keys(platformSecrets)
++	if (!names.length) {
++		throw new Error(
++			`vault folder "${PLATFORM_SECRETS_PATH}" holds no secret - the platform credentials must be stored there before any pipeline can run`,
++		)
++	}
++	for (const [name, secretValue] of Object.entries(platformSecrets)) {
++		writeSecretOutput(name, secretValue)
++	}
++	logger.info(
++		`loaded ${names.length} platform secret(s) from ${PLATFORM_SECRETS_PATH}: ${names.join(', ')}`,
++	)
++	return platformSecrets
++}
++
++async function loadProjectPool(
++	vault: SecretVault,
++	scope: ProjectSecretScope,
++	platformSecrets: Readonly<Record<string, string>>,
++): Promise<void> {
++	const path = projectSecretsPath(scope)
++	const projectSecrets = await vault.listSecrets(path)
++	// The pool travels as one JSON output: mask each value on its own so it
++	// stays redacted wherever a later step prints it individually.
++	for (const secretValue of Object.values(projectSecrets)) {
++		maskSecret(secretValue)
++	}
++	writeSecretOutput(
++		PROJECT_POOL_OUTPUT,
++		JSON.stringify(buildProjectSecretPool(platformSecrets, projectSecrets)),
++	)
++	logger.info(
++		`loaded ${Object.keys(projectSecrets).length} project secret(s) from ${path}: ${Object.keys(projectSecrets).join(', ')}`,
++	)
++}
++
++/**
++ * Read the job's secrets from the vault and expose them as masked step
++ * outputs, replacing the `secrets` context: each platform secret becomes its
++ * own output (`steps.<id>.outputs.<NAME>`), the project pool one JSON output.
++ * The read is live, so a secret generated by an earlier job of the same run is
++ * already visible here - no GitHub-style snapshot frozen at job start.
++ */
++export async function loadSecretsCommand(
++	vault: SecretVault = openVault(),
++): Promise<void> {
++	const platformSecrets = await loadPlatformSecrets(vault)
++
++	const scope = readProjectSecretScope()
++	if (scope) await loadProjectPool(vault, scope, platformSecrets)
++}

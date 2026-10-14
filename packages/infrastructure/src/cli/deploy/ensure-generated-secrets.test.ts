@@ -2,122 +2,80 @@ import { describe, expect, it } from 'vitest'
 
 import { ensureGeneratedSecrets } from './ensure-generated-secrets.ts'
 
-import type { EnvSecretsAdapter } from '#/adapters/github/env-secrets.ts'
+import type { SecretVault } from '#/domain/vault/secret-vault.ts'
 
-interface PushCall {
-	readonly name: string
-	readonly secretValue: string
-	readonly owner: string
-	readonly repo: string
-	readonly environment: string
+interface VaultWrite {
+	readonly path: string
+	readonly secrets: Readonly<Record<string, string>>
 }
 
-// In-memory fake of the gh env-secret boundary (preferred over a mock): records
-// every push so behavior - not call mechanics - can be asserted.
-function fakeAdapter(isGhAvailable = true): {
-	adapter: EnvSecretsAdapter
-	pushes: PushCall[]
-} {
-	const pushes: PushCall[] = []
-	const adapter: EnvSecretsAdapter = {
-		ghAvailable: () => Promise.resolve(isGhAvailable),
-		setRepoEnvSecret: (name, secretValue, scope) => {
-			pushes.push({
-				name,
-				secretValue,
-				owner: scope.owner,
-				repo: scope.repo,
-				environment: scope.environment,
-			})
+const SCOPE = { repo: 'fleurs', environment: 'production' } as const
+
+// In-memory fake of the vault boundary (preferred over a mock): records every
+// write so behavior - not call mechanics - can be asserted.
+function fakeVault(): { vault: SecretVault; writes: VaultWrite[] } {
+	const writes: VaultWrite[] = []
+	const vault: SecretVault = {
+		listSecrets: () => Promise.resolve({}),
+		setSecrets: (path, secrets) => {
+			writes.push({ path, secrets })
 			return Promise.resolve()
 		},
 	}
-	return { adapter, pushes }
+	return { vault, writes }
 }
 
 describe('ensureGeneratedSecrets', () => {
-	it('generates and pushes a secret absent from ALL_SECRETS', async () => {
-		const { adapter, pushes } = fakeAdapter()
+	it('generates a secret absent from ALL_SECRETS and stores it in the project folder', async () => {
+		const { vault, writes } = fakeVault()
 
 		await ensureGeneratedSecrets(
 			[{ name: 'JWT_SECRET', generate: 'token', length: 32 }],
 			{},
-			{ owner: 'nextnode', repo: 'fleurs', environment: 'production' },
-			adapter,
+			SCOPE,
+			vault,
 		)
 
-		expect(pushes).toHaveLength(1)
-		const [push] = pushes
-		expect(push?.name).toBe('JWT_SECRET')
-		expect(push?.owner).toBe('nextnode')
-		expect(push?.repo).toBe('fleurs')
-		expect(push?.environment).toBe('production')
-		expect(push?.secretValue).toHaveLength(32)
-		expect(push?.secretValue).toMatch(/^[A-Za-z0-9_-]+$/)
+		expect(writes).toHaveLength(1)
+		const [write] = writes
+		expect(write?.path).toBe('/projects/fleurs/production')
+		expect(Object.keys(write?.secrets ?? {})).toStrictEqual(['JWT_SECRET'])
+		expect(write?.secrets['JWT_SECRET']).toHaveLength(32)
+		expect(write?.secrets['JWT_SECRET']).toMatch(/^[A-Za-z0-9_-]+$/)
 	})
 
 	it('skips a secret already present in ALL_SECRETS (no rotation)', async () => {
-		const { adapter, pushes } = fakeAdapter()
+		const { vault, writes } = fakeVault()
 
 		await ensureGeneratedSecrets(
 			[{ name: 'JWT_SECRET', generate: 'token', length: 32 }],
 			{ JWT_SECRET: 'already-there' },
-			{ owner: 'nextnode', repo: 'fleurs', environment: 'production' },
-			adapter,
+			SCOPE,
+			vault,
 		)
 
-		expect(pushes).toHaveLength(0)
+		expect(writes).toHaveLength(0)
 	})
 
 	it('regenerates a secret whose ALL_SECRETS value is an empty string', async () => {
-		const { adapter, pushes } = fakeAdapter()
+		const { vault, writes } = fakeVault()
 
 		await ensureGeneratedSecrets(
 			[{ name: 'DB_PASSWORD', generate: 'password', length: 24 }],
 			{ DB_PASSWORD: '' },
-			{ owner: 'nextnode', repo: 'fleurs', environment: 'production' },
-			adapter,
+			SCOPE,
+			vault,
 		)
 
-		expect(pushes).toHaveLength(1)
-		expect(pushes[0]?.secretValue).toMatch(/^[A-Za-z0-9]{24}$/)
+		expect(writes).toHaveLength(1)
+		expect(writes[0]?.secrets['DB_PASSWORD']).toMatch(/^[A-Za-z0-9]{24}$/)
 	})
 
-	it('fails loud when gh is unavailable and a secret must be generated', async () => {
-		const { adapter, pushes } = fakeAdapter(false)
+	it('does not touch the vault when there is nothing to generate', async () => {
+		const { vault, writes } = fakeVault()
 
-		await expect(
-			ensureGeneratedSecrets(
-				[{ name: 'JWT_SECRET', generate: 'token', length: 32 }],
-				{},
-				{
-					owner: 'nextnode',
-					repo: 'fleurs',
-					environment: 'production',
-				},
-				adapter,
-			),
-		).rejects.toThrow(/gh CLI unavailable/)
-		expect(pushes).toHaveLength(0)
-	})
+		await ensureGeneratedSecrets([], {}, SCOPE, vault)
 
-	it('does not probe gh when there is nothing to generate', async () => {
-		let wasProbed = false
-		const adapter: EnvSecretsAdapter = {
-			ghAvailable: () => {
-				wasProbed = true
-				return Promise.resolve(true)
-			},
-			setRepoEnvSecret: () => Promise.resolve(),
-		}
-
-		await ensureGeneratedSecrets(
-			[],
-			{},
-			{ owner: 'nextnode', repo: 'fleurs', environment: 'production' },
-			adapter,
-		)
-
-		expect(wasProbed).toBe(false)
+		expect(writes).toHaveLength(0)
 	})
 })

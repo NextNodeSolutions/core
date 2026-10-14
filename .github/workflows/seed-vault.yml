@@ -1,0 +1,45 @@
+name: Seed Vault
+
+# TRANSITIONAL - delete with the `seed-vault` command once the GitHub secrets
+# are removed (packages/infrastructure/MIGRATION.md).
+#
+# One-shot copy of the GitHub secrets into the Infisical vault, run manually
+# right after the vault migration lands: the platform credentials every
+# pipeline needs, plus core's own project secrets (the monitoring stack).
+# Consumer repos seed their project secrets from the `check-secrets` job of
+# their next deploy. Idempotent: a secret the vault already resolves is skipped.
+
+on:
+    workflow_dispatch:
+
+permissions:
+    contents: read
+    id-token: write
+
+env:
+    # Infisical machine identity the pipeline logs in as through GitHub OIDC -
+    # the vault holds every secret, GitHub none. Org-level Variable (an id, not
+    # a credential).
+    INFISICAL_IDENTITY_ID: ${{ vars.INFISICAL_IDENTITY_ID }}
+
+jobs:
+    seed:
+        name: Seed vault from GitHub secrets
+        runs-on: ubuntu-latest
+        # Puts the secrets scoped to core's `production` environment in
+        # `toJSON(secrets)`, next to the org-level ones.
+        environment:
+            name: production
+        steps:
+            - uses: NextNodeSolutions/core/.github/actions/setup@main
+              with:
+                  infra: 'true'
+                  deps: 'false'
+
+            - name: Seed vault
+              run: node src/index.ts seed-vault
+              working-directory: .infra/packages/infrastructure
+              env:
+                  PIPELINE_CONFIG_FILE: ${{ github.workspace }}/packages/monitoring/nextnode.toml
+                  PIPELINE_ENVIRONMENT: production
+                  LEGACY_GITHUB_SECRETS: ${{ toJSON(secrets) }}

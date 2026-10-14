@@ -46,7 +46,6 @@ export async function provisionCommand(
 	await Promise.all(services.map(service => service.provision()))
 
 	await ensureGeneratedSecrets(config.deploy.generatedSecrets, repoSecrets, {
-		owner: repository.owner,
 		repo: repository.name,
 		environment,
 	})

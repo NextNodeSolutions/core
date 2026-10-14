@@ -1,7 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { spawnSyncMock } = vi.hoisted(() => ({ spawnSyncMock: vi.fn() }))
-vi.mock('node:child_process', () => ({ spawnSync: spawnSyncMock }))
+interface VaultWrite {
+	readonly path: string
+	readonly secrets: Readonly<Record<string, string>>
+}
+
+// In-memory fake of the vault: ensureR2Setup opens the real one by default,
+// so it is replaced here and its writes recorded.
+const { vaultWrites } = vi.hoisted(() => {
+	const recordedWrites: VaultWrite[] = []
+	return { vaultWrites: recordedWrites }
+})
+vi.mock('#/cli/vault/open-vault.ts', () => ({
+	openVault: () => ({
+		listSecrets: () => Promise.resolve({}),
+		setSecrets: (path: string, secrets: Record<string, string>) => {
+			vaultWrites.push({ path, secrets })
+			return Promise.resolve()
+		},
+	}),
+}))
 vi.mock('node:timers/promises', () => ({
 	setTimeout: vi.fn(() => Promise.resolve()),
 }))
@@ -154,31 +172,17 @@ function stubFetch(overrides: FetchOverrides = {}): StubFetchContext {
 	return { fetchMock, urls, deletedTokenIds }
 }
 
-interface GhStubOptions {
-	available?: boolean
-}
-
-function stubGh({ available = true }: GhStubOptions = {}): void {
-	spawnSyncMock.mockImplementation(
-		(_cmd: string, args: ReadonlyArray<string>) => {
-			if (args[0] === '--version') {
-				return available
-					? { status: 0, stdout: 'gh version 2.x', stderr: '' }
-					: { status: 1, stdout: '', stderr: 'not found' }
-			}
-			return { status: 0, stdout: '', stderr: '' }
-		},
-	)
-}
-
-const MUTATED_ENV_KEYS = ['R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY'] as const
+const MUTATED_ENV_KEYS = [
+	'R2_ACCESS_KEY_ID',
+	'R2_SECRET_ACCESS_KEY',
+	'CLOUDFLARE_ACCOUNT_ID',
+] as const
 
 beforeEach(() => {
 	for (const key of MUTATED_ENV_KEYS) {
 		Reflect.deleteProperty(process.env, key)
 	}
-	vi.stubEnv('GITHUB_REPOSITORY_OWNER', 'NextNodeOrg')
-	spawnSyncMock.mockReset()
+	vaultWrites.length = 0
 })
 
 afterEach(() => {
@@ -192,7 +196,6 @@ afterEach(() => {
 describe('ensureR2Setup', () => {
 	it('resolves account via GET /accounts', async () => {
 		const { urls } = stubFetch()
-		stubGh()
 
 		const ensured = await ensureR2Setup('cf-token')
 
@@ -205,7 +208,6 @@ describe('ensureR2Setup', () => {
 
 	it('ensures both state and certs buckets exist', async () => {
 		const { urls } = stubFetch()
-		stubGh()
 
 		await ensureR2Setup('cf-token')
 
@@ -219,7 +221,6 @@ describe('ensureR2Setup', () => {
 		vi.stubEnv('R2_ACCESS_KEY_ID', 'existing-id')
 		vi.stubEnv('R2_SECRET_ACCESS_KEY', 'existing-secret')
 		const { urls } = stubFetch({ verifyResults: ['ok'] })
-		stubGh()
 
 		const ensured = await ensureR2Setup('cf-token')
 
@@ -232,7 +233,6 @@ describe('ensureR2Setup', () => {
 		vi.stubEnv('R2_ACCESS_KEY_ID', 'stale-id')
 		vi.stubEnv('R2_SECRET_ACCESS_KEY', 'stale-secret')
 		const { urls } = stubFetch({ verifyResults: ['401', 'ok'] })
-		stubGh()
 
 		const ensured = await ensureR2Setup('cf-token')
 
@@ -264,7 +264,6 @@ describe('ensureR2Setup', () => {
 			],
 			deleteFailsFor: ['old-1'],
 		})
-		stubGh()
 
 		await expect(ensureR2Setup('cf-token')).resolves.toBeDefined()
 		expect(deletedTokenIds).toContain('old-2')
@@ -288,32 +287,35 @@ describe('ensureR2Setup', () => {
 				{ id: 'other', name: 'unrelated', status: 'active' },
 			],
 		})
-		stubGh()
 
 		await ensureR2Setup('cf-token')
 
 		expect(deletedTokenIds).toEqual(['old-1'])
 	})
 
-	it('creates a token and stores org secrets on fresh bootstrap', async () => {
+	it('creates a token and stores the credentials in the vault on fresh bootstrap', async () => {
 		const { urls } = stubFetch()
-		stubGh()
 
 		const ensured = await ensureR2Setup('cf-token')
 
 		expect(urls.filter(u => u.endsWith('/user/tokens'))).toHaveLength(2) // POST (create) + GET (list for cleanup)
 		expect(ensured.accessKeyId).toBe('new-key-id')
-		const setCalls = spawnSyncMock.mock.calls.filter(
-			c => c[1]?.[0] === 'secret' && c[1]?.[1] === 'set',
-		)
-		expect(setCalls).toHaveLength(3)
+		expect(vaultWrites).toStrictEqual([
+			{
+				path: '/ci',
+				secrets: {
+					CLOUDFLARE_ACCOUNT_ID: 'acct-from-api',
+					R2_ACCESS_KEY_ID: 'new-key-id',
+					R2_SECRET_ACCESS_KEY: ensured.secretAccessKey,
+				},
+			},
+		])
 	})
 
 	it('polls verification and gives up after max attempts', async () => {
 		stubFetch({
 			verifyResults: ['401', '401', '401', '401', '401'],
 		})
-		stubGh()
 
 		await expect(ensureR2Setup('cf-token')).rejects.toThrow(
 			'did not become active after 5 attempts',
@@ -322,7 +324,6 @@ describe('ensureR2Setup', () => {
 
 	it('returns the resolved InfraStorageRuntimeConfig without mutating process.env', async () => {
 		stubFetch()
-		stubGh()
 
 		const ensured = await ensureR2Setup('cf-token')
 
@@ -337,28 +338,14 @@ describe('ensureR2Setup', () => {
 		expect(process.env['R2_ENDPOINT']).toBeUndefined()
 	})
 
-	it('skips org secret persistence when GITHUB_REPOSITORY_OWNER is unset', async () => {
-		vi.stubEnv('GITHUB_REPOSITORY_OWNER', '')
-		stubFetch()
-		stubGh()
+	it('does not rewrite the vault when the job already holds the verified credentials', async () => {
+		vi.stubEnv('CLOUDFLARE_ACCOUNT_ID', 'acct-from-api')
+		vi.stubEnv('R2_ACCESS_KEY_ID', 'existing-id')
+		vi.stubEnv('R2_SECRET_ACCESS_KEY', 'existing-secret')
+		stubFetch({ verifyResults: ['ok'] })
 
 		await ensureR2Setup('cf-token')
 
-		const setCalls = spawnSyncMock.mock.calls.filter(
-			c => c[1]?.[0] === 'secret' && c[1]?.[1] === 'set',
-		)
-		expect(setCalls).toHaveLength(0)
-	})
-
-	it('warns when gh CLI is unavailable and skips storage', async () => {
-		stubFetch()
-		stubGh({ available: false })
-
-		await ensureR2Setup('cf-token')
-
-		const setCalls = spawnSyncMock.mock.calls.filter(
-			c => c[1]?.[0] === 'secret' && c[1]?.[1] === 'set',
-		)
-		expect(setCalls).toHaveLength(0)
+		expect(vaultWrites).toHaveLength(0)
 	})
 })

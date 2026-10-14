@@ -12,6 +12,13 @@ on:
 
 permissions:
     contents: read
+    id-token: write
+
+env:
+    # Infisical machine identity the pipeline logs in as through GitHub OIDC -
+    # the vault holds every secret, GitHub none. Org-level Variable (an id, not
+    # a credential).
+    INFISICAL_IDENTITY_ID: ${{ vars.INFISICAL_IDENTITY_ID }}
 
 jobs:
     reconcile:
@@ -23,8 +30,13 @@ jobs:
                   infra: 'true'
                   deps: 'false'
 
+            - name: Load secrets
+              id: vault
+              run: node src/index.ts load-secrets
+              working-directory: .infra/packages/infrastructure
+
             - name: Reconcile tailnet ACL
               run: node src/index.ts reconcile-tailnet-acl
               working-directory: .infra/packages/infrastructure
               env:
-                  TAILSCALE_AUTH_KEY: ${{ secrets.TS_OAUTH_SECRET }}
+                  TAILSCALE_AUTH_KEY: ${{ steps.vault.outputs.TS_OAUTH_SECRET }}

@@ -5,68 +5,48 @@ import {
 	ensureEmbeddedPostgresPasswordSecret,
 } from './ensure-password.ts'
 
-import type { EnvSecretsAdapter } from '#/adapters/github/env-secrets.ts'
+import type { SecretVault } from '#/domain/vault/secret-vault.ts'
 
-const SCOPE = {
-	owner: 'nextnode',
-	repo: 'acme',
-	environment: 'production',
-} as const
+const SCOPE = { repo: 'acme', environment: 'production' } as const
 
-function fakeAdapter(
-	overrides: Partial<EnvSecretsAdapter> = {},
-): EnvSecretsAdapter {
+function fakeVault(overrides: Partial<SecretVault> = {}): SecretVault {
 	return {
-		ghAvailable: () => Promise.resolve(true),
-		setRepoEnvSecret: () => Promise.resolve(),
+		listSecrets: () => Promise.resolve({}),
+		setSecrets: () => Promise.resolve(),
 		...overrides,
 	}
 }
 
 describe('ensureEmbeddedPostgresPasswordSecret', () => {
 	it('leaves an existing password untouched (idempotent, non-rotating)', async () => {
-		const setRepoEnvSecret = vi.fn(() => Promise.resolve())
-		const ghAvailable = vi.fn(() => Promise.resolve(true))
+		const setSecrets = vi.fn(() => Promise.resolve())
 
 		await ensureEmbeddedPostgresPasswordSecret(
 			{ [POSTGRES_PASSWORD_SECRET]: 'already-set' },
 			SCOPE,
-			fakeAdapter({ setRepoEnvSecret, ghAvailable }),
+			fakeVault({ setSecrets }),
 		)
 
-		expect(setRepoEnvSecret).not.toHaveBeenCalled()
-		// no gh probe either - the skip happens before any IO
-		expect(ghAvailable).not.toHaveBeenCalled()
+		expect(setSecrets).not.toHaveBeenCalled()
 	})
 
-	it('generates an ALPHANUMERIC password and pushes it when absent', async () => {
-		const setRepoEnvSecret = vi.fn<EnvSecretsAdapter['setRepoEnvSecret']>(
-			() => Promise.resolve(),
+	it('generates an ALPHANUMERIC password and stores it when absent', async () => {
+		const setSecrets = vi.fn<SecretVault['setSecrets']>(() =>
+			Promise.resolve(),
 		)
 
 		await ensureEmbeddedPostgresPasswordSecret(
 			{},
 			SCOPE,
-			fakeAdapter({ setRepoEnvSecret }),
+			fakeVault({ setSecrets }),
 		)
 
-		expect(setRepoEnvSecret).toHaveBeenCalledOnce()
-		const [name, value, scope] = setRepoEnvSecret.mock.calls[0] ?? []
-		expect(name).toBe(POSTGRES_PASSWORD_SECRET)
-		expect(scope).toEqual(SCOPE)
+		expect(setSecrets).toHaveBeenCalledOnce()
+		const [path, secrets] = setSecrets.mock.calls[0] ?? []
+		expect(path).toBe('/projects/acme/production')
 		// The whole point of #2: the value carries no character that would break
 		// the raw SQL literal (`'`) or the DATABASE_URL (`@ : / + =`). A base64
 		// generator would fail this assertion.
-		expect(value).toMatch(/^[A-Za-z0-9]{32}$/)
-	})
-
-	it('fails loud when gh is unavailable but a push is needed', async () => {
-		await expect(
-			ensureEmbeddedPostgresPasswordSecret(
-				{},
-				SCOPE,
-				fakeAdapter({ ghAvailable: () => Promise.resolve(false) }),
-			),
-		).rejects.toThrow('gh CLI unavailable')
+		expect(secrets?.[POSTGRES_PASSWORD_SECRET]).toMatch(/^[A-Za-z0-9]{32}$/)
 	})
 })

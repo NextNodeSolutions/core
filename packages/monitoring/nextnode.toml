@@ -11,7 +11,8 @@ vps = "nn-internals"
 # renderers - never by the app runtime. Empty by default: both notification
 # channels are OPTIONAL so the stack deploys (dashboards + scraping work) before
 # any channel is wired, and the renderer omits a route when its secret is absent.
-# To turn a channel on, add the name here AND set the GitHub secret, then deploy:
+# To turn a channel on, add the name here AND store the secret in the vault
+# (/projects/core/production), then deploy:
 #   - "RESEND_API_KEY"        -> Alertmanager email to ops@nextnode.fr
 #   - "HEALTHCHECKS_PING_URL" -> external dead man's switch heartbeat
 secrets = []
@@ -27,7 +28,7 @@ location = "nbg1"
 # internal = true it gets a tailnet-IP A-record, an internal-cert Caddy upstream,
 # and a published host port forwarding to the container's :3000.
 # `secrets` are declared PER SERVICE (no deploy-wide pool): the runtime pulls
-# exactly these names from GitHub Secrets into this service's .env — least
+# exactly these names from the vault into this service's .env — least
 # privilege, so a sibling service never sees them.
 [deploy.services.app]
 source = "build"

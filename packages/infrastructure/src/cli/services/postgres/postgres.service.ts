@@ -19,7 +19,6 @@ import {
 	provisionPostgresBackupCreds,
 } from './postgres-backup-creds.ts'
 
-import type { RepoEnvScope } from '#/adapters/github/env-secrets.ts'
 import type {
 	Service,
 	ServiceDefinition,
@@ -28,6 +27,7 @@ import type {
 import type { PostgresServiceConfig } from '#/config/service-config.ts'
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
 import type { ServiceEnv } from '#/domain/services/service.ts'
+import type { ProjectSecretScope } from '#/domain/vault/secret-vault.ts'
 
 const logger = createLogger()
 
@@ -77,8 +77,7 @@ async function provisionEmbeddedPostgres(
 	ctx: ServiceFactoryContext,
 	infraStorage: InfraStorageRuntimeConfig,
 ): Promise<void> {
-	const scope: RepoEnvScope = {
-		owner: ctx.repository.owner,
+	const scope: ProjectSecretScope = {
 		repo: ctx.repository.name,
 		environment: ctx.environment,
 	}
@@ -115,7 +114,7 @@ async function loadEmbeddedPostgresEnv(
 	const password = ctx.repoSecrets[POSTGRES_PASSWORD_SECRET]
 	if (!password) {
 		throw new Error(
-			`postgres service (embedded mode): "${POSTGRES_PASSWORD_SECRET}" is missing from ALL_SECRETS. It is auto-generated at provision (alphanumeric, safe to interpolate into the initdb SQL + DATABASE_URL), but GitHub freezes secrets at job start - run "provision" first so it is pushed, then re-trigger the deploy workflow so ALL_SECRETS picks it up`,
+			`postgres service (embedded mode): "${POSTGRES_PASSWORD_SECRET}" is missing from ALL_SECRETS. It is auto-generated at provision (alphanumeric, safe to interpolate into the initdb SQL + DATABASE_URL) and stored in the project's vault folder - run "provision" first so it exists`,
 		)
 	}
 	const backupCreds = await loadPostgresBackupCreds({
@@ -133,7 +132,7 @@ function loadExternalPostgresEnv(ctx: ServiceFactoryContext): ServiceEnv {
 	const databaseUrl = ctx.repoSecrets[POSTGRES_DATABASE_URL_SECRET]
 	if (!databaseUrl) {
 		throw new Error(
-			`postgres service (external mode): "${POSTGRES_DATABASE_URL_SECRET}" must be defined in repository secrets pointing at the managed database`,
+			`postgres service (external mode): "${POSTGRES_DATABASE_URL_SECRET}" must be defined in the project's vault folder, pointing at the managed database`,
 		)
 	}
 	return buildPostgresExternalEnv(databaseUrl)

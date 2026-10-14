@@ -172,7 +172,7 @@ describe('buildDeployInput registry token', () => {
 		).toThrow(/multiple distinct registry_auth_secret values/)
 	})
 
-	it('throws when the declared registry_auth_secret is absent from GitHub Secrets', () => {
+	it('throws when the declared registry_auth_secret is absent from the vault', () => {
 		const config = hetznerConfig({
 			web: upstreamService(
 				'docker.io/private/app:1.0',
@@ -181,7 +181,7 @@ describe('buildDeployInput registry token', () => {
 		})
 
 		expect(() => buildDeployInput(config, {}, {})).toThrow(
-			'Secret "DOCKERHUB_TOKEN" declared in deploy.services.web.registry_auth_secret but not found in GitHub Secrets',
+			'Secret "DOCKERHUB_TOKEN" declared in deploy.services.web.registry_auth_secret but not found in the vault',
 		)
 	})
 })

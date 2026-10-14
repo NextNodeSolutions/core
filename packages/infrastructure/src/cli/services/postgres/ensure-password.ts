@@ -1,11 +1,12 @@
-import { createEnvSecretsAdapter } from '#/adapters/github/env-secrets.ts'
+import { openVault } from '#/cli/vault/open-vault.ts'
 import { generateSecretValue } from '#/domain/deploy/secret-generation.ts'
+import { projectSecretsPath } from '#/domain/vault/secret-vault.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
 import type {
-	EnvSecretsAdapter,
-	RepoEnvScope,
-} from '#/adapters/github/env-secrets.ts'
+	ProjectSecretScope,
+	SecretVault,
+} from '#/domain/vault/secret-vault.ts'
 
 const logger = createLogger()
 
@@ -16,8 +17,8 @@ const EMBEDDED_POSTGRES_PASSWORD_LENGTH = 32
 
 /**
  * Auto-generate the embedded-postgres `POSTGRES_PASSWORD` on first provision
- * and push it as a GitHub env-secret, idempotent + non-rotating. The value is
- * drawn from the ALPHANUMERIC generator
+ * and store it in the project's vault folder, idempotent + non-rotating. The
+ * value is drawn from the ALPHANUMERIC generator
  * on purpose: it is interpolated RAW (no escaping) into both the exporter
  * bootstrap SQL literal (`CREATE ROLE ... PASSWORD '<pw>'`) and the embedded
  * `DATABASE_URL` (`postgres://id:<pw>@host/db`). An alphanumeric alphabet
@@ -26,14 +27,13 @@ const EMBEDDED_POSTGRES_PASSWORD_LENGTH = 32
  * already in `ALL_SECRETS` is left untouched: regenerating would orphan the
  * initialised database volume and break every live connection.
  *
- * Contract: a secret pushed here lands in a LATER run's `ALL_SECRETS` (GitHub
- * freezes secrets at job start), so the flow is provision -> re-trigger deploy,
- * the same contract used for every auto-generated secret.
+ * The vault is read live by every job, so the migrate and deploy jobs that
+ * follow provision in the same run already see the stored password.
  */
 export async function ensureEmbeddedPostgresPasswordSecret(
 	repoSecrets: Readonly<Record<string, string>>,
-	scope: RepoEnvScope,
-	adapter: EnvSecretsAdapter = createEnvSecretsAdapter(),
+	scope: ProjectSecretScope,
+	vault: SecretVault = openVault(),
 ): Promise<void> {
 	if (repoSecrets[POSTGRES_PASSWORD_SECRET]) {
 		logger.info(
@@ -41,18 +41,14 @@ export async function ensureEmbeddedPostgresPasswordSecret(
 		)
 		return
 	}
-	if (!(await adapter.ghAvailable())) {
-		throw new Error(
-			`postgres service (embedded mode): gh CLI unavailable - cannot persist "${POSTGRES_PASSWORD_SECRET}" as a GitHub env secret`,
-		)
-	}
 	const password = generateSecretValue({
 		name: POSTGRES_PASSWORD_SECRET,
 		generate: 'password',
 		length: EMBEDDED_POSTGRES_PASSWORD_LENGTH,
 	})
-	await adapter.setRepoEnvSecret(POSTGRES_PASSWORD_SECRET, password, scope)
+	const path = projectSecretsPath(scope)
+	await vault.setSecrets(path, { [POSTGRES_PASSWORD_SECRET]: password })
 	logger.info(
-		`embedded postgres ${POSTGRES_PASSWORD_SECRET} generated + persisted as env-secret on ${scope.owner}/${scope.repo} (${scope.environment})`,
+		`embedded postgres ${POSTGRES_PASSWORD_SECRET} generated + stored in the vault at ${path}`,
 	)
 }

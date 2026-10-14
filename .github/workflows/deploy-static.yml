@@ -20,6 +20,12 @@ permissions:
     contents: read
     actions: read
 
+env:
+    # Infisical machine identity the pipeline logs in as through GitHub OIDC -
+    # the vault holds every secret, GitHub none. Org-level Variable (an id, not
+    # a credential).
+    INFISICAL_IDENTITY_ID: ${{ vars.INFISICAL_IDENTITY_ID }}
+
 jobs:
     plan:
         name: Plan
@@ -48,9 +54,13 @@ jobs:
         name: Check secrets
         needs: plan
         runs-on: ubuntu-latest
-        # `environment:` is what makes GitHub inject the env-scoped secrets into
-        # `toJSON(secrets)`. Without it the check would see the repo-level
-        # snapshot only and flag every environment secret as missing.
+        permissions:
+            contents: read
+            actions: read
+            id-token: write
+        # `environment:` is only still here for the transitional seed step: it is
+        # what makes GitHub put the env-scoped secrets in the snapshot that step
+        # copies. The check itself reads the vault.
         environment:
             name: ${{ inputs.environment }}
         steps:
@@ -59,13 +69,31 @@ jobs:
                   infra: 'true'
                   deps: 'false'
 
+            # TRANSITIONAL (packages/infrastructure/MIGRATION.md): copy the GitHub
+            # secrets this pipeline still relies on into the vault, once. Goes
+            # away with the GitHub secrets.
+            - name: Seed vault from GitHub secrets
+              run: node src/index.ts seed-vault
+              working-directory: .infra/packages/infrastructure
+              env:
+                  PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
+                  PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
+                  LEGACY_GITHUB_SECRETS: ${{ toJSON(secrets) }}
+
+            - name: Load secrets
+              id: vault
+              run: node src/index.ts load-secrets
+              working-directory: .infra/packages/infrastructure
+              env:
+                  PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
+
             - name: Check declared secrets
               run: node src/index.ts check-secrets
               working-directory: .infra/packages/infrastructure
               env:
                   PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
                   PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
-                  ALL_SECRETS: ${{ toJSON(secrets) }}
+                  ALL_SECRETS: ${{ steps.vault.outputs.ALL_SECRETS }}
 
     quality:
         name: ${{ matrix.task.name }}
@@ -90,11 +118,20 @@ jobs:
         name: Provision
         needs: [plan, check-secrets]
         runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            actions: read
+            id-token: write
         steps:
             - uses: NextNodeSolutions/core/.github/actions/setup@main
               with:
                   infra: 'true'
                   deps: 'false'
+
+            - name: Load secrets
+              id: vault
+              run: node src/index.ts load-secrets
+              working-directory: .infra/packages/infrastructure
 
             - name: Provision infrastructure
               run: node src/index.ts provision
@@ -102,19 +139,28 @@ jobs:
               env:
                   PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
                   PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
-                  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-                  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+                  CLOUDFLARE_ACCOUNT_ID: ${{ steps.vault.outputs.CLOUDFLARE_ACCOUNT_ID }}
+                  CLOUDFLARE_API_TOKEN: ${{ steps.vault.outputs.CLOUDFLARE_API_TOKEN }}
 
     dns:
         name: DNS
         needs: [plan, provision]
         if: needs.plan.outputs.has_domain == 'true'
         runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            actions: read
+            id-token: write
         steps:
             - uses: NextNodeSolutions/core/.github/actions/setup@main
               with:
                   infra: 'true'
                   deps: 'false'
+
+            - name: Load secrets
+              id: vault
+              run: node src/index.ts load-secrets
+              working-directory: .infra/packages/infrastructure
 
             - name: Reconcile DNS
               run: node src/index.ts dns
@@ -122,13 +168,17 @@ jobs:
               env:
                   PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
                   PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
-                  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-                  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+                  CLOUDFLARE_ACCOUNT_ID: ${{ steps.vault.outputs.CLOUDFLARE_ACCOUNT_ID }}
+                  CLOUDFLARE_API_TOKEN: ${{ steps.vault.outputs.CLOUDFLARE_API_TOKEN }}
 
     deploy:
         name: Deploy
         needs: [plan, quality, provision]
         runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            actions: read
+            id-token: write
         environment:
             name: ${{ inputs.environment }}
             url: ${{ steps.cf.outputs.url }}
@@ -137,15 +187,22 @@ jobs:
               with:
                   infra: 'true'
 
+            - name: Load secrets
+              id: vault
+              run: node src/index.ts load-secrets
+              working-directory: .infra/packages/infrastructure
+              env:
+                  PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
+
             - name: Deploy
               run: node src/index.ts deploy
               working-directory: .infra/packages/infrastructure
               env:
                   PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
                   PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
-                  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-                  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-                  ALL_SECRETS: ${{ toJSON(secrets) }}
+                  CLOUDFLARE_ACCOUNT_ID: ${{ steps.vault.outputs.CLOUDFLARE_ACCOUNT_ID }}
+                  CLOUDFLARE_API_TOKEN: ${{ steps.vault.outputs.CLOUDFLARE_API_TOKEN }}
+                  ALL_SECRETS: ${{ steps.vault.outputs.ALL_SECRETS }}
 
             - name: Build
               run: pnpm build
@@ -163,5 +220,5 @@ jobs:
               with:
                   directory: ${{ needs.plan.outputs.build_directory }}
                   project-name: ${{ needs.plan.outputs.project_name }}
-                  account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-                  api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+                  account-id: ${{ steps.vault.outputs.CLOUDFLARE_ACCOUNT_ID }}
+                  api-token: ${{ steps.vault.outputs.CLOUDFLARE_API_TOKEN }}

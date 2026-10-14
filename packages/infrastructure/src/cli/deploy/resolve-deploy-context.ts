@@ -232,7 +232,7 @@ function resolveUpstreamRegistryToken(
 	const secretValue = repoSecrets[secret]
 	if (typeof secretValue === 'undefined') {
 		throw new Error(
-			`Secret "${secret}" declared in deploy.services.${name}.registry_auth_secret but not found in GitHub Secrets`,
+			`Secret "${secret}" declared in deploy.services.${name}.registry_auth_secret but not found in the vault`,
 		)
 	}
 	return secretValue

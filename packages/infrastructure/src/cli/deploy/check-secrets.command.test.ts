@@ -10,6 +10,7 @@ import { checkSecretsCommand } from './check-secrets.command.ts'
 
 beforeEach(() => {
 	vi.stubEnv('PIPELINE_ENVIRONMENT', 'production')
+	vi.stubEnv('GITHUB_REPOSITORY', 'NextNodeSolutions/fleurs')
 })
 
 afterEach(() => {
@@ -23,14 +24,14 @@ describe('checkSecretsCommand', () => {
 		checkSecretsCommand(STATIC_WITH_SECRETS)
 	})
 
-	it('throws naming the missing secret and its environment', () => {
+	it('throws naming the missing secret and its vault folder', () => {
 		vi.stubEnv('ALL_SECRETS', JSON.stringify({ OTHER: 'value' }))
 
 		expect(() => checkSecretsCommand(STATIC_WITH_MISSING_SECRET)).toThrow(
 			/MISSING_KEY/,
 		)
 		expect(() => checkSecretsCommand(STATIC_WITH_MISSING_SECRET)).toThrow(
-			/production/,
+			'/projects/fleurs/production',
 		)
 	})
 

@@ -14,6 +14,13 @@ on:
 
 permissions:
     contents: read
+    id-token: write
+
+env:
+    # Infisical machine identity the pipeline logs in as through GitHub OIDC -
+    # the vault holds every secret, GitHub none. Org-level Variable (an id, not
+    # a credential).
+    INFISICAL_IDENTITY_ID: ${{ vars.INFISICAL_IDENTITY_ID }}
 
 jobs:
     prune:
@@ -25,10 +32,15 @@ jobs:
                   infra: 'true'
                   deps: 'false'
 
+            - name: Load secrets
+              id: vault
+              run: node src/index.ts load-secrets
+              working-directory: .infra/packages/infrastructure
+
             - name: Prune postgres backups
               run: node src/index.ts prune-backups
               working-directory: .infra/packages/infrastructure
               env:
-                  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-                  R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-                  R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+                  CLOUDFLARE_API_TOKEN: ${{ steps.vault.outputs.CLOUDFLARE_API_TOKEN }}
+                  R2_ACCESS_KEY_ID: ${{ steps.vault.outputs.R2_ACCESS_KEY_ID }}
+                  R2_SECRET_ACCESS_KEY: ${{ steps.vault.outputs.R2_SECRET_ACCESS_KEY }}

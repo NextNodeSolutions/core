@@ -144,9 +144,9 @@ export const SECRET_GENERATORS = ['token', 'password'] as const
 export type SecretGenerator = (typeof SECRET_GENERATORS)[number]
 
 // A secret the infra GENERATES itself (rather than requiring the operator to
-// pre-set it in GitHub). Declared inline in `[deploy].secrets` as
+// pre-set it in the vault). Declared inline in `[deploy].secrets` as
 // `{ name, generate, length }`. At provision the value is generated once and
-// pushed as a GitHub env-secret, idempotently - see `ensureGeneratedSecrets`.
+// stored in the project's vault folder, idempotently - see `ensureGeneratedSecrets`.
 // `length` is the number of CHARACTERS in the produced secret.
 export interface GeneratedSecretConfig {
 	readonly name: string
@@ -160,7 +160,7 @@ interface BaseDeploySection {
 	// Only consumed by the hetzner-vps target; cloudflare-pages ignores it.
 	readonly vps: string | null
 	readonly volumes: ReadonlyArray<DeployVolume>
-	// Secrets the infra auto-generates and pushes to GitHub at provision time -
+	// Secrets the infra auto-generates and stores in the vault at provision time -
 	// the `{ name, generate, length }` entries parsed out of `[deploy].secrets`.
 	// Empty when every declared secret is must-exist. Consumed by
 	// `ensureGeneratedSecrets`; the names also live in `secrets` (the pull pool).
@@ -169,7 +169,7 @@ interface BaseDeploySection {
 
 export interface HetznerVpsDeploySection extends BaseDeploySection {
 	readonly target: 'hetzner-vps'
-	// The pool of GitHub Secret NAMES the pipeline pulls = the GLOBAL secrets
+	// The pool of secret NAMES the pipeline pulls from the vault = the GLOBAL secrets
 	// declared in `[deploy].secrets` (injected into every service) UNIONED with
 	// every service's own `[deploy.services.<name>].secrets` (least-privilege).
 	// Consumed by `pickSecrets` + the GITHUB_ENV write.
@@ -265,7 +265,7 @@ export const DEFAULT_SERVICE_PORT = 3000
 
 export interface CloudflarePagesDeploySection extends BaseDeploySection {
 	readonly target: 'cloudflare-pages'
-	// The pool of GitHub Secret NAMES synced to the Pages project. Declared
+	// The pool of vault secret NAMES synced to the Pages project. Declared
 	// directly in `[deploy].secrets` - a Pages deploy is a single unit with no
 	// per-service split, so there is nothing to derive and no leak to prevent.
 	readonly secrets: ReadonlyArray<string>

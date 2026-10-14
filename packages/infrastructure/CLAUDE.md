@@ -18,7 +18,10 @@ src/
   index.ts            — Command registry + argv dispatch. No business logic.
   cli/                — Command orchestrators: read env vars, call domain + adapters
     env.ts            — Typed env var readers (requireEnv, getEnv)
-    secrets.ts        — parseAllSecrets, pickSecrets (GitHub Secrets → Record)
+    secrets.ts        — parseAllSecrets, pickSecrets (vault pool → Record)
+    vault/            — Secret vault access
+      open-vault.ts         — OIDC login, lazy SecretVault handle
+      load-secrets.command.ts — vault → masked step outputs
     deploy/           — Deploy-related commands
       create-target.ts  — Factory: config + env → DeployTarget instance
       provision.command.ts  — target.ensureInfra()
@@ -53,6 +56,8 @@ src/
       compose-env.ts        — formatComposeEnv (KEY=val serializer)
       vector-env.ts         — VectorTenantFields type
       render-vector-env.ts  — renderVectorEnv (pure)
+    vault/            — Secret vault (provider-agnostic)
+      secret-vault.ts       — SecretVault port, folder layout, project pool
     pipeline/         — Pipeline logic
       quality-matrix.ts — buildQualityMatrix, hasProdGate
       prod-gate.ts      — findDevRun, evaluateDevRun
@@ -75,8 +80,11 @@ src/
     r2/               — R2 (S3) adapter
       client.ts            — S3 SDK wrapper for state + certs
       verify-credentials.ts — SigV4 handshake for R2 credential self-heal
+    infisical/        — Infisical API adapter
+      vault.ts        — SecretVault impl (OIDC login, list, upsert)
     github/           — GitHub Actions adapter
       api.ts          — fetchWorkflowRuns
+      oidc-token.ts   — requestGithubOidcToken
       plan-outputs.ts — writePlanOutputs
       env.ts          — writeOutput, writeSummary
     build-output/     — Build output file injection
@@ -140,8 +148,8 @@ All scripts default to their key name. Set to `false` to skip.
 ## Deploy env: build args, secrets & needs (per service)
 
 A deployable declares its env wiring PER SERVICE under `[deploy.services.<name>]`.
-The dev declares only NAMES — values always live in GitHub (Secrets / Variables),
-**never** in `nextnode.toml`. There are two distinct "doors":
+The dev declares only NAMES — values live in the vault (secrets) or in GitHub
+Variables (build args), **never** in `nextnode.toml`. There are two distinct "doors":
 
 - **BUILD door** — values inlined into the image at build time (Astro `site`,
   `NEXT_PUBLIC_*`, `VITE_*`). A `.env` does NOT traverse the Docker build (the
@@ -337,8 +345,8 @@ HetznerVpsTargetConfig → rollout → DeployContainerInput → stageRollout`.
 ## Secrets: global pool + auto-generation
 
 A `[deploy].secrets` entry is either a **must-exist** name (a string — the
-operator set it in GitHub) or an **auto-generated** table the infra creates and
-pushes itself:
+operator stored it in the vault) or an **auto-generated** table the infra creates
+and stores itself:
 
 ```toml
 [deploy]
@@ -358,25 +366,46 @@ secrets = [
   pool; table entries also become `deploy.generatedSecrets`. Duplicate names,
   unknown generators, and out-of-range lengths fail loud at parse.
 - **Provision** (`cli/deploy/ensure-generated-secrets.ts`): for each generated
-  secret ABSENT from `ALL_SECRETS`, generate the value and `gh secret set
-<name> --env <env>` (via the `EnvSecretsAdapter`). **Idempotent +
-  non-rotating** — a secret already in `ALL_SECRETS` is left untouched
-  (regenerating would invalidate every live token / break the DB connection).
-  Fails loud if gh is unavailable but a push is needed.
-- **Contract**: a secret pushed during provision lands in a LATER run's
-  `ALL_SECRETS` snapshot (GitHub freezes secrets at job start), so the flow is
-  _provision → re-trigger deploy_ — the same contract every auto-generated
-  secret uses.
+  secret ABSENT from `ALL_SECRETS`, generate the value and store it in the
+  project's vault folder. **Idempotent + non-rotating** — a secret already in
+  `ALL_SECRETS` is left untouched (regenerating would invalidate every live
+  token / break the DB connection).
+- **Contract**: every job reads the vault live, so a secret stored during
+  provision is visible to the migrate and deploy jobs of the SAME run.
 - **Fail fast** (`cli/deploy/check-secrets.command.ts`): the `check-secrets`
   job runs right after `plan`, in parallel with the quality matrix, and fails
   the run when a must-exist declared secret is absent from `ALL_SECRETS` —
-  reporting EVERY missing name at once instead of dying one secret at a time in
-  `pickSecrets` at the end of the pipeline. Generated secrets are excluded (they
-  legitimately do not exist before their first provision). The job declares
-  `environment:` — that is what makes GitHub inject env-scoped secrets into
-  `toJSON(secrets)`; without it every environment secret would read as missing.
-  `provision` / `build-image` depend on it, so nothing is created before the
-  secret pool is known complete.
+  reporting EVERY missing name at once, with the vault folder to add them to,
+  instead of dying one secret at a time in `pickSecrets` at the end of the
+  pipeline. Generated secrets are excluded (they legitimately do not exist
+  before their first provision). `provision` / `build-image` depend on it, so
+  nothing is created before the secret pool is known complete.
+
+## Secrets live in the vault
+
+Infisical is the single source of truth for secrets; GitHub holds none
+(`vars.*` stays in GitHub — Variables are not secrets). Never add a
+`secrets.<NAME>` reference to a workflow, and never hardcode a list of secret
+names: the vault folder is the list.
+
+- **Layout** (`domain/vault/secret-vault.ts`): `/ci` holds the platform
+  credentials shared by the fleet; `/projects/<repo>/<environment>` holds one
+  repo's secrets for one environment. The pool a project's names resolve
+  against (`ALL_SECRETS`) is `/ci` overlaid by the project folder, the project
+  winning — so a project may declare a platform secret without holding a copy.
+- **Auth** (`cli/vault/open-vault.ts`): a job granted `id-token: write` trades
+  its GitHub OIDC token for a short-lived vault token. The machine identity
+  (`INFISICAL_IDENTITY_ID`, an org Variable) only trusts workflow files of
+  `core` on `main` (`job_workflow_ref` claim), whichever repo calls them.
+- **Read** (`load-secrets`): the first step of every job that needs a secret.
+  Each `/ci` secret becomes a masked step output
+  (`steps.vault.outputs.<NAME>`), mapped explicitly into the steps that need
+  it; with `PIPELINE_ENVIRONMENT` set it also emits the project pool as the
+  `ALL_SECRETS` JSON output.
+- **Write** (`SecretVault.setSecrets`): provision stores generated secrets in
+  the project folder, and the R2 self-heal stores rotated credentials in `/ci`.
+- `seed-vault` + `domain/vault/legacy-seed.ts` are TRANSITIONAL (one-shot copy
+  of the former GitHub secrets, see `MIGRATION.md`) and get deleted with them.
 
 ## Worker binding types: `generate-worker-types`
 

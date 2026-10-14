@@ -17,14 +17,14 @@ vi.mock('./postgres-backup-creds.ts', () => ({
 	loadPostgresBackupCreds: loadPostgresBackupCredsMock,
 }))
 
-// CRITICAL: embedded provision() auto-generates POSTGRES_PASSWORD via the real
-// gh CLI by default. Stub the env-secrets adapter so this suite can NEVER run
-// `gh secret set` against a live repo (that would overwrite a production
-// secret). The password-ensure logic itself is covered in ensure-password.test.ts.
-vi.mock('#/adapters/github/env-secrets.ts', () => ({
-	createEnvSecretsAdapter: () => ({
-		ghAvailable: () => Promise.resolve(true),
-		setRepoEnvSecret: () => Promise.resolve(),
+// CRITICAL: embedded provision() auto-generates POSTGRES_PASSWORD and stores it
+// in the real vault by default. Stub the vault so this suite can NEVER write to
+// the live one (that would overwrite a production secret). The password-ensure
+// logic itself is covered in ensure-password.test.ts.
+vi.mock('#/cli/vault/open-vault.ts', () => ({
+	openVault: () => ({
+		listSecrets: () => Promise.resolve({}),
+		setSecrets: () => Promise.resolve(),
 	}),
 }))
 
@@ -234,7 +234,7 @@ describe('createPostgresService', () => {
 			const service = createPostgresService(makeCtx({}), EXTERNAL)
 
 			await expect(service.loadEnv()).rejects.toThrow(
-				'postgres service (external mode): "DATABASE_URL" must be defined in repository secrets',
+				'postgres service (external mode): "DATABASE_URL" must be defined in the project',
 			)
 		})
 

@@ -1,18 +1,20 @@
 import { resolveAccountId } from '#/adapters/cloudflare/accounts.ts'
 import { ensureR2Bucket } from '#/adapters/cloudflare/r2/buckets.ts'
-import { createOrgSecretsAdapter } from '#/adapters/github/org-secrets.ts'
 import { verifyR2Credentials } from '#/adapters/r2/verify-credentials.ts'
+import { openVault } from '#/cli/vault/open-vault.ts'
 import {
 	DEFAULT_R2_CERTS_BUCKET,
 	DEFAULT_R2_STATE_BUCKET,
 	R2_BUCKET_LOCATION_HINT,
 } from '#/config/types.ts'
 import { computeR2Endpoint } from '#/domain/cloudflare/r2/addressing.ts'
+import { PLATFORM_SECRETS_PATH } from '#/domain/vault/secret-vault.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
 import { rotateR2Credentials } from './rotate-token.ts'
 
 import type { InfraStorageRuntimeConfig } from '#/domain/cloudflare/r2/runtime-config.ts'
+import type { SecretVault } from '#/domain/vault/secret-vault.ts'
 import type { R2Context } from './context.ts'
 import type { R2Credentials } from './rotate-token.ts'
 
@@ -20,8 +22,7 @@ const logger = createLogger()
 
 const ENV_R2_ACCESS_KEY = 'R2_ACCESS_KEY_ID'
 const ENV_R2_SECRET_KEY = 'R2_SECRET_ACCESS_KEY'
-const ENV_GITHUB_OWNER = 'GITHUB_REPOSITORY_OWNER'
-const GH_SECRET_ACCOUNT_ID = 'CLOUDFLARE_ACCOUNT_ID'
+const ENV_ACCOUNT_ID = 'CLOUDFLARE_ACCOUNT_ID'
 
 async function resolveCredsOrRotate(ctx: R2Context): Promise<R2Credentials> {
 	const accessKeyId = process.env[ENV_R2_ACCESS_KEY]
@@ -47,31 +48,29 @@ async function resolveCredsOrRotate(ctx: R2Context): Promise<R2Credentials> {
 	return rotateR2Credentials(ctx)
 }
 
-async function persistOrgSecrets(
+// Store the account id + R2 credentials among the platform secrets, so every
+// later job (and every other project) loads them from the vault. Skipped when
+// the job was already given these exact values: the vault holds them, and a
+// rewrite would only add a version to their history on every provision.
+async function persistPlatformSecrets(
 	accountId: string,
 	creds: R2Credentials,
+	vault: SecretVault,
 ): Promise<void> {
-	const org = process.env[ENV_GITHUB_OWNER]
-	if (!org) {
-		logger.warn(
-			`${ENV_GITHUB_OWNER} not set - skipping GitHub org secret persistence`,
-		)
-		return
+	const platformSecrets = {
+		[ENV_ACCOUNT_ID]: accountId,
+		[ENV_R2_ACCESS_KEY]: creds.accessKeyId,
+		[ENV_R2_SECRET_KEY]: creds.secretAccessKey,
 	}
+	const isInSync = Object.entries(platformSecrets).every(
+		([name, secretValue]) => process.env[name] === secretValue,
+	)
+	if (isInSync) return
 
-	const orgSecrets = createOrgSecretsAdapter()
-	const available = await orgSecrets.ghAvailable()
-	if (!available) {
-		logger.warn(
-			'gh CLI unavailable - cannot persist R2 secrets to GitHub org. They will need to be recreated on the next run.',
-		)
-		return
-	}
-
-	await orgSecrets.setOrgSecret(GH_SECRET_ACCOUNT_ID, accountId, org)
-	await orgSecrets.setOrgSecret(ENV_R2_ACCESS_KEY, creds.accessKeyId, org)
-	await orgSecrets.setOrgSecret(ENV_R2_SECRET_KEY, creds.secretAccessKey, org)
-	logger.info(`R2 credentials stored as GitHub org secrets on "${org}"`)
+	await vault.setSecrets(PLATFORM_SECRETS_PATH, platformSecrets)
+	logger.info(
+		`R2 credentials stored in the vault at ${PLATFORM_SECRETS_PATH}`,
+	)
 }
 
 /**
@@ -81,14 +80,14 @@ async function persistOrgSecrets(
  *   2. Ensure both R2 buckets (state + certs) exist.
  *   3. If R2 creds are in env and verify via SigV4 handshake → reuse.
  *   4. Otherwise, create a new R2 API token scoped to both buckets, poll
- *      until it propagates, revoke stale tokens, persist as GitHub org
- *      secrets.
+ *      until it propagates, revoke stale tokens, persist to the vault.
  *
  * Returns the resolved `InfraStorageRuntimeConfig` - callers thread it
  * explicitly into adapters that need it (no hidden coupling via `process.env`).
  */
 export async function ensureR2Setup(
 	cfToken: string,
+	vault: SecretVault = openVault(),
 ): Promise<InfraStorageRuntimeConfig> {
 	const stateBucket = DEFAULT_R2_STATE_BUCKET
 	const certsBucket = DEFAULT_R2_CERTS_BUCKET
@@ -113,7 +112,7 @@ export async function ensureR2Setup(
 
 	const ctx: R2Context = { cfToken, accountId, stateBucket, certsBucket }
 	const creds = await resolveCredsOrRotate(ctx)
-	await persistOrgSecrets(accountId, creds)
+	await persistPlatformSecrets(accountId, creds, vault)
 
 	return {
 		accountId,
