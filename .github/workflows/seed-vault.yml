@@ -4,11 +4,9 @@ name: Seed Vault
 # GitHub secrets are removed (packages/infrastructure/README.md, "Secrets").
 #
 # One-shot copy of the platform credentials from the GitHub secrets into `/ci`,
-# run manually right after the vault migration lands. The platform identity is
-# read-only on `/ci`: grant it a temporary write privilege for the run (README,
-# "Moving off GitHub secrets"). Project secrets are not copied: they are stored
-# in the project folder by hand. Idempotent: a secret the vault already holds
-# is skipped.
+# run manually right after the vault migration lands. Project secrets are not
+# copied: they are stored in the project folder by hand. Idempotent: a secret
+# the vault already holds is skipped.
 
 on:
     workflow_dispatch:
@@ -20,10 +18,9 @@ permissions:
 env:
     # The CI vault, a dedicated Infisical project, and the machine identity
     # this workflow logs in as through GitHub OIDC. Organization Variables: ids,
-    # not credentials. The platform identity reads `/ci` only (README, "Vault
-    # setup").
+    # not credentials (README, "Vault setup").
     INFISICAL_PROJECT_ID: ${{ vars.INFISICAL_PROJECT_ID }}
-    INFISICAL_IDENTITY_ID: ${{ vars.INFISICAL_PLATFORM_IDENTITY_ID }}
+    INFISICAL_IDENTITY_ID: ${{ vars.INFISICAL_IDENTITY_ID }}
 
 jobs:
     seed:

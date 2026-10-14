@@ -5,8 +5,7 @@
 // inside a workflow run, where `toJSON(secrets)` exposes them. This command
 // copies the platform credentials into `/ci` once, from core's own Seed Vault
 // workflow, and never overwrites, so a value edited in the vault is not
-// reverted by a later run. The pipeline identity is read-only on `/ci`: the
-// run needs a temporary write privilege, granted for the occasion.
+// reverted by a later run.
 
 import { readJsonRecordEnv } from '#/cli/env.ts'
 import {

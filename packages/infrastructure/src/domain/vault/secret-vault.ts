@@ -5,26 +5,23 @@ import type { AppEnvironment } from '#/domain/environment.ts'
  * consumes - GitHub holds none. Two folders frame it:
  *   - `PLATFORM_SECRETS_PATH`: the fleet-wide infra credentials (cloud
  *     providers, CI identities, registries) the workflows themselves consume.
- *     Read-only for the pipeline.
  *   - `projectSecretsPath()`: one folder per repository x environment, holding
  *     the secrets that belong to that project alone.
  */
 export const PLATFORM_SECRETS_PATH = '/ci'
 const PROJECT_SECRETS_ROOT = '/projects'
 
-// Repository + pipeline environment a project secret is scoped to. Both are
-// the values of the `repository` and `environment` claims of the job's OIDC
-// token: the vault policy templates the folder it grants on those same claims,
-// so the folder the code reads and the folder the token may read agree by
-// construction - a pipeline cannot point itself at another project's folder.
+// Repo + pipeline environment a project secret is scoped to. Keyed by the
+// GitHub repository name (not `project.name`): the runner sets it, so a caller
+// cannot point its pipeline at another project's folder from its own
+// nextnode.toml.
 export interface ProjectSecretScope {
-	// `owner/name`, as GitHub sets it.
-	readonly repository: string
+	readonly repo: string
 	readonly environment: AppEnvironment
 }
 
 export function projectSecretsPath(scope: ProjectSecretScope): string {
-	return `${PROJECT_SECRETS_ROOT}/${scope.repository}/${scope.environment}`
+	return `${PROJECT_SECRETS_ROOT}/${scope.repo}/${scope.environment}`
 }
 
 // The pool `[deploy].secrets` names resolve against (`ALL_SECRETS`): the

@@ -35,7 +35,7 @@ export function checkSecretsCommand(config: DeployableConfig): void {
 
 	if (missing.length) {
 		const vaultPath = projectSecretsPath({
-			repository: requireGithubRepository().fullName,
+			repo: requireGithubRepository().name,
 			environment,
 		})
 		throw new Error(formatMissingSecretsError(missing, vaultPath))

@@ -41,9 +41,6 @@ export function requireB64Env(name: string): string {
 export interface GithubRepository {
 	readonly owner: string
 	readonly name: string
-	// `owner/name` verbatim - the value of the `repository` claim in the job's
-	// OIDC token, which the vault policy scopes project folders on.
-	readonly fullName: string
 }
 
 export function requireGithubRepository(): GithubRepository {
@@ -54,7 +51,7 @@ export function requireGithubRepository(): GithubRepository {
 			`GITHUB_REPOSITORY must be in "owner/repo" format (got "${repository}")`,
 		)
 	}
-	return { owner, name, fullName: repository }
+	return { owner, name }
 }
 
 // Unix env-var idiom: a variable is opt-in by presence, not by "true/false".

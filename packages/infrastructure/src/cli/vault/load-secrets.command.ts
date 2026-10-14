@@ -32,7 +32,7 @@ function readProjectSecretScope(): ProjectSecretScope | undefined {
 			`PIPELINE_ENVIRONMENT must be one of ${APP_ENVIRONMENTS.join(', ')} (got: ${environment})`,
 		)
 	}
-	return { repository: requireGithubRepository().fullName, environment }
+	return { repo: requireGithubRepository().name, environment }
 }
 
 async function loadPlatformSecrets(

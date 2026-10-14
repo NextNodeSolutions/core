@@ -20,7 +20,7 @@ export async function provisionCommand(
 		config.project.type,
 		getEnv('PIPELINE_ENVIRONMENT'),
 	)
-	const repository = requireGithubRepository().fullName
+	const repository = requireGithubRepository()
 	const repoSecrets = readJsonRecordEnv('ALL_SECRETS')
 	const target = TARGET_DEFINITIONS[config.deploy.target].build(config, {
 		environment,
@@ -31,7 +31,7 @@ export async function provisionCommand(
 		await target.loadBackingEnv(config.project.name),
 	])
 	await ensureGeneratedSecrets(config.deploy.generatedSecrets, repoSecrets, {
-		repository,
+		repo: repository.name,
 		environment,
 	})
 	writeSummary(

@@ -23,10 +23,9 @@ permissions:
 env:
     # The CI vault, a dedicated Infisical project, and the machine identity
     # this workflow logs in as through GitHub OIDC. Organization Variables: ids,
-    # not credentials. The deploy identity is the only one that reaches project
-    # folders, and only from this file (README, "Vault setup").
+    # not credentials (README, "Vault setup").
     INFISICAL_PROJECT_ID: ${{ vars.INFISICAL_PROJECT_ID }}
-    INFISICAL_IDENTITY_ID: ${{ vars.INFISICAL_DEPLOY_IDENTITY_ID }}
+    INFISICAL_IDENTITY_ID: ${{ vars.INFISICAL_IDENTITY_ID }}
 
 # Serialise deploys per (config, environment). Two pushes to the same
 # project's environment queue rather than racing - protects the shared
@@ -80,10 +79,8 @@ jobs:
             contents: read
             actions: read
             id-token: write
-        # `environment:` puts the `environment` claim in the job's OIDC token.
-        # The deploy identity maps that claim to scope the project folder, and
-        # Infisical refuses its login from a job without one: every job of this
-        # file that loads secrets declares its environment.
+        # `environment:` ties the job to the GitHub environment, for deployment
+        # tracking and any protection rule set on it.
         environment:
             name: ${{ inputs.environment }}
         steps:
