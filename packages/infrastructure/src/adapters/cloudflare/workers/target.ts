@@ -16,7 +16,6 @@ import { deployWorkers } from './deploy-workers.ts'
 import { migrateWorkers } from './migrate-workers.ts'
 import { teardownWorkers } from './teardown-workers.ts'
 import {
-	destroyWorkersTerraform,
 	memoizeOutputsReader,
 	planWorkersTerraform,
 	readWorkersTerraformOutputs,
@@ -208,8 +207,7 @@ export class CloudflareWorkersTarget implements DeployTarget {
 			environment: this.environment,
 			serviceNames: Object.keys(this.config.deploy.services),
 			wranglerRunner: this.wrangler,
-			destroyTerraform: () =>
-				destroyWorkersTerraform(this.terraformContext()),
+			terraformContext: this.terraformContext(),
 		})
 	}
 	planDiff(): Promise<string> {

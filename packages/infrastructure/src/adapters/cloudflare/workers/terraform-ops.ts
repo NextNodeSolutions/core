@@ -67,13 +67,17 @@ export async function applyWorkersTerraform(
 	return { handled: true, detail: 'applied' }
 }
 
-export async function destroyWorkersTerraform(
+export function withWorkersTerraformTeardown<T>(
 	ctx: WorkersTerraformContext,
-): Promise<ResourceOutcome> {
-	await withWorkdir(ctx, (workdir, vars) =>
-		terraformDestroy(workdir, ctx.runner, vars),
-	)
-	return { handled: true, detail: 'destroyed' }
+	run: (destroyTerraform: () => Promise<ResourceOutcome>) => Promise<T>,
+): Promise<T> {
+	return withWorkdir(ctx, async (workdir, vars) => {
+		await terraformPlan(workdir, ctx.runner, vars)
+		return run(async () => {
+			await terraformDestroy(workdir, ctx.runner, vars)
+			return { handled: true, detail: 'destroyed' }
+		})
+	})
 }
 
 export function planWorkersTerraform(
