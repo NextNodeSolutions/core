@@ -1,8 +1,8 @@
 import type { DeploySection } from '#/config/types.ts'
 
-// The declared secrets that must ALREADY exist in GitHub when the pipeline
+// The declared secrets that must ALREADY exist in the vault when the pipeline
 // starts. Auto-generated entries are excluded: `ensureGeneratedSecrets` creates
-// and pushes them at provision, so their absence from a pre-provision snapshot
+// and stores them at provision, so their absence from a pre-provision snapshot
 // is the expected first-run state, not a config bug.
 export function collectRequiredSecrets(
 	deploy: DeploySection,
@@ -20,11 +20,7 @@ export function findMissingSecrets(
 
 export function formatMissingSecretsError(
 	missing: ReadonlyArray<string>,
-	environment: string,
+	vaultPath: string,
 ): string {
-	const names = missing.join(', ')
-	const commands = missing
-		.map(name => `gh secret set ${name} --env ${environment}`)
-		.join('\n')
-	return `${missing.length} secret(s) declared in nextnode.toml are absent from GitHub Secrets for the "${environment}" environment: ${names}\n\nSet them, then re-run the pipeline:\n${commands}`
+	return `${missing.length} secret(s) declared in nextnode.toml are absent from the vault folder "${vaultPath}": ${missing.join(', ')}\n\nAdd them to that folder, then re-run the pipeline.`
 }

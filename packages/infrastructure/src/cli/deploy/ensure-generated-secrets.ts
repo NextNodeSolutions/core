@@ -1,33 +1,32 @@
-import { createEnvSecretsAdapter } from '#/adapters/github/env-secrets.ts'
+import { openVault } from '#/cli/vault/open-vault.ts'
 import { generateSecretValue } from '#/domain/deploy/secret-generation.ts'
+import { projectSecretsPath } from '#/domain/vault/secret-vault.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
-import type {
-	EnvSecretsAdapter,
-	RepoEnvScope,
-} from '#/adapters/github/env-secrets.ts'
 import type { GeneratedSecretConfig } from '#/config/types.ts'
+import type {
+	ProjectSecretScope,
+	SecretVault,
+} from '#/domain/vault/secret-vault.ts'
 
 const logger = createLogger()
 
 /**
  * Provision-time bootstrap for the project's auto-generated secrets. For each
  * `{ name, generate, length }` declared in `[deploy].secrets`, generate the
- * value once and push it as a GitHub env-secret on the project repo, scoped to
- * the current pipeline environment.
+ * value once and store it in the project's vault folder, scoped to the current
+ * pipeline environment.
  *
  * Idempotent and non-rotating: a secret already present in `ALL_SECRETS` is left
  * untouched (regenerating a JWT/DB secret would invalidate every live token /
- * break the connection). The freshly-pushed value lands in a LATER run's
- * `ALL_SECRETS` snapshot - the same provision-then-redeploy contract used for
- * every auto-generated secret. Fails loud when gh is unavailable but a push is
- * needed.
+ * break the connection). The vault is read live by every job, so the jobs that
+ * follow provision in the same run already see the freshly-stored value.
  */
 export async function ensureGeneratedSecrets(
 	generated: ReadonlyArray<GeneratedSecretConfig>,
 	repoSecrets: Readonly<Record<string, string>>,
-	scope: RepoEnvScope,
-	adapter: EnvSecretsAdapter = createEnvSecretsAdapter(),
+	scope: ProjectSecretScope,
+	vault: SecretVault = openVault(),
 ): Promise<void> {
 	const pending = generated.filter(spec => !repoSecrets[spec.name])
 	const present = generated.length - pending.length
@@ -38,21 +37,16 @@ export async function ensureGeneratedSecrets(
 	}
 	if (!pending.length) return
 
-	if (!(await adapter.ghAvailable())) {
-		throw new Error(
-			`cannot generate secrets [${pending.map(spec => spec.name).join(', ')}] - gh CLI unavailable, so they cannot be pushed as GitHub env-secrets on ${scope.owner}/${scope.repo}`,
+	const path = projectSecretsPath(scope)
+	await vault.setSecrets(
+		path,
+		Object.fromEntries(
+			pending.map(spec => [spec.name, generateSecretValue(spec)]),
+		),
+	)
+	for (const spec of pending) {
+		logger.info(
+			`generated secret "${spec.name}" (${spec.generate}, length ${String(spec.length)}) stored in the vault at ${path}`,
 		)
 	}
-
-	// Each push is an independent `gh secret set` on a distinct name - no
-	// ordering constraint - so run them concurrently.
-	await Promise.all(
-		pending.map(async spec => {
-			const secretValue = generateSecretValue(spec)
-			await adapter.setRepoEnvSecret(spec.name, secretValue, scope)
-			logger.info(
-				`generated secret "${spec.name}" (${spec.generate}, length ${String(spec.length)}) pushed to ${scope.owner}/${scope.repo} (${scope.environment})`,
-			)
-		}),
-	)
 }

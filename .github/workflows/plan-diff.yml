@@ -9,13 +9,19 @@ name: Plan Workers Diff
 #   on:
 #     pull_request:
 #       paths: ['**/nextnode.toml']
+#   permissions:
+#     contents: read
+#     pull-requests: write
+#     id-token: write
 #   jobs:
 #     plan-infra:
-#       uses: NextNodeSolutions/core/.github/workflows/plan-workers-diff.yml@main
+#       uses: NextNodeSolutions/core/.github/workflows/plan-diff.yml@main
 #       with:
 #         environment: development
 #         config_file: apps/web/nextnode.toml
-#       secrets: inherit
+#
+# `id-token: write` lets the job read its credentials from the vault through
+# GitHub OIDC.
 
 on:
     workflow_call:
@@ -32,6 +38,14 @@ on:
 permissions:
     contents: read
     pull-requests: write
+    id-token: write
+
+env:
+    # The CI vault, a dedicated Infisical project, and the machine identity
+    # this workflow logs in as through GitHub OIDC. Organization Variables: ids,
+    # not credentials (README, "Vault setup").
+    INFISICAL_PROJECT_ID: ${{ vars.INFISICAL_PROJECT_ID }}
+    INFISICAL_IDENTITY_ID: ${{ vars.INFISICAL_IDENTITY_ID }}
 
 jobs:
     plan-infra:
@@ -44,6 +58,11 @@ jobs:
                   infra: 'true'
                   deps: 'false'
 
+            - name: Load secrets
+              id: vault
+              run: node src/index.ts load-secrets
+              working-directory: .infra/packages/infrastructure
+
             - name: Setup Terraform
               uses: hashicorp/setup-terraform@v3
               with:
@@ -54,13 +73,13 @@ jobs:
               run: node src/index.ts plan-infra
               working-directory: .infra/packages/infrastructure
               env:
-                  PLANETSCALE_SERVICE_TOKEN_ID: ${{ secrets.PLANETSCALE_SERVICE_TOKEN_ID }}
-                  PLANETSCALE_SERVICE_TOKEN: ${{ secrets.PLANETSCALE_SERVICE_TOKEN }}
+                  PLANETSCALE_SERVICE_TOKEN_ID: ${{ steps.vault.outputs.PLANETSCALE_SERVICE_TOKEN_ID }}
+                  PLANETSCALE_SERVICE_TOKEN: ${{ steps.vault.outputs.PLANETSCALE_SERVICE_TOKEN }}
                   PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
                   PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
-                  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-                  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-                  TF_TOKEN_app_terraform_io: ${{ secrets.TF_CLOUD_TOKEN }}
+                  CLOUDFLARE_API_TOKEN: ${{ steps.vault.outputs.CLOUDFLARE_API_TOKEN }}
+                  CLOUDFLARE_ACCOUNT_ID: ${{ steps.vault.outputs.CLOUDFLARE_ACCOUNT_ID }}
+                  TF_TOKEN_app_terraform_io: ${{ steps.vault.outputs.TF_CLOUD_TOKEN }}
                   TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
                   PLANETSCALE_ORGANIZATION: ${{ vars.PLANETSCALE_ORGANIZATION }}
                   COMPANY_DOMAIN: ${{ vars.COMPANY_DOMAIN }}

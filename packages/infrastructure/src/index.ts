@@ -13,6 +13,8 @@ import { planCommand } from './cli/pipeline/plan.command.ts'
 import { prodGateCommand } from './cli/pipeline/prod-gate.command.ts'
 import { publishResultCommand } from './cli/pipeline/publish-result.command.ts'
 import { publishCommand } from './cli/pipeline/publish.command.ts'
+import { loadSecretsCommand } from './cli/vault/load-secrets.command.ts'
+import { seedPlatformSecretsCommand } from './cli/vault/seed-platform-secrets.command.ts'
 import { loadConfig } from './config/load.ts'
 import { isDeployableConfig } from './config/types.ts'
 
@@ -40,6 +42,8 @@ const DEPLOY_COMMANDS: Record<string, DeployCommand> = {
 }
 
 const STANDALONE_COMMANDS: Record<string, StandaloneCommand> = {
+	'load-secrets': loadSecretsCommand,
+	'seed-platform-secrets': seedPlatformSecretsCommand,
 	'prod-gate': prodGateCommand,
 	publish: publishCommand,
 	'publish-result': publishResultCommand,

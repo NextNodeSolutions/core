@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { appendFileSync } from 'node:fs'
 
 function requireOutputFile(): string {
@@ -12,6 +13,32 @@ function requireOutputFile(): string {
 
 export function writeOutput(key: string, outputValue: string): void {
 	appendFileSync(requireOutputFile(), `${key}=${outputValue}\n`)
+}
+
+/**
+ * Register a value with the runner's log masker. `::add-mask::` is line-based,
+ * so a multi-line secret (a PEM key) is masked line by line - masking it as a
+ * whole would leave every line after the first readable in the logs.
+ */
+export function maskSecret(secretValue: string): void {
+	for (const line of secretValue.split(/\r?\n/)) {
+		if (line.trim()) process.stdout.write(`::add-mask::${line}\n`)
+	}
+}
+
+/**
+ * Write a secret as a step output: mask it first (the mask MUST be emitted
+ * before the value can leak), then append it in the delimiter form so a
+ * multi-line value survives. Unlike GITHUB_ENV, an output reaches only the
+ * steps that reference it explicitly.
+ */
+export function writeSecretOutput(key: string, secretValue: string): void {
+	maskSecret(secretValue)
+	const delimiter = `nextnode_${randomUUID()}`
+	appendFileSync(
+		requireOutputFile(),
+		`${key}<<${delimiter}\n${secretValue}\n${delimiter}\n`,
+	)
 }
 
 export function writeSummary(markdown: string): void {

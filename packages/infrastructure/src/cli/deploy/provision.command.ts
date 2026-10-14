@@ -31,7 +31,6 @@ export async function provisionCommand(
 		await target.loadBackingEnv(config.project.name),
 	])
 	await ensureGeneratedSecrets(config.deploy.generatedSecrets, repoSecrets, {
-		owner: repository.owner,
 		repo: repository.name,
 		environment,
 	})

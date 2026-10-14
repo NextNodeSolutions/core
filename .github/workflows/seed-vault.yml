@@ -1,0 +1,44 @@
+name: Seed Vault
+
+# TRANSITIONAL - delete with the `seed-platform-secrets` command once the
+# GitHub secrets are removed (packages/infrastructure/README.md, "Secrets").
+#
+# One-shot copy of the platform credentials from the GitHub secrets into `/ci`,
+# run manually right after the vault migration lands. Project secrets are not
+# copied: they are stored in the project folder by hand. Idempotent: a secret
+# the vault already holds is skipped.
+
+on:
+    workflow_dispatch:
+
+permissions:
+    contents: read
+    id-token: write
+
+env:
+    # The CI vault, a dedicated Infisical project, and the machine identity
+    # this workflow logs in as through GitHub OIDC. Organization Variables: ids,
+    # not credentials (README, "Vault setup").
+    INFISICAL_PROJECT_ID: ${{ vars.INFISICAL_PROJECT_ID }}
+    INFISICAL_IDENTITY_ID: ${{ vars.INFISICAL_IDENTITY_ID }}
+
+jobs:
+    seed:
+        name: Seed vault from GitHub secrets
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        # Puts the secrets scoped to core's `production` environment in
+        # `toJSON(secrets)`, next to the org-level ones.
+        environment:
+            name: production
+        steps:
+            - uses: NextNodeSolutions/core/.github/actions/setup@main
+              with:
+                  infra: 'true'
+                  deps: 'false'
+
+            - name: Seed platform secrets
+              run: node src/index.ts seed-platform-secrets
+              working-directory: .infra/packages/infrastructure
+              env:
+                  LEGACY_GITHUB_SECRETS: ${{ toJSON(secrets) }}

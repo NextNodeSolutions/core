@@ -21,6 +21,10 @@ Keep the deployment registry and service-to-target declarations as the extension
 
 Organization settings have one resolver in `cli/deploy/organization.ts`. Pass its result into adapters and pure Terraform builders. Do not read organization environment variables in domain code or hardcode account names and company domains.
 
+## Secrets
+
+The Infisical vault is the only source of secrets. Never add a `secrets.<NAME>` reference to a workflow and never hardcode a list of secret names: the vault folder is the list. `domain/vault/secret-vault.ts` owns the folder layout, `cli/vault/open-vault.ts` the OIDC login, and `load-secrets` the read. A job with `id-token: write` runs core's CLI only: never add a caller script, build or dependency install to one. `publish-package.yml` releases core's own packages and refuses other callers. The seed command and `domain/vault/legacy-seed.ts` are transitional and go away with the GitHub secrets.
+
 ## Worker configuration
 
 Every Worker is declared under `deploy.services`. A service without `url` is callable only through bindings. `entry = false` requires `assets` and deploys assets without a script. `needs` selects backing resources and sibling bindings. `depends_on` controls deployment order without adding a binding.
