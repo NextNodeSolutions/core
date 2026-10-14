@@ -66,7 +66,7 @@ Any step of a job granted `id-token: write` can mint the job's OIDC token, and t
 
 The `job_workflow_ref` claim is what the identity trusts: only core's workflow files on `main` can log in, whichever repository calls them. In a called workflow the claim names the called file. In a workflow run directly, such as Seed Vault or teardown, it names that workflow's own file. The `repository_owner_id` claim pins the organization by its immutable id. This trust is exactly as strong as the protection of core's `main`: no direct push, pull requests only.
 
-Per-repository folder isolation and a read-only `/ci` need Infisical custom roles, which the free plan does not include. A role templated on the token's `repository` and `environment` claims, through the OIDC Claim Mapping, would add them without a code change.
+Per-repository folder isolation and a read-only `/ci` need Infisical custom roles, which the free plan does not include. A role templated on the token's `repository` and `environment` claims, through the OIDC Claim Mapping, would add them. The `repository` claim reads `owner/repo`, so the project folder would take back an owner level.
 
 ### Vault setup
 
