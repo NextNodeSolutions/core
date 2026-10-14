@@ -15,11 +15,12 @@ import {
 import { resolveEnvironment } from '#/domain/environment.ts'
 import {
 	LEGACY_PLATFORM_SECRET_NAMES,
-	selectProjectSeedSecrets,
+	findDivergentPlatformSecrets,
 	selectSeedSecrets,
 } from '#/domain/vault/legacy-seed.ts'
 import {
 	PLATFORM_SECRETS_PATH,
+	buildProjectSecretPool,
 	projectSecretsPath,
 } from '#/domain/vault/secret-vault.ts'
 import { createLogger } from '@nextnode-solutions/logger'
@@ -89,14 +90,30 @@ export async function seedVaultCommand(
 		repo: requireGithubRepository().name,
 		environment,
 	})
+	const projectSecrets = await vault.listSecrets(projectPath)
+
+	const divergent = findDivergentPlatformSecrets(
+		config.deploy.secrets,
+		legacySecrets,
+		platformSecrets,
+		projectSecrets,
+	)
+	if (divergent.length) {
+		logger.warn(
+			`${divergent.join(', ')}: GitHub holds a different value than ${PLATFORM_SECRETS_PATH}, not copied - a stale copy if the vault was rotated, or a repository/environment override; store a deliberate override in ${projectPath}`,
+		)
+	}
+
+	// A declared name the pool already resolves - from the platform folder or
+	// the project's own - is never copied: a copy of a platform value would go
+	// stale at the next rotation and still win in the pool.
 	await seedFolder(
 		vault,
 		projectPath,
-		selectProjectSeedSecrets(
+		selectSeedSecrets(
 			config.deploy.secrets,
 			legacySecrets,
-			platformSecrets,
-			await vault.listSecrets(projectPath),
+			buildProjectSecretPool(platformSecrets, projectSecrets),
 		),
 	)
 }

@@ -62,7 +62,7 @@ This is transitional and is removed with the GitHub secrets.
 
 1. Create the identity and the Variable before merging the vault change. Without them, every pipeline fails at `load-secrets`.
 2. Run the Seed Vault workflow in core once. It copies the platform credentials into `/ci`.
-3. Deploy each consumer repository once per environment. Its `check-secrets` job copies its declared secrets into its project folder. Neither copy overwrites a secret the vault already holds.
+3. Deploy each consumer repository once per environment. Its `check-secrets` job copies its declared secrets into its project folder. Neither copy overwrites a secret the vault already holds. A declared name that `/ci` already holds is never copied into a project folder. When GitHub holds a different value for it, the seed logs the name: store a deliberate repository or environment override in the project folder by hand.
 4. Delete the GitHub secrets, then delete `seed-vault.yml`, the seed step of `deploy.yml`, `cli/vault/seed-vault.command.ts`, `domain/vault/legacy-seed.ts` and the `secrets: inherit` lines of the callers.
 
 ## CI

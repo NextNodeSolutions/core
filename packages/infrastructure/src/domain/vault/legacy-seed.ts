@@ -33,25 +33,22 @@ export function selectSeedSecrets(
 	)
 }
 
-// The secrets to copy from the GitHub snapshot into a project folder: a
-// declared name set in GitHub that the folder does not hold yet. A value equal
-// to the platform one is skipped - the pool already resolves it, and a copy
-// would go stale at the next rotation. A value that differs is a repository or
-// environment override of a platform name, and is kept in the project folder so
-// the pool still resolves to it.
-export function selectProjectSeedSecrets(
+// Declared names the pool resolves from the platform folder while the GitHub
+// snapshot holds a different value and the project folder holds none. Such a
+// value is either a repository or environment override, or a stale copy left
+// behind by a rotation in the vault - the snapshot cannot tell them apart. The
+// seed therefore never copies it (a stale copy would win in the pool) and
+// reports the names, so a deliberate override is stored by hand.
+export function findDivergentPlatformSecrets(
 	names: ReadonlyArray<string>,
 	legacySecrets: Readonly<Record<string, string>>,
 	platformSecrets: Readonly<Record<string, string>>,
 	projectSecrets: Readonly<Record<string, string>>,
-): Record<string, string> {
-	return Object.fromEntries(
-		names.flatMap((name): Array<[string, string]> => {
-			const legacyValue = legacySecrets[name]
-			const resolvedByVault =
-				name in projectSecrets || platformSecrets[name] === legacyValue
-			if (!legacyValue || resolvedByVault) return []
-			return [[name, legacyValue]]
-		}),
-	)
+): ReadonlyArray<string> {
+	return names.filter(name => {
+		const legacyValue = legacySecrets[name]
+		const platformValue = platformSecrets[name]
+		if (!legacyValue || typeof platformValue === 'undefined') return false
+		return !(name in projectSecrets) && legacyValue !== platformValue
+	})
 }
