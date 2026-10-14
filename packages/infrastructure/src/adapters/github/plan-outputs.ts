@@ -44,6 +44,9 @@ export function writePlanOutputs({
 		'has_migrations',
 		String(Boolean(config.services.d1 ?? config.services.planetscale)),
 	)
+	// A PlanetScale migration runs the project's own migrate command, so the
+	// migrate job installs the project's dependencies only in that case.
+	writeOutput('has_planetscale', String(Boolean(config.services.planetscale)))
 	writeOutput('domain', config.project.domain ?? '')
 	writeOutput('package_dir', packageDir)
 

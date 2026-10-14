@@ -1,13 +1,14 @@
 name: Seed Vault
 
-# TRANSITIONAL - delete with the `seed-vault` commands once the GitHub secrets
-# are removed (packages/infrastructure/README.md, "Secrets").
+# TRANSITIONAL - delete with the `seed-platform-secrets` command once the
+# GitHub secrets are removed (packages/infrastructure/README.md, "Secrets").
 #
-# One-shot copy of the platform credentials from the GitHub secrets into the
-# Infisical vault, run manually right after the vault migration lands, so that
-# core's own workflows (publish, teardown, plan diff) can read them. Consumer
-# repos seed their project secrets from the `check-secrets` job of their next
-# deploy. Idempotent: a secret the vault already holds is skipped.
+# One-shot copy of the platform credentials from the GitHub secrets into `/ci`,
+# run manually right after the vault migration lands. The pipeline identity is
+# read-only on `/ci`: grant it a temporary write privilege for the run (README,
+# "Moving off GitHub secrets"). Project secrets are not copied: they are stored
+# in the project folder by hand. Idempotent: a secret the vault already holds
+# is skipped.
 
 on:
     workflow_dispatch:

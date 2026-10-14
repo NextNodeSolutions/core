@@ -35,6 +35,12 @@ concurrency:
     group: deploy-${{ inputs.config_file }}-${{ inputs.environment }}
     cancel-in-progress: false
 
+# Trust boundary. A job granted `id-token: write` can mint an OIDC token from
+# any of its steps, and the vault accepts that token. Such a job therefore runs
+# core's pipeline CLI only, never the caller's scripts or dependency lifecycle
+# hooks: the caller's code builds in `build`, with no credential and no token
+# endpoint, and `deploy` ships the uploaded result. The one exception is a
+# PlanetScale migration, which runs the caller's migrate command in `migrate`.
 jobs:
     plan:
         name: Plan
@@ -46,6 +52,7 @@ jobs:
             has_prod_gate: ${{ steps.plan.outputs.has_prod_gate }}
             has_domain: ${{ steps.plan.outputs.has_domain }}
             has_migrations: ${{ steps.plan.outputs.has_migrations }}
+            has_planetscale: ${{ steps.plan.outputs.has_planetscale }}
             package_dir: ${{ steps.plan.outputs.package_dir }}
         steps:
             - uses: NextNodeSolutions/core/.github/actions/setup@main
@@ -70,9 +77,9 @@ jobs:
             contents: read
             actions: read
             id-token: write
-        # `environment:` is only still here for the transitional seed step: it is
-        # what makes GitHub put the env-scoped secrets in the snapshot that step
-        # copies. The check itself reads the vault.
+        # `environment:` puts the `environment` claim in the job's OIDC token.
+        # The vault policy templates the project folder on that claim, so a job
+        # without it can read `/ci` only.
         environment:
             name: ${{ inputs.environment }}
         steps:
@@ -80,17 +87,6 @@ jobs:
               with:
                   infra: 'true'
                   deps: 'false'
-
-            # TRANSITIONAL (packages/infrastructure/README.md, "Secrets"): copy
-            # the GitHub secrets this pipeline still relies on into the vault,
-            # once. Goes away with the GitHub secrets.
-            - name: Seed vault from GitHub secrets
-              run: node src/index.ts seed-vault
-              working-directory: .infra/packages/infrastructure
-              env:
-                  PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
-                  PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
-                  LEGACY_GITHUB_SECRETS: ${{ toJSON(secrets) }}
 
             - name: Load secrets
               id: vault
@@ -131,6 +127,34 @@ jobs:
               env:
                   GH_TOKEN: ${{ github.token }}
                   DEV_WORKFLOW_FILE: ${{ inputs.dev_workflow_file }}
+
+    build:
+        name: Build
+        needs: plan
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        # The caller's dependencies install and its build runs here, with no
+        # `id-token: write` and no secret: nothing this job executes can reach
+        # the vault. The package directory, minus its dependencies, travels to
+        # `deploy` as an artifact; the Worker bundle must be self-contained,
+        # `deploy` never installs the caller's dependencies.
+        steps:
+            - uses: NextNodeSolutions/core/.github/actions/setup@main
+
+            - name: Build
+              run: pnpm build
+
+            - name: Upload build
+              uses: actions/upload-artifact@v7
+              with:
+                  name: build-${{ needs.plan.outputs.project_name }}-${{ inputs.environment }}
+                  path: |
+                      ${{ needs.plan.outputs.package_dir || '.' }}
+                      !**/node_modules/**
+                      !**/.git/**
+                  include-hidden-files: true
+                  if-no-files-found: error
+                  retention-days: 1
 
     provision:
         name: Provision
@@ -213,6 +237,11 @@ jobs:
             - uses: NextNodeSolutions/core/.github/actions/setup@main
               with:
                   infra: 'true'
+                  # D1 migrations are SQL files applied by wrangler: no caller
+                  # dependency runs. A PlanetScale migration is the caller's
+                  # own command and needs them - the one place caller code
+                  # runs with vault access, scoped to its own folder.
+                  deps: ${{ needs.plan.outputs.has_planetscale }}
 
             - name: Load secrets
               id: vault
@@ -246,7 +275,7 @@ jobs:
 
     deploy:
         name: Deploy
-        needs: [plan, quality, provision, migrate]
+        needs: [plan, quality, build, provision, migrate]
         if: ${{ !cancelled() && !failure() }}
         runs-on: ubuntu-latest
         timeout-minutes: 30
@@ -260,8 +289,15 @@ jobs:
             - uses: NextNodeSolutions/core/.github/actions/setup@main
               with:
                   infra: 'true'
-                  # deps left at its default 'true' - the caller's site builds
-                  # here (pnpm build) before `wrangler deploy` uploads the bundle.
+                  deps: 'false'
+
+            # The bundle built in `build`, laid over the checkout. No caller
+            # dependency is installed here (see the trust boundary above).
+            - name: Download build
+              uses: actions/download-artifact@v8
+              with:
+                  name: build-${{ needs.plan.outputs.project_name }}-${{ inputs.environment }}
+                  path: ${{ needs.plan.outputs.package_dir || '.' }}
 
             - name: Load secrets
               id: vault
@@ -275,9 +311,6 @@ jobs:
               with:
                   terraform_version: '~> 1.9'
                   terraform_wrapper: false
-
-            - name: Build
-              run: pnpm build
 
             # The SEO guard is injected per service inside `deploy` (before each
             # asset upload), so there is no separate seo-guard step here.
