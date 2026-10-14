@@ -107,6 +107,9 @@ importers:
       '@nextnode-solutions/standards':
         specifier: workspace:*
         version: link:../standards
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.13.3
       '@typescript/native-preview':
         specifier: 7.0.0-dev.20260407.1
         version: 7.0.0-dev.20260407.1
@@ -6012,7 +6015,7 @@ snapshots:
 
   '@types/conventional-commits-parser@5.0.2':
     dependencies:
-      '@types/node': 22.19.17
+      '@types/node': 24.13.3
 
   '@types/debug@4.1.13':
     dependencies:

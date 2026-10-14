@@ -37,6 +37,7 @@
   },
   "devDependencies": {
     "@nextnode-solutions/standards": "workspace:*",
+    "@types/node": "^24.13.3",
     "@typescript/native-preview": "7.0.0-dev.20260407.1",
     "oxfmt": "^0.43.0",
     "oxlint": "^1.62.0",
