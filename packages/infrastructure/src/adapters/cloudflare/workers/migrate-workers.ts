@@ -1,7 +1,7 @@
 import { wranglerD1MigrationsApply } from '#/adapters/wrangler/migrate.ts'
 import { defaultWranglerRunner } from '#/adapters/wrangler/runner.ts'
+import { resolveD1MigrationServiceName } from '#/domain/cloudflare/workers/d1-migration-owner.ts'
 import { buildWranglerConfig } from '#/domain/cloudflare/workers/wrangler-config.ts'
-import { resolveD1MigrationServiceName } from '#/domain/deploy/migration-service.ts'
 
 import type { WranglerRunner } from '#/adapters/wrangler/runner.ts'
 import type { ServicesConfig } from '#/config/service-config.ts'

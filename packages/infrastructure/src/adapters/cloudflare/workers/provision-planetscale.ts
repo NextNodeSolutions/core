@@ -1,14 +1,12 @@
 import { ensurePlanetscaleDatabase } from '#/adapters/planetscale/databases.ts'
-import {
-	computePlanetscaleDatabaseName,
-	PLANETSCALE_ORGANIZATION,
-} from '#/domain/cloudflare/workers/planetscale.ts'
+import { computePlanetscaleDatabaseName } from '#/domain/cloudflare/workers/planetscale.ts'
 
 import type { CloudflareWorkersDeployableConfig } from '#/config/types.ts'
 import type { ResourceOutcome } from '#/domain/deploy/resource-outcome.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 
 export interface ProvisionPlanetscaleInput {
+	readonly organization: string | undefined
 	readonly config: CloudflareWorkersDeployableConfig
 	readonly projectName: string
 	readonly environment: AppEnvironment
@@ -32,13 +30,13 @@ export function provisionPlanetscaleDatabase(
 			detail: 'no [services.planetscale] declared',
 		})
 	}
-	if (!input.serviceTokenId || !input.serviceToken) {
+	if (!input.organization || !input.serviceTokenId || !input.serviceToken) {
 		throw new Error(
 			'cloudflare-workers provision needs PlanetScale service-token credentials (PLANETSCALE_SERVICE_TOKEN_ID + PLANETSCALE_SERVICE_TOKEN) because the project declares a PlanetScale database, but they were not provided.',
 		)
 	}
 	return ensurePlanetscaleDatabase({
-		organization: PLANETSCALE_ORGANIZATION,
+		organization: input.organization,
 		database: computePlanetscaleDatabaseName(
 			input.projectName,
 			input.environment,

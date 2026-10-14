@@ -2,6 +2,7 @@ import {
 	PLANETSCALE_PROVIDER_SOURCE,
 	PLANETSCALE_PROVIDER_VERSION,
 } from './planetscale.ts'
+import { buildInternalResources } from './terraform-internal-resources.ts'
 import { buildOutputs } from './terraform-outputs.ts'
 import {
 	buildResourceBlock,
@@ -9,14 +10,10 @@ import {
 	deriveWorkersResources,
 } from './terraform-resources.ts'
 
+import type { OrganizationConfig } from '#/config/organization.ts'
 import type { CloudflareWorkersDeployableConfig } from '#/config/types.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 import type { TerraformMainConfig } from './terraform-main-config.ts'
-
-// HCP Terraform organization every workspace lives under. Not a nextnode.toml
-// default (it is not overridable per project) - it is the fixed backend
-// coordinate the generated `terraform.cloud` block points at.
-export const HCP_TERRAFORM_ORGANIZATION = 'nextnode'
 
 // The Cloudflare provider is pinned to its major (v5). The generated config is
 // the only place the provider version is materialised; a major bump is a
@@ -34,10 +31,15 @@ export const CLOUDFLARE_PROVIDER_VERSION = '~> 5.0'
 export function buildTerraformMainConfig(
 	config: CloudflareWorkersDeployableConfig,
 	environment: AppEnvironment,
+	organization: OrganizationConfig,
 ): TerraformMainConfig {
 	const derived = deriveWorkersResources(config, environment)
 
-	const resource = buildResourceBlock(derived)
+	const resource = buildResourceBlock(derived, organization)
+	Object.assign(
+		resource,
+		buildInternalResources(config, environment, organization),
+	)
 	const output = buildOutputs(derived)
 
 	// Terraform reads a top-level `resource`/`output`/`variable` key as a block
@@ -46,7 +48,7 @@ export function buildTerraformMainConfig(
 	const mainConfig: TerraformMainConfigDraft = {
 		terraform: {
 			cloud: {
-				organization: HCP_TERRAFORM_ORGANIZATION,
+				organization: organization.terraformOrganization,
 				workspaces: {
 					name: `${derived.projectName}-${environment}`,
 				},
@@ -74,7 +76,7 @@ export function buildTerraformMainConfig(
 	}
 	if (Object.keys(resource).length > 0) mainConfig.resource = resource
 	if (Object.keys(output).length > 0) mainConfig.output = output
-	if (derived.hasAccountResource) {
+	if (derived.hasAccountResource || config.project.internal) {
 		mainConfig.variable = { account_id: { type: 'string' } }
 	}
 	return mainConfig

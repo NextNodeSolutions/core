@@ -9,10 +9,6 @@ import type { AppEnvironment } from '#/domain/environment.ts'
 
 const logger = createLogger()
 
-// Mirrors adapters/build-output/inject-files' safety check. Kept local to the
-// cloudflare/workers adapter rather than importing build-output: a cross-adapter
-// call is banned, and the write is a generic, guarded fs primitive whose small
-// duplication buys the cloisonnement.
 function assertSafeFilename(filename: string, directory: string): void {
 	if (filename === '' || filename.includes('\0')) {
 		throw new Error(`seo-guard: invalid filename "${filename}"`)

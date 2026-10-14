@@ -1,30 +1,49 @@
-# @nextnode-solutions/infrastructure
+# Infrastructure
 
-NextNode infrastructure CLI — runs in GitHub Actions to orchestrate CI/CD: planning, provisioning, deployment, migrations, and backups.
+Cloudflare Workers deployment CLI consumed directly from core by GitHub Actions. This package is not published to npm.
 
-This package is consumed directly from the monorepo by GitHub Actions workflows and is **never published to npm**.
+## Configuration
 
-## Postgres MVP
+```toml
+[project]
+name = "my-app"
+type = "app"
+domain = "example.com"
 
-Embedded Postgres lifecycle: provision a sidecar in the project's compose stack, run drizzle migrations on each deploy, dump nightly to R2, and restore from any snapshot via the CLI.
+[deploy.services.web]
+entry = "dist/server/entry.mjs"
+url = "example.com"
+needs = ["d1"]
 
-### Commands
+[services.d1]
+```
 
-| Command                                                    | Purpose                                                            |
-| ---------------------------------------------------------- | ------------------------------------------------------------------ |
-| `infrastructure provision --project <slug>`                | Provision the project (compose stack, R2 buckets, DNS).            |
-| `infrastructure migrate`                                   | Apply drizzle migrations against `DATABASE_URL` (advisory-locked). |
-| `infrastructure restore --project <slug> --at <iso> --yes` | Fetch the closest backup ≤ `<iso>` from R2 and replay it.          |
+`deploy.target` is optional and only accepts `cloudflare-workers`. Static assets use `entry = false` and an `assets` directory. Backing services are D1, KV, Queues, R2 and PlanetScale. Declare secret names in the service or global deploy pool. Values come from GitHub secrets.
 
-`restore` is destructive (`pg_restore --clean --if-exists`) and refuses to run without `--yes`.
+## Organization settings
 
-### Compose layout
+GitHub organization Actions variables are the source of organization settings. Set `TF_CLOUD_ORGANIZATION` for every deployment. Set `PLANETSCALE_ORGANIZATION` when using PlanetScale. Internal projects additionally require `COMPANY_DOMAIN` and `ACCESS_SESSION_DURATION` for their Access email policy and session lifetime. The CLI rejects missing settings, with no company-specific defaults.
 
-- `postgres` — `postgres:18`, named volume `postgres-data`, internal-only (no host port binding).
-- `postgres-backup` — `ghcr.io/solectrus/postgres-s3-backup:18`, runs `pg_dump` on the `@daily` schedule and uploads to `s3://nn-backups-<project>/postgres/`.
+Deployment credentials remain secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `TF_CLOUD_TOKEN`, `NEXTNODE_APP_ID`, `NEXTNODE_APP_PRIVATE_KEY`. PlanetScale requires `PLANETSCALE_SERVICE_TOKEN_ID` and `PLANETSCALE_SERVICE_TOKEN`. The Terraform token must be a team or user token, not an organization token. Internal deployments need Cloudflare Access Apps and Policies permission.
 
-Retention is 7 daily / 4 weekly / 3 monthly UTC buckets, pruned after each backup.
+## CI
 
-## Architecture
+Call `.github/workflows/deploy.yml` with `environment` and optional `config_file`. Development prefixes the configured hostname with `dev.`. Terraform provisions resources before D1 and PlanetScale migrations. Wrangler deploys code and checks public routed Workers at `/healthz`.
 
-See `CLAUDE.md` for the strict four-layer architecture (`index.ts` → `cli/` → `domain/` + `adapters/` → `config/`) and the import rules enforced across layers.
+`project.internal = true` creates Access applications in both environments. Internal smoke checks are skipped because CI has no Access login. Verify the Access login redirect separately.
+
+`.github/workflows/plan-diff.yml` reports Terraform changes on pull requests. `.github/workflows/teardown.yml` is manually dispatched with target repository, environment and project-name confirmation. Stateful teardown additionally requires `wipe_data`. HCP workspace history remains after teardown.
+
+PlanetScale migrations use `services.planetscale.migrate_command`, defaulting to the command defined in `domain/deploy/target.ts`, from the directory containing `nextnode.toml`. Only the migration subprocess receives `DATABASE_URL` built from sensitive migrator outputs.
+
+## Checks
+
+```sh
+pnpm --filter @nextnode-solutions/infrastructure type-check
+pnpm --filter @nextnode-solutions/infrastructure lint
+pnpm --filter @nextnode-solutions/infrastructure build
+```
+
+Infrastructure tests were deleted by operator request. Successful compilation does not prove deployment, Access login or PlanetScale migrations.
+
+Layer rules are in [CLAUDE.md](CLAUDE.md). Historical server deployment documents are archived and are not instructions for this CLI.

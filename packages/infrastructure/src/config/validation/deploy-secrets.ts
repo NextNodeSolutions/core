@@ -5,15 +5,8 @@ import { isRecord } from '#/kernel/guards.ts'
 import type {
 	DeployTargetType,
 	GeneratedSecretConfig,
-	UserServiceConfig,
+	WorkerServiceConfig,
 } from '#/config/types.ts'
-
-// `[deploy].secrets` entries are either a bare NAME (a must-exist GitHub secret)
-// or a `{ name, generate, length }` table (the infra generates + pushes it at
-// provision). `length` is the produced secret's CHARACTER count. The floor of
-// 16 keeps a generated signing key / password above ~95 bits of entropy for
-// the narrowest (alphanumeric) generator - below that the value is too weak to
-// back a JWT secret or a DB password.
 const MIN_SECRET_LENGTH = 16
 const MAX_SECRET_LENGTH = 256
 
@@ -68,10 +61,6 @@ function parseSecretEntry(entry: unknown): ParsedSecretEntry {
 	if (isRecord(entry)) return parseGeneratedSecret(entry)
 	return { kind: 'error', message: SECRET_ENTRY_INVALID }
 }
-
-// Parse `[deploy].secrets` into the flat NAME pool (every entry's name, for
-// pickSecrets) and the generation specs (the table entries, for provisioning).
-// Duplicate names are rejected - a name declared twice is an ambiguous source.
 function parseSecretEntries(raw: unknown): {
 	errors: string[]
 	names: string[]
@@ -104,12 +93,6 @@ function parseSecretEntries(raw: unknown): {
 	}
 	return { errors, names, generated }
 }
-
-// Fold the GLOBAL `[deploy].secrets` names into every service's own `secrets`
-// (global ∪ own, deduped, global-first) so the per-service routing in
-// `service-env.ts` - which keys off `service.secrets` - injects a global secret
-// into every `.env.<service>` without any further wiring. No-op when there are
-// no globals.
 function expandServiceSecrets<T extends { secrets: ReadonlyArray<string> }>(
 	services: Record<string, T>,
 	globalNames: ReadonlyArray<string>,
@@ -126,45 +109,19 @@ function expandServiceSecrets<T extends { secrets: ReadonlyArray<string> }>(
 	)
 }
 
-export interface ResolvedSecrets<T = UserServiceConfig> {
+export interface ResolvedSecrets<T = WorkerServiceConfig> {
 	errors: string[]
 	secrets: ReadonlyArray<string>
 	generatedSecrets: ReadonlyArray<GeneratedSecretConfig>
 	services: Record<string, T>
 }
-
-// Targets that split a global secret pool across per-service `.env` files
-// (`expandServiceSecrets`); cloudflare-pages has no services so its pool is the
-// declared list verbatim.
-const POOLED_SECRET_TARGETS: ReadonlySet<DeployTargetType> =
-	new Set<DeployTargetType>(['hetzner-vps', 'cloudflare-workers'])
-
-// Resolve the secret pool - the set of GitHub Secret NAMES the pipeline pulls
-// for this deploy - and the generation specs, per target:
-//   - cloudflare-pages parses [deploy].secrets directly: one deployable unit,
-//     no per-service split, so the pool IS the declared list.
-//   - hetzner-vps and cloudflare-workers treat [deploy].secrets as the GLOBAL
-//     pool (injected into every service via `expandServiceSecrets`) and the pool
-//     is that union with each service's own per-service (least-privilege)
-//     secrets.
-// Either way a `{ name, generate, length }` entry contributes its name to the
-// pool and its spec to `generatedSecrets`. A name declared but absent from
-// GitHub Secrets still fails loud at deploy time in `pickSecrets`.
 export function resolveSecrets<T extends { secrets: ReadonlyArray<string> }>(
 	target: DeployTargetType,
 	deployRecord: Record<string, unknown>,
 	services: Record<string, T>,
 ): ResolvedSecrets<T> {
+	void target
 	const parsed = parseSecretEntries(deployRecord['secrets'])
-	if (!POOLED_SECRET_TARGETS.has(target)) {
-		return {
-			errors: parsed.errors,
-			secrets: parsed.names,
-			generatedSecrets: parsed.generated,
-			services,
-		}
-	}
-
 	const expanded = expandServiceSecrets(services, parsed.names)
 	const pool = new Set<string>(parsed.names)
 	for (const service of Object.values(expanded)) {

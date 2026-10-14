@@ -2,10 +2,7 @@ import { resolve } from 'node:path'
 
 import { writeWorkerTypes } from '#/adapters/cloudflare/workers/write-worker-types.ts'
 import { loadConfig } from '#/config/load.ts'
-import {
-	isCloudflareWorkersDeployableConfig,
-	isDeployableConfig,
-} from '#/config/types.ts'
+import { isDeployableConfig } from '#/config/types.ts'
 import { renderWorkerEnvTypes } from '#/domain/cloudflare/workers/worker-env-types.ts'
 
 import type { DeployableConfig } from '#/config/types.ts'
@@ -14,8 +11,6 @@ export function generateWorkerTypes(
 	config: DeployableConfig,
 	configDir: string,
 ): ReadonlyArray<string> {
-	if (!isCloudflareWorkersDeployableConfig(config)) return []
-
 	const serviceNames = Object.keys(config.deploy.services)
 	return Object.entries(config.deploy.services).flatMap(
 		([serviceName, service]) => {

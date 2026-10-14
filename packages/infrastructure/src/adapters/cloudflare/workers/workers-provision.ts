@@ -1,17 +1,18 @@
 import { ensureHcpWorkspace } from '#/adapters/hcp/workspaces.ts'
 import { WORKERS_MANAGED_RESOURCES } from '#/domain/cloudflare/workers/managed-resources.ts'
-import { HCP_TERRAFORM_ORGANIZATION } from '#/domain/cloudflare/workers/terraform-config.ts'
 import { executeHandlers } from '#/domain/deploy/execute-handlers.ts'
 
 import { provisionPlanetscaleDatabase } from './provision-planetscale.ts'
 import { applyWorkersTerraform } from './terraform-ops.ts'
 
+import type { OrganizationConfig } from '#/config/organization.ts'
 import type { CloudflareWorkersDeployableConfig } from '#/config/types.ts'
 import type { WorkersResourceOutcome } from '#/domain/deploy/resource-outcome.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 import type { WorkersTerraformContext } from './terraform-ops.ts'
 
 export interface WorkersProvisionInput {
+	readonly organization: OrganizationConfig
 	readonly workspaceName: string
 	readonly projectName: string
 	readonly hcpToken: string
@@ -35,12 +36,13 @@ export function runWorkersProvision(
 	return executeHandlers(WORKERS_MANAGED_RESOURCES, {
 		'hcp-workspace': () =>
 			ensureHcpWorkspace({
-				organization: HCP_TERRAFORM_ORGANIZATION,
+				organization: input.organization.terraformOrganization,
 				workspaceName: input.workspaceName,
 				token: input.hcpToken,
 			}),
 		'planetscale-database': () =>
 			provisionPlanetscaleDatabase({
+				organization: input.organization.planetscaleOrganization,
 				config: input.config,
 				projectName: input.projectName,
 				environment: input.environment,
