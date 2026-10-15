@@ -28,7 +28,7 @@ env:
 jobs:
     plan:
         name: Plan
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         outputs:
             quality_matrix: ${{ steps.plan.outputs.quality_matrix }}
             project_name: ${{ steps.plan.outputs.project_name }}
@@ -50,7 +50,7 @@ jobs:
     quality:
         name: ${{ matrix.task.name }}
         needs: plan
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         strategy:
             fail-fast: false
             matrix:
@@ -67,7 +67,7 @@ jobs:
         # Core only (see the header). The build stays here: the release runs
         # from the same installed tree anyway.
         if: github.repository == 'NextNodeSolutions/core' && github.ref == 'refs/heads/main' && needs.plan.outputs.publish == 'true'
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         concurrency:
             group: publish-${{ needs.plan.outputs.project_name }}
             cancel-in-progress: false
