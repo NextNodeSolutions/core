@@ -2,10 +2,10 @@ import { isRecord } from '#/kernel/guards.ts'
 
 import type { SecretVault, VaultProject } from '#/domain/vault/secret-vault.ts'
 
-const INFISICAL_API_BASE = 'https://app.infisical.com/api'
+export const INFISICAL_API_BASE = 'https://app.infisical.com/api'
 // Secrets are read and written at the root of a project environment: the
 // pipeline knows no folder.
-const ROOT_PATH = '/'
+export const ROOT_PATH = '/'
 // The Infisical product the pipeline's projects belong to (the same API also
 // lists certificate and KMS projects).
 const SECRET_MANAGER_PROJECT_TYPE = 'secret-manager'

@@ -19,7 +19,7 @@ import type { SecretVault } from '#/domain/vault/secret-vault.ts'
 // party cannot be replayed against the vault.
 const VAULT_OIDC_AUDIENCE = 'https://app.infisical.com'
 
-async function login(): Promise<string> {
+export async function login(): Promise<string> {
 	const jwt = await requestGithubOidcToken(VAULT_OIDC_AUDIENCE)
 	return loginInfisicalWithOidc(requireEnv('INFISICAL_IDENTITY_ID'), jwt)
 }
