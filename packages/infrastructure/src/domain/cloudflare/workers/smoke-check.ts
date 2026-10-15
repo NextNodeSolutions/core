@@ -1,4 +1,4 @@
-import { computeSiteUrl } from '#/domain/deploy/domain.ts'
+import { resolveDeployUrl } from '#/domain/deploy/domain.ts'
 
 import type { WorkerServiceConfig } from '#/config/types.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
@@ -13,7 +13,7 @@ export interface SmokeCheckTarget {
 /**
  * The `/healthz` URLs to smoke-check after deploy, one per ROUTED service (a
  * service declaring a `url`). Internal services carry no custom domain, so they
- * are skipped. Each URL is env-resolved through `computeSiteUrl` (the same dev
+ * are skipped. Each URL is env-resolved through `resolveDeployUrl` (the same dev
  * subdomain convention the Custom Domain routes use), so the check hits the
  * exact hostname the deploy just wired.
  */
@@ -26,7 +26,7 @@ export function computeSmokeCheckUrls(
 		if (typeof config.url === 'undefined') continue
 		targets.push({
 			service,
-			url: `${computeSiteUrl(config.url, environment)}${HEALTHZ_PATH}`,
+			url: `${resolveDeployUrl(config.url, environment)}${HEALTHZ_PATH}`,
 		})
 	}
 	return targets

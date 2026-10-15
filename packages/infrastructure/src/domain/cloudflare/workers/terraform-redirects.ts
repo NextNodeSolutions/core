@@ -1,4 +1,4 @@
-import { computeSiteUrl } from '#/domain/deploy/domain.ts'
+import { resolveDeployUrl } from '#/domain/deploy/domain.ts'
 
 import { buildHostExpression } from './ruleset-expressions.ts'
 import { redirectZoneLabel, toTerraformLabel } from './terraform-labels.ts'
@@ -41,7 +41,7 @@ function redirectDnsRecord(
 
 function redirectRuleset(
 	redirectDomain: string,
-	siteUrl: string,
+	targetUrl: string,
 	resolvedDomain: string,
 ): RulesetResource {
 	const label = toTerraformLabel(redirectDomain)
@@ -62,7 +62,7 @@ function redirectRuleset(
 				action_parameters: {
 					from_value: {
 						target_url: {
-							expression: `concat("${siteUrl}", http.request.uri.path)`,
+							expression: `concat("${targetUrl}", http.request.uri.path)`,
 						},
 						preserve_query_string: true,
 						status_code: REDIRECT_STATUS_CODE,
@@ -79,7 +79,7 @@ export function buildRedirectResources(
 	resolvedDomain: string,
 	redirectDomains: ReadonlyArray<string>,
 ): RedirectResources {
-	const siteUrl = computeSiteUrl(domain, environment)
+	const targetUrl = resolveDeployUrl(domain, environment)
 	const dns: Record<string, DnsRecordResource> = {}
 	const rulesets: Record<string, RulesetResource> = {}
 	for (const redirectDomain of redirectDomains) {
@@ -94,7 +94,7 @@ export function buildRedirectResources(
 		)
 		rulesets[`redirect_${label}`] = redirectRuleset(
 			redirectDomain,
-			siteUrl,
+			targetUrl,
 			resolvedDomain,
 		)
 	}

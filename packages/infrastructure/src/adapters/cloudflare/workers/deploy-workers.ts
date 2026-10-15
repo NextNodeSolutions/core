@@ -5,7 +5,7 @@ import { orderWorkerDeploy } from '#/domain/cloudflare/workers/service-bindings.
 import { computeSmokeCheckUrls } from '#/domain/cloudflare/workers/smoke-check.ts'
 import { buildWorkerVars } from '#/domain/cloudflare/workers/worker-vars.ts'
 import { buildWranglerConfig } from '#/domain/cloudflare/workers/wrangler-config.ts'
-import { computeSiteUrl } from '#/domain/deploy/domain.ts'
+import { resolveDeployUrl } from '#/domain/deploy/domain.ts'
 
 import { injectSeoGuardAssets } from './seo-guard-assets.ts'
 import { smokeCheckWorkers } from './smoke-check.ts'
@@ -50,7 +50,7 @@ function workerUrl(
 	environment: AppEnvironment,
 ): string {
 	if (typeof service.url === 'undefined') return ''
-	return computeSiteUrl(service.url, environment)
+	return resolveDeployUrl(service.url, environment)
 }
 
 // A static-assets-only Worker (entry = false) runs no code that could read a
@@ -176,7 +176,7 @@ export async function deployWorkers(
 			{
 				kind: 'worker',
 				name: input.environment,
-				url: computeSiteUrl(input.domain, input.environment),
+				url: resolveDeployUrl(input.domain, input.environment),
 				workers: deployed,
 				deployedAt: new Date(),
 			},

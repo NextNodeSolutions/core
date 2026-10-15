@@ -21,7 +21,7 @@ export function resolveDeployDomain(
  * The public URL of a host for an environment: `https://<resolved-domain>`.
  * Used by the smoke checks, the redirects and the deploy summary.
  */
-export function computeSiteUrl(
+export function resolveDeployUrl(
 	domain: string,
 	environment: AppEnvironment,
 ): string {
