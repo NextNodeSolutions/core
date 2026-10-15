@@ -25,7 +25,7 @@ env:
 jobs:
     seed:
         name: Seed vault from GitHub secrets
-        runs-on: ubuntu-24.04
+        runs-on: ubuntu-latest
         timeout-minutes: 30
         # Puts the secrets scoped to core's `production` environment in
         # `toJSON(secrets)`, next to the org-level ones.

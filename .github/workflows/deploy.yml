@@ -45,7 +45,7 @@ concurrency:
 jobs:
     plan:
         name: Plan
-        runs-on: ubuntu-24.04
+        runs-on: ubuntu-latest
         timeout-minutes: 30
         outputs:
             quality_matrix: ${{ steps.plan.outputs.quality_matrix }}
@@ -73,7 +73,7 @@ jobs:
     quality:
         name: ${{ matrix.task.name }}
         needs: plan
-        runs-on: ubuntu-24.04
+        runs-on: ubuntu-latest
         timeout-minutes: 30
         strategy:
             fail-fast: false
@@ -98,7 +98,7 @@ jobs:
     build:
         name: Build
         needs: plan
-        runs-on: ubuntu-24.04
+        runs-on: ubuntu-latest
         timeout-minutes: 30
         # The caller's dependencies install and its build runs here, with no
         # `id-token: write` and no secret: nothing this job executes can reach
@@ -126,7 +126,7 @@ jobs:
     provision:
         name: Provision
         needs: [plan, quality]
-        runs-on: ubuntu-24.04
+        runs-on: ubuntu-latest
         timeout-minutes: 30
         permissions:
             contents: read
@@ -183,7 +183,7 @@ jobs:
         # current. No git-diff gating: the deployed D1 (which a provision can
         # recreate empty) is the source of truth, not the push's file diff.
         if: ${{ !cancelled() && !failure() && needs.plan.outputs.has_migrations == 'true' }}
-        runs-on: ubuntu-24.04
+        runs-on: ubuntu-latest
         timeout-minutes: 30
         permissions:
             contents: read
@@ -234,7 +234,7 @@ jobs:
         name: Deploy
         needs: [plan, quality, build, provision, migrate]
         if: ${{ !cancelled() && !failure() }}
-        runs-on: ubuntu-24.04
+        runs-on: ubuntu-latest
         timeout-minutes: 30
         permissions:
             contents: read
