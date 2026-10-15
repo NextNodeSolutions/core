@@ -61,12 +61,22 @@ runs:
                   pnpm-lock.yaml
 
         - name: Setup Node (infra cache)
-          if: inputs.infra == 'true'
+          if: inputs.infra == 'true' && inputs.deps != 'true'
           uses: actions/setup-node@v6
           with:
               node-version: 24
               cache: pnpm
               cache-dependency-path: .infra/pnpm-lock.yaml
+
+        - name: Setup Node (infra and project cache)
+          if: inputs.infra == 'true' && inputs.deps == 'true'
+          uses: actions/setup-node@v6
+          with:
+              node-version: 24
+              cache: pnpm
+              cache-dependency-path: |
+                  .infra/pnpm-lock.yaml
+                  pnpm-lock.yaml
 
         - name: Setup Node (project cache)
           if: inputs.infra != 'true'
