@@ -127,4 +127,4 @@ pnpm --filter @nextnode-solutions/infrastructure build
 
 Infrastructure tests were deleted by operator request. Successful compilation does not prove deployment, Access login or PlanetScale migrations.
 
-Layer rules are in [CLAUDE.md](CLAUDE.md). Historical server deployment documents are archived and are not instructions for this CLI.
+Layer rules are in [AGENTS.md](AGENTS.md). Historical server deployment documents are archived and are not instructions for this CLI.
