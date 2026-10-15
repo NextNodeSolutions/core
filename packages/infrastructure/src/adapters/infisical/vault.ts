@@ -1,19 +1,21 @@
+import { VaultPathNotFoundError } from '#/domain/vault/secret-vault.ts'
 import { isRecord } from '#/kernel/guards.ts'
 
 import type { SecretVault, VaultProject } from '#/domain/vault/secret-vault.ts'
 
 const INFISICAL_API_BASE = 'https://app.infisical.com/api'
-// Secrets are read and written at the root of a project environment: the
-// pipeline knows no folder.
-const ROOT_PATH = '/'
+const NOT_FOUND_STATUS = 404
+const PATH_NOT_FOUND_ERROR = 'SecretPathNotFound'
 // The Infisical product the pipeline's projects belong to (the same API also
 // lists certificate and KMS projects).
 const SECRET_MANAGER_PROJECT_TYPE = 'secret-manager'
 
-// Where the secrets live inside Infisical: one project, one environment slug.
+// Where the secrets live inside Infisical: one project, one environment slug,
+// one folder.
 export interface InfisicalVaultLocation {
 	readonly projectId: string
 	readonly environment: string
+	readonly secretPath: string
 }
 
 interface InfisicalSession extends InfisicalVaultLocation {
@@ -155,16 +157,24 @@ function parseImportedSecrets(
 async function listSecrets(
 	session: InfisicalSession,
 ): Promise<Record<string, string>> {
-	const context = `Infisical list secrets (project ${session.projectId}, environment "${session.environment}")`
+	const context = `Infisical list secrets (project ${session.projectId}, environment "${session.environment}", path "${session.secretPath}")`
 	const query = new URLSearchParams({
 		projectId: session.projectId,
 		environment: session.environment,
-		secretPath: ROOT_PATH,
+		secretPath: session.secretPath,
 	})
 	const response = await fetch(
 		`${INFISICAL_API_BASE}/v4/secrets?${query.toString()}`,
 		{ headers: authHeaders(session.accessToken) },
 	)
+	if (response.status === NOT_FOUND_STATUS) {
+		const body = await response.text()
+		const message = `${context}: Infisical API returned ${response.status}: ${body}`
+		if (body.includes(PATH_NOT_FOUND_ERROR)) {
+			throw new VaultPathNotFoundError(message)
+		}
+		throw new Error(message)
+	}
 	await requireOk(response, context)
 
 	const responseBody: unknown = await response.json()
@@ -187,7 +197,7 @@ async function setSecrets(
 		body: JSON.stringify({
 			projectId: session.projectId,
 			environment: session.environment,
-			secretPath: ROOT_PATH,
+			secretPath: session.secretPath,
 			mode: 'upsert',
 			secrets: Object.entries(secrets).map(
 				([secretKey, secretValue]) => ({

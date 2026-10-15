@@ -2,15 +2,23 @@ import type { AppEnvironment } from '#/domain/environment.ts'
 
 /**
  * The secret vault is the single source of truth for every secret the pipeline
- * consumes - GitHub holds none. Two kinds of Infisical project hold them, each
- * read at the root of one environment:
- *   - the CI project, environment `PLATFORM_VAULT_ENVIRONMENT`: the fleet-wide
- *     infra credentials (cloud providers, CI identities, registries) the
- *     workflows themselves consume;
- *   - one project per repository, named after it: the secrets its Workers
- *     receive, every one of them, with nothing declared in nextnode.toml.
+ * consumes - GitHub holds none. Two kinds of Infisical project hold them:
+ *   - the CI project, root of environment `PLATFORM_VAULT_ENVIRONMENT`: the
+ *     fleet-wide infra credentials (cloud providers, CI identities,
+ *     registries) the workflows themselves consume;
+ *   - one project per repository, named after it. The root of each environment
+ *     holds the secrets its Workers receive, every one of them; its
+ *     `BUILD_VAULT_PATH` folder holds the environment of its build. Nothing is
+ *     declared in nextnode.toml.
  */
 export const PLATFORM_VAULT_ENVIRONMENT = 'main'
+
+export const VAULT_ROOT_PATH = '/'
+export const BUILD_VAULT_PATH = '/build'
+
+// No folder at the requested path. Infisical answers the same for an
+// environment the project lacks.
+export class VaultPathNotFoundError extends Error {}
 
 // The environment slugs Infisical gives every new project (Development,
 // Staging, Production), so a repository's project needs no renaming. Staging
@@ -51,8 +59,9 @@ export function findProjectVault(
 }
 
 export interface SecretVault {
-	// Every secret readable at the root of the project environment.
+	// Every secret readable at the vault's path. Throws VaultPathNotFoundError
+	// when no folder exists there.
 	listSecrets(): Promise<Record<string, string>>
-	// Create or replace each secret at the root of the project environment.
+	// Create or replace each secret at the vault's path.
 	setSecrets(secrets: Readonly<Record<string, string>>): Promise<void>
 }

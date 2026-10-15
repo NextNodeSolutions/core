@@ -7,6 +7,7 @@ import {
 import { requireEnv } from '#/cli/env.ts'
 import {
 	PLATFORM_VAULT_ENVIRONMENT,
+	VAULT_ROOT_PATH,
 	findProjectVault,
 	projectVaultEnvironment,
 } from '#/domain/vault/secret-vault.ts'
@@ -42,6 +43,7 @@ export async function openPlatformVault(): Promise<SecretVault> {
 	return createInfisicalVault(await loginOnce(), {
 		projectId: requireEnv('INFISICAL_PROJECT_ID'),
 		environment: PLATFORM_VAULT_ENVIRONMENT,
+		secretPath: VAULT_ROOT_PATH,
 	})
 }
 
@@ -53,12 +55,13 @@ export type ProjectVaultLookup =
 
 /**
  * The repository's own project, found by name among the projects the identity
- * is a member of. Adding the identity to a repository's project is the whole
- * setup: nothing records the project id anywhere else.
+ * is a member of, read at `secretPath`. Adding the identity to a repository's
+ * project is the whole setup: nothing records the project id anywhere else.
  */
 export async function openProjectVault(
 	repoName: string,
 	environment: AppEnvironment,
+	secretPath: string,
 ): Promise<ProjectVaultLookup> {
 	const token = await loginOnce()
 	const projects = await listInfisicalProjects(token)
@@ -71,6 +74,7 @@ export async function openProjectVault(
 		vault: createInfisicalVault(token, {
 			projectId: project.id,
 			environment: projectVaultEnvironment(environment),
+			secretPath,
 		}),
 	}
 }

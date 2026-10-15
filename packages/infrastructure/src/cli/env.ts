@@ -1,5 +1,8 @@
+import { APP_ENVIRONMENTS, isAppEnvironment } from '#/domain/environment.ts'
 import { parseJsonOrThrow } from '#/kernel/json.ts'
 import { custom, pipe, record, safeParse, string } from 'valibot'
+
+import type { AppEnvironment } from '#/domain/environment.ts'
 
 const STRING_RECORD_SCHEMA = pipe(
 	custom(input => !Array.isArray(input)),
@@ -16,6 +19,18 @@ export function requireEnv(name: string): string {
 
 export function getEnv(name: string): string | undefined {
 	return process.env[name]
+}
+
+// The app environment an env var names, or undefined when the var is unset.
+export function readAppEnvironment(name: string): AppEnvironment | undefined {
+	const environment = getEnv(name)
+	if (!environment) return undefined
+	if (!isAppEnvironment(environment)) {
+		throw new Error(
+			`${name} must be one of ${APP_ENVIRONMENTS.join(', ')} (got: ${environment})`,
+		)
+	}
+	return environment
 }
 
 // Read an env var holding a JSON object of string values - the shape of

@@ -3,8 +3,8 @@ import {
 	writeSecretOutput,
 	writeWarning,
 } from '#/adapters/github/output.ts'
-import { getEnv, requireGithubRepository } from '#/cli/env.ts'
-import { APP_ENVIRONMENTS, isAppEnvironment } from '#/domain/environment.ts'
+import { readAppEnvironment, requireGithubRepository } from '#/cli/env.ts'
+import { VAULT_ROOT_PATH } from '#/domain/vault/secret-vault.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
 import { openPlatformVault, openProjectVault } from './open-vault.ts'
@@ -16,20 +16,6 @@ const logger = createLogger()
 // Step output carrying the repository's secrets as a JSON object - the payload
 // `deploy` reads back as `PROJECT_SECRETS` and pushes to every Worker.
 const PROJECT_SECRETS_OUTPUT = 'PROJECT_SECRETS'
-
-// A job asks for the repository's secrets by setting PIPELINE_ENVIRONMENT on
-// the step; without it only the platform secrets are loaded (jobs that act on
-// the infrastructure, not on the Workers).
-function readProjectEnvironment(): AppEnvironment | undefined {
-	const environment = getEnv('PIPELINE_ENVIRONMENT')
-	if (!environment) return undefined
-	if (!isAppEnvironment(environment)) {
-		throw new Error(
-			`PIPELINE_ENVIRONMENT must be one of ${APP_ENVIRONMENTS.join(', ')} (got: ${environment})`,
-		)
-	}
-	return environment
-}
 
 async function loadPlatformSecrets(): Promise<void> {
 	const vault = await openPlatformVault()
@@ -54,7 +40,11 @@ async function loadPlatformSecrets(): Promise<void> {
 // so the cause is found in the run summary rather than in the Worker's logs.
 async function loadProjectSecrets(environment: AppEnvironment): Promise<void> {
 	const repoName = requireGithubRepository().name
-	const lookup = await openProjectVault(repoName, environment)
+	const lookup = await openProjectVault(
+		repoName,
+		environment,
+		VAULT_ROOT_PATH,
+	)
 	if (lookup.kind === 'missing') {
 		writeWarning(
 			`no Infisical project named "${repoName}" is visible to the pipeline identity (visible: ${lookup.visible.join(', ') || 'none'}) - the Workers' secrets are left unchanged. Create the project and add the identity as a member (README, "Secrets").`,
@@ -82,6 +72,9 @@ async function loadProjectSecrets(environment: AppEnvironment): Promise<void> {
 export async function loadSecretsCommand(): Promise<void> {
 	await loadPlatformSecrets()
 
-	const environment = readProjectEnvironment()
+	// A job asks for the repository's secrets by setting PIPELINE_ENVIRONMENT
+	// on the step; without it only the platform secrets are loaded (jobs that
+	// act on the infrastructure, not on the Workers).
+	const environment = readAppEnvironment('PIPELINE_ENVIRONMENT')
 	if (environment) await loadProjectSecrets(environment)
 }
