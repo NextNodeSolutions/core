@@ -6,11 +6,9 @@ import { migratePlanetscale } from '#/adapters/planetscale/migrate.ts'
 import { defaultTerraformRunner } from '#/adapters/terraform/runner.ts'
 import {
 	EMPTY_WORKERS_TERRAFORM_OUTPUTS,
-	buildWorkersBackingEnv,
 	deriveWorkersBackingConfig,
 	hasWorkersBacking,
 } from '#/domain/cloudflare/workers/outputs-env.ts'
-import { computeSiteUrl } from '#/domain/deploy/domain.ts'
 
 import { deployWorkers } from './deploy-workers.ts'
 import { migrateWorkers } from './migrate-workers.ts'
@@ -27,18 +25,15 @@ import type { WranglerRunner } from '#/adapters/wrangler/runner.ts'
 import type { OrganizationConfig } from '#/config/organization.ts'
 import type { CloudflareWorkersDeployableConfig } from '#/config/types.ts'
 import type {
-	DeployEnv,
 	DeployInput,
 	DeployResult,
 	DeployTarget,
 	MigrateInput,
 	MigrateResult,
 	ProvisionResult,
-	TargetEnv,
 } from '#/domain/deploy/target.ts'
 import type { TeardownResult } from '#/domain/deploy/teardown-result.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
-import type { ServiceEnv } from '#/domain/services/service.ts'
 import type { OutputsReader, WorkersTerraformContext } from './terraform-ops.ts'
 
 export interface CloudflareWorkersTargetConfig {
@@ -86,19 +81,6 @@ export class CloudflareWorkersTarget implements DeployTarget {
 		)
 	}
 
-	contributeEnv(projectName: string): TargetEnv {
-		void projectName
-		return {
-			public: {
-				SITE_URL: computeSiteUrl(
-					this.config.project.domain,
-					this.environment,
-				),
-			},
-			secret: {},
-		}
-	}
-
 	async ensureInfra(projectName: string): Promise<ProvisionResult> {
 		const start = Date.now()
 		const workspaceName = `${projectName}-${this.environment}`
@@ -127,22 +109,10 @@ export class CloudflareWorkersTarget implements DeployTarget {
 		}
 	}
 
-	async loadBackingEnv(projectName: string): Promise<ServiceEnv> {
-		void projectName
-		const backing = deriveWorkersBackingConfig(this.config.services)
-		if (!hasWorkersBacking(backing)) {
-			return { public: {}, secret: {} }
-		}
-		const outputs = await this.loadTerraformOutputs()
-		return buildWorkersBackingEnv(outputs, this.accountId, backing)
-	}
-
 	async deploy(
 		projectName: string,
 		input: DeployInput,
-		env: DeployEnv,
 	): Promise<DeployResult> {
-		void env
 		const outputs = await this.loadTerraformOutputs()
 		return deployWorkers({
 			projectName,

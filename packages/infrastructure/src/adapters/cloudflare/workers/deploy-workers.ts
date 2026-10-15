@@ -78,8 +78,6 @@ function buildServiceDocument(
 		cron: input.cron,
 		serviceNames: Object.keys(input.services),
 		vars: buildWorkerVars({
-			projectDomain: input.domain,
-			environment: input.environment,
 			service,
 			backing: deriveWorkersBackingConfig(input.backingServices),
 			outputs: input.outputs,

@@ -80,9 +80,9 @@ function envKeyForAlias(alias: string): string {
 
 /**
  * Project the state payload to the env vars threaded into the deployed
- * app. Endpoint + bucket-name bindings are public (safe in GITHUB_ENV);
- * the credentials are returned in the secret channel so callers route
- * them through `DeployInput.secrets`, never `writeEnvVar`.
+ * app. Endpoint + bucket-name bindings are public (Worker vars); the
+ * credentials are returned in the secret channel so callers route them
+ * through `DeployInput.secrets`, never the public vars.
  */
 export function buildR2ServiceEnv(state: R2ServiceState): ServiceEnv {
 	const publicEnv: Record<string, string> = {

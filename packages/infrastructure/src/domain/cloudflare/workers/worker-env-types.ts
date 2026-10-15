@@ -24,10 +24,9 @@ export interface WorkerEnvTypesInput {
 // The generated `Env` depends only on binding/var NAMES, which are the
 // same in every environment and every project. These stand in for the value-side
 // inputs `buildWranglerConfig`/`buildWorkerVars` require; every value they
-// produce (script names, SITE_URL, the R2 endpoint) is discarded by the renderer.
+// produce (script names, the R2 endpoint) is discarded by the renderer.
 const TYPES_PROJECT_NAME = 'types'
 const TYPES_ENVIRONMENT: AppEnvironment = 'production'
-const TYPES_PROJECT_DOMAIN = 'types.invalid'
 const TYPES_ACCOUNT_ID = 'types'
 
 const GENERATED_HEADER = [
@@ -120,8 +119,6 @@ export function renderWorkerEnvTypes(input: WorkerEnvTypesInput): string {
 		cron: [],
 		serviceNames: input.serviceNames,
 		vars: buildWorkerVars({
-			projectDomain: TYPES_PROJECT_DOMAIN,
-			environment: TYPES_ENVIRONMENT,
 			service: input.service,
 			backing,
 			outputs,

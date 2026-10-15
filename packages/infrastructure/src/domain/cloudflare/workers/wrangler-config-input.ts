@@ -23,7 +23,7 @@ export interface WranglerConfigInput {
 	// Declaration order of every service, so cron's "primary = first service"
 	// default resolves identically to the schema's own rule.
 	readonly serviceNames: ReadonlyArray<string>
-	// Public runtime vars. Empty for now; US-3.2 fills SITE_URL + peer URLs +
-	// backing env. Emitted only when non-empty.
+	// Public runtime vars: the backing env of the services this Worker needs.
+	// Emitted only when non-empty.
 	readonly vars: Readonly<Record<string, string>>
 }

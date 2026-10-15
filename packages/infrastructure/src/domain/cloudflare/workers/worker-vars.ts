@@ -1,17 +1,12 @@
-import { computeSiteUrl } from '#/domain/deploy/domain.ts'
-
 import { buildWorkersBackingEnv } from './outputs-env.ts'
 
 import type { WorkerServiceConfig } from '#/config/types.ts'
-import type { AppEnvironment } from '#/domain/environment.ts'
 import type {
 	WorkersBackingConfig,
 	WorkersTerraformOutputs,
 } from './outputs-env.ts'
 
 export interface WorkerVarsInput {
-	readonly projectDomain: string
-	readonly environment: AppEnvironment
 	// The worker whose vars are built (its `needs` filter the backing env).
 	readonly service: WorkerServiceConfig
 	readonly backing: WorkersBackingConfig
@@ -44,15 +39,9 @@ function backingForNeeds(
 
 /**
  * Build the public `vars` block injected into one Worker's generated wrangler
- * config. Two sources, precedence low-to-high on the (pathological) key
- * collision:
- *
- *   - the backing env (D1/KV/Queue ids, R2 bucket names + CDN URLs, endpoint)
- *     of the backing services THIS worker declares in `needs` - least-privilege,
- *     never the full backing surface;
- *   - `SITE_URL`, this worker's canonical site URL: the service-url-derived
- *     host (dev-prefixed in development) when `[deploy.services.<name>].url` is
- *     declared, else the project-domain fallback (single-service/apex projects).
+ * config: the backing env (D1/KV/Queue ids, R2 bucket names + CDN URLs,
+ * endpoint) of the backing services THIS worker declares in `needs` -
+ * least-privilege, never the full backing surface.
  *
  * Worker-to-worker addressing is NOT here: a Worker reaches a sibling only
  * through its service binding (`env.<NAME>`, see `wrangler-config.ts`), never a
@@ -62,16 +51,9 @@ function backingForNeeds(
 export function buildWorkerVars(
 	input: WorkerVarsInput,
 ): Record<string, string> {
-	const backingEnv = buildWorkersBackingEnv(
+	return buildWorkersBackingEnv(
 		input.outputs,
 		input.accountId,
 		backingForNeeds(input.backing, input.service.needs),
 	).public
-
-	const siteUrlDomain = input.service.url ?? input.projectDomain
-
-	return {
-		...backingEnv,
-		SITE_URL: computeSiteUrl(siteUrlDomain, input.environment),
-	}
 }

@@ -7,7 +7,7 @@ import type { AppEnvironment } from '#/domain/environment.ts'
  * - Development: `dev.{domain}`
  *
  * This is the single source of truth for the dev subdomain convention.
- * Used by DNS records, Pages custom domains, and deploy env (SITE_URL).
+ * Used by Worker routes, zone rules, Access applications and R2 custom domains.
  */
 export function resolveDeployDomain(
 	domain: string,
@@ -18,11 +18,8 @@ export function resolveDeployDomain(
 }
 
 /**
- * The canonical public site URL for an environment: `https://<resolved-domain>`.
- * Single source of truth shared by the runtime env (every target's
- * `contributeEnv().public.SITE_URL`) and the build args (Astro `site:` and
- * friends read it at build time) - so the value baked into the image and the
- * value injected at runtime can never drift.
+ * The public URL of a host for an environment: `https://<resolved-domain>`.
+ * Used by the smoke checks, the redirects and the deploy summary.
  */
 export function computeSiteUrl(
 	domain: string,

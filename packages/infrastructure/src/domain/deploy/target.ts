@@ -1,20 +1,6 @@
 import type { AppEnvironment } from '#/domain/environment.ts'
-import type { ServiceEnv } from '#/domain/services/service.ts'
 import type { WorkersResourceOutcome } from './resource-outcome.ts'
 import type { TeardownResult } from './teardown-result.ts'
-
-export type DeployEnv = Readonly<Record<string, string>> & {
-	readonly SITE_URL: string
-}
-export type TargetEnv = ServiceEnv & { readonly public: DeployEnv }
-
-export function buildDeployEnv(
-	values: Readonly<Record<string, string>>,
-): DeployEnv {
-	const siteUrl = values['SITE_URL']
-	if (!siteUrl) throw new Error('SITE_URL missing from target environment')
-	return { ...values, SITE_URL: siteUrl }
-}
 
 export type DeployInput = {
 	// The secrets every Worker of the project holds after the deploy: the
@@ -61,14 +47,8 @@ export const DEFAULT_MIGRATE_COMMAND = 'pnpm drizzle-kit migrate'
 
 export interface DeployTarget {
 	readonly name: string
-	contributeEnv(projectName: string): TargetEnv | Promise<TargetEnv>
 	ensureInfra(projectName: string): Promise<ProvisionResult>
-	loadBackingEnv(projectName: string): Promise<ServiceEnv>
-	deploy(
-		projectName: string,
-		input: DeployInput,
-		env: DeployEnv,
-	): Promise<DeployResult>
+	deploy(projectName: string, input: DeployInput): Promise<DeployResult>
 	runMigrate(input: MigrateInput): Promise<MigrateResult>
 	teardown(projectName: string): Promise<TeardownResult>
 	planDiff(): Promise<string>
