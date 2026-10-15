@@ -280,6 +280,15 @@ jobs:
                   terraform_version: '~> 1.9'
                   terraform_wrapper: false
 
+            - name: Prepare source maps
+              run: node src/index.ts upload-sourcemaps
+              working-directory: .infra/packages/infrastructure
+              env:
+                  PIPELINE_BUILD_DIR: ${{ runner.temp }}/build
+                  SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+                  SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+                  SENTRY_AUTH_TOKEN: ${{ steps.vault.outputs.SENTRY_AUTH_TOKEN }}
+
             # The SEO guard is injected per service inside `deploy` (before each
             # asset upload), so there is no separate seo-guard step here.
             - name: Deploy

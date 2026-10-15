@@ -32,6 +32,7 @@
   },
   "dependencies": {
     "@nextnode-solutions/logger": "^1.0.0",
+    "@sentry/cli": "^3.8.0",
     "smol-toml": "^1.6.1",
     "valibot": "^1.4.1"
   },
