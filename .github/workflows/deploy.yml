@@ -37,10 +37,12 @@ concurrency:
     cancel-in-progress: false
 
 # Trust boundary. A job granted `id-token: write` can mint an OIDC token from
-# any of its steps, and the vault accepts that token. Such a job therefore runs
-# core's pipeline CLI only, never the caller's scripts or dependency lifecycle
-# hooks: the caller's code builds in `build`, with no credential and no token
-# endpoint, and `deploy` ships the uploaded result. The one exception is a
+# any of its steps, and the vault accepts that token for the identity bound to
+# the job's workflow file. The jobs below log in as the platform identity, so
+# they run core's pipeline CLI only, never the caller's scripts or dependency
+# lifecycle hooks. The caller's code builds in build.yml, whose jobs the vault
+# admits as the build identity only (repositories' projects, never the CI
+# project), and `deploy` ships the uploaded result. The one exception is a
 # PlanetScale migration, which runs the caller's migrate command in `migrate`.
 jobs:
     plan:
@@ -98,30 +100,16 @@ jobs:
     build:
         name: Build
         needs: plan
-        runs-on: ubuntu-latest
-        timeout-minutes: 30
-        # The caller's dependencies install and its build runs here, with no
-        # `id-token: write` and no secret: nothing this job executes can reach
-        # the vault. The package directory, minus its dependencies, travels to
-        # `deploy` as an artifact; the Worker bundle must be self-contained,
-        # `deploy` never installs the caller's dependencies.
-        steps:
-            - uses: NextNodeSolutions/core/.github/actions/setup@main
-
-            - name: Build
-              run: pnpm build
-
-            - name: Upload build
-              uses: actions/upload-artifact@v7
-              with:
-                  name: build-${{ needs.plan.outputs.project_name }}-${{ inputs.environment }}
-                  path: |
-                      ${{ needs.plan.outputs.package_dir || '.' }}
-                      !**/node_modules/**
-                      !**/.git/**
-                  include-hidden-files: true
-                  if-no-files-found: error
-                  retention-days: 1
+        # The caller's dependencies install and its build runs in build.yml,
+        # logged in as the build identity (see the trust boundary above).
+        permissions:
+            contents: read
+            id-token: write
+        uses: NextNodeSolutions/core/.github/workflows/build.yml@main
+        with:
+            environment: ${{ inputs.environment }}
+            artifact_name: build-${{ needs.plan.outputs.project_name }}-${{ inputs.environment }}
+            package_dir: ${{ needs.plan.outputs.package_dir }}
 
     provision:
         name: Provision

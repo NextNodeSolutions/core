@@ -1,0 +1,71 @@
+name: Build
+
+# The caller's build, called by deploy.yml only. It is its own workflow file
+# because the vault tells identities apart by the file a job is defined in
+# (the OIDC claim `job_workflow_ref`): a job here logs in as the build
+# identity, which sees the repositories' Infisical projects and never the CI
+# project. The caller's dependencies and build therefore never hold a platform
+# credential, while they read the `/build` folder of their own project.
+
+on:
+    workflow_call:
+        inputs:
+            environment:
+                type: string
+                required: true
+                description: 'development or production'
+            artifact_name:
+                type: string
+                required: true
+                description: 'Name of the uploaded build artifact'
+            package_dir:
+                type: string
+                default: ''
+                description: 'Package directory to upload, relative to the repository root'
+
+permissions:
+    contents: read
+    id-token: write
+
+env:
+    # The build identity, not the platform one (README, "Vault setup").
+    INFISICAL_IDENTITY_ID: ${{ vars.INFISICAL_BUILD_IDENTITY_ID }}
+
+jobs:
+    build:
+        name: Build
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        steps:
+            - uses: NextNodeSolutions/core/.github/actions/setup@main
+              with:
+                  infra: 'true'
+
+            - name: Load build env
+              run: node src/index.ts load-build-env
+              working-directory: .infra/packages/infrastructure
+              env:
+                  PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
+
+            # Core's checkout leaves before the caller's build, which would
+            # otherwise scan it (type-check, Tailwind sources) or upload it.
+            - name: Remove core checkout
+              run: rm -rf .infra
+
+            - name: Build
+              run: pnpm build
+
+            # The package directory, minus its dependencies, travels to
+            # `deploy`; the Worker bundle must be self-contained, `deploy` never
+            # installs the caller's dependencies.
+            - name: Upload build
+              uses: actions/upload-artifact@v7
+              with:
+                  name: ${{ inputs.artifact_name }}
+                  path: |
+                      ${{ inputs.package_dir || '.' }}
+                      !**/node_modules/**
+                      !**/.git/**
+                  include-hidden-files: true
+                  if-no-files-found: error
+                  retention-days: 1

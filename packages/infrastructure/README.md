@@ -28,12 +28,12 @@ Deployment credentials live in the CI project of the vault: `CLOUDFLARE_API_TOKE
 
 ## Secrets
 
-Infisical is the only source of secrets. GitHub holds none, and `nextnode.toml` declares none. GitHub Variables stay in GitHub because they are not secrets. Secrets sit at the root of an environment, with no folder.
+Infisical is the only source of secrets. GitHub holds none, and `nextnode.toml` declares none. GitHub Variables stay in GitHub because they are not secrets.
 
-| Infisical project                             | Environments  | Content                                       |
-| --------------------------------------------- | ------------- | --------------------------------------------- |
-| The CI project, id `INFISICAL_PROJECT_ID`     | `main`        | Platform credentials shared by every pipeline |
-| One per repository, named like the repository | `dev`, `prod` | The secrets of that repository's Workers      |
+| Infisical project                             | Environments  | Content                                                                    |
+| --------------------------------------------- | ------------- | -------------------------------------------------------------------------- |
+| The CI project, id `INFISICAL_PROJECT_ID`     | `main`        | Platform credentials shared by every pipeline, at the root                 |
+| One per repository, named like the repository | `dev`, `prod` | Its Workers' secrets at the root, its build's values in the `build` folder |
 
 ### A repository's secrets
 
@@ -42,18 +42,20 @@ The `deploy` job looks up the project named after the calling repository among t
 To give a repository secrets:
 
 1. Create an Infisical project with the repository's exact name.
-2. Add the identity `github-actions` to it, with the built-in role Viewer.
-3. Store the secrets in `dev` and `prod`.
+2. Add the identities `github-actions` and `github-actions-build` to it, with the built-in role Viewer.
+3. Store the secrets at the root of `dev` and `prod`.
 
 Locally, `infisical init` links the checkout to the project, and `infisical run --env=dev -- pnpm dev` replaces `.env.local`.
 
 The app types the secrets it reads by augmenting `Cloudflare.Env` in its own declaration file. `worker-types` generates the bindings and vars only.
 
-No secret reaches the build. A value the build needs is not a secret, and goes in a GitHub Variable.
+### A repository's build values
+
+The build reads the `build` folder of the same project and environment, `dev/build` or `prod/build`, and exports every value in it to `pnpm build` as an env var, masked in the logs. It holds what the build needs, such as `SITE_URL`, a public Sentry DSN or a Sentry upload token. Root secrets never reach the build, and `build` values never reach the Workers. A repository without a project, or without the folder, builds with no value.
 
 ### Loading in a job
 
-Every job that needs a secret starts with `node src/index.ts load-secrets`. The job trades its GitHub OIDC token for a short-lived vault token, then exposes each platform secret as a masked step output, `steps.vault.outputs.<NAME>`. With `PIPELINE_ENVIRONMENT` set, it also emits the repository's secrets as one JSON output, `PROJECT_SECRETS`. Only `deploy` sets it. Never reference `secrets.<NAME>` in a workflow.
+Every job that needs a secret starts with `node src/index.ts load-secrets`, except the build, which runs `load-build-env`. The job trades its GitHub OIDC token for a short-lived vault token, then exposes each platform secret as a masked step output, `steps.vault.outputs.<NAME>`. With `PIPELINE_ENVIRONMENT` set, it also emits the repository's secrets as one JSON output, `PROJECT_SECRETS`. Only `deploy` sets it. Never reference `secrets.<NAME>` in a workflow.
 
 A calling workflow declares its permissions, `id-token: write` included, so it keeps working if the organization's default token becomes read-only:
 
@@ -74,27 +76,39 @@ A caller of `plan-diff.yml` grants `contents: read`, `pull-requests: write` and 
 
 ### Trust boundary
 
-Any step of a job granted `id-token: write` can mint the job's OIDC token, and the vault accepts it. The identity reads every project it is a member of, so the boundary is what runs in such a job.
+Any step of a job granted `id-token: write` can mint the job's OIDC token, and the vault accepts it for the identity bound to the job's workflow file. An identity reads every project it is a member of, so the boundary is which identity a job can reach and what runs in it.
 
-- Such a job runs core's pipeline CLI only. The caller's dependencies install and its build runs in the `build` job of `deploy.yml`, which holds no credential. `deploy` ships the uploaded result and never installs the caller's dependencies, so the Worker bundle must be self-contained. The exception is a PlanetScale migration, which runs the caller's migrate command in `migrate`.
+- The platform identity, `github-actions`, admits `deploy.yml`, `plan-diff.yml`, `publish-package.yml`, `seed-vault.yml` and `teardown.yml`. Their jobs run core's pipeline CLI only. `deploy` ships the uploaded build and never installs the caller's dependencies, so the Worker bundle must be self-contained. The exception is a PlanetScale migration, which runs the caller's migrate command in `migrate`.
+- The build identity, `github-actions-build`, admits `build.yml` only. The caller's dependencies install and its build runs there. It is a member of the repositories' projects, never of the CI project, so the caller's code reaches its own project's values and no platform credential. It can read the root secrets too, which the same code holds at runtime anyway.
 - `publish-package.yml` is bound to core. Its `publish` job runs the package's release tooling, caller code by construction, so it refuses any other calling repository. Core's own code and lockfile are the trusted base, like the CLI.
 - The CLI picks the repository's project from `GITHUB_REPOSITORY`, which the runner sets, so a caller cannot point its pipeline at another repository's project.
 
-The `job_workflow_ref` claim is what the identity trusts: only core's workflow files on `main` can log in, whichever repository calls them. In a called workflow the claim names the called file. In a workflow run directly, such as Seed Vault or teardown, it names that workflow's own file. The `repository_owner_id` claim pins the organization by its immutable id. This trust is exactly as strong as the protection of core's `main`: no direct push, pull requests only.
+The `job_workflow_ref` claim is what each identity trusts: only the listed core workflow files on `main` can log in, whichever repository calls them. In a called workflow the claim names the called file. GitHub does not document the nested case, `deploy.yml` calling `build.yml`: the build's login proves it, since the build identity admits `build.yml` only. In a workflow run directly, such as Seed Vault or teardown, it names that workflow's own file. The `repository_owner_id` claim pins the organization by its immutable id. This trust is exactly as strong as the protection of core's `main`: no direct push, pull requests only.
 
 ### Vault setup
 
-Created once: the CI project with its environment `main`, and one organization identity, `github-actions`, with the organization role No Access. It is a member of the CI project with the built-in role Member, and of each repository's project with the built-in role Viewer. Its id is the organization Variable `INFISICAL_IDENTITY_ID`. OIDC Auth:
+Created once: the CI project with its environment `main`, and two organization identities with the organization role No Access.
 
-| Field                       | Value                                                        |
-| --------------------------- | ------------------------------------------------------------ |
-| OIDC Discovery URL          | `https://token.actions.githubusercontent.com`                |
-| Issuer                      | `https://token.actions.githubusercontent.com`                |
-| Subject                     | `repo:NextNodeSolutions/*`                                   |
-| Audiences                   | `https://app.infisical.com`                                  |
-| Claim `repository_owner_id` | `259621712`                                                  |
-| Claim `job_workflow_ref`    | `NextNodeSolutions/core/.github/workflows/*@refs/heads/main` |
-| Access token TTL, max TTL   | 900                                                          |
+- `github-actions` is a member of the CI project with the built-in role Member, and of each repository's project with the built-in role Viewer. Its id is the organization Variable `INFISICAL_IDENTITY_ID`.
+- `github-actions-build` is a member of each repository's project with the built-in role Viewer, and of nothing else. Its id is the organization Variable `INFISICAL_BUILD_IDENTITY_ID`.
+
+Both use OIDC Auth with the same fields, except the `job_workflow_ref` claim:
+
+| Field                       | Value                                         |
+| --------------------------- | --------------------------------------------- |
+| OIDC Discovery URL          | `https://token.actions.githubusercontent.com` |
+| Issuer                      | `https://token.actions.githubusercontent.com` |
+| Subject                     | `repo:NextNodeSolutions/*`                    |
+| Audiences                   | `https://app.infisical.com`                   |
+| Claim `repository_owner_id` | `259621712`                                   |
+| Access token TTL, max TTL   | 900                                           |
+
+| Identity               | Claim `job_workflow_ref`, one comma-separated list                                                                                                                                                                                                                                                                                                                          |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `github-actions`       | `NextNodeSolutions/core/.github/workflows/deploy.yml@refs/heads/main, NextNodeSolutions/core/.github/workflows/plan-diff.yml@refs/heads/main, NextNodeSolutions/core/.github/workflows/publish-package.yml@refs/heads/main, NextNodeSolutions/core/.github/workflows/seed-vault.yml@refs/heads/main, NextNodeSolutions/core/.github/workflows/teardown.yml@refs/heads/main` |
+| `github-actions-build` | `NextNodeSolutions/core/.github/workflows/build.yml@refs/heads/main`                                                                                                                                                                                                                                                                                                        |
+
+A glob such as `workflows/*` would admit `build.yml` into the platform identity: list the files.
 
 Infisical matches the Subject as one glob, with no comma list. Claims accept a comma-separated list per claim. A claim mapped through Claim Mapping must be present in every token, otherwise the login is refused.
 
