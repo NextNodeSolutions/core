@@ -154,7 +154,6 @@ export class CloudflareWorkersTarget implements DeployTarget {
 			cron: this.config.deploy.cron,
 			outputs,
 			secrets: input.secrets,
-			secretOrigins: input.secretOrigins,
 			accountId: this.accountId,
 			wranglerRunner: this.wrangler,
 			projectDir: this.requireProjectDir(),

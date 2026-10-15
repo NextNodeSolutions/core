@@ -25,7 +25,6 @@ export function generateWorkerTypes(
 						service,
 						services: config.services,
 						serviceNames,
-						secretNames: service.secrets,
 					}),
 				}),
 			]

@@ -3,7 +3,7 @@ import { impliableServiceNames } from '#/config/service-config.ts'
 import { DEFAULT_DEPLOY_TARGETS, DEPLOY_TARGETS } from '#/config/types.ts'
 import { isRecord } from '#/kernel/guards.ts'
 
-import { resolveSecrets } from './deploy-secrets.ts'
+import { REMOVED_SECRETS_FIELD_REASON } from './deploy-removed-fields.ts'
 import {
 	validateServiceDependsOnRefs,
 	validateServiceNeedsRefs,
@@ -17,6 +17,11 @@ import type { ValidationResult } from './result.ts'
 function invalidTargetErrors(rawTarget: unknown): string[] {
 	if (typeof rawTarget === 'undefined' || isDeployTarget(rawTarget)) return []
 	return [`deploy.target must be one of: ${DEPLOY_TARGETS.join(', ')}`]
+}
+
+function removedSecretsErrors(deployRecord: Record<string, unknown>): string[] {
+	if (typeof deployRecord['secrets'] === 'undefined') return []
+	return [`deploy.secrets is not supported: ${REMOVED_SECRETS_FIELD_REASON}`]
 }
 
 export function validateDeploySection(
@@ -33,22 +38,19 @@ export function validateDeploySection(
 	if (targetErrors.length) return { ok: false, errors: targetErrors }
 	const target = DEFAULT_DEPLOY_TARGETS[projectType]
 	const parsed = validateWorkerServices(deployRecord)
-	const secrets = resolveSecrets(target, deployRecord, parsed.services)
 	const provider = DEPLOY_PROVIDER_VALIDATORS[target]
 	const validatedProvider = provider.validate(deployRecord, {
-		secrets: secrets.secrets,
-		generatedSecrets: secrets.generatedSecrets,
-		workerServices: secrets.services,
+		workerServices: parsed.services,
 		domain,
 	})
 	const errors = [
+		...removedSecretsErrors(deployRecord),
 		...parsed.errors,
 		...validateServiceDependsOnRefs(parsed),
 		...validateServiceNeedsRefs(
 			parsed,
 			new Set([...declaredServices, ...impliableServiceNames(target)]),
 		),
-		...secrets.errors,
 		...validatedProvider.errors,
 	]
 	if (provider.requiresDomain && !domain)

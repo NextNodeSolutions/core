@@ -41,6 +41,11 @@ export function writeSecretOutput(key: string, secretValue: string): void {
 	)
 }
 
+// A warning annotation: shown on the run summary, not only in the step log.
+export function writeWarning(message: string): void {
+	process.stdout.write(`::warning::${message}\n`)
+}
+
 export function writeSummary(markdown: string): void {
 	const summaryFile = process.env['GITHUB_STEP_SUMMARY']
 	if (!summaryFile) {

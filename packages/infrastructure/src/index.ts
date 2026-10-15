@@ -1,6 +1,5 @@
 import { createLogger } from '@nextnode-solutions/logger'
 
-import { checkSecretsCommand } from './cli/deploy/check-secrets.command.ts'
 import { deployCommand } from './cli/deploy/deploy.command.ts'
 import { generateWorkerTypesCommand } from './cli/deploy/generate-worker-types.command.ts'
 import { migrateRemoteCommand } from './cli/deploy/migrate-remote.command.ts'
@@ -32,7 +31,6 @@ const PLAN_COMMANDS: Record<string, ConfigCommand> = {
 }
 
 const DEPLOY_COMMANDS: Record<string, DeployCommand> = {
-	'check-secrets': checkSecretsCommand,
 	provision: provisionCommand,
 	'plan-infra': planInfraCommand,
 	'migrate-remote': migrateRemoteCommand,

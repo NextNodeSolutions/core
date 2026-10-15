@@ -2,46 +2,57 @@ import type { AppEnvironment } from '#/domain/environment.ts'
 
 /**
  * The secret vault is the single source of truth for every secret the pipeline
- * consumes - GitHub holds none. Two folders frame it:
- *   - `PLATFORM_SECRETS_PATH`: the fleet-wide infra credentials (cloud
- *     providers, CI identities, registries) the workflows themselves consume.
- *   - `projectSecretsPath()`: one folder per repository x environment, holding
- *     the secrets that belong to that project alone.
+ * consumes - GitHub holds none. Two kinds of Infisical project hold them, each
+ * read at the root of one environment:
+ *   - the CI project, environment `PLATFORM_VAULT_ENVIRONMENT`: the fleet-wide
+ *     infra credentials (cloud providers, CI identities, registries) the
+ *     workflows themselves consume;
+ *   - one project per repository, named after it: the secrets its Workers
+ *     receive, every one of them, with nothing declared in nextnode.toml.
  */
-export const PLATFORM_SECRETS_PATH = '/ci'
-const PROJECT_SECRETS_ROOT = '/projects'
+export const PLATFORM_VAULT_ENVIRONMENT = 'main'
 
-// Repo + pipeline environment a project secret is scoped to. Keyed by the
-// GitHub repository name (not `project.name`): the runner sets it, so a caller
-// cannot point its pipeline at another project's folder from its own
-// nextnode.toml.
-export interface ProjectSecretScope {
-	readonly repo: string
-	readonly environment: AppEnvironment
+// The environment slugs Infisical gives every new project (Development,
+// Staging, Production), so a repository's project needs no renaming. Staging
+// is left unused.
+const PROJECT_VAULT_ENVIRONMENTS: Readonly<Record<AppEnvironment, string>> = {
+	development: 'dev',
+	production: 'prod',
 }
 
-export function projectSecretsPath(scope: ProjectSecretScope): string {
-	return `${PROJECT_SECRETS_ROOT}/${scope.repo}/${scope.environment}`
+export function projectVaultEnvironment(environment: AppEnvironment): string {
+	return PROJECT_VAULT_ENVIRONMENTS[environment]
 }
 
-// The pool `[deploy].secrets` names resolve against (`ALL_SECRETS`): the
-// platform secrets overlaid by the project's own, the project winning on a
-// shared name. A project may therefore declare a platform secret without
-// holding a copy that would go stale at the next rotation - the same semantics
-// as `toJSON(secrets)`, which merged org, repo and environment secrets.
-export function buildProjectSecretPool(
-	platformSecrets: Readonly<Record<string, string>>,
-	projectSecrets: Readonly<Record<string, string>>,
-): Record<string, string> {
-	return { ...platformSecrets, ...projectSecrets }
+// An Infisical project the pipeline's identity can see.
+export interface VaultProject {
+	readonly id: string
+	readonly name: string
+}
+
+/**
+ * The repository's project among those the identity is a member of, keyed by
+ * the GitHub repository name (not `project.name`): the runner sets it, so a
+ * caller cannot point its pipeline at another repository's project from its
+ * own nextnode.toml. Two visible projects with that name are ambiguous and
+ * refused rather than picked at random.
+ */
+export function findProjectVault(
+	projects: ReadonlyArray<VaultProject>,
+	repoName: string,
+): VaultProject | undefined {
+	const matches = projects.filter(project => project.name === repoName)
+	if (matches.length > 1) {
+		throw new Error(
+			`${matches.length} Infisical projects named "${repoName}" are visible to the pipeline identity - keep one`,
+		)
+	}
+	return matches[0]
 }
 
 export interface SecretVault {
-	// Every secret readable at `path`. A folder that does not exist holds none.
-	listSecrets(path: string): Promise<Record<string, string>>
-	// Create or replace each secret at `path`, creating the folder when absent.
-	setSecrets(
-		path: string,
-		secrets: Readonly<Record<string, string>>,
-	): Promise<void>
+	// Every secret readable at the root of the project environment.
+	listSecrets(): Promise<Record<string, string>>
+	// Create or replace each secret at the root of the project environment.
+	setSecrets(secrets: Readonly<Record<string, string>>): Promise<void>
 }

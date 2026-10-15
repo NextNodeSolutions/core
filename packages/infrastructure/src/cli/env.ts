@@ -19,8 +19,8 @@ export function getEnv(name: string): string | undefined {
 }
 
 // Read an env var holding a JSON object of string values - the shape of
-// `ALL_SECRETS` (the vault's project pool, emitted by `load-secrets`) and of
-// GitHub's `toJSON(vars)`. Absent or empty → `{}` (a project with no
+// `PROJECT_SECRETS` (the repository's Infisical environment, emitted by
+// `load-secrets`) and of GitHub's `toJSON(secrets)`. Absent or empty → `{}` (a project with no
 // secrets/variables is valid; the consumer fails loud later if
 // a specific key it needs is missing). A present-but-malformed payload throws.
 export function readJsonRecordEnv(name: string): Record<string, string> {

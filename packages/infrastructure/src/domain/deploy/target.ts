@@ -17,8 +17,10 @@ export function buildDeployEnv(
 }
 
 export type DeployInput = {
-	readonly secrets: Readonly<Record<string, string>>
-	readonly secretOrigins: Readonly<Record<string, string>>
+	// The secrets every Worker of the project holds after the deploy: the
+	// repository's Infisical environment. Undefined when the repository has no
+	// Infisical project, which leaves the Workers' secrets as they are.
+	readonly secrets: Readonly<Record<string, string>> | undefined
 }
 
 export type DeployedWorker = { readonly name: string; readonly url: string }

@@ -6,7 +6,6 @@ import { computeSmokeCheckUrls } from '#/domain/cloudflare/workers/smoke-check.t
 import { buildWorkerVars } from '#/domain/cloudflare/workers/worker-vars.ts'
 import { buildWranglerConfig } from '#/domain/cloudflare/workers/wrangler-config.ts'
 import { computeSiteUrl } from '#/domain/deploy/domain.ts'
-import { buildServiceSecretEnv } from '#/domain/deploy/service-env.ts'
 
 import { injectSeoGuardAssets } from './seo-guard-assets.ts'
 import { smokeCheckWorkers } from './smoke-check.ts'
@@ -31,11 +30,11 @@ export interface WorkersDeployInput {
 	readonly cron: ReadonlyArray<CronJobConfig>
 	// Provision outputs, read ONCE by the caller and shared across every service.
 	readonly outputs: WorkersTerraformOutputs
-	// Resolved secret VALUES (the pool = [deploy].secrets global ∪ each service's
-	// own, already folded and resolved from ALL_SECRETS upstream) and their
-	// provenance. Projected per service, least-privilege, via `buildServiceSecretEnv`.
-	readonly secrets: Readonly<Record<string, string>>
-	readonly secretOrigins: Readonly<Record<string, string>>
+	// The secrets every scripted Worker of the project holds after the deploy:
+	// the repository's whole Infisical environment. Undefined when the
+	// repository has no Infisical project: the Workers' secrets are left as
+	// they are.
+	readonly secrets: Readonly<Record<string, string>> | undefined
 	// The Cloudflare account id, needed to derive R2_ENDPOINT for the backing vars.
 	readonly accountId: string
 	readonly wranglerRunner: WranglerRunner | undefined
@@ -54,17 +53,14 @@ function workerUrl(
 	return computeSiteUrl(service.url, environment)
 }
 
-const SECRETS_JSON_INDENT = 2
-
-// A worker with no projected secrets makes NO `wrangler secret bulk` call
-// (undefined), so an empty declaration never spawns an empty upload.
-function secretsJsonFor(
+// A static-assets-only Worker (entry = false) runs no code that could read a
+// secret: its secrets are never synced.
+function secretsFor(
+	service: WorkerServiceConfig,
 	secrets: Readonly<Record<string, string>> | undefined,
-): string | undefined {
-	if (!secrets || !Object.keys(secrets).length) {
-		return undefined
-	}
-	return JSON.stringify(secrets, null, SECRETS_JSON_INDENT)
+): Readonly<Record<string, string>> | undefined {
+	if (service.entry === false) return undefined
+	return secrets
 }
 
 function buildServiceDocument(
@@ -92,11 +88,11 @@ function buildServiceDocument(
 	})
 }
 
-function secretsJsonArg(
-	secretsJson: string | undefined,
-): { secretsJson: string } | undefined {
-	if (typeof secretsJson === 'undefined') return undefined
-	return { secretsJson }
+function secretsArg(
+	secrets: Readonly<Record<string, string>> | undefined,
+): { secrets: Readonly<Record<string, string>> } | undefined {
+	if (typeof secrets === 'undefined') return undefined
+	return { secrets }
 }
 
 interface ServiceDeployJob {
@@ -104,12 +100,12 @@ interface ServiceDeployJob {
 	readonly runner: WranglerRunner
 	readonly serviceName: string
 	readonly service: WorkerServiceConfig
-	readonly secretsJson: string | undefined
+	readonly secrets: Readonly<Record<string, string>> | undefined
 }
 
 // Deploy one service: generate its config, inject the non-prod SEO guard into
 // its assets directory (so a non-prod deploy is not indexable) BEFORE the upload,
-// then `wrangler deploy` and bulk-upload its projected secrets against the same
+// then `wrangler deploy` and sync its secrets against the same
 // config. A failed deploy throws (the caller stops the run).
 async function deployOneService(
 	job: ServiceDeployJob,
@@ -127,7 +123,7 @@ async function deployOneService(
 		document,
 		runner: job.runner,
 		cwd: input.projectDir,
-		...secretsJsonArg(job.secretsJson),
+		...secretsArg(job.secrets),
 	})
 	return { name: serviceName, url: workerUrl(service, input.environment) }
 }
@@ -139,8 +135,8 @@ async function deployOneService(
  * `depends_on`. Each
  * service's ephemeral wrangler config is generated in the domain and written by
  * the adapter; an asset-shipping service gets the non-prod SEO guard injected
- * into its assets directory before upload, and its projected secrets are
- * bulk-uploaded against the same config (see `deployOneService`). A failed deploy
+ * into its assets directory before upload, and its secrets are synced
+ * against the same config (see `deployOneService`). A failed deploy
  * throws and stops the run (later services are not deployed). Once every service
  * is deployed, each routed service is smoke-checked on `/healthz` (bounded
  * retries); an unhealthy service throws so the deploy job fails. Returns a single
@@ -152,11 +148,6 @@ export async function deployWorkers(
 	const start = Date.now()
 	const runner = input.wranglerRunner ?? defaultWranglerRunner
 	const order = orderWorkerDeploy(input.services)
-	const perServiceSecrets = buildServiceSecretEnv(
-		input.services,
-		input.secrets,
-		input.secretOrigins,
-	)
 
 	const deployed: Array<DeployedWorker> = []
 	for (const serviceName of order) {
@@ -169,7 +160,7 @@ export async function deployWorkers(
 				runner,
 				serviceName,
 				service,
-				secretsJson: secretsJsonFor(perServiceSecrets[serviceName]),
+				secrets: secretsFor(service, input.secrets),
 			}),
 		)
 	}

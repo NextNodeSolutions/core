@@ -2,7 +2,7 @@
 // GitHub secrets are removed (see README.md, "Secrets").
 
 // The org-level GitHub secrets the workflows consumed before the vault: the
-// fleet-wide infra credentials, now read from `PLATFORM_SECRETS_PATH`. Names
+// fleet-wide infra credentials, now read from the CI project. Names
 // are kept identical on both sides so the workflows only change their source.
 export const LEGACY_PLATFORM_SECRET_NAMES = [
 	'CLOUDFLARE_API_TOKEN',

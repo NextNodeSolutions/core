@@ -1,10 +1,9 @@
-import { getEnv, readJsonRecordEnv } from '#/cli/env.ts'
+import { getEnv, isEnvSet, readJsonRecordEnv } from '#/cli/env.ts'
 import { buildDeployEnv } from '#/domain/deploy/target.ts'
 import { resolveEnvironment } from '#/domain/environment.ts'
 import { mergeServiceEnvs } from '#/domain/services/service.ts'
 
 import { TARGET_DEFINITIONS } from './registry.ts'
-import { pickSecrets } from './secrets.ts'
 
 import type { DeployableConfig } from '#/config/types.ts'
 import type {
@@ -21,7 +20,14 @@ export type DeployContext = {
 	readonly input: DeployInput
 	readonly environment: AppEnvironment
 	readonly merged: ServiceEnv
-	readonly repoSecrets: Readonly<Record<string, string>>
+}
+
+// The repository's whole Infisical environment, as `load-secrets` emitted it.
+// Unset when the repository has no Infisical project, and in jobs that only act
+// on the infrastructure: then no Worker secret is touched.
+function readProjectSecrets(): Readonly<Record<string, string>> | undefined {
+	if (!isEnvSet('PROJECT_SECRETS')) return undefined
+	return readJsonRecordEnv('PROJECT_SECRETS')
 }
 
 export async function resolveDeployContext(
@@ -31,21 +37,22 @@ export async function resolveDeployContext(
 		config.project.type,
 		getEnv('PIPELINE_ENVIRONMENT'),
 	)
-	const repoSecrets = readJsonRecordEnv('ALL_SECRETS')
 	const target = TARGET_DEFINITIONS[config.deploy.target].build(config, {
 		environment,
 	})
+	const projectSecrets = readProjectSecrets()
 	const merged = mergeServiceEnvs([
 		await target.contributeEnv(config.project.name),
 		await target.loadBackingEnv(config.project.name),
-		{ public: {}, secret: pickSecrets(repoSecrets, config.deploy.secrets) },
+		{ public: {}, secret: projectSecrets ?? {} },
 	])
 	return {
 		target,
 		environment,
-		repoSecrets,
 		merged,
 		env: buildDeployEnv(merged.public),
-		input: { secrets: merged.secret, secretOrigins: {} },
+		input: {
+			secrets: projectSecrets ? merged.secret : undefined,
+		},
 	}
 }

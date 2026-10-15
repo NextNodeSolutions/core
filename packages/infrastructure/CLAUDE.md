@@ -23,7 +23,7 @@ Organization settings have one resolver in `cli/deploy/organization.ts`. Pass it
 
 ## Secrets
 
-The Infisical vault is the only source of secrets. Never add a `secrets.<NAME>` reference to a workflow and never hardcode a list of secret names: the vault folder is the list. `domain/vault/secret-vault.ts` owns the folder layout, `cli/vault/open-vault.ts` the OIDC login, and `load-secrets` the read. A job with `id-token: write` runs core's CLI only: never add a caller script, build or dependency install to one. `publish-package.yml` releases core's own packages and refuses other callers. The seed command and `domain/vault/legacy-seed.ts` are transitional and go away with the GitHub secrets.
+The Infisical vault is the only source of secrets. Never add a `secrets.<NAME>` reference to a workflow, never declare secret names in `nextnode.toml` and never hardcode a list of them: a project environment is the list. The CI project holds the platform credentials. Each repository's project, found by the repository's name, holds its Workers' secrets, synced whole to every scripted Worker at deploy. `domain/vault/secret-vault.ts` owns the project and environment layout, `cli/vault/open-vault.ts` the OIDC login and lookup, and `load-secrets` the read. A job with `id-token: write` runs core's CLI only: never add a caller script, build or dependency install to one. `publish-package.yml` releases core's own packages and refuses other callers. The seed command and `domain/vault/legacy-seed.ts` are transitional and go away with the GitHub secrets.
 
 ## Worker configuration
 

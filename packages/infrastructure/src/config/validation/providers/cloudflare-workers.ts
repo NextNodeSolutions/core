@@ -111,7 +111,7 @@ export const cloudflareWorkers: DeployProviderValidator = {
 	requiresDomain: true,
 	requiresServices: true,
 	validate(deployRecord, inputs) {
-		const { secrets, generatedSecrets, workerServices, domain } = inputs
+		const { workerServices, domain } = inputs
 		const cronResult = validateCronJobs(
 			deployRecord['cron'],
 			new Set(Object.keys(workerServices)),
@@ -127,8 +127,6 @@ export const cloudflareWorkers: DeployProviderValidator = {
 			errors: serviceErrors,
 			deploy: {
 				target: 'cloudflare-workers',
-				secrets,
-				generatedSecrets,
 				services: workerServices,
 				cron: cronResult.ok ? cronResult.section : [],
 			},
