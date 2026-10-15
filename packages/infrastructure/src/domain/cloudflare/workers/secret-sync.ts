@@ -7,7 +7,9 @@ export function buildWorkerSecretSync(
 	desired: Readonly<Record<string, string>>,
 	existingNames: ReadonlyArray<string>,
 ): Record<string, string | null> {
-	const removed = existingNames.filter(name => !(name in desired))
+	// Own keys only: `in` would also match inherited names such as
+	// `constructor`, and keep a secret of that name on the Worker.
+	const removed = existingNames.filter(name => !Object.hasOwn(desired, name))
 	return {
 		...desired,
 		...Object.fromEntries(removed.map(name => [name, null])),
