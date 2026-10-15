@@ -1,30 +1,26 @@
-import { maskSecret, writeSecretOutput } from '#/adapters/github/output.ts'
+import {
+	maskSecret,
+	writeSecretOutput,
+	writeWarning,
+} from '#/adapters/github/output.ts'
 import { getEnv, requireGithubRepository } from '#/cli/env.ts'
 import { APP_ENVIRONMENTS, isAppEnvironment } from '#/domain/environment.ts'
-import {
-	PLATFORM_SECRETS_PATH,
-	buildProjectSecretPool,
-	projectSecretsPath,
-} from '#/domain/vault/secret-vault.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
-import { openVault } from './open-vault.ts'
+import { openPlatformVault, openProjectVault } from './open-vault.ts'
 
-import type {
-	ProjectSecretScope,
-	SecretVault,
-} from '#/domain/vault/secret-vault.ts'
+import type { AppEnvironment } from '#/domain/environment.ts'
 
 const logger = createLogger()
 
-// Step output carrying the project's secret pool as a JSON object - the
-// payload the deploy commands read back as `ALL_SECRETS`.
-const PROJECT_POOL_OUTPUT = 'ALL_SECRETS'
+// Step output carrying the repository's secrets as a JSON object - the payload
+// `deploy` reads back as `PROJECT_SECRETS` and pushes to every Worker.
+const PROJECT_SECRETS_OUTPUT = 'PROJECT_SECRETS'
 
-// A job asks for its project's pool by setting PIPELINE_ENVIRONMENT on the
-// step; without it only the platform secrets are loaded (ops workflows that
-// act on the fleet rather than on one project).
-function readProjectSecretScope(): ProjectSecretScope | undefined {
+// A job asks for the repository's secrets by setting PIPELINE_ENVIRONMENT on
+// the step; without it only the platform secrets are loaded (jobs that act on
+// the infrastructure, not on the Workers).
+function readProjectEnvironment(): AppEnvironment | undefined {
 	const environment = getEnv('PIPELINE_ENVIRONMENT')
 	if (!environment) return undefined
 	if (!isAppEnvironment(environment)) {
@@ -32,61 +28,60 @@ function readProjectSecretScope(): ProjectSecretScope | undefined {
 			`PIPELINE_ENVIRONMENT must be one of ${APP_ENVIRONMENTS.join(', ')} (got: ${environment})`,
 		)
 	}
-	return { repo: requireGithubRepository().name, environment }
+	return environment
 }
 
-async function loadPlatformSecrets(
-	vault: SecretVault,
-): Promise<Record<string, string>> {
-	const platformSecrets = await vault.listSecrets(PLATFORM_SECRETS_PATH)
+async function loadPlatformSecrets(): Promise<void> {
+	const vault = await openPlatformVault()
+	const platformSecrets = await vault.listSecrets()
 	const names = Object.keys(platformSecrets)
 	if (!names.length) {
 		throw new Error(
-			`vault folder "${PLATFORM_SECRETS_PATH}" holds no secret - the platform credentials must be stored there before any pipeline can run`,
+			'the CI project holds no secret - the platform credentials must be stored there before any pipeline can run',
 		)
 	}
 	for (const [name, secretValue] of Object.entries(platformSecrets)) {
 		writeSecretOutput(name, secretValue)
 	}
 	logger.info(
-		`loaded ${names.length} platform secret(s) from ${PLATFORM_SECRETS_PATH}: ${names.join(', ')}`,
+		`loaded ${names.length} platform secret(s) from the CI project: ${names.join(', ')}`,
 	)
-	return platformSecrets
 }
 
-async function loadProjectPool(
-	vault: SecretVault,
-	scope: ProjectSecretScope,
-	platformSecrets: Readonly<Record<string, string>>,
-): Promise<void> {
-	const path = projectSecretsPath(scope)
-	const projectSecrets = await vault.listSecrets(path)
-	// The pool travels as one JSON output: mask each value on its own so it
+// A repository without a project deploys without touching its Workers'
+// secrets: a static site needs none, and a forgotten membership must not wipe
+// a live Worker. The output is left unset, and the warning annotates the run,
+// so the cause is found in the run summary rather than in the Worker's logs.
+async function loadProjectSecrets(environment: AppEnvironment): Promise<void> {
+	const repoName = requireGithubRepository().name
+	const lookup = await openProjectVault(repoName, environment)
+	if (lookup.kind === 'missing') {
+		writeWarning(
+			`no Infisical project named "${repoName}" is visible to the pipeline identity (visible: ${lookup.visible.join(', ') || 'none'}) - the Workers' secrets are left unchanged. Create the project and add the identity as a member (README, "Secrets").`,
+		)
+		return
+	}
+	const projectSecrets = await lookup.vault.listSecrets()
+	// The secrets travel as one JSON output: mask each value on its own so it
 	// stays redacted wherever a later step prints it individually.
 	for (const secretValue of Object.values(projectSecrets)) {
 		maskSecret(secretValue)
 	}
-	writeSecretOutput(
-		PROJECT_POOL_OUTPUT,
-		JSON.stringify(buildProjectSecretPool(platformSecrets, projectSecrets)),
-	)
+	writeSecretOutput(PROJECT_SECRETS_OUTPUT, JSON.stringify(projectSecrets))
 	logger.info(
-		`loaded ${Object.keys(projectSecrets).length} project secret(s) from ${path}: ${Object.keys(projectSecrets).join(', ')}`,
+		`loaded ${Object.keys(projectSecrets).length} secret(s) from project "${repoName}" for ${environment}: ${Object.keys(projectSecrets).join(', ')}`,
 	)
 }
 
 /**
  * Read the job's secrets from the vault and expose them as masked step
  * outputs, replacing the `secrets` context: each platform secret becomes its
- * own output (`steps.<id>.outputs.<NAME>`), the project pool one JSON output.
- * The read is live, so a secret generated by an earlier job of the same run is
- * already visible here - no GitHub-style snapshot frozen at job start.
+ * own output (`steps.<id>.outputs.<NAME>`), the repository's secrets one JSON
+ * output. The read is live: a secret stored in Infisical is in the next run.
  */
-export async function loadSecretsCommand(
-	vault: SecretVault = openVault(),
-): Promise<void> {
-	const platformSecrets = await loadPlatformSecrets(vault)
+export async function loadSecretsCommand(): Promise<void> {
+	await loadPlatformSecrets()
 
-	const scope = readProjectSecretScope()
-	if (scope) await loadProjectPool(vault, scope, platformSecrets)
+	const environment = readProjectEnvironment()
+	if (environment) await loadProjectSecrets(environment)
 }

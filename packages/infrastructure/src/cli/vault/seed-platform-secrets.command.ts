@@ -3,28 +3,28 @@
 //
 // GitHub secret values are write-only: the only way to carry them over is from
 // inside a workflow run, where `toJSON(secrets)` exposes them. This command
-// copies the platform credentials into `/ci` once, from core's own Seed Vault
-// workflow, and never overwrites, so a value edited in the vault is not
-// reverted by a later run.
+// copies the platform credentials into the CI project once, from core's own
+// Seed Vault workflow, and never overwrites, so a value edited in the vault is
+// not reverted by a later run.
 
 import { readJsonRecordEnv } from '#/cli/env.ts'
 import {
 	LEGACY_PLATFORM_SECRET_NAMES,
 	selectSeedSecrets,
 } from '#/domain/vault/legacy-seed.ts'
-import { PLATFORM_SECRETS_PATH } from '#/domain/vault/secret-vault.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
-import { openVault } from './open-vault.ts'
+import { openPlatformVault } from './open-vault.ts'
 
 import type { SecretVault } from '#/domain/vault/secret-vault.ts'
 
 const logger = createLogger()
 
 export async function seedPlatformSecretsCommand(
-	vault: SecretVault = openVault(),
+	vault?: SecretVault,
 ): Promise<void> {
-	const platformSecrets = await vault.listSecrets(PLATFORM_SECRETS_PATH)
+	const platformVault = vault ?? (await openPlatformVault())
+	const platformSecrets = await platformVault.listSecrets()
 	const seedSecrets = selectSeedSecrets(
 		LEGACY_PLATFORM_SECRET_NAMES,
 		readJsonRecordEnv('LEGACY_GITHUB_SECRETS'),
@@ -32,11 +32,11 @@ export async function seedPlatformSecretsCommand(
 	)
 	const seedNames = Object.keys(seedSecrets)
 	if (!seedNames.length) {
-		logger.info(`nothing to seed into ${PLATFORM_SECRETS_PATH}`)
+		logger.info('nothing to seed into the CI project')
 		return
 	}
-	await vault.setSecrets(PLATFORM_SECRETS_PATH, seedSecrets)
+	await platformVault.setSecrets(seedSecrets)
 	logger.info(
-		`seeded ${seedNames.length} GitHub secret(s) into ${PLATFORM_SECRETS_PATH}: ${seedNames.join(', ')}`,
+		`seeded ${seedNames.length} GitHub secret(s) into the CI project: ${seedNames.join(', ')}`,
 	)
 }

@@ -1,5 +1,7 @@
 import { appendFileSync } from 'node:fs'
 
+// Public values only: a secret never goes through GITHUB_ENV, where every later
+// step of the job would inherit it.
 export function writeEnvVar(key: string, envValue: string): void {
 	const envFile = process.env['GITHUB_ENV']
 	if (!envFile) {
@@ -8,17 +10,4 @@ export function writeEnvVar(key: string, envValue: string): void {
 		)
 	}
 	appendFileSync(envFile, `${key}=${envValue}\n`)
-}
-
-/**
- * Write a secret env var: emit `::add-mask::<value>` on stdout so GitHub
- * Actions redacts the value from every subsequent log line, then append
- * `KEY=value` to GITHUB_ENV so later steps in the same job inherit it.
- *
- * Mask MUST be emitted before the value can leak; calling writeEnvVar for
- * a secret skips the mask and is a leak.
- */
-export function writeSecret(key: string, envValue: string): void {
-	process.stdout.write(`::add-mask::${envValue}\n`)
-	writeEnvVar(key, envValue)
 }

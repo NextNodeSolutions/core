@@ -5,6 +5,7 @@ import {
 import { isRecord } from '#/kernel/guards.ts'
 import { boolean, literal, object, optional, union } from 'valibot'
 
+import { REMOVED_SECRETS_FIELD_REASON } from './deploy-removed-fields.ts'
 import {
 	toWorkerFirewall,
 	workerFirewallFields,
@@ -30,7 +31,7 @@ const containerFieldRejection = (
 
 type ParsedWorkerService = ParsedWorkerFirewall & {
 	url?: string | undefined
-	secrets: string[]
+	secrets?: undefined
 	needs: string[]
 	depends_on: string[]
 	entry: string | false
@@ -76,9 +77,8 @@ const workerServiceSchema = (
 		url: optionalNonEmpty(
 			`deploy.services.${name}.url must be a non-empty string`,
 		),
-		secrets: stringArray(
-			`deploy.services.${name}.secrets must be an array of strings`,
-			`deploy.services.${name}.secrets entries must be non-empty strings`,
+		secrets: forbiddenField(
+			`deploy.services.${name}.secrets is not supported: ${REMOVED_SECRETS_FIELD_REASON}`,
 		),
 		needs: stringArray(
 			`deploy.services.${name}.needs must be an array of strings`,
@@ -121,7 +121,6 @@ type MutableWorkerServiceConfig = {
 
 function toWorkerService(parsed: ParsedWorkerService): WorkerServiceConfig {
 	const workerService: MutableWorkerServiceConfig = {
-		secrets: parsed.secrets,
 		needs: parsed.needs,
 		dependsOn: parsed.depends_on,
 		entry: parsed.entry,

@@ -65,19 +65,6 @@ export interface PackageSection {
 export interface EnvironmentSection {
 	readonly development: boolean
 }
-export const SECRET_GENERATORS = ['token', 'password'] as const
-export type SecretGenerator = (typeof SECRET_GENERATORS)[number]
-export interface GeneratedSecretConfig {
-	readonly name: string
-	readonly generate: SecretGenerator
-	readonly length: number
-}
-
-type BaseDeploySection = {
-	readonly secrets: ReadonlyArray<string>
-	readonly generatedSecrets: ReadonlyArray<GeneratedSecretConfig>
-}
-
 export const CRON_METHODS = ['GET', 'POST'] as const
 export type CronMethod = (typeof CRON_METHODS)[number]
 export const DEFAULT_CRON_METHOD: CronMethod = 'POST'
@@ -91,7 +78,6 @@ export interface CronJobConfig {
 
 export interface WorkerServiceConfig {
 	readonly url?: string
-	readonly secrets: ReadonlyArray<string>
 	readonly needs: ReadonlyArray<string>
 	readonly dependsOn: ReadonlyArray<string>
 	readonly entry: string | false
@@ -103,9 +89,8 @@ export interface WorkerServiceConfig {
 	readonly rateLimiters?: ReadonlyArray<WorkerRateLimiterConfig>
 }
 
-export interface CloudflareWorkersDeploySection extends BaseDeploySection {
+export interface CloudflareWorkersDeploySection {
 	readonly target: 'cloudflare-workers'
-	readonly secrets: ReadonlyArray<string>
 	readonly services: Readonly<Record<string, WorkerServiceConfig>>
 	readonly cron: ReadonlyArray<CronJobConfig>
 }

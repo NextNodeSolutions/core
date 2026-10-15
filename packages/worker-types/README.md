@@ -3,9 +3,11 @@
 Generate each Cloudflare Worker's `worker-configuration.d.ts` from `nextnode.toml`.
 
 The generated file types `import { env } from 'cloudflare:workers'` (`Cloudflare.Env`)
-and the `Env` interface from the project's declared bindings, vars and secrets —
-the same `nextnode.toml` the deploy pipeline reads, so the types can never drift
-from what is deployed.
+and the `Env` interface from the project's declared bindings and vars — the same
+`nextnode.toml` the deploy pipeline reads, so the types can never drift from what
+is deployed. Secrets come from the repository's Infisical project, not from
+`nextnode.toml`: type the ones your code reads by augmenting `Cloudflare.Env` in
+your own declaration file.
 
 ## Usage
 

@@ -19,12 +19,9 @@ export interface WorkerEnvTypesInput {
 	// Every declared worker name, so a sibling listed in `needs` resolves to a
 	// service binding (`Fetcher`) and not a backing binding.
 	readonly serviceNames: ReadonlyArray<string>
-	// The secret NAMES this worker receives (already expanded: the GLOBAL
-	// `[deploy].secrets` pool folded into the service's own). Typed `string`.
-	readonly secretNames: ReadonlyArray<string>
 }
 
-// The generated `Env` depends only on binding/var/secret NAMES, which are the
+// The generated `Env` depends only on binding/var NAMES, which are the
 // same in every environment and every project. These stand in for the value-side
 // inputs `buildWranglerConfig`/`buildWorkerVars` require; every value they
 // produce (script names, SITE_URL, the R2 endpoint) is discarded by the renderer.
@@ -79,18 +76,14 @@ function stringMembers(names: ReadonlyArray<string>): ReadonlyArray<EnvMember> {
 	return names.map(name => ({ name, type: 'string' }))
 }
 
-// Every `env.<key>` a worker reads: typed bindings (from the wrangler document),
-// public vars, and secrets. Deduped (a name cannot span two kinds by
+// Every declared `env.<key>` a worker reads: typed bindings (from the wrangler
+// document) and public vars. Deduped (a name cannot span two kinds by
 // construction) and sorted so the emitted file is stable run to run.
-function collectMembers(
-	document: WranglerDocument,
-	secretNames: ReadonlyArray<string>,
-): ReadonlyArray<EnvMember> {
+function collectMembers(document: WranglerDocument): ReadonlyArray<EnvMember> {
 	const byName = new Map<string, EnvMember>()
 	for (const member of [
 		...bindingMembers(document),
 		...stringMembers(Object.keys(document.vars ?? {})),
-		...stringMembers(secretNames),
 	]) {
 		byName.set(member.name, member)
 	}
@@ -110,7 +103,9 @@ function collectMembers(
  * deploys (fed placeholder provision outputs, since types need only names), so a
  * binding can never exist in the deployed config yet be missing from the types,
  * or vice versa. Sibling workers are `Fetcher`; D1/KV/R2/Queues get their
- * Cloudflare types; vars and secrets are `string`.
+ * Cloudflare types; vars are `string`. Secrets are not declared in
+ * nextnode.toml, so they are not generated: the app types the ones it reads by
+ * augmenting `Cloudflare.Env` in its own declaration file.
  */
 export function renderWorkerEnvTypes(input: WorkerEnvTypesInput): string {
 	const backing = deriveWorkersBackingConfig(input.services)
@@ -134,7 +129,7 @@ export function renderWorkerEnvTypes(input: WorkerEnvTypesInput): string {
 		}),
 	})
 
-	const members = collectMembers(document, input.secretNames)
+	const members = collectMembers(document)
 	return [
 		GENERATED_HEADER,
 		'',

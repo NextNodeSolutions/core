@@ -1,12 +1,14 @@
 import { isRecord } from '#/kernel/guards.ts'
 
-import type { SecretVault } from '#/domain/vault/secret-vault.ts'
+import type { SecretVault, VaultProject } from '#/domain/vault/secret-vault.ts'
 
 const INFISICAL_API_BASE = 'https://app.infisical.com/api'
-const HTTP_NOT_FOUND = 404
-// `error` code Infisical returns when the folder at `secretPath` does not exist.
-const SECRET_PATH_NOT_FOUND = 'SecretPathNotFound'
+// Secrets are read and written at the root of a project environment: the
+// pipeline knows no folder.
 const ROOT_PATH = '/'
+// The Infisical product the pipeline's projects belong to (the same API also
+// lists certificate and KMS projects).
+const SECRET_MANAGER_PROJECT_TYPE = 'secret-manager'
 
 // Where the secrets live inside Infisical: one project, one environment slug.
 export interface InfisicalVaultLocation {
@@ -64,6 +66,42 @@ export async function loginInfisicalWithOidc(
 	return responseBody['accessToken']
 }
 
+function parseProject(rawProject: unknown, context: string): VaultProject {
+	if (
+		!isRecord(rawProject) ||
+		typeof rawProject['id'] !== 'string' ||
+		typeof rawProject['name'] !== 'string'
+	) {
+		throw new Error(`${context}: a project is missing \`id\` or \`name\``)
+	}
+	return { id: rawProject['id'], name: rawProject['name'] }
+}
+
+/**
+ * The secret-manager projects the identity is a member of. Membership is the
+ * whole filter: a project the identity was never added to is not listed, and
+ * not readable.
+ */
+export async function listInfisicalProjects(
+	accessToken: string,
+): Promise<ReadonlyArray<VaultProject>> {
+	const context = 'Infisical list projects'
+	const query = new URLSearchParams({ type: SECRET_MANAGER_PROJECT_TYPE })
+	const response = await fetch(
+		`${INFISICAL_API_BASE}/v1/workspace?${query.toString()}`,
+		{ headers: authHeaders(accessToken) },
+	)
+	await requireOk(response, context)
+
+	const responseBody: unknown = await response.json()
+	if (!isRecord(responseBody) || !Array.isArray(responseBody['workspaces'])) {
+		throw new Error(`${context}: \`workspaces\` must be an array`)
+	}
+	return responseBody['workspaces'].map(rawProject =>
+		parseProject(rawProject, context),
+	)
+}
+
 function parseSecretEntry(
 	rawSecret: unknown,
 	context: string,
@@ -92,9 +130,9 @@ function parseSecrets(
 	)
 }
 
-// Secrets a folder pulls in through Infisical imports (a `/shared` folder
-// linked into several projects). Imports apply in order - a later import
-// overrides an earlier one - and the folder's own secrets override them all.
+// Secrets a project pulls in through Infisical imports (a folder of another
+// project linked in). Imports apply in order - a later import overrides an
+// earlier one - and the project's own secrets override them all.
 function parseImportedSecrets(
 	rawImports: unknown,
 	context: string,
@@ -116,23 +154,17 @@ function parseImportedSecrets(
 
 async function listSecrets(
 	session: InfisicalSession,
-	path: string,
 ): Promise<Record<string, string>> {
-	const context = `Infisical list secrets at "${path}"`
+	const context = `Infisical list secrets (project ${session.projectId}, environment "${session.environment}")`
 	const query = new URLSearchParams({
 		projectId: session.projectId,
 		environment: session.environment,
-		secretPath: path,
+		secretPath: ROOT_PATH,
 	})
 	const response = await fetch(
 		`${INFISICAL_API_BASE}/v4/secrets?${query.toString()}`,
 		{ headers: authHeaders(session.accessToken) },
 	)
-	if (response.status === HTTP_NOT_FOUND) {
-		const body = await response.text()
-		if (body.includes(SECRET_PATH_NOT_FOUND)) return {}
-		throw new Error(`${context}: Infisical API returned 404: ${body}`)
-	}
 	await requireOk(response, context)
 
 	const responseBody: unknown = await response.json()
@@ -145,71 +177,17 @@ async function listSecrets(
 	}
 }
 
-async function folderExists(
-	session: InfisicalSession,
-	parentPath: string,
-	name: string,
-): Promise<boolean> {
-	const context = `Infisical list folders at "${parentPath}"`
-	const query = new URLSearchParams({
-		projectId: session.projectId,
-		environment: session.environment,
-		path: parentPath,
-	})
-	const response = await fetch(
-		`${INFISICAL_API_BASE}/v2/folders?${query.toString()}`,
-		{ headers: authHeaders(session.accessToken) },
-	)
-	await requireOk(response, context)
-
-	const responseBody: unknown = await response.json()
-	if (!isRecord(responseBody) || !Array.isArray(responseBody['folders'])) {
-		throw new Error(`${context}: \`folders\` must be an array`)
-	}
-	return responseBody['folders'].some(
-		folder => isRecord(folder) && folder['name'] === name,
-	)
-}
-
-// Infisical refuses a write into a folder that does not exist, and creating a
-// folder that already exists is an error - so check, then create. Missing
-// parent folders are created by the same call.
-async function ensureFolder(
-	session: InfisicalSession,
-	path: string,
-): Promise<void> {
-	if (path === ROOT_PATH) return
-	const separatorIndex = path.lastIndexOf('/')
-	const parentPath = path.slice(0, separatorIndex) || ROOT_PATH
-	const name = path.slice(separatorIndex + 1)
-	if (await folderExists(session, parentPath, name)) return
-
-	const response = await fetch(`${INFISICAL_API_BASE}/v2/folders`, {
-		method: 'POST',
-		headers: authHeaders(session.accessToken),
-		body: JSON.stringify({
-			projectId: session.projectId,
-			environment: session.environment,
-			name,
-			path: parentPath,
-		}),
-	})
-	await requireOk(response, `Infisical create folder "${path}"`)
-}
-
 async function setSecrets(
 	session: InfisicalSession,
-	path: string,
 	secrets: Readonly<Record<string, string>>,
 ): Promise<void> {
-	await ensureFolder(session, path)
 	const response = await fetch(`${INFISICAL_API_BASE}/v4/secrets/batch`, {
 		method: 'PATCH',
 		headers: authHeaders(session.accessToken),
 		body: JSON.stringify({
 			projectId: session.projectId,
 			environment: session.environment,
-			secretPath: path,
+			secretPath: ROOT_PATH,
 			mode: 'upsert',
 			secrets: Object.entries(secrets).map(
 				([secretKey, secretValue]) => ({
@@ -219,7 +197,10 @@ async function setSecrets(
 			),
 		}),
 	})
-	await requireOk(response, `Infisical set secrets at "${path}"`)
+	await requireOk(
+		response,
+		`Infisical set secrets (project ${session.projectId}, environment "${session.environment}")`,
+	)
 }
 
 export function createInfisicalVault(
@@ -228,7 +209,7 @@ export function createInfisicalVault(
 ): SecretVault {
 	const session: InfisicalSession = { ...location, accessToken }
 	return {
-		listSecrets: path => listSecrets(session, path),
-		setSecrets: (path, secrets) => setSecrets(session, path, secrets),
+		listSecrets: () => listSecrets(session),
+		setSecrets: secrets => setSecrets(session, secrets),
 	}
 }
