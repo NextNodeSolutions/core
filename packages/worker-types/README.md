@@ -9,6 +9,10 @@ is deployed. Secrets come from the repository's Infisical project, not from
 `nextnode.toml`: type the ones your code reads by augmenting `Cloudflare.Env` in
 your own declaration file.
 
+An internal service (`internal = true` on the service, or `project.internal`)
+also gets `ACCESS_AUD`, the audience tag the deploy injects so the Worker can
+verify the Cloudflare Access JWT.
+
 ## Usage
 
 ```jsonc

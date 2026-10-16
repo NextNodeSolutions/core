@@ -1,7 +1,9 @@
+import { hasInternalWorker } from './internal-workers.ts'
 import {
 	PLANETSCALE_PROVIDER_SOURCE,
 	PLANETSCALE_PROVIDER_VERSION,
 } from './planetscale.ts'
+import { buildAccessOutputs } from './terraform-access.ts'
 import { buildInternalResources } from './terraform-internal-resources.ts'
 import { buildOutputs } from './terraform-outputs.ts'
 import {
@@ -40,7 +42,7 @@ export function buildTerraformMainConfig(
 		resource,
 		buildInternalResources(config, environment, organization),
 	)
-	const output = buildOutputs(derived)
+	const output = { ...buildOutputs(derived), ...buildAccessOutputs(config) }
 
 	// Terraform reads a top-level `resource`/`output`/`variable` key as a block
 	// needing labels; an empty `{}` fails init with "Missing block label". Emit
@@ -76,7 +78,10 @@ export function buildTerraformMainConfig(
 	}
 	if (Object.keys(resource).length > 0) mainConfig.resource = resource
 	if (Object.keys(output).length > 0) mainConfig.output = output
-	if (derived.hasAccountResource || config.project.internal) {
+	if (
+		derived.hasAccountResource ||
+		hasInternalWorker(config.deploy.services)
+	) {
 		mainConfig.variable = { account_id: { type: 'string' } }
 	}
 	return mainConfig

@@ -4,11 +4,16 @@ import { toTerraformLabel } from './terraform-labels.ts'
 import { ACCOUNT_ID_REF } from './terraform-refs.ts'
 
 import type { OrganizationConfig } from '#/config/organization.ts'
-import type { CloudflareWorkersDeployableConfig } from '#/config/types.ts'
+import type {
+	CloudflareWorkersDeployableConfig,
+	WorkerServiceConfig,
+} from '#/config/types.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
+import type { OutputValue } from './terraform-main-config.ts'
 
 const ACCESS_POLICY_LABEL = 'internal'
 const ACCESS_POLICY_PRECEDENCE = 1
+export const ACCESS_AUDIENCES_OUTPUT = 'access_audiences'
 
 export type AccessPolicyResource = {
 	readonly account_id: string
@@ -31,6 +36,37 @@ export type AccessApplicationResource = {
 	}>
 }
 
+// Config parsing resolves `internal` to false on a Worker without `url`, so
+// every internal service carries the hostname its Access application guards.
+function internalHosts(
+	config: CloudflareWorkersDeployableConfig,
+): ReadonlyArray<readonly [string, WorkerServiceConfig]> {
+	return Object.entries(config.deploy.services).filter(
+		([, service]) => service.internal,
+	)
+}
+
+/**
+ * The audience tag of each internal service's Access application, keyed by
+ * service name. The Worker receives it as `ACCESS_AUD` to verify the Access JWT.
+ */
+export function buildAccessOutputs(
+	config: CloudflareWorkersDeployableConfig,
+): Record<string, OutputValue> {
+	const hosts = internalHosts(config)
+	if (!hosts.length) return {}
+	return {
+		[ACCESS_AUDIENCES_OUTPUT]: {
+			value: Object.fromEntries(
+				hosts.map(([name]) => [
+					name,
+					`\${cloudflare_zero_trust_access_application.${toTerraformLabel(name)}.aud}`,
+				]),
+			),
+		},
+	}
+}
+
 export function buildAccessResources(
 	config: CloudflareWorkersDeployableConfig,
 	environment: AppEnvironment,
@@ -39,16 +75,10 @@ export function buildAccessResources(
 	applications: Record<string, AccessApplicationResource>
 	policies: Record<string, AccessPolicyResource>
 } {
-	if (!config.project.internal) return { applications: {}, policies: {} }
+	const hosts = internalHosts(config)
+	if (!hosts.length) return { applications: {}, policies: {} }
 	if (!access)
 		throw new Error('Internal Workers require organization Access settings')
-	const hosts = Object.entries(config.deploy.services).filter(
-		([, service]) => service.url,
-	)
-	if (!hosts.length)
-		throw new Error(
-			'project.internal requires at least one routed Worker with a url',
-		)
 	return {
 		applications: Object.fromEntries(
 			hosts.map(([name, service]) => [

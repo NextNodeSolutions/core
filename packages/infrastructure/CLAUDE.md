@@ -35,7 +35,7 @@ Declare R2 buckets under `services.r2.buckets`. Terraform creates buckets and op
 
 PlanetScale database creation runs before Terraform because its provider manages roles, not databases. Terraform creates separate runtime and migrator roles. Migrations run with migrator credentials from sensitive outputs.
 
-Internal projects require Access organization settings. Keep alternate public Worker endpoints disabled. Do not interpret a skipped internal smoke check as an authenticated health check.
+Internal Workers, per service or through `project.internal`, require Access organization settings. Keep alternate public Worker endpoints disabled. Do not interpret a skipped internal smoke check as an authenticated health check.
 
 ## Verification
 

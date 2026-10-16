@@ -103,7 +103,7 @@ function assembleDeployable({
 	const deployResult = validateDeploySection(
 		raw['deploy'],
 		type,
-		project.domain,
+		project,
 		declaredServices,
 	)
 	if (!deployResult.ok) return { ok: false, errors: deployResult.errors }

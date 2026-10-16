@@ -22,7 +22,6 @@ export interface WorkersDeployInput {
 	readonly projectName: string
 	readonly environment: AppEnvironment
 	readonly domain: string
-	readonly isInternal: boolean
 	readonly services: Readonly<Record<string, WorkerServiceConfig>>
 	// The [services.*] block (backing resources); bindings are filtered per
 	// service by `needs` inside `buildWranglerConfig`.
@@ -80,6 +79,7 @@ function buildServiceDocument(
 		vars: buildWorkerVars({
 			projectDomain: input.domain,
 			environment: input.environment,
+			serviceName,
 			service,
 			backing: deriveWorkersBackingConfig(input.backingServices),
 			outputs: input.outputs,
@@ -138,7 +138,7 @@ async function deployOneService(
  * into its assets directory before upload, and its secrets are synced
  * against the same config (see `deployOneService`). A failed deploy
  * throws and stops the run (later services are not deployed). Once every service
- * is deployed, each routed service is smoke-checked on `/healthz` (bounded
+ * is deployed, each public routed service is smoke-checked on `/healthz` (bounded
  * retries); an unhealthy service throws so the deploy job fails. Returns a single
  * `worker` deployed-environment carrying every service's resolved URL.
  */
@@ -165,12 +165,10 @@ export async function deployWorkers(
 		)
 	}
 
-	if (!input.isInternal) {
-		await smokeCheckWorkers(
-			computeSmokeCheckUrls(input.services, input.environment),
-			{ sleep: input.smokeCheckSleep },
-		)
-	}
+	await smokeCheckWorkers(
+		computeSmokeCheckUrls(input.services, input.environment),
+		{ sleep: input.smokeCheckSleep },
+	)
 
 	return {
 		projectName: input.projectName,

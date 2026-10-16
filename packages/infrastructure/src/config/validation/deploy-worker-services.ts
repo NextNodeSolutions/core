@@ -18,7 +18,7 @@ import {
 	stringArray,
 } from './valibot.ts'
 
-import type { WorkerServiceConfig } from '#/config/types.ts'
+import type { ProjectSection, WorkerServiceConfig } from '#/config/types.ts'
 import type { GenericSchema } from 'valibot'
 import type { ParsedWorkerFirewall } from './deploy-worker-firewall.ts'
 
@@ -31,6 +31,7 @@ const containerFieldRejection = (
 
 type ParsedWorkerService = ParsedWorkerFirewall & {
 	url?: string | undefined
+	internal?: boolean | undefined
 	secrets?: undefined
 	needs: string[]
 	depends_on: string[]
@@ -77,6 +78,11 @@ const workerServiceSchema = (
 		url: optionalNonEmpty(
 			`deploy.services.${name}.url must be a non-empty string`,
 		),
+		// Puts this routed service behind Cloudflare Access, or keeps it public
+		// in an internal project: overrides `project.internal` either way.
+		internal: optional(
+			boolean(`deploy.services.${name}.internal must be a boolean`),
+		),
 		secrets: forbiddenField(
 			`deploy.services.${name}.secrets is not supported: ${REMOVED_SECRETS_FIELD_REASON}`,
 		),
@@ -119,8 +125,12 @@ type MutableWorkerServiceConfig = {
 	-readonly [K in keyof WorkerServiceConfig]: WorkerServiceConfig[K]
 }
 
-function toWorkerService(parsed: ParsedWorkerService): WorkerServiceConfig {
+function toWorkerService(
+	parsed: ParsedWorkerService,
+	project: Pick<ProjectSection, 'internal'>,
+): WorkerServiceConfig {
 	const workerService: MutableWorkerServiceConfig = {
+		internal: Boolean(parsed.url) && (parsed.internal ?? project.internal),
 		needs: parsed.needs,
 		dependsOn: parsed.depends_on,
 		entry: parsed.entry,
@@ -138,8 +148,35 @@ export interface WorkerServicesValidation {
 	services: Record<string, WorkerServiceConfig>
 }
 
+// The assets directory has exactly one source per service shape: declared for a
+// static-assets-only Worker, derived from the entry otherwise - so the two forms
+// are mutually exclusive and `false` carries its directory.
+function shapeError(
+	name: string,
+	parsed: ParsedWorkerService,
+): string | undefined {
+	if (parsed.entry === false && typeof parsed.assets === 'undefined')
+		return `deploy.services.${name}: \`entry = false\` (static-assets-only Worker) requires \`assets\` - declare the built assets directory`
+	if (parsed.entry !== false && typeof parsed.assets !== 'undefined')
+		return `deploy.services.${name}: \`assets\` is only valid with \`entry = false\` - a scripted Worker derives its assets directory from its entry`
+	if (!parsed.internal || parsed.url) return undefined
+	return `deploy.services.${name}: \`internal = true\` requires \`url\` - Access protects a hostname, and a Worker without one is reachable only through service bindings`
+}
+
+function projectInternalErrors(
+	project: Pick<ProjectSection, 'internal'>,
+	services: Readonly<Record<string, WorkerServiceConfig>>,
+): string[] {
+	const hasRoutedService = Object.values(services).some(
+		service => service.url,
+	)
+	if (!project.internal || hasRoutedService) return []
+	return ['project.internal requires at least one routed Worker with a url']
+}
+
 export function validateWorkerServices(
 	deployRecord: Record<string, unknown>,
+	project: Pick<ProjectSection, 'internal'>,
 ): WorkerServicesValidation {
 	const raw = deployRecord['services']
 	if (typeof raw === 'undefined') return { errors: [], services: {} }
@@ -165,23 +202,13 @@ export function validateWorkerServices(
 			errors.push(...validation.errors)
 			continue
 		}
-		// The assets directory has exactly one source per service shape: declared
-		// for a static-assets-only Worker, derived from the entry otherwise - so
-		// the two forms are mutually exclusive and `false` carries its directory.
-		const { entry, assets } = validation.section
-		if (entry === false && typeof assets === 'undefined') {
-			errors.push(
-				`deploy.services.${name}: \`entry = false\` (static-assets-only Worker) requires \`assets\` - declare the built assets directory`,
-			)
+		const error = shapeError(name, validation.section)
+		if (error) {
+			errors.push(error)
 			continue
 		}
-		if (entry !== false && typeof assets !== 'undefined') {
-			errors.push(
-				`deploy.services.${name}: \`assets\` is only valid with \`entry = false\` - a scripted Worker derives its assets directory from its entry`,
-			)
-			continue
-		}
-		services[name] = toWorkerService(validation.section)
+		services[name] = toWorkerService(validation.section, project)
 	}
-	return { errors, services }
+	if (errors.length) return { errors, services }
+	return { errors: projectInternalErrors(project, services), services }
 }

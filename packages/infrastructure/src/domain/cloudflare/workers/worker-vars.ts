@@ -1,6 +1,7 @@
 import { computeSiteUrl } from '#/domain/deploy/domain.ts'
 
 import { buildWorkersBackingEnv } from './outputs-env.ts'
+import { ACCESS_AUDIENCES_OUTPUT } from './terraform-access.ts'
 
 import type { WorkerServiceConfig } from '#/config/types.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
@@ -12,6 +13,7 @@ import type {
 export interface WorkerVarsInput {
 	readonly projectDomain: string
 	readonly environment: AppEnvironment
+	readonly serviceName: string
 	// The worker whose vars are built (its `needs` filter the backing env).
 	readonly service: WorkerServiceConfig
 	readonly backing: WorkersBackingConfig
@@ -42,6 +44,16 @@ function backingForNeeds(
 	}
 }
 
+function accessVars(input: WorkerVarsInput): Record<string, string> {
+	if (!input.service.internal) return {}
+	const audience = input.outputs.accessAudiences[input.serviceName]
+	if (typeof audience === 'undefined')
+		throw new Error(
+			`terraform output "${ACCESS_AUDIENCES_OUTPUT}" has no entry for "${input.serviceName}" but the service is internal - run \`infrastructure provision\` before deploy so Terraform creates its Access application.`,
+		)
+	return { ACCESS_AUD: audience }
+}
+
 /**
  * Build the public `vars` block injected into one Worker's generated wrangler
  * config. Two sources, precedence low-to-high on the (pathological) key
@@ -50,6 +62,9 @@ function backingForNeeds(
  *   - the backing env (D1/KV/Queue ids, R2 bucket names + CDN URLs, endpoint)
  *     of the backing services THIS worker declares in `needs` - least-privilege,
  *     never the full backing surface;
+ *   - `ACCESS_AUD` on an internal worker: the audience tag of its Access
+ *     application, so the app verifies the Access JWT without a hand-copied
+ *     setting;
  *   - `SITE_URL`, this worker's canonical site URL: the service-url-derived
  *     host (dev-prefixed in development) when `[deploy.services.<name>].url` is
  *     declared, else the project-domain fallback (single-service/apex projects).
@@ -72,6 +87,7 @@ export function buildWorkerVars(
 
 	return {
 		...backingEnv,
+		...accessVars(input),
 		SITE_URL: computeSiteUrl(siteUrlDomain, input.environment),
 	}
 }

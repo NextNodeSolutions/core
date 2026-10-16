@@ -109,7 +109,10 @@ function collectMembers(document: WranglerDocument): ReadonlyArray<EnvMember> {
  */
 export function renderWorkerEnvTypes(input: WorkerEnvTypesInput): string {
 	const backing = deriveWorkersBackingConfig(input.services)
-	const outputs = typesPlaceholderOutputs(backing)
+	const outputs = typesPlaceholderOutputs(
+		backing,
+		input.service.internal ? [input.serviceName] : [],
+	)
 	const document = buildWranglerConfig({
 		projectName: TYPES_PROJECT_NAME,
 		environment: TYPES_ENVIRONMENT,
@@ -122,6 +125,7 @@ export function renderWorkerEnvTypes(input: WorkerEnvTypesInput): string {
 		vars: buildWorkerVars({
 			projectDomain: TYPES_PROJECT_DOMAIN,
 			environment: TYPES_ENVIRONMENT,
+			serviceName: input.serviceName,
 			service: input.service,
 			backing,
 			outputs,

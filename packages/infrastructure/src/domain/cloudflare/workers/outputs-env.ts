@@ -2,6 +2,8 @@ import { computeR2Endpoint } from '#/domain/cloudflare/r2/addressing.ts'
 import { computeR2ServiceBuckets } from '#/domain/services/r2.ts'
 import { isRecord } from '#/kernel/guards.ts'
 
+import { ACCESS_AUDIENCES_OUTPUT } from './terraform-access.ts'
+
 import type { ServicesConfig } from '#/config/service-config.ts'
 import type { ServiceEnv } from '#/domain/services/service.ts'
 
@@ -29,6 +31,8 @@ export interface WorkersTerraformOutputs {
 	readonly queueIds: Readonly<Record<string, string>>
 	readonly r2Buckets: Readonly<Record<string, string>>
 	readonly r2CdnUrls: Readonly<Record<string, string>>
+	// Audience tag of each internal service's Access application, by service name.
+	readonly accessAudiences: Readonly<Record<string, string>>
 }
 
 // The outputs of a project with no backing resources: nothing was applied, so
@@ -39,6 +43,7 @@ export const EMPTY_WORKERS_TERRAFORM_OUTPUTS: WorkersTerraformOutputs = {
 	queueIds: {},
 	r2Buckets: {},
 	r2CdnUrls: {},
+	accessAudiences: {},
 }
 
 /**
@@ -102,6 +107,7 @@ const TYPES_PLACEHOLDER_OUTPUT = 'types-only-placeholder'
  */
 export function typesPlaceholderOutputs(
 	backing: WorkersBackingConfig,
+	internalServiceNames: ReadonlyArray<string>,
 ): WorkersTerraformOutputs {
 	const fill = (aliases: ReadonlyArray<string>): Record<string, string> =>
 		Object.fromEntries(
@@ -112,6 +118,7 @@ export function typesPlaceholderOutputs(
 		queueIds: fill(backing.queueAliases),
 		r2Buckets: fill(backing.bucketAliases),
 		r2CdnUrls: fill(backing.cdnBucketAliases),
+		accessAudiences: fill(internalServiceNames),
 		...(backing.hasD1 && { d1DatabaseId: TYPES_PLACEHOLDER_OUTPUT }),
 	}
 }
@@ -183,11 +190,13 @@ export function parseTerraformOutputs(
 	const queues = extractValue(raw, 'queue_ids')
 	const buckets = extractValue(raw, 'r2_buckets')
 	const cdn = extractValue(raw, 'r2_cdn_urls')
+	const audiences = extractValue(raw, ACCESS_AUDIENCES_OUTPUT)
 	const outputs: WorkersTerraformOutputsDraft = {
 		kvNamespaceIds: optionalStringMap(kv, 'kv_namespace_ids'),
 		queueIds: optionalStringMap(queues, 'queue_ids'),
 		r2Buckets: optionalStringMap(buckets, 'r2_buckets'),
 		r2CdnUrls: optionalStringMap(cdn, 'r2_cdn_urls'),
+		accessAudiences: optionalStringMap(audiences, ACCESS_AUDIENCES_OUTPUT),
 	}
 	if (typeof d1 !== 'undefined') {
 		outputs.d1DatabaseId = asString(d1, 'd1_database_id')
