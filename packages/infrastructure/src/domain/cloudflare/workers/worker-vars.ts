@@ -1,6 +1,7 @@
 import { computeSiteUrl } from '#/domain/deploy/domain.ts'
 
 import { buildWorkersBackingEnv } from './outputs-env.ts'
+import { ACCESS_AUDIENCES_OUTPUT } from './terraform-access.ts'
 
 import type { WorkerServiceConfig } from '#/config/types.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
@@ -12,11 +13,14 @@ import type {
 export interface WorkerVarsInput {
 	readonly projectDomain: string
 	readonly environment: AppEnvironment
+	readonly serviceName: string
 	// The worker whose vars are built (its `needs` filter the backing env).
 	readonly service: WorkerServiceConfig
 	readonly backing: WorkersBackingConfig
 	readonly outputs: WorkersTerraformOutputs
 	readonly accountId: string
+	// The organization's Zero Trust team domain, required by an internal worker.
+	readonly accessTeamDomain: string | undefined
 }
 
 // Keep only the backing resources this worker declares in `needs`, so its public
@@ -42,6 +46,18 @@ function backingForNeeds(
 	}
 }
 
+function accessVars(input: WorkerVarsInput): Record<string, string> {
+	if (!input.service.internal) return {}
+	const audience = input.outputs.accessAudiences[input.serviceName]
+	if (typeof audience === 'undefined')
+		throw new Error(
+			`terraform output "${ACCESS_AUDIENCES_OUTPUT}" has no entry for "${input.serviceName}" but the service is internal - run \`infrastructure provision\` before deploy so Terraform creates its Access application.`,
+		)
+	if (typeof input.accessTeamDomain === 'undefined')
+		throw new Error('Internal Workers require organization Access settings')
+	return { ACCESS_AUD: audience, ACCESS_TEAM_DOMAIN: input.accessTeamDomain }
+}
+
 /**
  * Build the public `vars` block injected into one Worker's generated wrangler
  * config. Two sources, precedence low-to-high on the (pathological) key
@@ -50,6 +66,9 @@ function backingForNeeds(
  *   - the backing env (D1/KV/Queue ids, R2 bucket names + CDN URLs, endpoint)
  *     of the backing services THIS worker declares in `needs` - least-privilege,
  *     never the full backing surface;
+ *   - `ACCESS_AUD` and `ACCESS_TEAM_DOMAIN` on an internal worker: the audience
+ *     tag of its Access application and the JWT issuer, so the app verifies
+ *     the Access JWT without a hand-copied setting;
  *   - `SITE_URL`, this worker's canonical site URL: the service-url-derived
  *     host (dev-prefixed in development) when `[deploy.services.<name>].url` is
  *     declared, else the project-domain fallback (single-service/apex projects).
@@ -72,6 +91,7 @@ export function buildWorkerVars(
 
 	return {
 		...backingEnv,
+		...accessVars(input),
 		SITE_URL: computeSiteUrl(siteUrlDomain, input.environment),
 	}
 }

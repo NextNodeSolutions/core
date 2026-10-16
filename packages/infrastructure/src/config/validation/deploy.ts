@@ -11,7 +11,11 @@ import {
 import { validateWorkerServices } from './deploy-worker-services.ts'
 import { DEPLOY_PROVIDER_VALIDATORS } from './providers/registry.ts'
 
-import type { DeploySection, DeployableProjectType } from '#/config/types.ts'
+import type {
+	DeploySection,
+	DeployableProjectType,
+	ProjectSection,
+} from '#/config/types.ts'
 import type { ValidationResult } from './result.ts'
 
 function invalidTargetErrors(rawTarget: unknown): string[] {
@@ -27,9 +31,10 @@ function removedSecretsErrors(deployRecord: Record<string, unknown>): string[] {
 export function validateDeploySection(
 	raw: unknown,
 	projectType: DeployableProjectType,
-	domain: string | undefined,
+	project: Pick<ProjectSection, 'domain' | 'internal'>,
 	declaredServices: ReadonlySet<string>,
 ): ValidationResult<DeploySection> {
+	const { domain } = project
 	const deployRecord = raw ?? {}
 	if (!isRecord(deployRecord))
 		return { ok: false, errors: ['[deploy] must be a table'] }
@@ -37,7 +42,7 @@ export function validateDeploySection(
 	const targetErrors = invalidTargetErrors(rawTarget)
 	if (targetErrors.length) return { ok: false, errors: targetErrors }
 	const target = DEFAULT_DEPLOY_TARGETS[projectType]
-	const parsed = validateWorkerServices(deployRecord)
+	const parsed = validateWorkerServices(deployRecord, project)
 	const provider = DEPLOY_PROVIDER_VALIDATORS[target]
 	const validatedProvider = provider.validate(deployRecord, {
 		workerServices: parsed.services,

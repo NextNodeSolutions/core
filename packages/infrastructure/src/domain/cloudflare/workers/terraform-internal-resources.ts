@@ -1,3 +1,4 @@
+import { hasInternalWorker } from './internal-workers.ts'
 import { buildAccessResources } from './terraform-access.ts'
 
 import type { OrganizationConfig } from '#/config/organization.ts'
@@ -10,7 +11,7 @@ export function buildInternalResources(
 	environment: AppEnvironment,
 	organization: OrganizationConfig,
 ): TerraformResourceBlock {
-	if (!config.project.internal) return {}
+	if (!hasInternalWorker(config.deploy.services)) return {}
 	const access = buildAccessResources(
 		config,
 		environment,

@@ -78,6 +78,9 @@ export interface CronJobConfig {
 
 export interface WorkerServiceConfig {
 	readonly url?: string
+	// Behind Cloudflare Access. Resolved at parse time: the service's own
+	// `internal`, else `project.internal`, and always false without a `url`.
+	readonly internal: boolean
 	readonly needs: ReadonlyArray<string>
 	readonly dependsOn: ReadonlyArray<string>
 	readonly entry: string | false

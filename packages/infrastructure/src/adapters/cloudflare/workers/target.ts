@@ -4,6 +4,7 @@ const logger = createLogger()
 
 import { migratePlanetscale } from '#/adapters/planetscale/migrate.ts'
 import { defaultTerraformRunner } from '#/adapters/terraform/runner.ts'
+import { hasInternalWorker } from '#/domain/cloudflare/workers/internal-workers.ts'
 import {
 	EMPTY_WORKERS_TERRAFORM_OUTPUTS,
 	buildWorkersBackingEnv,
@@ -80,7 +81,7 @@ export class CloudflareWorkersTarget implements DeployTarget {
 		this.runner = config.terraformRunner ?? defaultTerraformRunner
 		this.wrangler = config.wranglerRunner
 		this.loadTerraformOutputs = memoizeOutputsReader(() =>
-			hasWorkersBacking(deriveWorkersBackingConfig(this.config.services))
+			this.hasTerraformOutputs()
 				? readWorkersTerraformOutputs(this.terraformContext())
 				: Promise.resolve(EMPTY_WORKERS_TERRAFORM_OUTPUTS),
 		)
@@ -148,7 +149,7 @@ export class CloudflareWorkersTarget implements DeployTarget {
 			projectName,
 			environment: this.environment,
 			domain: this.config.project.domain,
-			isInternal: this.config.project.internal,
+			accessTeamDomain: this.organization.access?.teamDomain,
 			services: this.config.deploy.services,
 			backingServices: this.config.services,
 			cron: this.config.deploy.cron,
@@ -167,6 +168,16 @@ export class CloudflareWorkersTarget implements DeployTarget {
 			)
 		}
 		return this.projectDir
+	}
+
+	// Backing resources and Access applications are the only Terraform outputs
+	// a deploy reads; without either there is nothing to read.
+	private hasTerraformOutputs(): boolean {
+		return (
+			hasWorkersBacking(
+				deriveWorkersBackingConfig(this.config.services),
+			) || hasInternalWorker(this.config.deploy.services)
+		)
 	}
 
 	private terraformContext(): WorkersTerraformContext {
