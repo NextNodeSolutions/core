@@ -10,8 +10,8 @@ is deployed. Secrets come from the repository's Infisical project, not from
 your own declaration file.
 
 An internal service (`internal = true` on the service, or `project.internal`)
-also gets `ACCESS_AUD` and `ACCESS_TEAM_DOMAIN`, the public vars the deploy
-injects so the Worker can verify the Cloudflare Access JWT.
+also gets `ACCESS_AUD`, the audience tag the deploy injects so the Worker can
+verify the Cloudflare Access JWT.
 
 ## Usage
 

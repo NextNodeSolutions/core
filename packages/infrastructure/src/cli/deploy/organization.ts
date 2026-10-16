@@ -16,7 +16,6 @@ export function resolveOrganization(
 			access: {
 				emailDomain: requireEnv('COMPANY_DOMAIN'),
 				sessionDuration: requireEnv('ACCESS_SESSION_DURATION'),
-				teamDomain: requireEnv('ACCESS_TEAM_DOMAIN'),
 			},
 		}),
 	}

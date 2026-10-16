@@ -172,7 +172,6 @@ jobs:
                   PLANETSCALE_ORGANIZATION: ${{ vars.PLANETSCALE_ORGANIZATION }}
                   COMPANY_DOMAIN: ${{ vars.COMPANY_DOMAIN }}
                   ACCESS_SESSION_DURATION: ${{ vars.ACCESS_SESSION_DURATION }}
-                  ACCESS_TEAM_DOMAIN: ${{ vars.ACCESS_TEAM_DOMAIN }}
 
     migrate:
         name: Migrate
@@ -230,7 +229,6 @@ jobs:
                   PLANETSCALE_ORGANIZATION: ${{ vars.PLANETSCALE_ORGANIZATION }}
                   COMPANY_DOMAIN: ${{ vars.COMPANY_DOMAIN }}
                   ACCESS_SESSION_DURATION: ${{ vars.ACCESS_SESSION_DURATION }}
-                  ACCESS_TEAM_DOMAIN: ${{ vars.ACCESS_TEAM_DOMAIN }}
 
     deploy:
         name: Deploy
@@ -293,5 +291,4 @@ jobs:
                   PLANETSCALE_ORGANIZATION: ${{ vars.PLANETSCALE_ORGANIZATION }}
                   COMPANY_DOMAIN: ${{ vars.COMPANY_DOMAIN }}
                   ACCESS_SESSION_DURATION: ${{ vars.ACCESS_SESSION_DURATION }}
-                  ACCESS_TEAM_DOMAIN: ${{ vars.ACCESS_TEAM_DOMAIN }}
                   PROJECT_SECRETS: ${{ steps.vault.outputs.PROJECT_SECRETS }}

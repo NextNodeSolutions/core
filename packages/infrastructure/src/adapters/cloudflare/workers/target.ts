@@ -149,7 +149,6 @@ export class CloudflareWorkersTarget implements DeployTarget {
 			projectName,
 			environment: this.environment,
 			domain: this.config.project.domain,
-			accessTeamDomain: this.organization.access?.teamDomain,
 			services: this.config.deploy.services,
 			backingServices: this.config.services,
 			cron: this.config.deploy.cron,

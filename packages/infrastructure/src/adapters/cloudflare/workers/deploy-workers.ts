@@ -22,8 +22,6 @@ export interface WorkersDeployInput {
 	readonly projectName: string
 	readonly environment: AppEnvironment
 	readonly domain: string
-	// The organization's Zero Trust team domain, projected into internal Workers.
-	readonly accessTeamDomain: string | undefined
 	readonly services: Readonly<Record<string, WorkerServiceConfig>>
 	// The [services.*] block (backing resources); bindings are filtered per
 	// service by `needs` inside `buildWranglerConfig`.
@@ -86,7 +84,6 @@ function buildServiceDocument(
 			backing: deriveWorkersBackingConfig(input.backingServices),
 			outputs: input.outputs,
 			accountId: input.accountId,
-			accessTeamDomain: input.accessTeamDomain,
 		}),
 	})
 }

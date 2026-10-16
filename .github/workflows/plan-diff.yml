@@ -84,6 +84,5 @@ jobs:
                   PLANETSCALE_ORGANIZATION: ${{ vars.PLANETSCALE_ORGANIZATION }}
                   COMPANY_DOMAIN: ${{ vars.COMPANY_DOMAIN }}
                   ACCESS_SESSION_DURATION: ${{ vars.ACCESS_SESSION_DURATION }}
-                  ACCESS_TEAM_DOMAIN: ${{ vars.ACCESS_TEAM_DOMAIN }}
                   GH_TOKEN: ${{ github.token }}
                   PIPELINE_PR_NUMBER: ${{ github.event.pull_request.number }}

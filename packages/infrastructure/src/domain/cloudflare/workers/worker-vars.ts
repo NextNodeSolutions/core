@@ -19,8 +19,6 @@ export interface WorkerVarsInput {
 	readonly backing: WorkersBackingConfig
 	readonly outputs: WorkersTerraformOutputs
 	readonly accountId: string
-	// The organization's Zero Trust team domain, required by an internal worker.
-	readonly accessTeamDomain: string | undefined
 }
 
 // Keep only the backing resources this worker declares in `needs`, so its public
@@ -53,9 +51,7 @@ function accessVars(input: WorkerVarsInput): Record<string, string> {
 		throw new Error(
 			`terraform output "${ACCESS_AUDIENCES_OUTPUT}" has no entry for "${input.serviceName}" but the service is internal - run \`infrastructure provision\` before deploy so Terraform creates its Access application.`,
 		)
-	if (typeof input.accessTeamDomain === 'undefined')
-		throw new Error('Internal Workers require organization Access settings')
-	return { ACCESS_AUD: audience, ACCESS_TEAM_DOMAIN: input.accessTeamDomain }
+	return { ACCESS_AUD: audience }
 }
 
 /**
@@ -66,9 +62,9 @@ function accessVars(input: WorkerVarsInput): Record<string, string> {
  *   - the backing env (D1/KV/Queue ids, R2 bucket names + CDN URLs, endpoint)
  *     of the backing services THIS worker declares in `needs` - least-privilege,
  *     never the full backing surface;
- *   - `ACCESS_AUD` and `ACCESS_TEAM_DOMAIN` on an internal worker: the audience
- *     tag of its Access application and the JWT issuer, so the app verifies
- *     the Access JWT without a hand-copied setting;
+ *   - `ACCESS_AUD` on an internal worker: the audience tag of its Access
+ *     application, so the app verifies the Access JWT without a hand-copied
+ *     setting;
  *   - `SITE_URL`, this worker's canonical site URL: the service-url-derived
  *     host (dev-prefixed in development) when `[deploy.services.<name>].url` is
  *     declared, else the project-domain fallback (single-service/apex projects).

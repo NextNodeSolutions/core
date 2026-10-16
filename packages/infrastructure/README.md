@@ -22,7 +22,7 @@ needs = ["d1"]
 
 ## Organization settings
 
-GitHub organization Actions variables are the source of organization settings. Set `TF_CLOUD_ORGANIZATION` for every deployment. Set `PLANETSCALE_ORGANIZATION` when using PlanetScale. A project with an internal Worker additionally requires `COMPANY_DOMAIN` and `ACCESS_SESSION_DURATION` for its Access email policy and session lifetime, and `ACCESS_TEAM_DOMAIN`, the Zero Trust team domain such as `example.cloudflareaccess.com`. The CLI rejects missing settings, with no company-specific defaults.
+GitHub organization Actions variables are the source of organization settings. Set `TF_CLOUD_ORGANIZATION` for every deployment. Set `PLANETSCALE_ORGANIZATION` when using PlanetScale. A project with an internal Worker additionally requires `COMPANY_DOMAIN` and `ACCESS_SESSION_DURATION` for its Access email policy and session lifetime. The CLI rejects missing settings, with no company-specific defaults.
 
 Deployment credentials live in the CI project of the vault: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `TF_CLOUD_TOKEN`, `NEXTNODE_APP_ID`, `NEXTNODE_APP_PRIVATE_KEY` and `NPM_TOKEN`. PlanetScale requires `PLANETSCALE_SERVICE_TOKEN_ID` and `PLANETSCALE_SERVICE_TOKEN`. The Terraform token must be a team or user token, not an organization token. Internal deployments need Cloudflare Access Apps and Policies permission.
 
@@ -111,7 +111,7 @@ This is transitional and is removed with the GitHub secrets.
 
 Call `.github/workflows/deploy.yml` with `environment` and optional `config_file`. Development prefixes the configured hostname with `dev.`. Terraform provisions resources before D1 and PlanetScale migrations. Wrangler deploys code and checks public routed Workers at `/healthz`.
 
-`internal = true` on a routed service puts it behind Cloudflare Access, with one Access application per service and environment. `project.internal = true` sets the default for every routed service, and a service's own `internal` overrides it either way, so an internal project can keep a webhook receiver public. An internal service needs a `url`. Each internal Worker receives the public vars `ACCESS_AUD`, its application's audience tag, and `ACCESS_TEAM_DOMAIN`, the JWT issuer, to verify the `Cf-Access-Jwt-Assertion` header without a hand-copied setting. Keep both names out of the repository's Infisical project. Internal services skip the smoke check because CI has no Access login. Verify the Access login redirect separately.
+`internal = true` on a routed service puts it behind Cloudflare Access, with one Access application per service and environment. `project.internal = true` sets the default for every routed service, and a service's own `internal` overrides it either way, so an internal project can keep a webhook receiver public. An internal service needs a `url`. Each internal Worker receives the public var `ACCESS_AUD`, its application's audience tag, to verify the `Cf-Access-Jwt-Assertion` header without a hand-copied setting. The JWT issuer is the organization's Zero Trust team domain, which the Worker knows. Keep `ACCESS_AUD` out of the repository's Infisical project. Internal services skip the smoke check because CI has no Access login. Verify the Access login redirect separately.
 
 `.github/workflows/plan-diff.yml` reports Terraform changes on pull requests. `.github/workflows/teardown.yml` is manually dispatched with target repository, environment and project-name confirmation. Stateful teardown additionally requires `wipe_data`. HCP workspace history remains after teardown.
 
