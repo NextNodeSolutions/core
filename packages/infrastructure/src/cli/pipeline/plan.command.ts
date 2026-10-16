@@ -1,7 +1,9 @@
 import { basename, dirname, relative } from 'node:path'
 
+import { writeOutput } from '#/adapters/github/output.ts'
 import { writePlanOutputs } from '#/adapters/github/plan-outputs.ts'
 import { getEnv, requireEnv } from '#/cli/env.ts'
+import { computeSiteUrl } from '#/domain/deploy/domain.ts'
 import { resolveEnvironment } from '#/domain/environment.ts'
 import { buildQualityMatrix } from '#/domain/pipeline/quality-matrix.ts'
 
@@ -28,4 +30,10 @@ export function planCommand(config: NextNodeConfig): void {
 		}),
 	})
 	writePlanOutputs({ config, tasks, packageDir, configName })
+	writeOutput(
+		'site_url',
+		config.project.domain && environment !== 'none'
+			? computeSiteUrl(config.project.domain, environment)
+			: '',
+	)
 }

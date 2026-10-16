@@ -49,7 +49,9 @@ Locally, `infisical init` links the checkout to the project, and `infisical run 
 
 The app types the secrets it reads by augmenting `Cloudflare.Env` in its own declaration file. `worker-types` generates the bindings and vars only.
 
-No secret reaches the build. A value the build needs is not a secret, and goes in a GitHub Variable.
+No secret reaches the build. The plan derives `SITE_URL` from the project domain and target environment using the runtime hostname rule. Build receives `PUBLIC_SENTRY_DSN` from a repository GitHub Variable, `PUBLIC_SENTRY_ENVIRONMENT` from the workflow environment and `SENTRY_RELEASE` from the commit SHA.
+
+To enable Sentry source-map uploads, set repository Variables `SENTRY_ORG` and `SENTRY_PROJECT`, and store `SENTRY_AUTH_TOKEN` in the CI vault project, environment `main`. Generate hidden source maps in the caller build without an upload token. The deploy job injects debug IDs and uploads the downloaded artifact through core's pinned Sentry CLI, without executing caller code or installing caller dependencies. A failed upload blocks deployment. Source maps are removed from the artifact before deployment, including when Sentry is not configured.
 
 ### Loading in a job
 

@@ -56,6 +56,7 @@ jobs:
             has_planetscale: ${{ steps.plan.outputs.has_planetscale }}
             package_dir: ${{ steps.plan.outputs.package_dir }}
             config_name: ${{ steps.plan.outputs.config_name }}
+            site_url: ${{ steps.plan.outputs.site_url }}
         steps:
             - uses: NextNodeSolutions/core/.github/actions/setup@main
               with:
@@ -110,6 +111,11 @@ jobs:
 
             - name: Build
               run: pnpm build
+              env:
+                  SITE_URL: ${{ needs.plan.outputs.site_url }}
+                  PUBLIC_SENTRY_DSN: ${{ vars.PUBLIC_SENTRY_DSN }}
+                  PUBLIC_SENTRY_ENVIRONMENT: ${{ inputs.environment }}
+                  SENTRY_RELEASE: ${{ github.sha }}
 
             - name: Upload build
               uses: actions/upload-artifact@v7
@@ -273,6 +279,15 @@ jobs:
               with:
                   terraform_version: '~> 1.9'
                   terraform_wrapper: false
+
+            - name: Prepare source maps
+              run: node src/index.ts upload-sourcemaps
+              working-directory: .infra/packages/infrastructure
+              env:
+                  PIPELINE_BUILD_DIR: ${{ runner.temp }}/build
+                  SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+                  SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+                  SENTRY_AUTH_TOKEN: ${{ steps.vault.outputs.SENTRY_AUTH_TOKEN }}
 
             # The SEO guard is injected per service inside `deploy` (before each
             # asset upload), so there is no separate seo-guard step here.
