@@ -90,13 +90,13 @@ Created once: the CI project with its environment `main`, and one organization i
 | --------------------------- | ------------------------------------------------------------ |
 | OIDC Discovery URL          | `https://token.actions.githubusercontent.com`                |
 | Issuer                      | `https://token.actions.githubusercontent.com`                |
-| Subject                     | `repo:NextNodeSolutions/*`                                   |
+| Subject                     | `repo:NextNodeSolutions*`                                    |
 | Audiences                   | `https://app.infisical.com`                                  |
 | Claim `repository_owner_id` | `259621712`                                                  |
 | Claim `job_workflow_ref`    | `NextNodeSolutions/core/.github/workflows/*@refs/heads/main` |
 | Access token TTL, max TTL   | 900                                                          |
 
-Infisical matches the Subject as one glob, with no comma list. Claims accept a comma-separated list per claim. A claim mapped through Claim Mapping must be present in every token, otherwise the login is refused.
+Infisical matches the Subject as one glob, with no comma list. Repositories created since July 15, 2026 carry GitHub's immutable subject, `repo:NextNodeSolutions@259621712/<repo>@<id>:…`, and cannot opt out, so the glob covers both forms. The Subject is not the trust boundary: `repository_owner_id` pins the organization and `job_workflow_ref` pins core's workflows. Claims accept a comma-separated list per claim. A claim mapped through Claim Mapping must be present in every token, otherwise the login is refused.
 
 ### Moving off GitHub secrets
 
