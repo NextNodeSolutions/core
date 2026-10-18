@@ -2,7 +2,9 @@ name: Plan Workers Diff
 
 # Comments the Terraform plan (create/update/delete) for a Cloudflare Workers
 # project on the pull request, so a reviewer sees the infrastructure diff before
-# merge. The plan is env-specific (HCP workspace <project>-<environment>).
+# merge. The plan is env-specific (HCP workspace <project>-<environment>). One
+# comment per project and environment is edited on every run; an empty plan
+# posts nothing unless that comment already exists.
 #
 # The caller decides WHEN to run it — trigger on nextnode.toml changes:
 #

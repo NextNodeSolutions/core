@@ -57,6 +57,10 @@ export type PlanetscaleMigrateInput = {
 }
 export type MigrateInput = D1MigrateInput | PlanetscaleMigrateInput
 export type MigrateResult = { readonly durationMs: number }
+export type InfraPlan = {
+	readonly hasChanges: boolean
+	readonly planText: string
+}
 export const DEFAULT_MIGRATE_COMMAND = 'pnpm drizzle-kit migrate'
 
 export interface DeployTarget {
@@ -71,5 +75,5 @@ export interface DeployTarget {
 	): Promise<DeployResult>
 	runMigrate(input: MigrateInput): Promise<MigrateResult>
 	teardown(projectName: string): Promise<TeardownResult>
-	planDiff(): Promise<string>
+	planDiff(): Promise<InfraPlan>
 }

@@ -8,6 +8,7 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 import type { ExecFileException } from 'node:child_process'
 import type { TerraformMainConfig } from '#/domain/cloudflare/workers/terraform-main-config.ts'
+import type { InfraPlan } from '#/domain/deploy/target.ts'
 
 const logger = createLogger()
 
@@ -200,16 +201,11 @@ export async function terraformDestroy(
 	)
 }
 
-export interface TerraformPlanResult {
-	readonly hasChanges: boolean
-	readonly planText: string
-}
-
 export async function terraformPlan(
 	workdir: string,
 	runner: TerraformRunner,
 	vars: Readonly<Record<string, string>>,
-): Promise<TerraformPlanResult> {
+): Promise<InfraPlan> {
 	const startedAt = Date.now()
 	logger.info(`terraform plan started in "${workdir}"`)
 	const execResult = await runner(
