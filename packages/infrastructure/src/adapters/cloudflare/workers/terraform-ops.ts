@@ -18,6 +18,7 @@ import type { OrganizationConfig } from '#/config/organization.ts'
 import type { CloudflareWorkersDeployableConfig } from '#/config/types.ts'
 import type { WorkersTerraformOutputs } from '#/domain/cloudflare/workers/outputs-env.ts'
 import type { ResourceOutcome } from '#/domain/deploy/resource-outcome.ts'
+import type { InfraPlan } from '#/domain/deploy/target.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 
 const WORKDIR_PREFIX = 'nn-workers-tf-'
@@ -82,11 +83,10 @@ export function withWorkersTerraformTeardown<T>(
 
 export function planWorkersTerraform(
 	ctx: WorkersTerraformContext,
-): Promise<string> {
-	return withWorkdir(ctx, async (workdir, vars) => {
-		const plan = await terraformPlan(workdir, ctx.runner, vars)
-		return plan.planText
-	})
+): Promise<InfraPlan> {
+	return withWorkdir(ctx, (workdir, vars) =>
+		terraformPlan(workdir, ctx.runner, vars),
+	)
 }
 
 export function readWorkersTerraformOutputs(

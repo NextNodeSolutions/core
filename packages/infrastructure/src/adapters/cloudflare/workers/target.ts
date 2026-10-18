@@ -32,6 +32,7 @@ import type {
 	DeployInput,
 	DeployResult,
 	DeployTarget,
+	InfraPlan,
 	MigrateInput,
 	MigrateResult,
 	ProvisionResult,
@@ -219,7 +220,7 @@ export class CloudflareWorkersTarget implements DeployTarget {
 			terraformContext: this.terraformContext(),
 		})
 	}
-	planDiff(): Promise<string> {
+	planDiff(): Promise<InfraPlan> {
 		return planWorkersTerraform(this.terraformContext())
 	}
 }
