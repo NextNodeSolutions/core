@@ -49,7 +49,7 @@ Locally, `infisical init` links the checkout to the project, and `infisical run 
 
 The app types the secrets it reads by augmenting `Cloudflare.Env` in its own declaration file. `worker-types` generates the bindings and vars only.
 
-No secret reaches the build. A value the build needs is not a secret, and goes in a GitHub Variable.
+No secret reaches the build. A value the build needs is not a secret, and goes in a GitHub Variable. The build receives `PUBLIC_SENTRY_DSN` from a repository Variable, `PUBLIC_SENTRY_ENVIRONMENT` from the deployed environment and `SENTRY_RELEASE` from the commit SHA.
 
 ### Loading in a job
 
