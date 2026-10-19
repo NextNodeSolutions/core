@@ -27,12 +27,13 @@ This package is the pipeline CLI that core's workflows run from a checkout of co
 - **Throw an error that names the field, resource or variable at fault and how to fix it, and let it propagate.** The entry point catches nothing, so Node prints the message, exits non-zero and fails the step. The message is all the operator sees.
 - **Set the exit code instead of throwing only when the command must still write its step output or summary.** The publish result step reports a failure this way.
 - **Keep generated Terraform and Wrangler configuration deterministic, in a temporary directory removed afterwards.** `nextnode.toml` is the only source, and an unstable order would show changes in every plan.
-- **Give every subprocess of a deploy and every wait loop a time limit.** A hung Terraform call holds the state lock until the job times out.
+- **Give every network request, every subprocess of a deploy and every wait loop a time limit.** Send requests through the HTTP adapter's bounded fetch, which the linter enforces in place of a bare `fetch`, and run subprocesses through the process adapter's bounded runner. A hung Terraform call holds the state lock until the job times out, and a request that never answers holds the job just as long, then fails without naming the call.
 
 ## Secrets
 
 - **Pass a secret to a later step only as a masked step output.** Every later step inherits `GITHUB_ENV`, and a log line, a summary or an argument shows in the job log. Hand a secret to a tool on stdin or in its environment.
 - **Redact credentials from a subprocess's output before it reaches an error.** Errors land in the job log.
+- **Keep tokens and secrets out of a request's operation name.** A request that runs out of time fails with that name, and the error lands in the job log.
 - **Never declare secret names in `nextnode.toml` or hardcode a list of them.** The repository's Infisical environment is the list, synced whole to every scripted Worker.
 - **Download a build artifact outside core's checkout.** Laid over the workspace, a project's artifact could replace the CLI before a credentialed step runs it.
 - **Do not extend the transitional vault seeding command or its legacy secret mapping.** Both are deleted with the GitHub secrets.

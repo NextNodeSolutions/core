@@ -35,7 +35,7 @@ The entry point reads the command name, loads `nextnode.toml` when the command n
 - **Command to environment.** Commands read their settings from environment variables that the workflow sets. A missing required variable stops the command with an error that names it, before any external call.
 - **Config to the rest.** Loading returns a fully validated, typed config or throws one error that lists every problem found. Nothing downstream re-validates the file.
 - **Domain.** Builders take the config, the environment and the organization settings, and return plain data: the Terraform configuration, one Wrangler configuration per Worker, resource names, summaries as markdown, and decisions such as whether to post a pull request comment.
-- **Adapters.** Each adapter talks to one external system and returns owned types. A failed call throws with the status or exit code and the response body or stderr. The deploy target adapter composes the others.
+- **Adapters.** Each adapter talks to one external system and returns owned types. A failed call throws with the status or exit code and the response body or stderr. A call that runs out of time throws with the name of the operation. The deploy target adapter composes the others.
 - **Deploy target.** Every target implements one interface: contribute public env, ensure infrastructure, load backing env, deploy, migrate, tear down and plan. A registry maps the target name to its factory.
 - **Job to job.** A job passes data to the next through GitHub step outputs. Public values go to `GITHUB_ENV`. Secrets travel only as masked step outputs.
 - **The `./worker-types` export.** It takes a path to `nextnode.toml` and returns the type files it wrote. It reads no environment variable and writes no GitHub output, because it runs on developer machines.
@@ -223,6 +223,7 @@ stateDiagram-v2
 | A required variable or organization setting is missing | The command stopped before any external call.                                                                                                                |
 | The HCP workspace is not in local execution mode       | Nothing applied. The workspace must be switched by hand.                                                                                                     |
 | The PlanetScale database is not ready in time          | The database exists or is still being created. Terraform did not run. The next provision reuses it.                                                          |
+| An API request or a GitHub CLI call runs out of time   | The command stopped at that call, with an error that names it. What ran before it stays, and the next run converges from there.                              |
 | `terraform apply` fails                                | HCP state records what was created. The next run converges from there.                                                                                       |
 | The Terraform state lock stays held                    | Terraform waited for a bounded time, then failed with a hint on how to release the lock.                                                                     |
 | A migration fails                                      | Workers keep their previous version, because the deploy job needs a successful migrate job.                                                                  |
@@ -241,5 +242,5 @@ stateDiagram-v2
 6. Generated configuration is deterministic for a given `nextnode.toml` and environment.
 7. Generated Terraform and Wrangler files live in temporary directories that each command removes.
 8. Development and production never share a resource, a Worker script or a rate limiter counter.
-9. Terraform, Wrangler, GitHub CLI and migration subprocesses, the PlanetScale readiness poll and the health checks are bounded in time. Other calls rely on the job's timeout.
+9. Every network request, the Terraform, Wrangler, GitHub CLI and migration subprocesses, the PlanetScale readiness poll and the health checks are bounded in time. Only the semantic-release run relies on the job's timeout.
 10. Teardown needs a typed confirmation, refuses to destroy data without `wipe_data`, and keeps the Terraform state history and the PlanetScale database.

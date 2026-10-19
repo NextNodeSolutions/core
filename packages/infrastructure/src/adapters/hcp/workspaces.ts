@@ -1,8 +1,10 @@
+import { fetchBounded } from '#/adapters/http/fetch.ts'
 import {
 	EXECUTION_MODE_LOCAL,
 	assertLocalExecutionMode,
 } from '#/domain/cloudflare/workers/hcp-workspace.ts'
 import { HTTP_NOT_FOUND } from '#/domain/http/status.ts'
+import { parseJsonOrThrow } from '#/kernel/json.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 import { object, safeParse, string } from 'valibot'
 
@@ -62,9 +64,10 @@ async function createHcpWorkspace(
 	token: string,
 ): Promise<ResourceOutcome> {
 	logger.info(`Creating HCP Terraform workspace "${workspaceName}"`)
-	const createResponse = await fetch(
+	const createResponse = await fetchBounded(
 		`${TERRAFORM_CLOUD_API_BASE}/organizations/${organization}/workspaces`,
 		{
+			operation: `HCP Terraform API: create workspace "${workspaceName}"`,
 			method: 'POST',
 			headers: hcpHeaders(token),
 			body: JSON.stringify({
@@ -80,9 +83,8 @@ async function createHcpWorkspace(
 	)
 
 	if (!createResponse.ok) {
-		const body = await createResponse.text()
 		throw new Error(
-			`HCP Terraform API returned ${String(createResponse.status)}: ${body}`,
+			`HCP Terraform API returned ${String(createResponse.status)}: ${createResponse.body}`,
 		)
 	}
 
@@ -108,13 +110,16 @@ export async function ensureHcpWorkspace(
 ): Promise<ResourceOutcome> {
 	const { organization, workspaceName, token } = input
 	const context = `HCP Terraform workspace "${workspaceName}"`
-	const getResponse = await fetch(
+	const getResponse = await fetchBounded(
 		`${TERRAFORM_CLOUD_API_BASE}/organizations/${organization}/workspaces/${workspaceName}`,
-		{ headers: hcpHeaders(token) },
+		{
+			operation: `HCP Terraform API: read workspace "${workspaceName}"`,
+			headers: hcpHeaders(token),
+		},
 	)
 
 	if (getResponse.ok) {
-		const responseBody: unknown = await getResponse.json()
+		const responseBody = parseJsonOrThrow(getResponse.body, context)
 		assertLocalExecutionMode(
 			readExecutionMode(responseBody, context),
 			workspaceName,
@@ -124,9 +129,8 @@ export async function ensureHcpWorkspace(
 	}
 
 	if (getResponse.status !== HTTP_NOT_FOUND) {
-		const body = await getResponse.text()
 		throw new Error(
-			`HCP Terraform API returned ${String(getResponse.status)}: ${body}`,
+			`HCP Terraform API returned ${String(getResponse.status)}: ${getResponse.body}`,
 		)
 	}
 

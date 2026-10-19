@@ -1,4 +1,6 @@
+import { fetchBounded } from '#/adapters/http/fetch.ts'
 import { isRecord } from '#/kernel/guards.ts'
+import { parseJsonOrThrow } from '#/kernel/json.ts'
 
 /**
  * Request the job's GitHub Actions OIDC token: a short-lived JWT signed by
@@ -20,16 +22,18 @@ export async function requestGithubOidcToken(
 
 	const url = new URL(requestUrl)
 	url.searchParams.set('audience', audience)
-	const response = await fetch(url, {
+	const operation = 'GitHub OIDC token request'
+	const response = await fetchBounded(url, {
+		operation,
 		headers: { Authorization: `Bearer ${requestToken}` },
 	})
 	if (!response.ok) {
 		throw new Error(
-			`GitHub OIDC token request returned ${response.status}: ${await response.text()}`,
+			`${operation} returned ${response.status}: ${response.body}`,
 		)
 	}
 
-	const responseBody: unknown = await response.json()
+	const responseBody = parseJsonOrThrow(response.body, operation)
 	if (!isRecord(responseBody) || typeof responseBody['value'] !== 'string') {
 		throw new Error('GitHub OIDC token response is missing `value`')
 	}
