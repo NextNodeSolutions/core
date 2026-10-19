@@ -116,7 +116,7 @@ sequenceDiagram
     end
 ```
 
-A successful send produces two success log entries. The adapter writes one under the `PROVIDER` scope, and the manager writes one under the logger it was given.
+The manager writes the one outcome entry of each send, under the logger it was given. The adapter logs under the `PROVIDER` scope only the request it makes and the raw cause of a failure, before classification.
 
 ### Check credentials
 

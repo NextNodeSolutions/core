@@ -206,10 +206,6 @@ const sendViaResend = async (
 			})
 		}
 
-		logger.info('Email sent successfully', {
-			details: { messageId: data.id },
-		})
-
 		return {
 			success: true,
 			data: { id: data.id, provider: 'resend', sentAt: new Date() },

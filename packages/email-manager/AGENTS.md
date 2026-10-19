@@ -34,7 +34,7 @@ These rules cover the email library, where an email manager renders React Email 
     - Run the shared message validation first and return its failure unchanged.
     - Map `EmailMessage` to the SDK payload with the shared recipient helpers. Leave absent optional fields out of the payload.
     - Classify both returned and thrown SDK errors into `EmailErrorCode` values with ordered rules, falling back to `PROVIDER_ERROR`.
-    - On success return the provider's message ID, the provider name and the send time.
+    - On success return the provider's message ID, the provider name and the send time. Log no success entry, because the manager logs the outcome of every send.
     - Implement `validateConfig` with one cheap authenticated read that resolves `false` on any failure.
 4. In the provider registry, add a setup routine for the name. It throws when required config is missing, loads the SDK with a dynamic import, throws an install hint when that import fails and builds the client once.
 5. Export the config type from the package entry point. Keep the adapter factory internal, because callers reach providers through `createProvider` and `createEmailManager`.
