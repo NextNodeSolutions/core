@@ -21,7 +21,7 @@ import type {
  *
  * @example
  * ```typescript
- * import { createSpyLogger } from '@nextnode/logger/testing'
+ * import { createSpyLogger } from '@nextnode-solutions/logger/testing'
  *
  * describe('MyService', () => {
  *   it('logs when creating a user', () => {
@@ -136,7 +136,7 @@ export const createSpyLogger = (
  *
  * @example
  * ```typescript
- * import { createNoopLogger } from '@nextnode/logger/testing'
+ * import { createNoopLogger } from '@nextnode-solutions/logger/testing'
  *
  * const service = new MyService(createNoopLogger())
  * // Service works normally but produces no log output
@@ -200,7 +200,7 @@ const createMockFn = (): MockFn => {
  *
  * @example
  * ```typescript
- * import { createMockLogger } from '@nextnode/logger/testing'
+ * import { createMockLogger } from '@nextnode-solutions/logger/testing'
  *
  * const mock = createMockLogger()
  * const service = new MyService(mock)
