@@ -37,10 +37,8 @@
     "semantic-release-monorepo": "^8.0.2"
   },
   "devDependencies": {
-    "@commitlint/cli": "^19.8.1",
     "@commitlint/config-conventional": "^19.8.1",
     "better-sort-package-json": "^1.1.1",
-    "husky": "^9.0.11",
     "lint-staged": "^15.2.2",
     "oxfmt": "^0.43.0",
     "oxlint": "^1.62.0",
