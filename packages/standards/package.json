@@ -26,7 +26,6 @@
     "url": "https://github.com/NextNodeSolutions/core.git"
   },
   "scripts": {
-    "build": "cp src/oxfmt/base.ts src/oxfmt/base.js",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "lint": "oxlint",

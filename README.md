@@ -14,7 +14,7 @@ pnpm build
 pnpm test
 ```
 
-`pnpm install` also installs the git hooks. Build before anything else, because every package's formatter config imports a preset that the standards build generates, and packages import the built output of the packages they depend on.
+`pnpm install` also installs the git hooks. Build before anything else, because packages import the built output of the packages they depend on.
 
 ## How it works
 

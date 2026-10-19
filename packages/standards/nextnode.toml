@@ -5,3 +5,6 @@ filter = "@nextnode-solutions/standards"
 
 [package]
 access = "public"
+
+[scripts]
+build = false

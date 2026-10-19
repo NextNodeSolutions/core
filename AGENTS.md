@@ -63,7 +63,7 @@ The formatter and linter rules live in the standards presets, wired in through e
 - **Keep a shared tool's version specifier identical in every manifest that declares it, and change them all in one commit.** The standards presets assume one version of oxlint, oxfmt, oxlint-tsgolint, tsdown and `@typescript/native-preview`.
 - **List a dependency in `onlyBuiltDependencies` of `pnpm-workspace.yaml` when it needs its install script.** pnpm skips the install scripts of every unlisted dependency, so a native binding would install broken.
 - **Keep git hooks, the commitlint config and the lockfile at the root.** Husky runs the root hooks, and pnpm installs the whole workspace from the root lockfile.
-- **Never edit generated files.** Change the source and rebuild instead. Generated files include build output, husky's internal hook directory and the formatter preset that the standards build copies from its TypeScript source.
+- **Never edit generated files.** Change the source and rebuild instead. Generated files include build output and husky's internal hook directory.
 
 ## Checks
 

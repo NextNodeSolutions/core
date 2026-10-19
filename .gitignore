@@ -1,6 +1,5 @@
 node_modules/
 dist/
-packages/standards/src/oxfmt/base.js
 .turbo/
 coverage/
 *.tsbuildinfo

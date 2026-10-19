@@ -1,6 +1,6 @@
 # Architecture
 
-How the package is split, what crosses each boundary, how to read a custom lint rule, and what happens during a lint run, a test run and a formatter preset change.
+How the package is split, what crosses each boundary, how to read a custom lint rule, and what happens during a lint run and a test run.
 
 ## Parts
 
@@ -8,8 +8,6 @@ How the package is split, what crosses each boundary, how to read a custom lint 
 flowchart LR
     Project["Project tool configs"] -->|extend or import| Presets["Presets, one per tool"]
     Presets --> Lint["Lint preset"]
-    Presets --> Format["Formatter preset, generated copy"]
-    FormatSource["Formatter preset source"] -->|build copies| Format
     Lint -->|jsPlugins| Registry["nextnode plugin registry"]
     Registry --> Rules["Rule modules, one per rule"]
     Rules -.-> Scanner["Shared raw-text scanner"]
@@ -81,10 +79,6 @@ The fixture case for a rule completes its header comment. Its bad, edge and good
 ### Overrides by file type
 
 The overrides in the lint preset apply rule changes to files matched by globs. Each block exists for one reason, stated in a comment or obvious from its globs, such as test files that need no size limits or framework entry points that must default-export. A project adds its own blocks the same way.
-
-### Formatter source and generated copy
-
-The formatter preset is authored in TypeScript. The package's `build` script copies it to a JavaScript file, and the `./oxfmt` export serves that copy. Node refuses to strip types from TypeScript files inside `node_modules`, so a project could not load the source. The package's own formatter config reads the source directly.
 
 ### Test harness and oxlint
 
@@ -166,33 +160,16 @@ stateDiagram-v2
     state "Live in projects" as Shipped
 ```
 
-## The formatter preset after an edit
-
-```mermaid
-stateDiagram-v2
-    [*] --> InSync
-    InSync --> Stale : the TypeScript source changes
-    Stale --> InSync : build runs
-    state "Source and copy match" as InSync
-    state "Copy stale, consumers format with old options" as Stale
-    note right of Stale
-        Turbo runs this package's build before the tasks
-        of every package that depends on it, and the
-        publish job builds before it releases
-    end note
-```
-
 ## Failure and what is left
 
-| Failure                                                              | What is left                                                                                                       |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| A custom rule is enabled in the preset but missing from the registry | oxlint refuses the config. Every project that extends that version lints nothing.                                  |
-| A custom rule is registered without a severity                       | The rule never runs, and no test notices unless a fixture case exists.                                             |
-| A rule fires on code written to the guidelines                       | The non-functional suite fails when its sample module triggers the rule.                                           |
-| Two fixture cases share sample file names                            | One sample overwrites the other, and a case tests the wrong code.                                                  |
-| The formatter source changes and build does not run                  | The package formats with the new options. Every consumer of the export formats with the old copy until build runs. |
-| A project lints without `--type-aware`                               | Type-aware rules are skipped, and nothing reports it.                                                              |
-| oxlint prints output the harness cannot parse                        | The harness throws, and the whole suite fails before any case runs.                                                |
+| Failure                                                              | What is left                                                                      |
+| -------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| A custom rule is enabled in the preset but missing from the registry | oxlint refuses the config. Every project that extends that version lints nothing. |
+| A custom rule is registered without a severity                       | The rule never runs, and no test notices unless a fixture case exists.            |
+| A rule fires on code written to the guidelines                       | The non-functional suite fails when its sample module triggers the rule.          |
+| Two fixture cases share sample file names                            | One sample overwrites the other, and a case tests the wrong code.                 |
+| A project lints without `--type-aware`                               | Type-aware rules are skipped, and nothing reports it.                             |
+| oxlint prints output the harness cannot parse                        | The harness throws, and the whole suite fails before any case runs.               |
 
 ## Guarantees
 
