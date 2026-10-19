@@ -97,7 +97,7 @@ This package is the pipeline CLI that core's workflows run from a checkout of co
 ### Add a deploy target
 
 1. Add its name to the target list and its sections to the config types.
-2. Register its provider validator, and make sure validation selects the declared target rather than the project type's default.
+2. Register its provider validator under its name. Validation runs the provider of the declared `deploy.target`, or of the project type's default when the key is absent. The registry's type only accepts a provider whose section carries the target it is registered under, so the target registry and the implied services read the target that validated the file. Keep the project type defaults as they are, because every project that omits the key would move to the new target.
 3. Allow the backing services it supports.
 4. Add its result variants to the deploy, teardown and resource outcome unions, each with a distinct `kind`.
 5. Put its builders in `domain` and its IO in `adapters`, under the provider's name. Its target implements the deploy target interface.
