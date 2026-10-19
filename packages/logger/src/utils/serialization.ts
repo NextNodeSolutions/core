@@ -73,7 +73,9 @@ interface ReplacedFields {
  * Copies an object's own enumerable fields, replacing each one whose getter or
  * JSON serialization throws by the marker of its error.
  */
-const replaceUnserializableFields = (subject: object): ReplacedFields => {
+export const replaceUnserializableFields = (
+	subject: object,
+): ReplacedFields => {
 	const failures: string[] = []
 	// Object.fromEntries defines own keys, so a `__proto__` key stays a field
 	const fields = Object.fromEntries(
