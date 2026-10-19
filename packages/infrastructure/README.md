@@ -49,7 +49,7 @@ Locally, `infisical init` links the checkout to the project, and `infisical run 
 
 The app types the secrets it reads by augmenting `Cloudflare.Env` in its own declaration file. `worker-types` generates the bindings and vars only.
 
-No secret reaches the build. A value the build needs is not a secret, and goes in a GitHub Variable.
+No secret reaches the build. A value the build needs is not a secret, and goes in a GitHub Variable. The build receives `PUBLIC_SENTRY_DSN` from a repository Variable, `PUBLIC_SENTRY_ENVIRONMENT` from the deployed environment and `SENTRY_RELEASE` from the commit SHA.
 
 ### Loading in a job
 
@@ -109,7 +109,7 @@ This is transitional and is removed with the GitHub secrets.
 
 ## CI
 
-Call `.github/workflows/deploy.yml` with `environment` and optional `config_file`. Development prefixes the configured hostname with `dev.`. Terraform provisions resources before D1 and PlanetScale migrations. Wrangler deploys code and checks public routed Workers at `/healthz`.
+Call `.github/workflows/deploy.yml` with `environment` and optional `config_file`. Development prefixes the configured hostname with `dev.`. Terraform provisions resources before D1 and PlanetScale migrations. Wrangler deploys code and checks public routed Workers at `/healthz`. Every `.map` file is removed from a Worker's assets directory before upload, so source maps are never served.
 
 `internal = true` on a routed service puts it behind Cloudflare Access, with one Access application per service and environment. `project.internal = true` sets the default for every routed service, and a service's own `internal` overrides it either way, so an internal project can keep a webhook receiver public. An internal service needs a `url`. Each internal Worker receives the public var `ACCESS_AUD`, its application's audience tag, to verify the `Cf-Access-Jwt-Assertion` header without a hand-copied setting. The JWT issuer is the organization's Zero Trust team domain, which the Worker knows. Keep `ACCESS_AUD` out of the repository's Infisical project. Internal services skip the smoke check because CI has no Access login. Verify the Access login redirect separately.
 

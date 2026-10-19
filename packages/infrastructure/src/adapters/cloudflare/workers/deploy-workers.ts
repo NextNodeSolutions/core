@@ -9,6 +9,7 @@ import { computeSiteUrl } from '#/domain/deploy/domain.ts'
 
 import { injectSeoGuardAssets } from './seo-guard-assets.ts'
 import { smokeCheckWorkers } from './smoke-check.ts'
+import { removeSourcemapAssets } from './sourcemap-assets.ts'
 
 import type { WranglerRunner } from '#/adapters/wrangler/runner.ts'
 import type { ServicesConfig } from '#/config/service-config.ts'
@@ -104,7 +105,8 @@ interface ServiceDeployJob {
 }
 
 // Deploy one service: generate its config, inject the non-prod SEO guard into
-// its assets directory (so a non-prod deploy is not indexable) BEFORE the upload,
+// its assets directory (so a non-prod deploy is not indexable) and remove its
+// source maps (so the original source is not served) BEFORE the upload,
 // then `wrangler deploy` and sync its secrets against the same
 // config. A failed deploy throws (the caller stops the run).
 async function deployOneService(
@@ -118,6 +120,7 @@ async function deployOneService(
 			document.assets.directory,
 			input.environment,
 		)
+		await removeSourcemapAssets(input.projectDir, document.assets.directory)
 	}
 	await wranglerDeploy({
 		document,
