@@ -19,10 +19,10 @@ export interface ProductionLocationInfo {
 }
 
 export interface LogObject {
-	readonly scope?: string
+	readonly scope?: string | undefined
 	readonly details?: unknown
-	readonly status?: number
-	readonly requestId?: string
+	readonly status?: number | undefined
+	readonly requestId?: string | undefined
 	readonly [key: string]: unknown
 }
 
@@ -43,21 +43,21 @@ export interface Transport {
 }
 
 export interface LoggerConfig {
-	readonly prefix?: string
-	readonly scope?: string
-	readonly environment?: Environment
-	readonly includeLocation?: boolean
-	readonly minLevel?: LogLevel
-	readonly silent?: boolean
-	readonly transports?: Transport[]
-	readonly requestId?: string
+	readonly prefix?: string | undefined
+	readonly scope?: string | undefined
+	readonly environment?: Environment | undefined
+	readonly includeLocation?: boolean | undefined
+	readonly minLevel?: LogLevel | undefined
+	readonly silent?: boolean | undefined
+	readonly transports?: Transport[] | undefined
+	readonly requestId?: string | undefined
 }
 
 export interface ChildLoggerConfig {
-	readonly scope?: string
-	readonly prefix?: string
-	readonly minLevel?: LogLevel
-	readonly requestId?: string
+	readonly scope?: string | undefined
+	readonly prefix?: string | undefined
+	readonly minLevel?: LogLevel | undefined
+	readonly requestId?: string | undefined
 }
 
 export interface Logger {

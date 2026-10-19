@@ -23,39 +23,39 @@ export interface HttpTransportConfig {
 	/**
 	 * Additional headers to include in requests.
 	 */
-	headers?: Record<string, string>
+	headers?: Record<string, string> | undefined
 
 	/**
 	 * Number of logs to batch before sending. Must be a positive integer.
 	 * Defaults to 10.
 	 */
-	batchSize?: number
+	batchSize?: number | undefined
 
 	/**
 	 * Maximum time (in ms) to wait before flushing the buffer. Must be an
 	 * integer from 1 to the longest timer delay, 2147483647.
 	 * Defaults to 5000 (5 seconds).
 	 */
-	flushInterval?: number
+	flushInterval?: number | undefined
 
 	/**
 	 * Called when a request fails.
 	 * Receives the error and the entries that failed to send.
 	 */
-	onError?: (error: Error, entries: LogEntry[]) => void
+	onError?: ((error: Error, entries: LogEntry[]) => void) | undefined
 
 	/**
 	 * Called when a batch is successfully sent.
 	 * Receives the number of entries sent.
 	 */
-	onSuccess?: (count: number) => void
+	onSuccess?: ((count: number) => void) | undefined
 
 	/**
 	 * Request timeout in milliseconds. Must be an integer from 1 to the longest
 	 * timer delay, 2147483647.
 	 * Defaults to 10000 (10 seconds).
 	 */
-	timeout?: number
+	timeout?: number | undefined
 
 	/**
 	 * Number of retries after a failed first attempt, so a batch gets up to
@@ -63,7 +63,7 @@ export interface HttpTransportConfig {
 	 * before, from 100 ms up to 30 seconds. Must be a non-negative integer.
 	 * Defaults to 3.
 	 */
-	maxRetries?: number
+	maxRetries?: number | undefined
 
 	/**
 	 * Maximum number of entries the buffer holds while a batch is in flight.
@@ -72,7 +72,7 @@ export interface HttpTransportConfig {
 	 * Must be an integer no smaller than batchSize.
 	 * Defaults to 1000, or to batchSize when that is larger.
 	 */
-	maxBufferSize?: number
+	maxBufferSize?: number | undefined
 }
 
 /**

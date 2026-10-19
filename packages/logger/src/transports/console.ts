@@ -31,7 +31,7 @@ export interface ConsoleTransportConfig {
 	 * The transport never reads NODE_ENV, so an omitted value follows the
 	 * development rules.
 	 */
-	environment?: Environment
+	environment?: Environment | undefined
 
 	/**
 	 * Force output format regardless of runtime.
@@ -41,13 +41,13 @@ export interface ConsoleTransportConfig {
 	 * - 'browser': Use CSS styling (for DevTools)
 	 * - 'json': Output JSON (for log aggregation)
 	 */
-	format?: FormatOption
+	format?: FormatOption | undefined
 
 	/**
 	 * Override the default writer for one or more formats.
 	 * Useful for testing or routing output through a different channel.
 	 */
-	writers?: Partial<Record<ConsoleFormat, ConsoleWriter>>
+	writers?: Partial<Record<ConsoleFormat, ConsoleWriter>> | undefined
 }
 
 export class ConsoleTransport implements Transport {
