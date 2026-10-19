@@ -241,5 +241,5 @@ stateDiagram-v2
 6. Generated configuration is deterministic for a given `nextnode.toml` and environment.
 7. Generated Terraform and Wrangler files live in temporary directories that each command removes.
 8. Development and production never share a resource, a Worker script or a rate limiter counter.
-9. Terraform, Wrangler and migration subprocesses, the PlanetScale readiness poll and the health checks are bounded in time. Other calls rely on the job's timeout.
+9. Terraform, Wrangler, GitHub CLI and migration subprocesses, the PlanetScale readiness poll and the health checks are bounded in time. Other calls rely on the job's timeout.
 10. Teardown needs a typed confirmation, refuses to destroy data without `wipe_data`, and keeps the Terraform state history and the PlanetScale database.
