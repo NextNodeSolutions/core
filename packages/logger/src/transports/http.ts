@@ -86,6 +86,11 @@ interface ResolvedHttpTransportConfig {
 	readonly onSuccess?: (count: number) => void
 }
 
+interface SerializedBatch {
+	readonly body: string
+	readonly entries: LogEntry[]
+}
+
 const resolveConfig = (
 	config: HttpTransportConfig,
 ): ResolvedHttpTransportConfig => ({
@@ -177,19 +182,11 @@ export class HttpTransport implements Transport {
 		}
 
 		this.isFlushing = true
-		const entries = [...this.buffer]
+		const batch = this.serializeBatch(this.buffer)
 		this.buffer = []
 
 		try {
-			await this.sendWithRetry(entries)
-			this.config.onSuccess?.(entries.length)
-		} catch (error) {
-			// Business rule: nothing awaits a flush started by the timer or a full
-			// batch, so a lost batch goes to onError instead of rejecting.
-			this.config.onError?.(
-				error instanceof Error ? error : new Error(String(error)),
-				entries,
-			)
+			await this.deliver(batch)
 		} finally {
 			this.isFlushing = false
 		}
@@ -218,6 +215,47 @@ export class HttpTransport implements Transport {
 		}
 	}
 
+	private serializeBatch(entries: readonly LogEntry[]): SerializedBatch {
+		const serializedEntries: string[] = []
+		const sendableEntries: LogEntry[] = []
+
+		for (const entry of entries) {
+			try {
+				serializedEntries.push(stringifyJson(entry))
+				sendableEntries.push(entry)
+			} catch (error) {
+				// Business rule: an entry whose getter or toJSON method throws is
+				// reported alone, so it cannot cost the rest of its batch.
+				this.reportLoss(error, [entry])
+			}
+		}
+
+		return {
+			body: `{"logs":[${serializedEntries.join(',')}]}`,
+			entries: sendableEntries,
+		}
+	}
+
+	private async deliver(batch: SerializedBatch): Promise<void> {
+		if (!batch.entries.length) return
+
+		try {
+			await this.sendWithRetry(batch.body)
+			this.config.onSuccess?.(batch.entries.length)
+		} catch (error) {
+			// Business rule: nothing awaits a flush started by the timer or a full
+			// batch, so a lost batch goes to onError instead of rejecting.
+			this.reportLoss(error, batch.entries)
+		}
+	}
+
+	private reportLoss(error: unknown, entries: LogEntry[]): void {
+		this.config.onError?.(
+			error instanceof Error ? error : new Error(String(error)),
+			entries,
+		)
+	}
+
 	private async backoffBeforeRetry(attempt: number): Promise<void> {
 		const isLastAttempt = attempt >= this.config.maxRetries
 		if (isLastAttempt) return
@@ -226,12 +264,12 @@ export class HttpTransport implements Transport {
 		await this.sleep(100 * 2 ** attempt)
 	}
 
-	private async sendWithRetry(entries: LogEntry[]): Promise<void> {
+	private async sendWithRetry(body: string): Promise<void> {
 		let lastError: unknown
 
 		for (let attempt = 0; attempt <= this.config.maxRetries; attempt++) {
 			try {
-				await this.send(entries)
+				await this.send(body)
 				return
 			} catch (error) {
 				lastError = error
@@ -242,7 +280,7 @@ export class HttpTransport implements Transport {
 		throw lastError
 	}
 
-	private async send(entries: LogEntry[]): Promise<void> {
+	private async send(body: string): Promise<void> {
 		const controller = new AbortController()
 		const timeoutId = setTimeout(
 			() => controller.abort(),
@@ -256,7 +294,7 @@ export class HttpTransport implements Transport {
 					'Content-Type': 'application/json',
 					...this.config.headers,
 				},
-				body: stringifyJson({ logs: entries }),
+				body,
 				signal: controller.signal,
 			})
 

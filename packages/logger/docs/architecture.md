@@ -149,17 +149,17 @@ sequenceDiagram
 
 ## What a failure leaves behind
 
-| Failure                                                                      | What is left                                                                                                   |
-| ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| A transport throws in `log`                                                  | A `console.error` line. The other transports still received the entry. The caller saw nothing.                 |
-| A transport's `log` promise rejects                                          | An unhandled rejection. The logger never sees it.                                                              |
-| The stack cannot be parsed                                                   | An entry whose location is `unknown`, and a `console.warn` line that says why.                                 |
-| A value in the object cannot be serialized by the Node formatter             | A placeholder that names the error, in place of the value. Circular references become a marker.                |
-| A value in the object is a `bigint` or holds a cycle                         | Nothing is lost. JSON output writes the `bigint` as its decimal string and the circular reference as a marker. |
-| A getter or a `toJSON` method in the object throws during JSON serialization | No JSON line for that entry. The console transport throws, and the logger reports it as a failed transport.    |
-| Web Crypto is missing and no `requestId` option was given                    | No logger. `generateRequestId` throws from the constructor.                                                    |
-| A transport's configuration is invalid                                       | No transport. Its constructor throws.                                                                          |
-| Every HTTP attempt for a batch fails                                         | The batch is gone from the buffer, and `onError` receives it with the error.                                   |
+| Failure                                                                      | What is left                                                                                                                                                                                        |
+| ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A transport throws in `log`                                                  | A `console.error` line. The other transports still received the entry. The caller saw nothing.                                                                                                      |
+| A transport's `log` promise rejects                                          | An unhandled rejection. The logger never sees it.                                                                                                                                                   |
+| The stack cannot be parsed                                                   | An entry whose location is `unknown`, and a `console.warn` line that says why.                                                                                                                      |
+| A value in the object cannot be serialized by the Node formatter             | A placeholder that names the error, in place of the value. Circular references become a marker.                                                                                                     |
+| A value in the object is a `bigint` or holds a cycle                         | Nothing is lost. JSON output writes the `bigint` as its decimal string and the circular reference as a marker.                                                                                      |
+| A getter or a `toJSON` method in the object throws during JSON serialization | No JSON line for that entry. The console transport throws, and the logger reports it as a failed transport. The HTTP transport hands that entry alone to `onError` and sends the rest of its batch. |
+| Web Crypto is missing and no `requestId` option was given                    | No logger. `generateRequestId` throws from the constructor.                                                                                                                                         |
+| A transport's configuration is invalid                                       | No transport. Its constructor throws.                                                                                                                                                               |
+| Every HTTP attempt for a batch fails                                         | The batch is gone from the buffer, and `onError` receives it with the error.                                                                                                                        |
 
 ## Guarantees
 
