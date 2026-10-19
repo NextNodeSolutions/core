@@ -58,7 +58,7 @@ The `containers` job builds each image from the caller's checkout with no creden
 
 GitHub organization Actions variables are the source of organization settings. Set `TF_CLOUD_ORGANIZATION` for every deployment. Set `PLANETSCALE_ORGANIZATION` when using PlanetScale. A project with an internal Worker additionally requires `COMPANY_DOMAIN` and `ACCESS_SESSION_DURATION` for its Access email policy and session lifetime. The CLI rejects missing settings, with no company-specific defaults.
 
-Deployment credentials live in the CI project of the vault: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `TF_CLOUD_TOKEN`, `NEXTNODE_APP_ID`, `NEXTNODE_APP_PRIVATE_KEY` and `NPM_TOKEN`. PlanetScale requires `PLANETSCALE_SERVICE_TOKEN_ID` and `PLANETSCALE_SERVICE_TOKEN`. The Terraform token must be a team or user token, not an organization token. Internal deployments need Cloudflare Access Apps and Policies permission. A container service needs the Containers permission on `CLOUDFLARE_API_TOKEN`, the `containers:write` scope wrangler uses to push images and manage applications.
+Deployment credentials live in the CI project of the vault: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `TF_CLOUD_TOKEN`, `NEXTNODE_APP_ID`, `NEXTNODE_APP_PRIVATE_KEY` and `NPM_TOKEN`. PlanetScale requires `PLANETSCALE_SERVICE_TOKEN_ID` and `PLANETSCALE_SERVICE_TOKEN`. The Terraform token must be a team or user token, not an organization token. Internal deployments need Cloudflare Access Apps and Policies permission. A container service needs the Workers Paid plan on the account, the only plan that runs Cloudflare Containers, and Account > Workers Containers: Edit on `CLOUDFLARE_API_TOKEN` to push images and manage applications.
 
 ## Secrets
 

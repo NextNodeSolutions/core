@@ -29,18 +29,42 @@ const SCRIPT_NOT_FOUND_FINGERPRINTS = [
 // missing Workers permissions rather than an invalid token.
 const AUTH_ERROR_FINGERPRINT = '[code: 10000]'
 
+// The Containers API answers a refused request with a bare "Unauthorized", both
+// when the token lacks the Containers permission and when the account is not on
+// the Workers Paid plan, the only plan that runs containers.
+const CONTAINERS_UNAUTHORIZED_FINGERPRINT = 'Unauthorized'
+const CONTAINERS_LABEL_PREFIX = 'containers'
+
 export interface ExecResult {
 	readonly exitCode: number
 	readonly stdout: string
 	readonly stderr: string
 }
 
+// Wrangler prints the error of a `--json` command to stdout, as
+// `{"error": ...}`, while stderr carries pnpm's install progress: a failure
+// message keeps both streams.
+function failureOutput(exec: ExecResult): string {
+	return [exec.stderr.trim(), exec.stdout.trim()]
+		.filter(stream => stream.length > 0)
+		.join('\n')
+}
+
 export function assertWranglerOk(exec: ExecResult, label: string): void {
 	if (exec.exitCode === 0) return
-	const base = `wrangler ${label} failed (exit ${String(exec.exitCode)}):\n${exec.stderr}`
-	if (exec.stderr.includes(AUTH_ERROR_FINGERPRINT)) {
+	const output = failureOutput(exec)
+	const base = `wrangler ${label} failed (exit ${String(exec.exitCode)}):\n${output}`
+	if (output.includes(AUTH_ERROR_FINGERPRINT)) {
 		throw new Error(
-			`${base}\n\nCloudflare rejected the request as unauthorized (code 10000). CLOUDFLARE_API_TOKEN needs Workers permissions - at minimum Account > Workers Scripts: Edit and Account Settings: Read, plus Zone > Workers Routes: Edit, DNS: Edit and Zone: Read on each routed zone for the custom-domain routes, and the Containers permission (wrangler's \`containers:write\` scope) for a container service. Also confirm the token belongs to the CLOUDFLARE_ACCOUNT_ID account.`,
+			`${base}\n\nCloudflare rejected the request as unauthorized (code 10000). CLOUDFLARE_API_TOKEN needs Workers permissions - at minimum Account > Workers Scripts: Edit and Account Settings: Read, plus Zone > Workers Routes: Edit, DNS: Edit and Zone: Read on each routed zone for the custom-domain routes, and Account > Workers Containers: Edit for a container service. Also confirm the token belongs to the CLOUDFLARE_ACCOUNT_ID account.`,
+		)
+	}
+	if (
+		label.startsWith(CONTAINERS_LABEL_PREFIX) &&
+		output.includes(CONTAINERS_UNAUTHORIZED_FINGERPRINT)
+	) {
+		throw new Error(
+			`${base}\n\nCloudflare refused the Containers request. Containers run only on an account with the Workers Paid plan, so check the plan of the CLOUDFLARE_ACCOUNT_ID account first. CLOUDFLARE_API_TOKEN also needs Account > Workers Containers: Edit.`,
 		)
 	}
 	throw new Error(base)
