@@ -4,6 +4,7 @@ import {
 } from '#/domain/cloudflare/workers/hcp-workspace.ts'
 import { HTTP_NOT_FOUND } from '#/domain/http/status.ts'
 import { createLogger } from '@nextnode-solutions/logger'
+import { object, safeParse, string } from 'valibot'
 
 import type { ResourceOutcome } from '#/domain/deploy/resource-outcome.ts'
 
@@ -26,31 +27,33 @@ function hcpHeaders(token: string): Record<string, string> {
 	}
 }
 
+const WORKSPACE_RESPONSE_SCHEMA = object(
+	{
+		data: object(
+			{
+				attributes: object(
+					{
+						'execution-mode': string(
+							'`execution-mode` is not a string',
+						),
+					},
+					'response missing `execution-mode`',
+				),
+			},
+			'response `data` missing `attributes`',
+		),
+	},
+	'response missing `data`',
+)
+
 function readExecutionMode(responseBody: unknown, context: string): string {
-	if (
-		typeof responseBody !== 'object' ||
-		responseBody === null ||
-		!('data' in responseBody)
-	) {
-		throw new Error(`${context}: response missing \`data\``)
+	const workspace = safeParse(WORKSPACE_RESPONSE_SCHEMA, responseBody, {
+		abortEarly: true,
+	})
+	if (!workspace.success) {
+		throw new Error(`${context}: ${workspace.issues[0].message}`)
 	}
-	const { data } = responseBody
-	if (typeof data !== 'object' || data === null || !('attributes' in data)) {
-		throw new Error(`${context}: response \`data\` missing \`attributes\``)
-	}
-	const { attributes } = data
-	if (
-		typeof attributes !== 'object' ||
-		attributes === null ||
-		!('execution-mode' in attributes)
-	) {
-		throw new Error(`${context}: response missing \`execution-mode\``)
-	}
-	const mode = attributes['execution-mode']
-	if (typeof mode !== 'string') {
-		throw new Error(`${context}: \`execution-mode\` is not a string`)
-	}
-	return mode
+	return workspace.output.data.attributes['execution-mode']
 }
 
 async function createHcpWorkspace(
