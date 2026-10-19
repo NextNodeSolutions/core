@@ -33,7 +33,7 @@ These rules cover the email library, where an email manager renders React Email 
 3. Write the adapter beside the existing ones, named after the provider. It receives a built client and a logger and returns an `EmailProvider`.
     - Run the shared message validation first and return its failure unchanged.
     - Map `EmailMessage` to the SDK payload with the shared recipient helpers. Leave absent optional fields out of the payload.
-    - Classify both returned and thrown SDK errors into `EmailErrorCode` values with ordered rules, falling back to `PROVIDER_ERROR`.
+    - Classify both returned and thrown SDK errors into `EmailErrorCode` values with ordered rules, falling back to `PROVIDER_ERROR`. Match a returned error's structured fields, such as its name or HTTP status, before its message text, and keep the value the SDK returned or threw as the original error.
     - On success return the provider's message ID, the provider name and the send time. Log no success entry, because the manager logs the outcome of every send.
     - Implement `validateConfig` with one cheap authenticated read that resolves `false` on any failure.
 4. In the provider registry, write a setup routine for the name and add it to the table of setups. The table is typed from `ProviderConfigMap`, so type-check fails until the routine is there, and each routine receives its own provider's config. The routine throws when required config is missing, loads the SDK with a dynamic import, throws an install hint when that import fails and builds the client once.

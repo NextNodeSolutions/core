@@ -42,7 +42,7 @@ sequenceDiagram
     else message valid
         A->>SDK: emails.send with the mapped payload
         alt SDK returns an error object
-            A-->>M: failure, code classified from the error message
+            A-->>M: failure, code classified from the error name, status and message
         else SDK throws
             A-->>M: failure, code classified from the thrown error
         else SDK returns data
@@ -51,11 +51,13 @@ sequenceDiagram
     end
 ```
 
-The Resend SDK reports API errors and network failures in its return value. It throws only on unexpected errors. Both paths go through the same classification.
+The Resend SDK reports API errors and network failures in its return value. It throws only on unexpected errors. Both paths go through one ordered set of rules, one rule per error code.
 
-Classification lowercases the error message and checks it against an ordered set of keyword rules, one rule per error code, where the first match wins. An unmatched error becomes `PROVIDER_ERROR`. A thrown value that is not an `Error` becomes `UNKNOWN_ERROR`. Some codes replace Resend's message with a generic one. Every failure except a validation failure carries `resend` as its `provider`.
+A returned error carries Resend's error name, its HTTP status code and a message. Classification matches the name first, then the status code, then keywords in the lowercased message. Within each step the first matching rule wins. The name decides before the status because a status can mislead: Resend reports some validation errors with a forbidden status, and they stay `VALIDATION_ERROR`. A sending quota counts as a rate limit. A failure to reach Resend comes back with no status code, so its message decides. The returned error object becomes `originalError` unchanged, so a caller can read Resend's name and status code from it. When that object has no message, the failure gets a generic one.
 
-Classification reads only the message text. For an error that Resend returns, the adapter wraps the message in a new `Error` and keeps that as `originalError`, so Resend's status code and error name are dropped. A change in Resend's wording can move an error to `PROVIDER_ERROR`.
+A thrown error has no name or status from Resend, so only the message keywords classify it, and the thrown value becomes `originalError`. A thrown value that is not an `Error` becomes `UNKNOWN_ERROR`.
+
+An error that no rule matches becomes `PROVIDER_ERROR`. Some codes replace Resend's message with a generic one. Every failure except one from the shared validation carries `resend` as its `provider`.
 
 ## Check credentials
 

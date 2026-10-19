@@ -8,7 +8,12 @@ import { fail } from '../types/result.js'
 import { createProviderUtils } from './base.js'
 
 import type { Logger } from '@nextnode-solutions/logger'
-import type { Attachment, CreateEmailOptions, Resend } from 'resend'
+import type {
+	Attachment,
+	CreateEmailOptions,
+	ErrorResponse,
+	Resend,
+} from 'resend'
 import type { EmailMessage } from '../types/email.js'
 import type { EmailProvider } from '../types/provider.js'
 import type { EmailError, SendResult } from '../types/result.js'
@@ -19,21 +24,37 @@ const HTTP_UNAUTHORIZED = 401
 const HTTP_FORBIDDEN = 403
 const HTTP_RATE_LIMIT = 429
 
-/**
- * Classification rules for Resend error messages (FR-20).
- * First matching rule wins. `message: null` keeps the original error message.
- */
-const RESEND_ERROR_RULES: ReadonlyArray<{
-	needles: string[]
+const MISSING_RETURNED_MESSAGE = 'Resend returned an error without a message'
+
+interface ResendErrorRule {
+	names: ReadonlyArray<ErrorResponse['name']>
+	statuses: readonly number[]
+	needles: readonly string[]
 	code: EmailError['code']
 	message: string | null
-}> = [
+}
+
+/**
+ * Classification rules for Resend errors (FR-20).
+ * A returned error matches on `names`, then on `statuses`, then on `needles`
+ * in its message. A thrown error matches on `needles` only. Within a stage
+ * the first matching rule wins. `message: null` keeps the original message.
+ */
+const RESEND_ERROR_RULES: readonly ResendErrorRule[] = [
 	{
+		names: [
+			'rate_limit_exceeded',
+			'daily_quota_exceeded',
+			'monthly_quota_exceeded',
+		],
+		statuses: [HTTP_RATE_LIMIT],
 		needles: ['rate limit', String(HTTP_RATE_LIMIT)],
 		code: 'RATE_LIMIT_ERROR',
 		message: 'Rate limit exceeded',
 	},
 	{
+		names: ['missing_api_key', 'invalid_api_key', 'restricted_api_key'],
+		statuses: [HTTP_UNAUTHORIZED, HTTP_FORBIDDEN],
 		needles: [
 			'unauthorized',
 			'api key',
@@ -44,38 +65,78 @@ const RESEND_ERROR_RULES: ReadonlyArray<{
 		message: 'Invalid API key or unauthorized',
 	},
 	{
+		names: [
+			'validation_error',
+			'missing_required_field',
+			'invalid_parameter',
+			'invalid_attachment',
+			'invalid_from_address',
+		],
+		statuses: [HTTP_VALIDATION_ERROR],
 		needles: ['validation', String(HTTP_VALIDATION_ERROR)],
 		code: 'VALIDATION_ERROR',
 		message: null,
 	},
 	{
+		names: [],
+		statuses: [],
 		needles: ['network', 'econnrefused', 'timeout', 'fetch'],
 		code: 'NETWORK_ERROR',
 		message: null,
 	},
 ]
 
-/**
- * Map Resend API errors to EmailError (FR-20)
- */
-const mapResendError = (error: unknown): EmailError => {
-	if (!(error instanceof Error)) {
-		return {
-			code: 'UNKNOWN_ERROR',
-			message: 'An unknown error occurred',
-			provider: 'resend',
-			originalError: error,
-		}
+const ruleForMessage = (message: string): ResendErrorRule | undefined => {
+	const lowered = message.toLowerCase()
+	return RESEND_ERROR_RULES.find(rule =>
+		rule.needles.some(needle => lowered.includes(needle)),
+	)
+}
+
+const ruleForReturnedError = (
+	error: ErrorResponse,
+	message: string,
+): ResendErrorRule | undefined =>
+	RESEND_ERROR_RULES.find(rule => rule.names.includes(error.name)) ??
+	RESEND_ERROR_RULES.find(
+		rule =>
+			error.statusCode !== null &&
+			rule.statuses.includes(error.statusCode),
+	) ??
+	ruleForMessage(message)
+
+// The SDK returns the API's error body unchecked, so its message may be absent.
+const returnedMessageOf = (message: unknown): string =>
+	typeof message === 'string' ? message : MISSING_RETURNED_MESSAGE
+
+const classifiedError = (
+	rule: ResendErrorRule | undefined,
+	message: string,
+	originalError: unknown,
+): EmailError => ({
+	code: rule?.code ?? 'PROVIDER_ERROR',
+	message: rule?.message ?? message,
+	provider: 'resend',
+	originalError,
+})
+
+const mapReturnedError = (error: ErrorResponse): EmailError => {
+	const message = returnedMessageOf(error.message)
+	return classifiedError(ruleForReturnedError(error, message), message, error)
+}
+
+const mapThrownError = (error: unknown): EmailError => {
+	if (error instanceof Error) {
+		return classifiedError(
+			ruleForMessage(error.message),
+			error.message,
+			error,
+		)
 	}
 
-	const message = error.message.toLowerCase()
-	const matched = RESEND_ERROR_RULES.find(rule =>
-		rule.needles.some(needle => message.includes(needle)),
-	)
-
 	return {
-		code: matched?.code ?? 'PROVIDER_ERROR',
-		message: matched?.message ?? error.message,
+		code: 'UNKNOWN_ERROR',
+		message: 'An unknown error occurred',
 		provider: 'resend',
 		originalError: error,
 	}
@@ -193,7 +254,7 @@ const sendViaResend = async (
 			logger.error('Resend API returned error', {
 				details: { errorMessage: error.message },
 			})
-			return fail(mapResendError(new Error(error.message)))
+			return fail(mapReturnedError(error))
 		}
 
 		return {
@@ -204,7 +265,7 @@ const sendViaResend = async (
 		logger.error('Resend send failed', {
 			details: { error: errorMessageOf(error) },
 		})
-		return fail(mapResendError(error))
+		return fail(mapThrownError(error))
 	}
 }
 

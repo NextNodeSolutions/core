@@ -64,7 +64,7 @@ if (!result.success) {
 console.log(`Sent ${result.data.id} through ${result.data.provider}`)
 ```
 
-TypeScript infers the props type from `template`, so props that do not match the template fail to compile. A failed send carries an `EmailError` with a `code` from the `EmailErrorCode` union, a readable `message`, and the provider name and the caught error when there is one.
+TypeScript infers the props type from `template`, so props that do not match the template fail to compile. A failed send carries an `EmailError` with a `code` from the `EmailErrorCode` union, a readable `message`, and the provider name and the original error when there is one.
 
 The package also exports lower-level entry points. `renderTemplate` returns the HTML and text of a template without sending, which suits previews and snapshot tests. `createProvider` returns a bare provider whose `send` takes an already rendered `EmailMessage`. A manager also exposes its provider as `emails.provider` and offers `emails.validateConfig()` for a credentials check.
 
