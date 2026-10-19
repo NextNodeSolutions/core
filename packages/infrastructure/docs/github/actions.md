@@ -104,7 +104,7 @@ A quality task that runs a project script works in the caller's clean tree witho
 `publish-package.yml` releases core's own packages and refuses every other repository. Its quality tasks run first. The publish job then runs only on `main` and only for a package with a `[package]` table.
 
 1. The job loads the npm token and the GitHub App credentials from the vault, builds the package and syncs with the remote `main`.
-2. `publish` runs semantic-release in the package directory. When npm accepted the new version but the git push was rejected, it rebases onto `main`, moves the tag and pushes again, a bounded number of times.
+2. `publish` runs semantic-release in the package directory and keeps its output for the next step. It fails the step when semantic-release fails.
 3. `publish-result` reads the release output, sets the `status` and `version` step outputs and writes the step summary. It runs even when publishing failed.
 
 ## Seeding the vault

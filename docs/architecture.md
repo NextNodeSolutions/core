@@ -125,16 +125,15 @@ stateDiagram-v2
 
 ## Failure and what is left
 
-| Failure                                                             | What is left                                                                                                                                                              |
-| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A quality task fails                                                | Nothing is published. The publish job does not run.                                                                                                                       |
-| Vault login, credential load or build fails                         | Nothing is published and no tag exists.                                                                                                                                   |
-| semantic-release rejects its npm or GitHub credentials              | Nothing is published and no tag exists.                                                                                                                                   |
-| The tag push is rejected                                            | Nothing is published, because semantic-release pushes the tag before it publishes.                                                                                        |
-| npm publish fails after the tag push                                | A tag with no npm version. The next release counts from that tag, so this version number is never published.                                                              |
-| The GitHub release fails after npm publish                          | The version is on npm and tagged, with no GitHub release, and the job fails.                                                                                              |
-| The output shows a version published to npm and a rejected git push | The CLI rebases on `main`, moves the tag to the new head and pushes both again, within a retry limit. If every attempt fails, the version stays on npm and the job fails. |
-| The output matches no known outcome                                 | The job fails and its summary reports a failed publish.                                                                                                                   |
+| Failure                                                | What is left                                                                                                 |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| A quality task fails                                   | Nothing is published. The publish job does not run.                                                          |
+| Vault login, credential load or build fails            | Nothing is published and no tag exists.                                                                      |
+| semantic-release rejects its npm or GitHub credentials | Nothing is published and no tag exists.                                                                      |
+| The tag push is rejected                               | Nothing is published, because semantic-release pushes the tag before it publishes.                           |
+| npm publish fails after the tag push                   | A tag with no npm version. The next release counts from that tag, so this version number is never published. |
+| The GitHub release fails after npm publish             | The version is on npm and tagged, with no GitHub release, and the job fails.                                 |
+| The output matches no known outcome                    | The job fails and its summary reports a failed publish.                                                      |
 
 ## A project's deploy
 
