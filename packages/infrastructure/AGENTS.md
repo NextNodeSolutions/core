@@ -54,7 +54,6 @@ This package is the pipeline CLI that core's workflows run from a checkout of co
 - **Run this package's type-check, lint and build before you push, with no new lint warnings.** Its own CI runs lint only. The root [checks](../../AGENTS.md#checks) say how to run one package.
 - **Also run the worker types package's type-check and build when a change reaches the `./worker-types` export.** That package bundles this build and keeps third-party imports external, so a new runtime dependency on that path also goes into its `dependencies`.
 - **Validate a deployment change through CI on an isolated hostname, never from a local machine.** These checks prove only that the code compiles. Production data migration and the retirement of live resources are separate operations that need the user's approval, as [working against real systems](../../AGENTS.md#working-against-real-systems) requires.
-- **Read the archive and notes under this package's `docs/` as history, never as instructions.** They describe earlier designs.
 
 ## Extending
 
