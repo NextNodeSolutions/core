@@ -149,7 +149,7 @@ Call `.github/workflows/deploy.yml` with `environment` and optional `config_file
 
 `.github/workflows/plan-diff.yml` reports Terraform changes on pull requests. It keeps one comment per project and environment and edits it on every run. A plan without changes posts nothing unless an earlier comment exists, which it then refreshes. The step summary always holds the plan. `.github/workflows/teardown.yml` is manually dispatched with target repository, environment and project-name confirmation. Stateful teardown additionally requires `wipe_data`. HCP workspace history remains after teardown.
 
-PlanetScale migrations use `services.planetscale.migrate_command`, defaulting to the command defined in `domain/deploy/target.ts`, from the directory containing `nextnode.toml`. Only the migration subprocess receives `DATABASE_URL` built from sensitive migrator outputs.
+PlanetScale migrations use `services.planetscale.migrate_command`, defaulting to the command defined in `domain/deploy/target.ts`, from the directory containing `nextnode.toml`. Only the migration subprocess receives `DATABASE_URL` built from sensitive migrator outputs. Terraform always creates the migrator role. The Hyperdrive config, and the runtime role it connects as, exist only when a Worker needs `planetscale`, so the CI token needs Hyperdrive permission only then. A container on the runtime role gets that role without a Hyperdrive config.
 
 ## Checks
 

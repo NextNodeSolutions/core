@@ -55,6 +55,10 @@ export interface WorkersDerivedResources {
 	readonly queueNames: ReadonlyArray<string>
 	readonly hasD1: boolean
 	readonly hasPlanetscale: boolean
+	// A Worker reaches Postgres through the Hyperdrive binding, so the config
+	// exists only when a Worker needs planetscale. A container connects with a
+	// URL and never needs it.
+	readonly hasHyperdrive: boolean
 	// A container service connects as the runtime role: its credentials are
 	// output. A container on the migrator role reads the migrator's outputs.
 	readonly hasPlanetscaleRuntimeContainer: boolean
@@ -91,6 +95,13 @@ export function deriveWorkersResources(
 		queueNames,
 		hasD1,
 		hasPlanetscale,
+		hasHyperdrive:
+			hasPlanetscale &&
+			Object.values(config.deploy.services).some(
+				service =>
+					service.kind === 'worker' &&
+					service.needs.includes('planetscale'),
+			),
 		hasPlanetscaleRuntimeContainer:
 			hasPlanetscale &&
 			containerServiceEntries(config.deploy.services).some(
@@ -222,6 +233,8 @@ export function buildResourceBlock(
 			derived,
 			organization.planetscaleOrganization,
 		)
+	}
+	if (derived.hasHyperdrive) {
 		resource.cloudflare_hyperdrive_config = buildHyperdriveConfig(derived)
 	}
 	if (derived.kvNames.length > 0) {

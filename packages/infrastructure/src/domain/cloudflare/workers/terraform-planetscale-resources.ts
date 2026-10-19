@@ -15,8 +15,9 @@ import type {
 } from './terraform-main-config.ts'
 import type { WorkersDerivedResources } from './terraform-resources.ts'
 
-// The single Terraform label both PlanetScale resources use - one branch-role +
-// one Hyperdrive config per project (one Postgres DB, like the single D1).
+// The single Terraform label of the runtime branch-role and of the Hyperdrive
+// config that connects as it, at most one of each per project (one Postgres DB,
+// like the single D1).
 export const PLANETSCALE_LABEL = 'planetscale'
 
 // The branch-role attributes the Hyperdrive origin interpolates. Named once so a
@@ -25,7 +26,9 @@ export const PLANETSCALE_MIGRATOR_LABEL = 'migrator'
 export const PLANETSCALE_MIGRATOR_REF = `planetscale_postgres_branch_role.${PLANETSCALE_MIGRATOR_LABEL}`
 
 // The runtime role Hyperdrive connects as, and a container service through its
-// `DATABASE_URL`.
+// `DATABASE_URL`. It exists only for one of them: a project whose Workers do not
+// need planetscale and whose containers connect as the migrator gets no role
+// that nothing uses.
 export const PLANETSCALE_RUNTIME_REF = `planetscale_postgres_branch_role.${PLANETSCALE_LABEL}`
 
 export function buildPlanetscaleBranchRole(
@@ -36,23 +39,25 @@ export function buildPlanetscaleBranchRole(
 		throw new Error(
 			'PlanetScale organization is required when the service is declared',
 		)
+	const database = computePlanetscaleDatabaseName(
+		derived.projectName,
+		derived.environment,
+	)
+	const hasRuntimeRole =
+		derived.hasHyperdrive || derived.hasPlanetscaleRuntimeContainer
 	return {
-		[PLANETSCALE_LABEL]: {
-			organization,
-			database: computePlanetscaleDatabaseName(
-				derived.projectName,
-				derived.environment,
-			),
-			branch: PLANETSCALE_DEFAULT_BRANCH,
-			name: PLANETSCALE_HYPERDRIVE_ROLE,
-			inherited_roles: [...PLANETSCALE_ROLE_INHERITED_ROLES],
-		},
+		...(hasRuntimeRole && {
+			[PLANETSCALE_LABEL]: {
+				organization,
+				database,
+				branch: PLANETSCALE_DEFAULT_BRANCH,
+				name: PLANETSCALE_HYPERDRIVE_ROLE,
+				inherited_roles: [...PLANETSCALE_ROLE_INHERITED_ROLES],
+			},
+		}),
 		[PLANETSCALE_MIGRATOR_LABEL]: {
 			organization,
-			database: computePlanetscaleDatabaseName(
-				derived.projectName,
-				derived.environment,
-			),
+			database,
 			branch: PLANETSCALE_DEFAULT_BRANCH,
 			name: PLANETSCALE_MIGRATOR_LABEL,
 			inherited_roles: ['postgres'],

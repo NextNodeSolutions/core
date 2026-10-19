@@ -35,7 +35,7 @@ A service with `image` is a container service: `config/validation/deploy-contain
 
 Declare R2 buckets under `services.r2.buckets`. Terraform creates buckets and optional public custom domains. No separate storage adapter or storage credentials are needed.
 
-PlanetScale database creation runs before Terraform because its provider manages roles, not databases. Terraform creates separate runtime and migrator roles. Migrations run with migrator credentials from sensitive outputs.
+PlanetScale database creation runs before Terraform because its provider manages roles, not databases. Terraform always creates the migrator role. It creates the runtime role only for a Worker's Hyperdrive config or a container on that role, and the Hyperdrive config only when a Worker needs `planetscale`. Migrations run with migrator credentials from sensitive outputs.
 
 Internal Workers, per service or through `project.internal`, require Access organization settings. Keep alternate public Worker endpoints disabled. Do not interpret a skipped internal smoke check as an authenticated health check.
 
