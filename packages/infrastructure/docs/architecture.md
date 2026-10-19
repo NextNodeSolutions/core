@@ -217,20 +217,20 @@ stateDiagram-v2
 
 ## Failures and what they leave
 
-| Failure                                                | What is left                                                                                                                                                 |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `nextnode.toml` is invalid                             | Nothing ran. The error lists every problem.                                                                                                                  |
-| A required variable or organization setting is missing | The command stopped before any external call.                                                                                                                |
-| The HCP workspace is not in local execution mode       | Nothing applied. The workspace must be switched by hand.                                                                                                     |
-| The PlanetScale database is not ready in time          | The database exists or is still being created. Terraform did not run. The next provision reuses it.                                                          |
-| An API request or a GitHub CLI call runs out of time   | The command stopped at that call, with an error that names it. What ran before it stays, and the next run converges from there.                              |
-| `terraform apply` fails                                | HCP state records what was created. The next run converges from there.                                                                                       |
-| The Terraform state lock stays held                    | Terraform waited for a bounded time, then failed with a hint on how to release the lock.                                                                     |
-| A migration fails                                      | Workers keep their previous version, because the deploy job needs a successful migrate job.                                                                  |
-| A Worker's deploy or secret sync fails                 | Workers earlier in the order run the new code. That Worker and later ones keep what they had, except a failed sync leaves the new code with the old secrets. |
-| A health check never passes                            | Every Worker runs the new code. The job is red.                                                                                                              |
-| The repository has no Infisical project                | The deploy succeeds with a warning. Worker secrets stay as they were.                                                                                        |
-| Teardown fails after deleting Workers                  | Workers are gone. Terraform resources remain until teardown runs again.                                                                                      |
+| Failure                                                           | What is left                                                                                                                                                 |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `nextnode.toml` is invalid                                        | Nothing ran. The error lists every problem.                                                                                                                  |
+| A required variable or organization setting is missing            | The command stopped before any external call.                                                                                                                |
+| The HCP workspace is not in local execution mode                  | Nothing applied. The workspace must be switched by hand.                                                                                                     |
+| The PlanetScale database is not ready in time                     | The database exists or is still being created. Terraform did not run. The next provision reuses it.                                                          |
+| An API request fails, or it or a GitHub CLI call runs out of time | The command stopped at that call, with an error that names it. What ran before it stays, and the next run converges from there.                              |
+| `terraform apply` fails                                           | HCP state records what was created. The next run converges from there.                                                                                       |
+| The Terraform state lock stays held                               | Terraform waited for a bounded time, then failed with a hint on how to release the lock.                                                                     |
+| A migration fails                                                 | Workers keep their previous version, because the deploy job needs a successful migrate job.                                                                  |
+| A Worker's deploy or secret sync fails                            | Workers earlier in the order run the new code. That Worker and later ones keep what they had, except a failed sync leaves the new code with the old secrets. |
+| A health check never passes                                       | Every Worker runs the new code. The job is red.                                                                                                              |
+| The repository has no Infisical project                           | The deploy succeeds with a warning. Worker secrets stay as they were.                                                                                        |
+| Teardown fails after deleting Workers                             | Workers are gone. Terraform resources remain until teardown runs again.                                                                                      |
 
 ## Guarantees
 
