@@ -45,7 +45,7 @@ permissions:
 env:
     # The CI project in Infisical, and the machine identity this workflow logs
     # in as through GitHub OIDC. Organization Variables: ids,
-    # not credentials (README, "Vault setup").
+    # not credentials (packages/infrastructure/docs/infisical/vault.md, "Vault setup").
     INFISICAL_PROJECT_ID: ${{ vars.INFISICAL_PROJECT_ID }}
     INFISICAL_IDENTITY_ID: ${{ vars.INFISICAL_IDENTITY_ID }}
 
