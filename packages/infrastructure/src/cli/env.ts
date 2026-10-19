@@ -34,10 +34,6 @@ export function readJsonRecordEnv(name: string): Record<string, string> {
 	return parsedRecord.output
 }
 
-export function requireB64Env(name: string): string {
-	return Buffer.from(requireEnv(name), 'base64').toString('utf8')
-}
-
 export interface GithubRepository {
 	readonly owner: string
 	readonly name: string
@@ -60,22 +56,4 @@ export function requireGithubRepository(): GithubRepository {
 export function isEnvSet(name: string): boolean {
 	const raw = process.env[name]
 	return Boolean(raw)
-}
-
-export function getEnumEnv<T extends string>(
-	name: string,
-	allowed: readonly T[],
-	defaultValue: T,
-): T {
-	const raw = process.env[name]
-	if (!raw) {
-		return defaultValue
-	}
-	const match = allowed.find(candidate => candidate === raw)
-	if (typeof match === 'undefined') {
-		throw new Error(
-			`Invalid ${name} "${raw}" - expected one of: ${allowed.join(', ')}`,
-		)
-	}
-	return match
 }
