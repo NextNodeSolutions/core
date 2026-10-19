@@ -2,7 +2,7 @@ import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
 
 import type {
 	CloudflareWorkersDeployableConfig,
-	WorkerServiceConfig,
+	DeployServiceConfig,
 } from '#/config/types.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 import type { WorkerPublicPathsRule } from './terraform-firewall.ts'
@@ -11,7 +11,7 @@ import type { WorkerRateLimitRule } from './terraform-rate-limit.ts'
 interface RoutedWorker {
 	readonly serviceName: string
 	readonly host: string
-	readonly service: WorkerServiceConfig
+	readonly service: DeployServiceConfig
 }
 
 export interface WorkerZoneRules {

@@ -3,8 +3,15 @@ import {
 	computeR2PublicUrl,
 } from '#/domain/cloudflare/r2/custom-domain.ts'
 
+import {
+	PLANETSCALE_MIGRATOR_OUTPUT_PREFIX,
+	PLANETSCALE_RUNTIME_OUTPUT_PREFIX,
+} from './planetscale.ts'
 import { indexBy, r2BucketLabel, toTerraformLabel } from './terraform-labels.ts'
-import { PLANETSCALE_MIGRATOR_REF } from './terraform-planetscale-resources.ts'
+import {
+	PLANETSCALE_MIGRATOR_REF,
+	PLANETSCALE_RUNTIME_REF,
+} from './terraform-planetscale-resources.ts'
 
 import type { OutputValue } from './terraform-main-config.ts'
 import type { WorkersDerivedResources } from './terraform-resources.ts'
@@ -53,6 +60,26 @@ function r2CdnUrlsOutput(derived: WorkersDerivedResources): OutputValue {
 	}
 }
 
+// The branch-role attributes behind each `<prefix>_<name>` credential output.
+const ROLE_CREDENTIAL_ATTRIBUTES = {
+	host: 'access_host_url',
+	database: 'database_name',
+	user: 'username',
+	password: 'password',
+} as const
+
+function roleCredentialOutputs(
+	prefix: string,
+	roleRef: string,
+): Record<string, OutputValue> {
+	return Object.fromEntries(
+		Object.entries(ROLE_CREDENTIAL_ATTRIBUTES).map(([name, attribute]) => [
+			`${prefix}_${name}`,
+			{ value: `\${${roleRef}.${attribute}}`, sensitive: true },
+		]),
+	)
+}
+
 export function buildOutputs(
 	derived: WorkersDerivedResources,
 ): Record<string, OutputValue> {
@@ -61,20 +88,27 @@ export function buildOutputs(
 		output['d1_database_id'] = { value: '${cloudflare_d1_database.d1.id}' }
 	}
 	if (derived.hasPlanetscale) {
-		for (const [name, attribute] of Object.entries({
-			host: 'access_host_url',
-			database: 'database_name',
-			user: 'username',
-			password: 'password',
-		})) {
-			output[`planetscale_migrator_${name}`] = {
-				value: `\${${PLANETSCALE_MIGRATOR_REF}.${attribute}}`,
-				sensitive: true,
-			}
-		}
+		Object.assign(
+			output,
+			roleCredentialOutputs(
+				PLANETSCALE_MIGRATOR_OUTPUT_PREFIX,
+				PLANETSCALE_MIGRATOR_REF,
+			),
+		)
 		output['hyperdrive_config_id'] = {
 			value: '${cloudflare_hyperdrive_config.planetscale.id}',
 		}
+	}
+	// A container connects with a URL, so the runtime role's credentials leave
+	// Terraform only when a container service connects as that role.
+	if (derived.hasPlanetscaleRuntimeContainer) {
+		Object.assign(
+			output,
+			roleCredentialOutputs(
+				PLANETSCALE_RUNTIME_OUTPUT_PREFIX,
+				PLANETSCALE_RUNTIME_REF,
+			),
+		)
 	}
 	if (derived.kvNames.length > 0) {
 		output['kv_namespace_ids'] = kvNamespaceIdsOutput(derived)

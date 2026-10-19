@@ -3,7 +3,7 @@ import { computeSiteUrl } from '#/domain/deploy/domain.ts'
 import { buildWorkersBackingEnv } from './outputs-env.ts'
 import { ACCESS_AUDIENCES_OUTPUT } from './terraform-access.ts'
 
-import type { WorkerServiceConfig } from '#/config/types.ts'
+import type { DeployServiceConfig } from '#/config/types.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 import type {
 	WorkersBackingConfig,
@@ -15,7 +15,7 @@ export interface WorkerVarsInput {
 	readonly environment: AppEnvironment
 	readonly serviceName: string
 	// The worker whose vars are built (its `needs` filter the backing env).
-	readonly service: WorkerServiceConfig
+	readonly service: DeployServiceConfig
 	readonly backing: WorkersBackingConfig
 	readonly outputs: WorkersTerraformOutputs
 	readonly accountId: string

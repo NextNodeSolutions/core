@@ -40,8 +40,10 @@ concurrency:
 # any of its steps, and the vault accepts that token. Such a job therefore runs
 # core's pipeline CLI only, never the caller's scripts or dependency lifecycle
 # hooks: the caller's code builds in `build`, with no credential and no token
-# endpoint, and `deploy` ships the uploaded result. The one exception is a
-# PlanetScale migration, which runs the caller's migrate command in `migrate`.
+# endpoint, and `deploy` ships the uploaded result. A container service's
+# Dockerfile builds in `containers` on the same terms; `deploy` loads and pushes
+# the saved image without building. The one exception is a PlanetScale
+# migration, which runs the caller's migrate command in `migrate`.
 jobs:
     plan:
         name: Plan
@@ -54,6 +56,7 @@ jobs:
             has_domain: ${{ steps.plan.outputs.has_domain }}
             has_migrations: ${{ steps.plan.outputs.has_migrations }}
             has_planetscale: ${{ steps.plan.outputs.has_planetscale }}
+            has_containers: ${{ steps.plan.outputs.has_containers }}
             package_dir: ${{ steps.plan.outputs.package_dir }}
             config_name: ${{ steps.plan.outputs.config_name }}
         steps:
@@ -125,6 +128,41 @@ jobs:
                       !**/node_modules/**
                       !**/.git/**
                   include-hidden-files: true
+                  if-no-files-found: error
+                  retention-days: 1
+
+    containers:
+        name: Containers
+        needs: plan
+        if: needs.plan.outputs.has_containers == 'true'
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        # Builds each container service's image from the caller's Dockerfile,
+        # which runs arbitrary caller code: like `build`, this job has no
+        # `id-token: write` and no secret, so nothing it executes can reach the
+        # vault. Core's CLI only drives `docker build` and `docker save`; the
+        # archives travel to `deploy`, which pushes them with the Cloudflare
+        # token and never builds.
+        steps:
+            - uses: NextNodeSolutions/core/.github/actions/setup@main
+              with:
+                  infra: 'true'
+                  deps: 'false'
+
+            - name: Build container images
+              run: node src/index.ts build-containers
+              working-directory: .infra/packages/infrastructure
+              env:
+                  PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
+                  PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
+                  CONTAINER_IMAGES_DIR: ${{ runner.temp }}/containers
+                  IMAGE_TAG: ${{ github.sha }}
+
+            - name: Upload container images
+              uses: actions/upload-artifact@v7
+              with:
+                  name: containers-${{ needs.plan.outputs.project_name }}-${{ inputs.environment }}
+                  path: ${{ runner.temp }}/containers
                   if-no-files-found: error
                   retention-days: 1
 
@@ -237,7 +275,9 @@ jobs:
 
     deploy:
         name: Deploy
-        needs: [plan, quality, build, provision, migrate]
+        # A skipped `containers` or `migrate` job is neither cancelled nor
+        # failed, so it does not block the deploy.
+        needs: [plan, quality, build, containers, provision, migrate]
         if: ${{ !cancelled() && !failure() }}
         runs-on: ubuntu-latest
         timeout-minutes: 30
@@ -264,6 +304,16 @@ jobs:
                   name: build-${{ needs.plan.outputs.project_name }}-${{ inputs.environment }}
                   path: ${{ runner.temp }}/build
 
+            # The image archives saved by `containers`, outside the checkout
+            # for the same reason. `deploy` only loads and pushes them: no
+            # Dockerfile step runs in this job.
+            - name: Download container images
+              if: needs.plan.outputs.has_containers == 'true'
+              uses: actions/download-artifact@v8
+              with:
+                  name: containers-${{ needs.plan.outputs.project_name }}-${{ inputs.environment }}
+                  path: ${{ runner.temp }}/containers
+
             # Platform credentials, plus the repository's Infisical project for
             # this environment: every secret in it is synced to each Worker.
             - name: Load secrets
@@ -280,7 +330,11 @@ jobs:
                   terraform_wrapper: false
 
             # The SEO guard is injected per service inside `deploy` (before each
-            # asset upload), so there is no separate seo-guard step here.
+            # asset upload), so there is no separate seo-guard step here. A
+            # container service loads its archive from CONTAINER_IMAGES_DIR and
+            # pushes it as IMAGE_TAG with `wrangler containers push`, which
+            # logs in to the registry with the Cloudflare token: no Docker login
+            # step. Both are left empty for a project without containers.
             - name: Deploy
               run: node src/index.ts deploy
               working-directory: .infra/packages/infrastructure
@@ -297,3 +351,5 @@ jobs:
                   COMPANY_DOMAIN: ${{ vars.COMPANY_DOMAIN }}
                   ACCESS_SESSION_DURATION: ${{ vars.ACCESS_SESSION_DURATION }}
                   PROJECT_SECRETS: ${{ steps.vault.outputs.PROJECT_SECRETS }}
+                  CONTAINER_IMAGES_DIR: ${{ needs.plan.outputs.has_containers == 'true' && format('{0}/containers', runner.temp) || '' }}
+                  IMAGE_TAG: ${{ needs.plan.outputs.has_containers == 'true' && github.sha || '' }}

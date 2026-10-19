@@ -29,6 +29,8 @@ The Infisical vault is the only source of secrets. Never add a `secrets.<NAME>` 
 
 Every Worker is declared under `deploy.services`. A service without `url` is callable only through bindings. `entry = false` requires `assets` and deploys assets without a script. `needs` selects backing resources and sibling bindings. `depends_on` controls deployment order without adding a binding.
 
+A service with `image` is a container service: `config/validation/deploy-container-services.ts` validates it and `domain/cloudflare/workers/container-wrangler-config.ts` builds its document. Core deploys its own gateway Worker, `runtime/container-gateway/worker.ts`, in front of each container. The gateway's Durable Object class drives one instance through `@cloudflare/containers`, and `runtime/container-gateway/contract.ts` is the only code the gateway shares with `src/`. A container reaches only PlanetScale, through a `DATABASE_URL` secret for the role `postgres_role` names, and R2, through its S3 endpoint; never emit a binding for it. Terraform outputs the runtime role's credentials only when a container connects as that role. `build-containers` runs the caller's Dockerfile in the `containers` job, which has no credential. `deploy` loads the saved image and pushes it with `wrangler containers push`, and never builds one. Keep `docker build` out of every job with `id-token: write`.
+
 `deploy.cron` maps schedules to native Worker triggers. The Worker implements its scheduled handler. HTTP `path` and `method` are not used by Cloudflare triggers.
 
 Declare R2 buckets under `services.r2.buckets`. Terraform creates buckets and optional public custom domains. No separate storage adapter or storage credentials are needed.

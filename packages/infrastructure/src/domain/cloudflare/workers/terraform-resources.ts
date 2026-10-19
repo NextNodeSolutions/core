@@ -6,6 +6,7 @@ import {
 	computeR2ServiceBuckets,
 } from '#/domain/services/r2.ts'
 
+import { containerServiceEntries } from './container-services.ts'
 import { buildFirewallResources } from './terraform-firewall.ts'
 import {
 	indexBy,
@@ -54,6 +55,9 @@ export interface WorkersDerivedResources {
 	readonly queueNames: ReadonlyArray<string>
 	readonly hasD1: boolean
 	readonly hasPlanetscale: boolean
+	// A container service connects as the runtime role: its credentials are
+	// output. A container on the migrator role reads the migrator's outputs.
+	readonly hasPlanetscaleRuntimeContainer: boolean
 	readonly redirectDomains: ReadonlyArray<string>
 	readonly rateLimitRules: ReadonlyArray<WorkerRateLimitRule>
 	readonly publicPathsRules: ReadonlyArray<WorkerPublicPathsRule>
@@ -87,6 +91,11 @@ export function deriveWorkersResources(
 		queueNames,
 		hasD1,
 		hasPlanetscale,
+		hasPlanetscaleRuntimeContainer:
+			hasPlanetscale &&
+			containerServiceEntries(config.deploy.services).some(
+				([, service]) => service.postgresRole === 'runtime',
+			),
 		// Redirect Rules materialise the apex+www .fr -> .com concept, which only
 		// exists in production; a dev zone has no record to redirect, so both the
 		// rulesets and their support records (and their redirect zone lookups) are

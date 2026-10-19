@@ -2,10 +2,15 @@ import { computeR2Endpoint } from '#/domain/cloudflare/r2/addressing.ts'
 import { computeR2ServiceBuckets } from '#/domain/services/r2.ts'
 import { isRecord } from '#/kernel/guards.ts'
 
+import {
+	PLANETSCALE_MIGRATOR_OUTPUT_PREFIX,
+	PLANETSCALE_RUNTIME_OUTPUT_PREFIX,
+} from './planetscale.ts'
 import { ACCESS_AUDIENCES_OUTPUT } from './terraform-access.ts'
 
 import type { ServicesConfig } from '#/config/service-config.ts'
 import type { ServiceEnv } from '#/domain/services/service.ts'
+import type { PlanetscaleRoleCredentials } from './planetscale.ts'
 
 /**
  * The Terraform outputs the cloudflare-workers `main.tf.json` emits, narrowed
@@ -16,12 +21,10 @@ import type { ServiceEnv } from '#/domain/services/service.ts'
  * declared aliases; values are the ids/URLs Terraform computed.
  */
 export interface WorkersTerraformOutputs {
-	readonly planetscaleMigrator?: Readonly<{
-		host: string
-		database: string
-		user: string
-		password: string
-	}>
+	readonly planetscaleMigrator?: PlanetscaleRoleCredentials
+	// The runtime role, emitted only when a container service needs PlanetScale:
+	// a container has no Hyperdrive binding and connects with a URL instead.
+	readonly planetscaleRuntime?: PlanetscaleRoleCredentials
 	readonly d1DatabaseId?: string
 	// The `cloudflare_hyperdrive_config` id - consumed by the `hyperdrive` wrangler
 	// binding, never projected as an env var (the Worker reaches Postgres through
@@ -207,25 +210,32 @@ export function parseTerraformOutputs(
 			'hyperdrive_config_id',
 		)
 	}
-	const host = extractValue(raw, 'planetscale_migrator_host')
-	if (typeof host !== 'undefined') {
-		outputs.planetscaleMigrator = {
-			host: asString(host, 'planetscale_migrator_host'),
-			database: asString(
-				extractValue(raw, 'planetscale_migrator_database'),
-				'planetscale_migrator_database',
-			),
-			user: asString(
-				extractValue(raw, 'planetscale_migrator_user'),
-				'planetscale_migrator_user',
-			),
-			password: asString(
-				extractValue(raw, 'planetscale_migrator_password'),
-				'planetscale_migrator_password',
-			),
-		}
-	}
+	const migrator = parseRoleCredentials(
+		raw,
+		PLANETSCALE_MIGRATOR_OUTPUT_PREFIX,
+	)
+	if (migrator) outputs.planetscaleMigrator = migrator
+	const runtime = parseRoleCredentials(raw, PLANETSCALE_RUNTIME_OUTPUT_PREFIX)
+	if (runtime) outputs.planetscaleRuntime = runtime
 	return outputs
+}
+
+// The four `<prefix>_{host,database,user,password}` outputs of a branch role,
+// absent together when the role is not exposed.
+function parseRoleCredentials(
+	raw: Readonly<Record<string, unknown>>,
+	prefix: string,
+): PlanetscaleRoleCredentials | undefined {
+	const host = extractValue(raw, `${prefix}_host`)
+	if (typeof host === 'undefined') return undefined
+	const read = (field: string): string =>
+		asString(extractValue(raw, `${prefix}_${field}`), `${prefix}_${field}`)
+	return {
+		host: asString(host, `${prefix}_host`),
+		database: read('database'),
+		user: read('user'),
+		password: read('password'),
+	}
 }
 
 function envKeyFor(alias: string): string {

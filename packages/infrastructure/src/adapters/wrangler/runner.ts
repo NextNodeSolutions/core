@@ -40,7 +40,7 @@ export function assertWranglerOk(exec: ExecResult, label: string): void {
 	const base = `wrangler ${label} failed (exit ${String(exec.exitCode)}):\n${exec.stderr}`
 	if (exec.stderr.includes(AUTH_ERROR_FINGERPRINT)) {
 		throw new Error(
-			`${base}\n\nCloudflare rejected the request as unauthorized (code 10000). CLOUDFLARE_API_TOKEN needs Workers permissions - at minimum Account > Workers Scripts: Edit and Account Settings: Read, plus Zone > Workers Routes: Edit, DNS: Edit and Zone: Read on each routed zone for the custom-domain routes. Also confirm the token belongs to the CLOUDFLARE_ACCOUNT_ID account.`,
+			`${base}\n\nCloudflare rejected the request as unauthorized (code 10000). CLOUDFLARE_API_TOKEN needs Workers permissions - at minimum Account > Workers Scripts: Edit and Account Settings: Read, plus Zone > Workers Routes: Edit, DNS: Edit and Zone: Read on each routed zone for the custom-domain routes, and the Containers permission (wrangler's \`containers:write\` scope) for a container service. Also confirm the token belongs to the CLOUDFLARE_ACCOUNT_ID account.`,
 		)
 	}
 	throw new Error(base)
@@ -49,6 +49,9 @@ export function assertWranglerOk(exec: ExecResult, label: string): void {
 export interface WranglerRunnerOptions {
 	readonly cwd?: string
 	readonly stdin?: string
+	// Overrides WRANGLER_TIMEOUT_MS for a command that moves more than API
+	// calls, such as an image push.
+	readonly timeoutMs?: number
 }
 
 export interface WranglerRunner {
@@ -58,8 +61,11 @@ export interface WranglerRunner {
 	): Promise<ExecResult>
 }
 
-function timeoutMessage(args: ReadonlyArray<string>): string {
-	return `wrangler ${args.join(' ')} timed out after ${String(WRANGLER_TIMEOUT_MS / MS_PER_SECOND)}s and was killed - a hung run usually means an unreachable Cloudflare API; retry`
+function timeoutMessage(
+	args: ReadonlyArray<string>,
+	timeoutMs: number,
+): string {
+	return `wrangler ${args.join(' ')} timed out after ${String(timeoutMs / MS_PER_SECOND)}s and was killed - a hung run usually means an unreachable Cloudflare API; retry`
 }
 
 // Auth is ambient: wrangler reads CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID
@@ -68,6 +74,7 @@ function timeoutMessage(args: ReadonlyArray<string>): string {
 // temporary environment without relying on npm's npx cache PATH.
 export const defaultWranglerRunner: WranglerRunner = (args, options) =>
 	new Promise<ExecResult>((resolve, reject) => {
+		const timeoutMs = options?.timeoutMs ?? WRANGLER_TIMEOUT_MS
 		const child = execFile(
 			'pnpm',
 			['dlx', 'wrangler', ...args],
@@ -76,7 +83,7 @@ export const defaultWranglerRunner: WranglerRunner = (args, options) =>
 				env: process.env,
 				encoding: 'utf8',
 				maxBuffer: WRANGLER_MAX_BUFFER_BYTES,
-				timeout: WRANGLER_TIMEOUT_MS,
+				timeout: timeoutMs,
 				killSignal: 'SIGKILL',
 			},
 			(error: ExecFileException | null, stdout, stderr) => {
@@ -85,7 +92,7 @@ export const defaultWranglerRunner: WranglerRunner = (args, options) =>
 					return
 				}
 				if (error.killed === true) {
-					reject(new Error(timeoutMessage(args)))
+					reject(new Error(timeoutMessage(args, timeoutMs)))
 					return
 				}
 				if (typeof error.code !== 'number') {

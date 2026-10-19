@@ -1,9 +1,6 @@
 import { execFile } from 'node:child_process'
 
-import {
-	PLANETSCALE_POSTGRES_PORT,
-	PLANETSCALE_POSTGRES_SCHEME,
-} from '#/domain/cloudflare/workers/planetscale.ts'
+import { buildPlanetscaleDatabaseUrl } from '#/domain/cloudflare/workers/planetscale.ts'
 
 import type { ExecFileException } from 'node:child_process'
 import type { WorkersTerraformOutputs } from '#/domain/cloudflare/workers/outputs-env.ts'
@@ -71,13 +68,7 @@ export async function migratePlanetscale(
 		throw new Error(
 			'PlanetScale migrator outputs are missing. Run provision before migrate-remote.',
 		)
-	const databaseUrl = new URL(`${PLANETSCALE_POSTGRES_SCHEME}://localhost`)
-	databaseUrl.hostname = credentials.host
-	databaseUrl.port = String(PLANETSCALE_POSTGRES_PORT)
-	databaseUrl.pathname = credentials.database
-	databaseUrl.username = credentials.user
-	databaseUrl.password = credentials.password
-	databaseUrl.searchParams.set('sslmode', 'verify-full')
+	const databaseUrl = buildPlanetscaleDatabaseUrl(credentials)
 	const startedAt = Date.now()
 	await new Promise<void>((resolve, reject) => {
 		execFile(
@@ -85,7 +76,7 @@ export async function migratePlanetscale(
 			['-c', command],
 			{
 				cwd: projectDir,
-				env: { ...process.env, DATABASE_URL: databaseUrl.toString() },
+				env: { ...process.env, DATABASE_URL: databaseUrl },
 				timeout: MIGRATION_TIMEOUT_MS,
 			},
 			(error, stdout, stderr) => {
@@ -97,7 +88,7 @@ export async function migratePlanetscale(
 					migrationFailure({
 						error,
 						command,
-						databaseUrl: databaseUrl.toString(),
+						databaseUrl,
 						password: credentials.password,
 						stdout,
 						stderr,

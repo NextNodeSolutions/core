@@ -24,7 +24,9 @@ export const PLANETSCALE_LABEL = 'planetscale'
 export const PLANETSCALE_MIGRATOR_LABEL = 'migrator'
 export const PLANETSCALE_MIGRATOR_REF = `planetscale_postgres_branch_role.${PLANETSCALE_MIGRATOR_LABEL}`
 
-const ROLE_REF = `planetscale_postgres_branch_role.${PLANETSCALE_LABEL}`
+// The runtime role Hyperdrive connects as, and a container service through its
+// `DATABASE_URL`.
+export const PLANETSCALE_RUNTIME_REF = `planetscale_postgres_branch_role.${PLANETSCALE_LABEL}`
 
 export function buildPlanetscaleBranchRole(
 	derived: WorkersDerivedResources,
@@ -70,11 +72,11 @@ export function buildHyperdriveConfig(
 			),
 			origin: {
 				scheme: PLANETSCALE_POSTGRES_SCHEME,
-				host: `\${${ROLE_REF}.access_host_url}`,
+				host: `\${${PLANETSCALE_RUNTIME_REF}.access_host_url}`,
 				port: PLANETSCALE_POSTGRES_PORT,
-				database: `\${${ROLE_REF}.database_name}`,
-				user: `\${${ROLE_REF}.username}`,
-				password: `\${${ROLE_REF}.password}`,
+				database: `\${${PLANETSCALE_RUNTIME_REF}.database_name}`,
+				user: `\${${PLANETSCALE_RUNTIME_REF}.username}`,
+				password: `\${${PLANETSCALE_RUNTIME_REF}.password}`,
 			},
 		},
 	}

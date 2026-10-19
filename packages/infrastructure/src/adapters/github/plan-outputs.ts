@@ -2,6 +2,7 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 const logger = createLogger()
 
+import { hasContainerService } from '#/domain/cloudflare/workers/container-services.ts'
 import { hasProdGate } from '#/domain/pipeline/quality-matrix.ts'
 
 import { writeOutput } from './output.ts'
@@ -51,6 +52,14 @@ export function writePlanOutputs({
 	// A PlanetScale migration runs the project's own migrate command, so the
 	// migrate job installs the project's dependencies only in that case.
 	writeOutput('has_planetscale', String(Boolean(config.services.planetscale)))
+	// A container service's image is built by its own credential-free job,
+	// which runs only when the project declares one.
+	writeOutput(
+		'has_containers',
+		String(
+			config.deploy ? hasContainerService(config.deploy.services) : false,
+		),
+	)
 	writeOutput('domain', config.project.domain ?? '')
 	writeOutput('package_dir', packageDir)
 	writeOutput('config_name', configName)

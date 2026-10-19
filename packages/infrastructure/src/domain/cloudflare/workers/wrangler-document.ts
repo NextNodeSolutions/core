@@ -1,3 +1,8 @@
+import type {
+	ContainerInstanceTypeName,
+	ContainerRegion,
+} from '#/config/container-service.ts'
+
 /**
  * The Cloudflare Workers runtime version every generated config pins. A fixed
  * date freezes the workerd behaviour set so a deploy is reproducible run to run;
@@ -149,6 +154,44 @@ export interface WranglerLimits {
 	readonly subrequests: number
 }
 
+// A Cloudflare Container application, linked to the Durable Object class that
+// drives it. `image` is a Cloudflare registry reference, so `wrangler deploy`
+// builds nothing. `instance_type` is a named type or a custom size.
+export interface WranglerCustomInstanceType {
+	readonly vcpu: number
+	readonly memory_mib: number
+	readonly disk_mb: number
+}
+
+export interface WranglerContainer {
+	readonly name: string
+	readonly class_name: string
+	readonly image: string
+	readonly max_instances: number
+	readonly instance_type:
+		| ContainerInstanceTypeName
+		| WranglerCustomInstanceType
+	readonly constraints?: {
+		readonly regions: ReadonlyArray<ContainerRegion>
+	}
+}
+
+export interface WranglerDurableObjectBinding {
+	readonly name: string
+	readonly class_name: string
+}
+
+export interface WranglerDurableObjects {
+	readonly bindings: ReadonlyArray<WranglerDurableObjectBinding>
+}
+
+// The declarative registration of a Durable Object class (wrangler 4.107+).
+// Mutually exclusive with `migrations`, which is therefore never emitted.
+export interface WranglerDurableObjectExport {
+	readonly type: 'durable-object'
+	readonly storage: 'sqlite'
+}
+
 /**
  * The wrangler configuration document (JSON) generated per service and written
  * to an ephemeral file for `wrangler deploy --config`. Optional keys are omitted
@@ -184,4 +227,13 @@ export interface WranglerDocument {
 	// Omitted unless `[deploy.services.*.limits]` is declared; Workers Free
 	// rejects a CPU limits block.
 	readonly limits?: WranglerLimits
+	// Container services only: the application, the Durable Object binding of
+	// the gateway class and its declarative registration.
+	readonly containers?: ReadonlyArray<WranglerContainer>
+	readonly durable_objects?: WranglerDurableObjects
+	readonly exports?: Readonly<Record<string, WranglerDurableObjectExport>>
+}
+
+export type WranglerDocumentDraft = {
+	-readonly [K in keyof WranglerDocument]: WranglerDocument[K]
 }
