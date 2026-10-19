@@ -47,6 +47,7 @@ These rules cover the email library, where an email manager renders React Email 
 - **Add a render option to `TemplateRenderOptions` and give it a default in the template renderer.** The defaults object is typed as the required form of the options, so type-check fails until the default exists.
 - **Add an error code to `EmailErrorCode` and produce it from an adapter's rules or the shared validation.** Consumers may switch on that public union exhaustively, so a new member can break their build.
 - **Re-export every new public function or type from the package entry point and show it in the README or a docs page.** Anything not exported there does not exist for consumers.
+- **Declare `| undefined` on every optional property of a public type.** A consumer who enables `exactOptionalPropertyTypes`, as the shared TypeScript config does, cannot otherwise pass a value that may be undefined.
 
 ## Tests
 

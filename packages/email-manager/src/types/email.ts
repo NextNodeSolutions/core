@@ -8,7 +8,9 @@ import type React from 'react'
 /**
  * Email recipient - string or object with name
  */
-export type EmailRecipient = string | { email: string; name?: string }
+export type EmailRecipient =
+	| string
+	| { email: string; name?: string | undefined }
 
 /**
  * Email attachment
