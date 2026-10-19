@@ -51,7 +51,16 @@ export function execBounded(
 			},
 		)
 		if (typeof options.stdin !== 'undefined') {
+			child.stdin?.on('error', error => {
+				if (!isClosedPipe(error)) reject(error)
+			})
 			child.stdin?.end(options.stdin)
 		}
 	})
+}
+
+// A child that exits before reading all of its input closes the pipe. Its exit
+// code and stderr then say why, so the write error carries nothing more.
+function isClosedPipe(error: Error): boolean {
+	return 'code' in error && error.code === 'EPIPE'
 }
