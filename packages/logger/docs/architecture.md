@@ -92,7 +92,7 @@ Each level maps to a console method, and each format has a writer that calls its
 
 - The Node formatter returns one ANSI-colored line, then one indented line per key of the entry's object. It serializes values with `safeStringify`, which survives circular references.
 - The browser formatter returns a `%c` format string, the CSS for each part and the objects to inspect. Its writer prints an entry that carries an object as a collapsed group, so DevTools can expand the object.
-- The JSON formatter returns one line. It flattens the keys of the entry's object onto the top level, so a log store can query them. It skips undefined values and keys that could pollute an object prototype.
+- The JSON formatter returns one line. It flattens the keys of the entry's object onto the top level, so a log store can query them. It skips undefined values and keys that could pollute an object prototype. A `bigint` becomes its decimal string, and a circular reference becomes the marker the Node formatter prints. The HTTP transport serializes its request body with the same rules.
 - The console formatters color the scope from a bounded cache, so a scope keeps its color while the cache holds it.
 
 ### Caller location
@@ -149,16 +149,17 @@ sequenceDiagram
 
 ## What a failure leaves behind
 
-| Failure                                                          | What is left                                                                                                                                                                                          |
-| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A transport throws in `log`                                      | A `console.error` line. The other transports still received the entry. The caller saw nothing.                                                                                                        |
-| A transport's `log` promise rejects                              | An unhandled rejection. The logger never sees it.                                                                                                                                                     |
-| The stack cannot be parsed                                       | An entry whose location is `unknown`, and a `console.warn` line that says why.                                                                                                                        |
-| A value in the object cannot be serialized by the Node formatter | A placeholder that names the error, in place of the value. Circular references become a marker.                                                                                                       |
-| A value in the object cannot be serialized by the JSON formatter | No line for that entry. The JSON formatter calls `JSON.stringify` directly, so a circular reference or a `bigint` makes the console transport throw, and the logger reports it as a failed transport. |
-| Web Crypto is missing and no `requestId` option was given        | No logger. `generateRequestId` throws from the constructor.                                                                                                                                           |
-| A transport's configuration is invalid                           | No transport. Its constructor throws.                                                                                                                                                                 |
-| Every HTTP attempt for a batch fails                             | The batch is gone from the buffer, and `onError` receives it with the error.                                                                                                                          |
+| Failure                                                                      | What is left                                                                                                   |
+| ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| A transport throws in `log`                                                  | A `console.error` line. The other transports still received the entry. The caller saw nothing.                 |
+| A transport's `log` promise rejects                                          | An unhandled rejection. The logger never sees it.                                                              |
+| The stack cannot be parsed                                                   | An entry whose location is `unknown`, and a `console.warn` line that says why.                                 |
+| A value in the object cannot be serialized by the Node formatter             | A placeholder that names the error, in place of the value. Circular references become a marker.                |
+| A value in the object is a `bigint` or holds a cycle                         | Nothing is lost. JSON output writes the `bigint` as its decimal string and the circular reference as a marker. |
+| A getter or a `toJSON` method in the object throws during JSON serialization | No JSON line for that entry. The console transport throws, and the logger reports it as a failed transport.    |
+| Web Crypto is missing and no `requestId` option was given                    | No logger. `generateRequestId` throws from the constructor.                                                    |
+| A transport's configuration is invalid                                       | No transport. Its constructor throws.                                                                          |
+| Every HTTP attempt for a batch fails                                         | The batch is gone from the buffer, and `onError` receives it with the error.                                   |
 
 ## Guarantees
 

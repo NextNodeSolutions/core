@@ -3,6 +3,8 @@
  * Produces structured JSON output for production/log aggregation systems
  */
 
+import { stringifyJson } from '../utils/serialization.js'
+
 import type { LogEntry } from '../types.js'
 
 /**
@@ -76,11 +78,11 @@ const buildJsonOutput = (entry: LogEntry): JsonLogOutput => {
  * - Produces single-line JSON optimized for log aggregation
  */
 export const formatAsJson = (entry: LogEntry): string =>
-	JSON.stringify(buildJsonOutput(entry))
+	stringifyJson(buildJsonOutput(entry))
 
 /**
  * Formats a log entry as pretty-printed JSON.
  * Useful for debugging and development with structured output.
  */
 export const formatAsJsonPretty = (entry: LogEntry): string =>
-	JSON.stringify(buildJsonOutput(entry), null, 2)
+	stringifyJson(buildJsonOutput(entry), 2)

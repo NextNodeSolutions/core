@@ -14,13 +14,13 @@ const typeToString = (subject: unknown): string | undefined => {
 	if (typeof subject === 'function')
 		return `[Function: ${subject.name || 'anonymous'}]`
 	if (typeof subject === 'symbol') return subject.toString()
-	if (typeof subject === 'bigint') return subject.toString()
 	return undefined
 }
 
 /**
- * Creates a JSON.stringify replacer that turns an object nested inside itself
- * into the circular reference marker. It tracks the path from the root to the
+ * Creates a JSON.stringify replacer for the values JSON cannot represent: a
+ * bigint becomes its decimal string, and an object nested inside itself becomes
+ * the circular reference marker. It tracks the path from the root to the
  * current value, so an object shared by two branches is serialized in both.
  * Each JSON.stringify call needs its own replacer.
  */
@@ -28,6 +28,7 @@ const createJsonSafeReplacer = (): JsonReplacer => {
 	const ancestors: object[] = []
 
 	return function replaceUnserializable(_key, fieldValue) {
+		if (typeof fieldValue === 'bigint') return fieldValue.toString()
 		if (typeof fieldValue !== 'object' || fieldValue === null)
 			return fieldValue
 
@@ -43,6 +44,13 @@ const createJsonSafeReplacer = (): JsonReplacer => {
 	}
 }
 
+/**
+ * Serializes a value as JSON. A bigint or a cycle never makes it throw, so
+ * every JSON output of the logger goes through it.
+ */
+export const stringifyJson = (subject: unknown, indent?: number): string =>
+	JSON.stringify(subject, createJsonSafeReplacer(), indent)
+
 export const safeStringify = (subject: unknown): string => {
 	try {
 		// Fast path for primitives
@@ -51,7 +59,11 @@ export const safeStringify = (subject: unknown): string => {
 
 		// Direct string conversion for simple types
 		if (typeof subject === 'string') return subject
-		if (typeof subject === 'number' || typeof subject === 'boolean') {
+		if (
+			typeof subject === 'number' ||
+			typeof subject === 'boolean' ||
+			typeof subject === 'bigint'
+		) {
 			return String(subject)
 		}
 

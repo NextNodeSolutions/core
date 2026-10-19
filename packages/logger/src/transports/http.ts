@@ -3,6 +3,8 @@
  * Sends logs to a remote endpoint with batching and error handling
  */
 
+import { stringifyJson } from '../utils/serialization.js'
+
 import type { LogEntry, Transport } from '../types.js'
 
 export interface HttpTransportConfig {
@@ -254,7 +256,7 @@ export class HttpTransport implements Transport {
 					'Content-Type': 'application/json',
 					...this.config.headers,
 				},
-				body: JSON.stringify({ logs: entries }),
+				body: stringifyJson({ logs: entries }),
 				signal: controller.signal,
 			})
 

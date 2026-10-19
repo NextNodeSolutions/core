@@ -46,7 +46,7 @@ await logger.dispose()
 ## What crosses the boundary
 
 - Each batch is one `POST` to `endpoint`, with a JSON content type and the configured `headers`.
-- The body is a JSON object whose `logs` array holds the raw `LogEntry` objects. It is not the flattened JSON line the console prints.
+- The body is a JSON object whose `logs` array holds the raw `LogEntry` objects. It is not the flattened JSON line the console prints, but it follows the JSON formatter's rules, so a `bigint` becomes its decimal string and a circular reference becomes a marker.
 - A response outside the success range counts as a failure, like a network error or a timeout.
 - The endpoint must be an `http` or `https` URL. The constructor refuses any other protocol, so a mistyped URL cannot reach a non-HTTP scheme.
 - The constructor refuses headers that the HTTP layer manages, such as `Host`, so configuration cannot inject them.
