@@ -3,9 +3,10 @@
  * Produces structured JSON output for production/log aggregation systems
  */
 
-import { stringifyJson } from '../utils/serialization.js'
+import { stringifyWithFieldFallback } from '../utils/serialization.js'
 
 import type { LogEntry } from '../types.js'
+import type { SerializedJson } from '../utils/serialization.js'
 
 /**
  * Keys that are filtered out during object flattening to prevent
@@ -37,7 +38,7 @@ export interface JsonLogOutput {
  * prototype-pollution-prone keys, ready to be flattened onto the output.
  */
 const safeObjectEntries = (
-	object: NonNullable<LogEntry['object']>,
+	object: Readonly<Record<string, unknown>>,
 ): Record<string, unknown> => {
 	const safe: Record<string, unknown> = {}
 	for (const [key, fieldValue] of Object.entries(object)) {
@@ -48,9 +49,11 @@ const safeObjectEntries = (
 	return safe
 }
 
-const buildJsonOutput = (entry: LogEntry): JsonLogOutput => {
-	const { level, message, timestamp, location, requestId, scope, object } =
-		entry
+const buildJsonOutput = (
+	entry: LogEntry,
+	object: Readonly<Record<string, unknown>> | undefined,
+): JsonLogOutput => {
+	const { level, message, timestamp, location, requestId, scope } = entry
 
 	const output: JsonLogOutput = {
 		level,
@@ -78,11 +81,25 @@ const buildJsonOutput = (entry: LogEntry): JsonLogOutput => {
  * - Produces single-line JSON optimized for log aggregation
  */
 export const formatAsJson = (entry: LogEntry): string =>
-	stringifyJson(buildJsonOutput(entry))
+	formatJsonLine(entry).json
 
 /**
  * Formats a log entry as pretty-printed JSON.
  * Useful for debugging and development with structured output.
  */
 export const formatAsJsonPretty = (entry: LogEntry): string =>
-	stringifyJson(buildJsonOutput(entry), 2)
+	formatJsonLine(entry, 2).json
+
+/**
+ * Formats a log entry as JSON and lists the fields of its object that were
+ * replaced by a marker because they cannot be serialized.
+ */
+export const formatJsonLine = (
+	entry: LogEntry,
+	indent?: number,
+): SerializedJson =>
+	stringifyWithFieldFallback(
+		entry.object,
+		object => buildJsonOutput(entry, object),
+		indent,
+	)

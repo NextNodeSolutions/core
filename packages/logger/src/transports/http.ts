@@ -3,7 +3,7 @@
  * Sends logs to a remote endpoint with batching and error handling
  */
 
-import { stringifyJson } from '../utils/serialization.js'
+import { stringifyWithFieldFallback } from '../utils/serialization.js'
 
 import {
 	validateBufferCapacity,
@@ -232,30 +232,29 @@ export class HttpTransport implements Transport {
 		}
 	}
 
-	private serializeBatch(entries: readonly LogEntry[]): SerializedBatch {
-		const serializedEntries: string[] = []
-		const sendableEntries: LogEntry[] = []
+	private serializeBatch(entries: LogEntry[]): SerializedBatch {
+		const serializedEntries = entries.map(entry => {
+			const { json, failures } = stringifyWithFieldFallback(
+				entry.object,
+				object => ({ ...entry, object }),
+			)
 
-		for (const entry of entries) {
-			try {
-				serializedEntries.push(stringifyJson(entry))
-				sendableEntries.push(entry)
-			} catch (error) {
-				// Business rule: an entry whose getter or toJSON method throws is
-				// reported alone, so it cannot cost the rest of its batch.
-				this.reportLoss(error, [entry])
+			if (failures.length) {
+				// Business rule: the console JSON line follows the same rule, so an
+				// entry is never lost for one field. The entry is still sent, so
+				// onError, which reports lost entries, is not called.
+				console.error(
+					`[logger] HTTP transport replaced fields it cannot serialize: ${failures.join(', ')}`,
+				)
 			}
-		}
 
-		return {
-			body: `{"logs":[${serializedEntries.join(',')}]}`,
-			entries: sendableEntries,
-		}
+			return json
+		})
+
+		return { body: `{"logs":[${serializedEntries.join(',')}]}`, entries }
 	}
 
 	private async deliver(batch: SerializedBatch): Promise<void> {
-		if (!batch.entries.length) return
-
 		try {
 			await this.sendWithRetry(batch.body)
 		} catch (error) {

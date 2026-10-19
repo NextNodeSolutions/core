@@ -56,7 +56,7 @@ The constructor checks every numeric option it is given. `batchSize` must be a p
 ## What crosses the boundary
 
 - Each batch is one `POST` to `endpoint`, with a JSON content type and the configured `headers`.
-- The body is a JSON object whose `logs` array holds the raw `LogEntry` objects. It is not the flattened JSON line the console prints, but it follows the JSON formatter's rules, so a `bigint` becomes its decimal string and a circular reference becomes a marker.
+- The body is a JSON object whose `logs` array holds the raw `LogEntry` objects. It is not the flattened JSON line the console prints, but it follows the JSON formatter's rules, so a `bigint` becomes its decimal string, a circular reference becomes a marker, and a field whose getter or `toJSON` method throws becomes a marker that names the error.
 - Each entry is serialized once per flush, before the first attempt, so every retry sends the same body.
 - A response outside the success range counts as a failure, like a network error or a timeout.
 - The endpoint must be an `http` or `https` URL. The constructor refuses any other protocol, so a mistyped URL cannot reach a non-HTTP scheme.
@@ -108,8 +108,8 @@ sequenceDiagram
         T-->>Trigger: return
     else otherwise
         T->>T: take every buffered entry and serialize each one
-        opt an entry cannot be serialized
-            T->>Hooks: onError with the error and that entry
+        opt a field of an entry cannot be serialized
+            T->>T: replace that field by a marker and report it on the console
         end
         loop until sent or out of attempts
             T->>C: POST the batch within the timeout
@@ -131,13 +131,13 @@ sequenceDiagram
 
 ## Failures
 
-| Failure                                                               | What is left                                                                                                                                                                              |
-| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Invalid endpoint, managed header or numeric option                    | No transport. The constructor throws an `Error` that names the value.                                                                                                                     |
-| A getter or a `toJSON` method in an entry throws during serialization | That entry is left out of the batch. `onError` receives it alone with the error, and the rest of the batch is sent. Without `onError`, nothing reports the loss.                          |
-| Network error, failed status or timeout                               | A retry after an exponential delay, until attempts run out. The delay stops growing at a fixed cap, so a long run of retries never overflows the timer and fires back to back.            |
-| Every attempt fails                                                   | The batch is gone from the buffer. `onError` receives it with the last error. Without `onError`, nothing reports the loss.                                                                |
-| The buffer is full while a batch is in flight                         | Each new entry drops the oldest one. When the flush settles, `onError` receives a `DroppedEntriesError` with the drop count and no entries. Without `onError`, nothing reports the drops. |
-| `onSuccess` throws                                                    | The batch still counts as sent, and `onError` is not called. A `console.error` line with the `[logger]` prefix reports the throw.                                                         |
-| `onError` throws                                                      | The loss is still reported once. A `console.error` line with the `[logger]` prefix reports the throw, and the flush and dispose promises still resolve.                                   |
-| The process exits without `dispose`                                   | The entries still in the buffer are lost.                                                                                                                                                 |
+| Failure                                                               | What is left                                                                                                                                                                                                                           |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Invalid endpoint, managed header or numeric option                    | No transport. The constructor throws an `Error` that names the value.                                                                                                                                                                  |
+| A getter or a `toJSON` method in an entry throws during serialization | The entry is still sent. The field of its object that holds the failing value becomes a marker that names the error, and a `console.error` line lists the replaced fields. `onError` is not called, since the entry reached the batch. |
+| Network error, failed status or timeout                               | A retry after an exponential delay, until attempts run out. The delay stops growing at a fixed cap, so a long run of retries never overflows the timer and fires back to back.                                                         |
+| Every attempt fails                                                   | The batch is gone from the buffer. `onError` receives it with the last error. Without `onError`, nothing reports the loss.                                                                                                             |
+| The buffer is full while a batch is in flight                         | Each new entry drops the oldest one. When the flush settles, `onError` receives a `DroppedEntriesError` with the drop count and no entries. Without `onError`, nothing reports the drops.                                              |
+| `onSuccess` throws                                                    | The batch still counts as sent, and `onError` is not called. A `console.error` line with the `[logger]` prefix reports the throw.                                                                                                      |
+| `onError` throws                                                      | The loss is still reported once. A `console.error` line with the `[logger]` prefix reports the throw, and the flush and dispose promises still resolve.                                                                                |
+| The process exits without `dispose`                                   | The entries still in the buffer are lost.                                                                                                                                                                                              |
