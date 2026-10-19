@@ -6,15 +6,29 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { parseLocation } from '@/utils/location.js'
 
-import { createMockError, MOCK_STACKS } from '../test-setup.js'
+import {
+	createConsoleMocks,
+	createMockError,
+	MOCK_STACKS,
+	restoreConsoleMocks,
+} from '../test-setup.js'
+
+import type { ConsoleMocks } from '../test-setup.js'
+
+// The stubs below replace the global Error, so they throw this one
+const RealError = Error
 
 describe('parseLocation', () => {
+	let consoleMocks: ConsoleMocks
+
 	beforeEach(() => {
 		vi.clearAllMocks()
+		consoleMocks = createConsoleMocks()
 	})
 
 	afterEach(() => {
 		vi.unstubAllGlobals()
+		restoreConsoleMocks(consoleMocks)
 	})
 
 	it('should parse location in development mode', () => {
@@ -155,17 +169,23 @@ describe('parseLocation', () => {
 		vi.stubGlobal(
 			'Error',
 			vi.fn().mockImplementation(() => {
-				throw new Error('Error constructor failed')
+				throw new RealError('Error constructor failed')
 			}),
 		)
 
 		const location = parseLocation(false)
+		vi.unstubAllGlobals()
 
 		expect(location).toEqual({
 			function: 'unknown',
 			file: 'unknown',
 			line: 0,
 		})
+		expect(consoleMocks.warn).toHaveBeenCalledWith(
+			expect.stringMatching(
+				/^\[logger\] stack trace parsing failed: .*Error constructor failed$/,
+			),
+		)
 	})
 
 	it('should handle file path with no separators', () => {
@@ -191,15 +211,21 @@ describe('parseLocation', () => {
 		vi.stubGlobal(
 			'Error',
 			vi.fn().mockImplementation(() => {
-				throw new Error('Stack parsing failed')
+				throw new RealError('Stack parsing failed')
 			}),
 		)
 
 		const location = parseLocation(true) // production mode
+		vi.unstubAllGlobals()
 
 		expect(location).toEqual({
 			function: 'unknown',
 		})
+		expect(consoleMocks.warn).toHaveBeenCalledWith(
+			expect.stringMatching(
+				/^\[logger\] stack trace parsing failed: .*Stack parsing failed$/,
+			),
+		)
 	})
 
 	describe('ReDoS Prevention', () => {
