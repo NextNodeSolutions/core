@@ -65,16 +65,15 @@ export const fail = <E>(error: E): { success: false; error: E } => ({
 	error,
 })
 
+type EmailErrorOptions = Pick<EmailError, 'provider' | 'originalError'>
+
 /**
  * Create an EmailError object
  */
 export const emailError = (
 	code: EmailErrorCode,
 	message: string,
-	options?: {
-		provider?: string
-		originalError?: unknown
-	},
+	options?: EmailErrorOptions,
 ): EmailError => ({
 	code,
 	message,
@@ -87,9 +86,6 @@ export const emailError = (
 export const emailFail = (
 	code: EmailErrorCode,
 	message: string,
-	options?: {
-		provider?: string
-		originalError?: unknown
-	},
+	options?: EmailErrorOptions,
 ): { success: false; error: EmailError } =>
 	fail(emailError(code, message, options))

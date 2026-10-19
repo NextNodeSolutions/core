@@ -12,6 +12,7 @@ import type { Attachment, CreateEmailOptions, Resend } from 'resend'
 import type { EmailMessage } from '../types/email.js'
 import type { EmailProvider } from '../types/provider.js'
 import type { EmailError, SendResult } from '../types/result.js'
+import type { ProviderUtils } from './base.js'
 
 const HTTP_VALIDATION_ERROR = 422
 const HTTP_UNAUTHORIZED = 401
@@ -126,8 +127,6 @@ const mapOptionalMetadata = (
 				: message.scheduledAt,
 	}),
 })
-
-type ProviderUtils = ReturnType<typeof createProviderUtils>
 
 /**
  * Map optional recipients (cc, bcc, replyTo)
