@@ -22,7 +22,6 @@ These rules cover the email library, where an email manager renders React Email 
 
 - **Build the workspace dependencies before running type-check, lint or test.** They resolve `@nextnode-solutions/logger` from its built output and fail with "Cannot find module" without it. `type-check` is not a turbo task, so nothing builds it for you.
 - **Check the returned `error` field of every Resend SDK call, not only `catch`.** The SDK returns API and network errors as values, so a call that resolves can still have failed.
-- **The provider registry's dispatch on the name does not narrow the provider config.** Once `ProviderConfigMap` has several entries, the config is a union in every branch. Narrow it with a type guard, because the shared lint config forbids `as`.
 - **The renderer calls the template as a plain function, not as a React component.** A hook in a template's own body throws and becomes `TEMPLATE_ERROR`, so test templates must keep hooks in nested components.
 - **The manager copies the outgoing message field by field.** A new message field that the manager does not copy never reaches a provider, and no type error warns you.
 
@@ -36,7 +35,7 @@ These rules cover the email library, where an email manager renders React Email 
     - Classify both returned and thrown SDK errors into `EmailErrorCode` values with ordered rules, falling back to `PROVIDER_ERROR`.
     - On success return the provider's message ID, the provider name and the send time. Log no success entry, because the manager logs the outcome of every send.
     - Implement `validateConfig` with one cheap authenticated read that resolves `false` on any failure.
-4. In the provider registry, add a setup routine for the name. It throws when required config is missing, loads the SDK with a dynamic import, throws an install hint when that import fails and builds the client once.
+4. In the provider registry, write a setup routine for the name and add it to the table of setups. The table is typed from `ProviderConfigMap`, so type-check fails until the routine is there, and each routine receives its own provider's config. The routine throws when required config is missing, loads the SDK with a dynamic import, throws an install hint when that import fails and builds the client once.
 5. Export the config type from the package entry point. Keep the adapter factory internal, because callers reach providers through `createProvider` and `createEmailManager`.
 6. Add a test suite for the adapter modeled on the Resend one. Cover payload mapping, error mapping, validation, `validateConfig` and the registry's setup errors.
 7. Add `docs/providers/NAME.md` describing how messages and errors cross that provider's boundary.

@@ -43,8 +43,6 @@ sequenceDiagram
         A->>SDK: emails.send with the mapped payload
         alt SDK returns an error object
             A-->>M: failure, code classified from the error message
-        else SDK returns neither data nor error
-            A-->>M: PROVIDER_ERROR result
         else SDK throws
             A-->>M: failure, code classified from the thrown error
         else SDK returns data

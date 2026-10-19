@@ -24,7 +24,7 @@ async function initResend(
 	config: ResendProviderConfig,
 	logger: Logger,
 ): Promise<EmailProvider> {
-	if (!config.apiKey?.trim().length) {
+	if (!config.apiKey.trim()) {
 		throw new Error('Resend API key is required and cannot be empty')
 	}
 
@@ -36,6 +36,17 @@ async function initResend(
 
 	const client = new resendModule.Resend(config.apiKey)
 	return createResendProvider(client, logger)
+}
+
+type ProviderSetups = {
+	[K in keyof ProviderConfigMap]: (
+		config: ProviderConfigMap[K],
+		logger: Logger,
+	) => Promise<EmailProvider>
+}
+
+const PROVIDER_SETUPS: ProviderSetups = {
+	resend: initResend,
 }
 
 /**
@@ -56,19 +67,12 @@ export async function createProvider<K extends keyof ProviderConfigMap>(
 	name: K,
 	config: ProviderConfigMap[K],
 	logger?: Logger,
-): Promise<EmailProvider>
-export async function createProvider(
-	name: keyof ProviderConfigMap,
-	config: ProviderConfigMap[keyof ProviderConfigMap],
-	logger?: Logger,
 ): Promise<EmailProvider> {
+	if (!Object.hasOwn(PROVIDER_SETUPS, name)) {
+		throw new Error(`Unknown provider: ${name}`)
+	}
+
 	// Business rule: silent by default - caller opts into logging by injecting a logger
 	const resolvedLogger = logger ?? createLogger({ silent: true })
-
-	switch (name) {
-		case 'resend':
-			return initResend(config, resolvedLogger)
-		default:
-			throw new Error(`Unknown provider: ${String(name)}`)
-	}
+	return PROVIDER_SETUPS[name](config, resolvedLogger)
 }

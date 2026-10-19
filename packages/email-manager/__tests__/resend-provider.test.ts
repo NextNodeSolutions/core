@@ -225,7 +225,6 @@ describe('Resend Provider', () => {
 			expect(sendResult.success).toBe(false)
 			if (!sendResult.success) {
 				expect(sendResult.error.code).toBe('PROVIDER_ERROR')
-				expect(sendResult.error.message).toContain('No data')
 			}
 		})
 	})

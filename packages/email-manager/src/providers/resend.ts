@@ -197,15 +197,6 @@ const sendViaResend = async (
 			return fail(mapResendError(new Error(error.message)))
 		}
 
-		if (!data) {
-			logger.error('No data returned from Resend')
-			return fail({
-				code: 'PROVIDER_ERROR',
-				message: 'No data returned from Resend',
-				provider: 'resend',
-			})
-		}
-
 		return {
 			success: true,
 			data: { id: data.id, provider: 'resend', sentAt: new Date() },
