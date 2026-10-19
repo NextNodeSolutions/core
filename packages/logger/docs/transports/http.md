@@ -79,7 +79,7 @@ stateDiagram-v2
         Lost --> [*]
     }
     Flushing --> Collecting: the batch is settled
-    Collecting --> Disposed: dispose stops the timer and flushes
+    Collecting --> Disposed: dispose stops the timer, waits for a running flush, then flushes
     state "Disposed, timer stopped" as Disposed
     note right of Disposed
         Entries logged after dispose are still buffered,
@@ -88,7 +88,7 @@ stateDiagram-v2
     Disposed --> [*]
 ```
 
-`log` only appends to the buffer, so a log call never waits for the network. A flush takes every buffered entry at once. Entries logged during a flush wait for the next one, and a flush requested while another runs is skipped.
+`log` only appends to the buffer, so a log call never waits for the network. A flush takes every buffered entry at once. Entries logged during a flush wait for the next one, and a flush requested while another runs is skipped. `dispose` does not skip: it waits for the running flush, then flushes what is left, so no entry buffered before the call stays behind. Calling `dispose` again, or twice at once, sends nothing twice, and each call resolves once the last flush settles.
 
 The buffer holds at most `maxBufferSize` entries, so a slow collector cannot make it grow without bound. A flush that starts empties the buffer, so the limit is only reached while a batch is in flight. Each entry logged past the limit then drops the oldest one, and the newest entries survive. The transport counts the drops and reports them once, when the flush settles: `onError` receives a `DroppedEntriesError` that carries the count, with an empty entry list. The dropped entries themselves are not kept, because holding them until the report would let memory grow again. Without `onError`, nothing reports the drops, as with every other loss.
 

@@ -149,7 +149,7 @@ export class HttpTransport implements Transport {
 
 	private buffer: LogEntry[] = []
 	private flushTimer: ReturnType<typeof setTimeout> | null = null
-	private isFlushing = false
+	private inFlightFlush: Promise<void> | undefined
 	private droppedCount = 0
 
 	constructor(config: HttpTransportConfig) {
@@ -185,18 +185,18 @@ export class HttpTransport implements Transport {
 	}
 
 	async flush(): Promise<void> {
-		if (this.isFlushing || !this.buffer.length) {
+		if (this.inFlightFlush || !this.buffer.length) {
 			return
 		}
 
-		this.isFlushing = true
 		const batch = this.serializeBatch(this.buffer)
 		this.buffer = []
+		this.inFlightFlush = this.deliver(batch)
 
 		try {
-			await this.deliver(batch)
+			await this.inFlightFlush
 		} finally {
-			this.isFlushing = false
+			this.inFlightFlush = undefined
 		}
 
 		this.reportDrops()
@@ -204,6 +204,13 @@ export class HttpTransport implements Transport {
 
 	async dispose(): Promise<void> {
 		this.stopFlushTimer()
+
+		// A flush requested while another runs is skipped, so the final one
+		// starts only once no flush is in flight.
+		while (this.inFlightFlush) {
+			await this.inFlightFlush
+		}
+
 		await this.flush()
 	}
 
