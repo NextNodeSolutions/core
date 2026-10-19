@@ -8,7 +8,7 @@ import { stringifyJson } from '../utils/serialization.js'
 import {
 	validateEndpoint,
 	validateHeaders,
-	validateMaxRetries,
+	validateIntegerOption,
 } from './http-validation.js'
 
 import type { LogEntry, Transport } from '../types.js'
@@ -25,13 +25,14 @@ export interface HttpTransportConfig {
 	headers?: Record<string, string>
 
 	/**
-	 * Number of logs to batch before sending.
+	 * Number of logs to batch before sending. Must be a positive integer.
 	 * Defaults to 10.
 	 */
 	batchSize?: number
 
 	/**
-	 * Maximum time (in ms) to wait before flushing the buffer.
+	 * Maximum time (in ms) to wait before flushing the buffer. Must be an
+	 * integer from 1 to the longest timer delay, 2147483647.
 	 * Defaults to 5000 (5 seconds).
 	 */
 	flushInterval?: number
@@ -49,7 +50,8 @@ export interface HttpTransportConfig {
 	onSuccess?: (count: number) => void
 
 	/**
-	 * Request timeout in milliseconds.
+	 * Request timeout in milliseconds. Must be an integer from 1 to the longest
+	 * timer delay, 2147483647.
 	 * Defaults to 10000 (10 seconds).
 	 */
 	timeout?: number
@@ -111,7 +113,10 @@ export class HttpTransport implements Transport {
 		// Validate configuration before storing
 		validateEndpoint(config.endpoint)
 		validateHeaders(config.headers)
-		validateMaxRetries(config.maxRetries)
+		validateIntegerOption('batchSize', config.batchSize)
+		validateIntegerOption('flushInterval', config.flushInterval)
+		validateIntegerOption('timeout', config.timeout)
+		validateIntegerOption('maxRetries', config.maxRetries)
 
 		this.config = resolveConfig(config)
 

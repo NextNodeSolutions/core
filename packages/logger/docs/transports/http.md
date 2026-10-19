@@ -43,6 +43,8 @@ await logger.dispose()
 | `onError`       | Receives the error and the entries of a batch that could not be sent. |
 | `onSuccess`     | Receives the number of entries in a batch that was sent.              |
 
+The constructor checks every numeric option it is given. `batchSize` must be a positive integer and `maxRetries` a non-negative integer. `flushInterval` and `timeout` are milliseconds, so each must be a positive integer no longer than the longest delay a timer accepts. A longer delay would overflow, and the timer would fire almost at once.
+
 ## What crosses the boundary
 
 - Each batch is one `POST` to `endpoint`, with a JSON content type and the configured `headers`.
@@ -118,7 +120,7 @@ sequenceDiagram
 
 | Failure                                                               | What is left                                                                                                                                                     |
 | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Invalid endpoint, managed header or `maxRetries`                      | No transport. The constructor throws an `Error` that names the value.                                                                                            |
+| Invalid endpoint, managed header or numeric option                    | No transport. The constructor throws an `Error` that names the value.                                                                                            |
 | A getter or a `toJSON` method in an entry throws during serialization | That entry is left out of the batch. `onError` receives it alone with the error, and the rest of the batch is sent. Without `onError`, nothing reports the loss. |
 | Network error, failed status or timeout                               | A retry after an exponential delay, until attempts run out.                                                                                                      |
 | Every attempt fails                                                   | The batch is gone from the buffer. `onError` receives it with the last error. Without `onError`, nothing reports the loss.                                       |
