@@ -95,6 +95,8 @@ export function buildOutputs(
 				PLANETSCALE_MIGRATOR_REF,
 			),
 		)
+	}
+	if (derived.hasHyperdrive) {
 		output['hyperdrive_config_id'] = {
 			value: '${cloudflare_hyperdrive_config.planetscale.id}',
 		}
