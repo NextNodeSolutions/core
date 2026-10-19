@@ -27,25 +27,27 @@ type FormatOption = ConsoleFormat | 'auto'
 
 export interface ConsoleTransportConfig {
 	/**
-	 * Force a specific environment format.
-	 * If not specified, auto-detects based on NODE_ENV.
+	 * Environment whose output rules apply. 'production' always outputs JSON.
+	 * The transport never reads NODE_ENV, so an omitted value follows the
+	 * development rules.
 	 */
-	environment?: Environment
+	environment?: Environment | undefined
 
 	/**
 	 * Force output format regardless of runtime.
+	 * Ignored when `environment` is 'production', which always outputs JSON.
 	 * - 'auto': Detect runtime and use appropriate format (default)
-	 * - 'node': Always use ANSI colors (for Node.js terminals)
-	 * - 'browser': Always use CSS styling (for DevTools)
-	 * - 'json': Always output JSON (for log aggregation)
+	 * - 'node': Use ANSI colors (for Node.js terminals)
+	 * - 'browser': Use CSS styling (for DevTools)
+	 * - 'json': Output JSON (for log aggregation)
 	 */
-	format?: FormatOption
+	format?: FormatOption | undefined
 
 	/**
 	 * Override the default writer for one or more formats.
 	 * Useful for testing or routing output through a different channel.
 	 */
-	writers?: Partial<Record<ConsoleFormat, ConsoleWriter>>
+	writers?: Partial<Record<ConsoleFormat, ConsoleWriter>> | undefined
 }
 
 export class ConsoleTransport implements Transport {
@@ -71,7 +73,7 @@ export class ConsoleTransport implements Transport {
 	private resolveFormat(): ConsoleFormat {
 		const requested: FormatOption = this.config.format ?? 'auto'
 
-		// Production always emits JSON unless a specific format is forced
+		// Production always emits JSON, even when another format is forced
 		if (this.config.environment === 'production' && requested !== 'json') {
 			return 'json'
 		}

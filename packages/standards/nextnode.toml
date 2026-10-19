@@ -3,9 +3,8 @@ name = "standards"
 type = "package"
 filter = "@nextnode-solutions/standards"
 
-[scripts]
-test = false
-
 [package]
 access = "public"
-canary_on_label = true
+
+[scripts]
+build = false

@@ -34,10 +34,6 @@ export function readJsonRecordEnv(name: string): Record<string, string> {
 	return parsedRecord.output
 }
 
-export function requireB64Env(name: string): string {
-	return Buffer.from(requireEnv(name), 'base64').toString('utf8')
-}
-
 export interface GithubRepository {
 	readonly owner: string
 	readonly name: string
@@ -55,27 +51,9 @@ export function requireGithubRepository(): GithubRepository {
 }
 
 // Unix env-var idiom: a variable is opt-in by presence, not by "true/false".
-// Set TEARDOWN_WITH_VOLUMES=1 (or anything non-empty) to enable; leave it
-// unset to disable. Same convention as CI, DEBUG, FORCE_COLOR.
+// Any non-empty value enables it, as with TEARDOWN_WIPE_DATA=1; unset disables
+// it. Same convention as CI, DEBUG, FORCE_COLOR.
 export function isEnvSet(name: string): boolean {
 	const raw = process.env[name]
 	return Boolean(raw)
-}
-
-export function getEnumEnv<T extends string>(
-	name: string,
-	allowed: readonly T[],
-	defaultValue: T,
-): T {
-	const raw = process.env[name]
-	if (!raw) {
-		return defaultValue
-	}
-	const match = allowed.find(candidate => candidate === raw)
-	if (typeof match === 'undefined') {
-		throw new Error(
-			`Invalid ${name} "${raw}" - expected one of: ${allowed.join(', ')}`,
-		)
-	}
-	return match
 }

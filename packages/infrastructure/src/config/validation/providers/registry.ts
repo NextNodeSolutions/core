@@ -6,27 +6,31 @@ import type {
 	WorkerServiceConfig,
 } from '#/config/types.ts'
 
-export interface DeployProviderResult {
+export interface DeployProviderResult<
+	K extends DeployTargetType = DeployTargetType,
+> {
 	readonly errors: string[]
-	readonly deploy: DeploySection | undefined
+	readonly deploy: Extract<DeploySection, { readonly target: K }> | undefined
 }
 export interface ParsedDeployInputs {
 	readonly workerServices: Record<string, WorkerServiceConfig>
 	readonly domain: string | undefined
 }
 
-export interface DeployProviderValidator {
+export interface DeployProviderValidator<
+	K extends DeployTargetType = DeployTargetType,
+> {
 	readonly requiresDomain: boolean
 	readonly requiresServices: boolean
 	validate(
 		deployRecord: Record<string, unknown>,
 		inputs: ParsedDeployInputs,
-	): DeployProviderResult
+	): DeployProviderResult<K>
 }
 
-export const DEPLOY_PROVIDER_VALIDATORS: Record<
-	DeployTargetType,
-	DeployProviderValidator
-> = {
+// A provider can only return a section of the target it is registered under.
+export const DEPLOY_PROVIDER_VALIDATORS: {
+	readonly [K in DeployTargetType]: DeployProviderValidator<K>
+} = {
 	'cloudflare-workers': cloudflareWorkers,
 }

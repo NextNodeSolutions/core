@@ -29,6 +29,10 @@ Paths inside the file, such as a Worker's `entry` or `assets`, resolve against t
 
 Its presence marks a package that the publish workflow releases. Only core's own packages use it, because that workflow publishes nothing for another repository.
 
+### `[deploy]`
+
+`target` names the platform the project deploys to. Without it, the project's type picks its default target, so most projects leave it out. A value the pipeline does not implement fails validation with the list of accepted targets. The table also holds the Worker and cron tables below.
+
 ### `[deploy.services.NAME]`
 
 Each table declares one Worker. `NAME` is kebab-case and becomes part of the Worker's script name.

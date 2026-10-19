@@ -90,7 +90,7 @@ The generated configuration follows these rules:
 
 ## Health checks
 
-After every Worker is deployed, the CLI requests `/healthz` on each public routed Worker. The app must answer it with a success status. The CLI retries within a time budget, because a new custom domain needs DNS and an edge certificate before it answers. A Worker that never answers fails the job, with the last status and body in the log, while the new code stays live.
+After every Worker is deployed, the CLI requests `/healthz` on each public routed Worker. The app must answer it with a success status. The CLI retries within a time budget, because a new custom domain needs DNS and an edge certificate before it answers. Each attempt has its own time limit, so a request that never completes counts as a failed attempt. A Worker that never answers fails the job, with the last status and body in the log, while the new code stays live.
 
 Internal Workers are not checked, because CI has no Access login. Check their login redirect by hand after a change to Access.
 

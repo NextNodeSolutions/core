@@ -14,13 +14,25 @@ import type {
 } from '../types/email.js'
 import type { EmailError, Result } from '../types/result.js'
 
+type ResolvedRenderOptions = {
+	[K in keyof TemplateRenderOptions]-?: NonNullable<TemplateRenderOptions[K]>
+}
+
 /**
  * Default render options
  */
-const DEFAULT_OPTIONS: Required<TemplateRenderOptions> = {
+const DEFAULT_OPTIONS: ResolvedRenderOptions = {
 	plainText: true,
 	pretty: false,
 }
+
+// An option passed as undefined takes its default, as an omitted one does.
+const resolveOptions = (
+	options: TemplateRenderOptions,
+): ResolvedRenderOptions => ({
+	plainText: options.plainText ?? DEFAULT_OPTIONS.plainText,
+	pretty: options.pretty ?? DEFAULT_OPTIONS.pretty,
+})
 
 /**
  * Render a React Email template to HTML and optionally plain text (FR-11)
@@ -38,18 +50,14 @@ export async function renderTemplate<TProps>(
 	props: TProps,
 	options: TemplateRenderOptions = {},
 ): Promise<Result<RenderedTemplate, EmailError>> {
-	const config = { ...DEFAULT_OPTIONS, ...options }
+	const config = resolveOptions(options)
 
 	try {
 		// Create React element from the template component (FR-13)
 		const element = template(props)
 
 		// Render to HTML using @react-email/render (FR-14)
-		const html = await render(element, {
-			...(typeof config.pretty !== 'undefined' && {
-				pretty: config.pretty,
-			}),
-		})
+		const html = await render(element, { pretty: config.pretty })
 
 		// Optionally generate plain text version
 		let text: string | undefined

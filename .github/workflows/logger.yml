@@ -13,4 +13,3 @@ jobs:
         uses: ./.github/workflows/publish-package.yml
         with:
             config_file: packages/logger/nextnode.toml
-        secrets: inherit

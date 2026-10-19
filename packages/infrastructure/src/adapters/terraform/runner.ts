@@ -1,12 +1,12 @@
-import { execFile } from 'node:child_process'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
+import { execBounded } from '#/adapters/process/exec.ts'
 import { isRecord } from '#/kernel/guards.ts'
 import { parseJsonOrThrow } from '#/kernel/json.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
-import type { ExecFileException } from 'node:child_process'
+import type { ExecResult } from '#/adapters/process/exec.ts'
 import type { TerraformMainConfig } from '#/domain/cloudflare/workers/terraform-main-config.ts'
 import type { InfraPlan } from '#/domain/deploy/target.ts'
 
@@ -17,11 +17,11 @@ const MS_PER_SECOND = 1_000
 // A `terraform apply` against Cloudflare can run for minutes (15 min); the bound
 // only exists to kill a genuinely hung process (held lock, unreachable provider
 // API) rather than block the CI job forever.
-export const TERRAFORM_TIMEOUT_MS = 900_000
+const TERRAFORM_TIMEOUT_MS = 900_000
 
 // Bounded wait for the HCP state lock. Terraform blocks up to this long for a
 // concurrent run to release the lock before failing instead of erroring at once.
-export const TERRAFORM_LOCK_TIMEOUT = '5m'
+const TERRAFORM_LOCK_TIMEOUT = '5m'
 
 const TERRAFORM_MAX_BUFFER_BYTES = 67_108_864
 const TERRAFORM_CONFIG_FILENAME = 'main.tf.json'
@@ -37,12 +37,6 @@ const STATE_LOCK_NOT_FOUND_FINGERPRINT = 'resource not found'
 // and 2 carry the human-readable plan on stdout.
 const TERRAFORM_PLAN_NO_CHANGES_EXIT = 0
 const TERRAFORM_PLAN_CHANGES_EXIT = 2
-
-export interface ExecResult {
-	readonly exitCode: number
-	readonly stdout: string
-	readonly stderr: string
-}
 
 export interface TerraformRunnerOptions {
 	readonly cwd?: string
@@ -61,34 +55,12 @@ function timeoutMessage(args: ReadonlyArray<string>): string {
 }
 
 export const defaultTerraformRunner: TerraformRunner = (args, options) =>
-	new Promise<ExecResult>((resolve, reject) => {
-		execFile(
-			'terraform',
-			[...args],
-			{
-				cwd: options?.cwd,
-				env: { ...process.env, ...options?.env },
-				encoding: 'utf8',
-				maxBuffer: TERRAFORM_MAX_BUFFER_BYTES,
-				timeout: TERRAFORM_TIMEOUT_MS,
-				killSignal: 'SIGKILL',
-			},
-			(error: ExecFileException | null, stdout, stderr) => {
-				if (error === null) {
-					resolve({ exitCode: 0, stdout, stderr })
-					return
-				}
-				if (error.killed === true) {
-					reject(new Error(timeoutMessage(args)))
-					return
-				}
-				if (typeof error.code !== 'number') {
-					reject(error)
-					return
-				}
-				resolve({ exitCode: error.code, stdout, stderr })
-			},
-		)
+	execBounded('terraform', args, {
+		cwd: options?.cwd,
+		env: { ...process.env, ...options?.env },
+		maxBufferBytes: TERRAFORM_MAX_BUFFER_BYTES,
+		timeoutMs: TERRAFORM_TIMEOUT_MS,
+		timeoutMessage: timeoutMessage(args),
 	})
 
 /**

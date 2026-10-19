@@ -65,14 +65,17 @@ export class NextNodeLogger implements Logger {
 			defaultScope: this.scope,
 			prefix: this.prefix,
 			includeLocation: this.includeLocation,
+			entryPoint: this[level],
 		})
 
 		for (const transport of this.transports) {
 			try {
 				void transport.log(entry)
 			} catch (error) {
+				// Business rule: a failing transport must neither throw into the
+				// caller nor keep the entry from the other transports.
 				console.error(
-					`[NextNodeLogger] Transport failed: ${error instanceof Error ? error.message : String(error)}`,
+					`[logger] transport failed: ${error instanceof Error ? error.message : String(error)}`,
 				)
 			}
 		}

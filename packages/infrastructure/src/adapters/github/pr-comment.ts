@@ -1,6 +1,7 @@
 import { defaultGhRunner } from './gh-runner.ts'
 
-import type { ExecResult, GhRunner } from './gh-runner.ts'
+import type { ExecResult } from '#/adapters/process/exec.ts'
+import type { GhRunner } from './gh-runner.ts'
 
 // GitHub repo a comment is posted to. Local to the adapter so it stays
 // decoupled from cli/ (layering); structurally the caller's GithubRepository.

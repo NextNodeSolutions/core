@@ -17,7 +17,7 @@ import {
 import { buildInfraPlanReport } from '#/domain/deploy/infra-plan-report.ts'
 import { resolveEnvironment } from '#/domain/environment.ts'
 
-import { createCloudflareWorkersTarget } from './create-cloudflare-workers-target.ts'
+import { TARGET_DEFINITIONS } from './registry.ts'
 
 import type { DeployableConfig } from '#/config/types.ts'
 import type { InfraPlan } from '#/domain/deploy/target.ts'
@@ -69,7 +69,9 @@ export async function planInfraCommand(
 		config.project.type,
 		getEnv('PIPELINE_ENVIRONMENT'),
 	)
-	const target = createCloudflareWorkersTarget(config, environment)
+	const target = TARGET_DEFINITIONS[config.deploy.target].build(config, {
+		environment,
+	})
 	const plan = await target.planDiff()
 	const report = buildInfraPlanReport({
 		projectName: config.project.name,

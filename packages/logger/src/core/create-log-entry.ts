@@ -8,6 +8,7 @@ import { extractScope } from '../utils/scope.js'
 import { getCurrentTimestamp } from '../utils/time.js'
 
 import type { LogEntry, LogLevel, LogObject } from '../types.js'
+import type { StackEntryPoint } from '../utils/location.js'
 
 export interface CreateLogEntryOptions {
 	readonly level: LogLevel
@@ -17,6 +18,11 @@ export interface CreateLogEntryOptions {
 	readonly defaultScope?: string | undefined
 	readonly prefix?: string | undefined
 	readonly includeLocation?: boolean | undefined
+	/**
+	 * The level method the caller invoked. The location is the code that
+	 * called it.
+	 */
+	readonly entryPoint: StackEntryPoint
 }
 
 /**
@@ -34,6 +40,7 @@ export const createLogEntry = (options: CreateLogEntryOptions): LogEntry => {
 		defaultScope,
 		prefix,
 		includeLocation = true,
+		entryPoint,
 	} = options
 
 	const {
@@ -48,7 +55,7 @@ export const createLogEntry = (options: CreateLogEntryOptions): LogEntry => {
 		level,
 		message: finalMessage,
 		timestamp: getCurrentTimestamp(),
-		location: includeLocation ? parseLocation(false) : parseLocation(true),
+		location: parseLocation(!includeLocation, entryPoint),
 		requestId: perCallRequestId ?? defaultRequestId,
 		scope: perCallScope ?? defaultScope,
 		object: cleanObject,

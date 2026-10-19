@@ -39,7 +39,7 @@ function planetscaleCredentials(
 	}
 }
 
-export function createCloudflareWorkersTarget(
+function createCloudflareWorkersTarget(
 	config: CloudflareWorkersDeployableConfig,
 	environment: AppEnvironment,
 ): CloudflareWorkersTarget {

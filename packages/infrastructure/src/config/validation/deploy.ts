@@ -13,14 +13,20 @@ import { DEPLOY_PROVIDER_VALIDATORS } from './providers/registry.ts'
 
 import type {
 	DeploySection,
+	DeployTargetType,
 	DeployableProjectType,
 	ProjectSection,
 } from '#/config/types.ts'
 import type { ValidationResult } from './result.ts'
 
-function invalidTargetErrors(rawTarget: unknown): string[] {
-	if (typeof rawTarget === 'undefined' || isDeployTarget(rawTarget)) return []
-	return [`deploy.target must be one of: ${DEPLOY_TARGETS.join(', ')}`]
+function selectTarget(
+	rawTarget: unknown,
+	projectType: DeployableProjectType,
+): DeployTargetType | undefined {
+	if (typeof rawTarget === 'undefined')
+		return DEFAULT_DEPLOY_TARGETS[projectType]
+	if (!isDeployTarget(rawTarget)) return undefined
+	return rawTarget
 }
 
 function removedSecretsErrors(deployRecord: Record<string, unknown>): string[] {
@@ -38,10 +44,14 @@ export function validateDeploySection(
 	const deployRecord = raw ?? {}
 	if (!isRecord(deployRecord))
 		return { ok: false, errors: ['[deploy] must be a table'] }
-	const rawTarget = deployRecord['target']
-	const targetErrors = invalidTargetErrors(rawTarget)
-	if (targetErrors.length) return { ok: false, errors: targetErrors }
-	const target = DEFAULT_DEPLOY_TARGETS[projectType]
+	const target = selectTarget(deployRecord['target'], projectType)
+	if (typeof target === 'undefined')
+		return {
+			ok: false,
+			errors: [
+				`deploy.target must be one of: ${DEPLOY_TARGETS.join(', ')}`,
+			],
+		}
 	const parsed = validateWorkerServices(deployRecord, project)
 	const provider = DEPLOY_PROVIDER_VALIDATORS[target]
 	const validatedProvider = provider.validate(deployRecord, {

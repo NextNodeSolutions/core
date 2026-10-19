@@ -10,6 +10,7 @@ These rules cover the email library, where an email manager renders React Email 
 - **Load a provider SDK only through the registry's dynamic import, and import it in the adapter for types only.** SDKs are optional peers, and a static import would make the package fail to load for every consumer who skipped that SDK.
 - **Declare every package the library imports at runtime as a peer dependency, mirrored in `devDependencies`. Never add `dependencies`.** The host application must own the versions and hold a single copy of React and of each SDK.
 - **Mark a provider SDK optional in `peerDependenciesMeta`. Make a package the library imports statically a required peer.** Consumers then install only the SDKs they use.
+- **Admit in the logger peer range only the logger majors that provide every logger API the library calls.** A consumer on a major the range wrongly admits installs without a warning, and `createEmailManager` then throws.
 - **Take every setting from function arguments. Never read `process.env` or files.** Each host application has its own secret handling. The registry's empty-key check also stops the Resend SDK from falling back to its environment variable.
 - **Default to a silent logger, and hand adapters a `PROVIDER`-scoped child of the manager's logger.** A library must not print into its host's output unless the host asks.
 - **Log message IDs, recipient counts, error codes and error messages only. Never log addresses, subjects, bodies, headers or keys.** Logs leave the process and outlive the email. The manager logs the message of every failure, so never put a secret or an address in an `EmailError` message.
@@ -21,8 +22,7 @@ These rules cover the email library, where an email manager renders React Email 
 ## Traps
 
 - **Build the workspace dependencies before running type-check, lint or test.** They resolve `@nextnode-solutions/logger` from its built output and fail with "Cannot find module" without it. `type-check` is not a turbo task, so nothing builds it for you.
-- **Check the returned `error` field of every Resend SDK call, not only `catch`.** The SDK returns API and network errors as values. The Resend adapter's credentials check ignores that field, which [docs/providers/resend.md](docs/providers/resend.md#check-credentials) describes.
-- **The provider registry's dispatch on the name does not narrow the provider config.** Once `ProviderConfigMap` has several entries, the config is a union in every branch. Narrow it with a type guard, because the shared lint config forbids `as`.
+- **Check the returned `error` field of every Resend SDK call, not only `catch`.** The SDK returns API and network errors as values, so a call that resolves can still have failed.
 - **The renderer calls the template as a plain function, not as a React component.** A hook in a template's own body throws and becomes `TEMPLATE_ERROR`, so test templates must keep hooks in nested components.
 - **The manager copies the outgoing message field by field.** A new message field that the manager does not copy never reaches a provider, and no type error warns you.
 
@@ -33,10 +33,10 @@ These rules cover the email library, where an email manager renders React Email 
 3. Write the adapter beside the existing ones, named after the provider. It receives a built client and a logger and returns an `EmailProvider`.
     - Run the shared message validation first and return its failure unchanged.
     - Map `EmailMessage` to the SDK payload with the shared recipient helpers. Leave absent optional fields out of the payload.
-    - Classify both returned and thrown SDK errors into `EmailErrorCode` values with ordered rules, falling back to `PROVIDER_ERROR`.
-    - On success return the provider's message ID, the provider name and the send time.
+    - Classify both returned and thrown SDK errors into `EmailErrorCode` values with ordered rules, falling back to `PROVIDER_ERROR`. Match a returned error's structured fields, such as its name or HTTP status, before its message text, and keep the value the SDK returned or threw as the original error.
+    - On success return the provider's message ID, the provider name and the send time. Log no success entry, because the manager logs the outcome of every send.
     - Implement `validateConfig` with one cheap authenticated read that resolves `false` on any failure.
-4. In the provider registry, add a setup routine for the name. It throws when required config is missing, loads the SDK with a dynamic import, throws an install hint when that import fails and builds the client once.
+4. In the provider registry, write a setup routine for the name and add it to the table of setups. The table is typed from `ProviderConfigMap`, so type-check fails until the routine is there, and each routine receives its own provider's config. The routine throws when required config is missing, loads the SDK with a dynamic import, throws an install hint when that import fails and builds the client once.
 5. Export the config type from the package entry point. Keep the adapter factory internal, because callers reach providers through `createProvider` and `createEmailManager`.
 6. Add a test suite for the adapter modeled on the Resend one. Cover payload mapping, error mapping, validation, `validateConfig` and the registry's setup errors.
 7. Add `docs/providers/NAME.md` describing how messages and errors cross that provider's boundary.
@@ -44,9 +44,10 @@ These rules cover the email library, where an email manager renders React Email 
 ## Other extensions
 
 - **Add a message field to both `TemplatedEmailMessage` and `EmailMessage`, copy it in the manager and map it in every adapter.** The manager builds the outgoing message explicitly, so each layer must carry the field on.
-- **Add a render option to `TemplateRenderOptions` and give it a default in the template renderer.** The defaults object is typed as the required form of the options, so type-check fails until the default exists.
+- **Add a render option to `TemplateRenderOptions`, then give it a default and resolve it with `??` in the template renderer.** The resolved options type requires every option without undefined, so type-check fails until both exist. A spread would let an option passed as undefined replace its default.
 - **Add an error code to `EmailErrorCode` and produce it from an adapter's rules or the shared validation.** Consumers may switch on that public union exhaustively, so a new member can break their build.
 - **Re-export every new public function or type from the package entry point and show it in the README or a docs page.** Anything not exported there does not exist for consumers.
+- **Declare `| undefined` on every optional property of a public type.** A consumer who enables `exactOptionalPropertyTypes`, as the shared TypeScript config does, cannot otherwise pass a value that may be undefined.
 
 ## Tests
 

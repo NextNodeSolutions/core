@@ -1,3 +1,6 @@
+import { fetchBounded } from '#/adapters/http/fetch.ts'
+import { parseJsonOrThrow } from '#/kernel/json.ts'
+
 import type { WorkflowRun } from '#/domain/pipeline/prod-gate.ts'
 
 export async function fetchWorkflowRuns(
@@ -5,9 +8,11 @@ export async function fetchWorkflowRuns(
 	sha: string,
 	token: string,
 ): Promise<ReadonlyArray<WorkflowRun>> {
-	const response = await fetch(
+	const operation = `GitHub API: list the workflow runs of ${repo} at ${sha}`
+	const response = await fetchBounded(
 		`https://api.github.com/repos/${repo}/actions/runs?head_sha=${sha}&per_page=100`,
 		{
+			operation,
 			headers: {
 				Authorization: `Bearer ${token}`,
 				Accept: 'application/vnd.github+json',
@@ -18,11 +23,11 @@ export async function fetchWorkflowRuns(
 
 	if (!response.ok) {
 		throw new Error(
-			`GitHub API returned ${response.status}: ${await response.text()}`,
+			`GitHub API returned ${response.status}: ${response.body}`,
 		)
 	}
 
-	const responseBody: unknown = await response.json()
+	const responseBody = parseJsonOrThrow(response.body, operation)
 	if (
 		typeof responseBody !== 'object' ||
 		responseBody === null ||

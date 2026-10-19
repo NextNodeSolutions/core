@@ -116,7 +116,7 @@ sequenceDiagram
     end
 ```
 
-A successful send produces two success log entries. The adapter writes one under the `PROVIDER` scope, and the manager writes one under the logger it was given.
+The manager writes the one outcome entry of each send, under the logger it was given. The adapter logs under the `PROVIDER` scope only the request it makes and the raw cause of a failure, before classification.
 
 ### Check credentials
 
@@ -130,16 +130,16 @@ sequenceDiagram
     App->>M: validateConfig
     M->>P: validateConfig
     P->>SDK: one cheap authenticated read
-    alt the call throws
+    alt the SDK returns or throws an error
         P->>P: log the cause
         P-->>M: false
-    else the call returns
+    else the read succeeds
         P-->>M: true
     end
     M-->>App: the same boolean
 ```
 
-Each adapter decides what counts as a failed read. The Resend adapter treats only a thrown error as a failure, which [docs/providers/resend.md](providers/resend.md#check-credentials) explains.
+Each adapter picks the read it makes. [docs/providers/resend.md](providers/resend.md#check-credentials) names the Resend one and what makes it fail.
 
 ## Failure and what is left
 

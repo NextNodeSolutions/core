@@ -21,7 +21,7 @@ import type {
  *
  * @example
  * ```typescript
- * import { createSpyLogger } from '@nextnode/logger/testing'
+ * import { createSpyLogger } from '@nextnode-solutions/logger/testing'
  *
  * describe('MyService', () => {
  *   it('logs when creating a user', () => {
@@ -89,8 +89,19 @@ export const createSpyLogger = (
 			object,
 			defaultRequestId: instanceRequestId,
 			...(parentScope && { defaultScope: parentScope }),
+			entryPoint: levelMethods[level],
 		})
 		calls.push(entry)
+	}
+
+	const levelMethods: Record<
+		LogLevel,
+		(message: string, object?: LogObject) => void
+	> = {
+		debug: (message, object) => log('debug', message, object),
+		info: (message, object) => log('info', message, object),
+		warn: (message, object) => log('warn', message, object),
+		error: (message, object) => log('error', message, object),
 	}
 
 	return {
@@ -98,21 +109,7 @@ export const createSpyLogger = (
 			return calls
 		},
 
-		debug(message: string, object?: LogObject): void {
-			log('debug', message, object)
-		},
-
-		info(message: string, object?: LogObject): void {
-			log('info', message, object)
-		},
-
-		warn(message: string, object?: LogObject): void {
-			log('warn', message, object)
-		},
-
-		error(message: string, object?: LogObject): void {
-			log('error', message, object)
-		},
+		...levelMethods,
 
 		...createSpyQueries(calls),
 
@@ -136,7 +133,7 @@ export const createSpyLogger = (
  *
  * @example
  * ```typescript
- * import { createNoopLogger } from '@nextnode/logger/testing'
+ * import { createNoopLogger } from '@nextnode-solutions/logger/testing'
  *
  * const service = new MyService(createNoopLogger())
  * // Service works normally but produces no log output
@@ -200,7 +197,7 @@ const createMockFn = (): MockFn => {
  *
  * @example
  * ```typescript
- * import { createMockLogger } from '@nextnode/logger/testing'
+ * import { createMockLogger } from '@nextnode-solutions/logger/testing'
  *
  * const mock = createMockLogger()
  * const service = new MyService(mock)

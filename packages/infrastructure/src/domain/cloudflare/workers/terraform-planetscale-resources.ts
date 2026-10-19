@@ -17,11 +17,11 @@ import type { WorkersDerivedResources } from './terraform-resources.ts'
 
 // The single Terraform label both PlanetScale resources use - one branch-role +
 // one Hyperdrive config per project (one Postgres DB, like the single D1).
-export const PLANETSCALE_LABEL = 'planetscale'
+const PLANETSCALE_LABEL = 'planetscale'
 
 // The branch-role attributes the Hyperdrive origin interpolates. Named once so a
 // provider attribute rename is a single edit.
-export const PLANETSCALE_MIGRATOR_LABEL = 'migrator'
+const PLANETSCALE_MIGRATOR_LABEL = 'migrator'
 export const PLANETSCALE_MIGRATOR_REF = `planetscale_postgres_branch_role.${PLANETSCALE_MIGRATOR_LABEL}`
 
 const ROLE_REF = `planetscale_postgres_branch_role.${PLANETSCALE_LABEL}`

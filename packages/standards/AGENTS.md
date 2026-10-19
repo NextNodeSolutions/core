@@ -15,7 +15,6 @@ This package holds the presets that every NextNode project extends and the `next
 
 ## Traps
 
-- **Edit the formatter preset's TypeScript source, never its JavaScript copy, then run `build`.** The export serves the copy, while this package's own formatter config reads the source. A skipped build leaves the package formatting correctly and every consumer formatting with the old options. Git tracks the copy, so commit both.
 - **Expect an enabled but unregistered `nextnode/` rule to break linting everywhere.** oxlint refuses the whole config, and every monorepo package lints nothing until the registry maps the rule.
 - **Expect a registered rule without a severity in the lint preset to stay silent.** oxlint runs a plugin rule only when the config enables it by name.
 - **Write any character that this package's own rules ban as a `\u` escape, in rule modules and fixtures alike.** The package lints itself with its own preset, so a raw em dash or curly quote in a sample fails `lint`.
@@ -23,7 +22,6 @@ This package holds the presets that every NextNode project extends and the `next
 - **Give a fixture case its own sample file names when its rule already has a case, when the rule reads the file name, or when an override glob must match.** Default names derive from the diagnostic code, so two cases of one rule overwrite each other's samples, and an override would not apply to the default name.
 - **Test rules only by linting samples through the lint preset.** A test that imports a rule module skips registration and severity, which are the parts that break.
 - **In a rule case, assert only on that case's rule.** Other rules may fire on the same sample. Only the non-functional suite asserts that a whole module stays clean.
-- **Run the tests locally before pushing.** This package's `nextnode.toml` decides which scripts CI runs, so CI may not run the suite.
 - **Keep the package's own `.lintstagedrc.js`.** lint-staged uses the nearest config and runs its commands from that directory, so staged files here are linted with this package's own oxlint config, which allows default exports in the source.
 
 ## Conventions
@@ -74,7 +72,7 @@ This package holds the presets that every NextNode project extends and the `next
 
 ### Change a preset
 
-1. Edit the preset. For the formatter, edit the TypeScript source and run `build`.
+1. Edit the preset.
 2. Update its declaration file when the exported shape changes.
 3. Update the matching section of the [configuration guide](docs/configuration.md) when the way a project wires the preset changes.
 4. Verify the package, then the monorepo.
@@ -93,7 +91,6 @@ This package holds the presets that every NextNode project extends and the `next
 Run from the repository root:
 
 ```sh
-pnpm --filter @nextnode-solutions/standards build
 pnpm --filter @nextnode-solutions/standards test
 pnpm --filter @nextnode-solutions/standards lint
 pnpm --filter @nextnode-solutions/standards format:check

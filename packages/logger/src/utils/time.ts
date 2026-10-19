@@ -1,6 +1,6 @@
 /**
  * Time utilities for NextNode Logger
- * Zero dependencies, using only Node.js built-in modules
+ * Uses only JavaScript built-ins, so it runs in every runtime
  */
 
 export const getCurrentTimestamp = (): string => new Date().toISOString()

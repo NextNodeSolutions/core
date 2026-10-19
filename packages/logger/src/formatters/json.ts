@@ -3,13 +3,25 @@
  * Produces structured JSON output for production/log aggregation systems
  */
 
+import { stringifyWithFieldFallback } from '../utils/serialization.js'
+
 import type { LogEntry } from '../types.js'
+import type { SerializedJson } from '../utils/serialization.js'
 
 /**
  * Keys that are filtered out during object flattening to prevent
  * prototype pollution attacks.
  */
 const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+
+const BASE_KEYS: ReadonlySet<string> = new Set([
+	'level',
+	'message',
+	'timestamp',
+	'location',
+	'requestId',
+	'scope',
+])
 
 export interface JsonLogOutput {
 	level: string
@@ -35,7 +47,7 @@ export interface JsonLogOutput {
  * prototype-pollution-prone keys, ready to be flattened onto the output.
  */
 const safeObjectEntries = (
-	object: NonNullable<LogEntry['object']>,
+	object: Readonly<Record<string, unknown>>,
 ): Record<string, unknown> => {
 	const safe: Record<string, unknown> = {}
 	for (const [key, fieldValue] of Object.entries(object)) {
@@ -46,9 +58,11 @@ const safeObjectEntries = (
 	return safe
 }
 
-const buildJsonOutput = (entry: LogEntry): JsonLogOutput => {
-	const { level, message, timestamp, location, requestId, scope, object } =
-		entry
+const buildJsonOutput = (
+	entry: LogEntry,
+	object: Readonly<Record<string, unknown>> | undefined,
+): JsonLogOutput => {
+	const { level, message, timestamp, location, requestId, scope } = entry
 
 	const output: JsonLogOutput = {
 		level,
@@ -63,7 +77,13 @@ const buildJsonOutput = (entry: LogEntry): JsonLogOutput => {
 	}
 
 	if (object) {
-		Object.assign(output, safeObjectEntries(object))
+		for (const [key, fieldValue] of Object.entries(
+			safeObjectEntries(object),
+		)) {
+			// A key named like a base field must not replace it, so log stores
+			// keep querying the real level, message, time and location.
+			output[BASE_KEYS.has(key) ? `object.${key}` : key] = fieldValue
+		}
 	}
 
 	return output
@@ -76,11 +96,25 @@ const buildJsonOutput = (entry: LogEntry): JsonLogOutput => {
  * - Produces single-line JSON optimized for log aggregation
  */
 export const formatAsJson = (entry: LogEntry): string =>
-	JSON.stringify(buildJsonOutput(entry))
+	formatJsonLine(entry).json
 
 /**
  * Formats a log entry as pretty-printed JSON.
  * Useful for debugging and development with structured output.
  */
 export const formatAsJsonPretty = (entry: LogEntry): string =>
-	JSON.stringify(buildJsonOutput(entry), null, 2)
+	formatJsonLine(entry, 2).json
+
+/**
+ * Formats a log entry as JSON and lists the fields of its object that were
+ * replaced by a marker because they cannot be serialized.
+ */
+export const formatJsonLine = (
+	entry: LogEntry,
+	indent?: number,
+): SerializedJson =>
+	stringifyWithFieldFallback(
+		entry.object,
+		object => buildJsonOutput(entry, object),
+		indent,
+	)

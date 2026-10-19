@@ -1,14 +1,17 @@
 import { setTimeout as sleep } from 'node:timers/promises'
 
+import { fetchBounded } from '#/adapters/http/fetch.ts'
 import { HTTP_NOT_FOUND } from '#/domain/http/status.ts'
 import { isRecord } from '#/kernel/guards.ts'
+import { parseJsonOrThrow } from '#/kernel/json.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
+import type { HttpResponse } from '#/adapters/http/fetch.ts'
 import type { ResourceOutcome } from '#/domain/deploy/resource-outcome.ts'
 
 const logger = createLogger()
 
-export const PLANETSCALE_API_BASE = 'https://api.planetscale.com/v1'
+const PLANETSCALE_API_BASE = 'https://api.planetscale.com/v1'
 
 // PlanetScale Postgres is the only engine this integration provisions; `kind`
 // selects it (the API value is "postgresql", not "postgres").
@@ -53,13 +56,9 @@ function isReady(body: unknown): boolean {
 	return isRecord(body) && body['ready'] === true
 }
 
-async function throwOnError(
-	response: Response,
-	context: string,
-): Promise<never> {
-	const body = await response.text()
+function throwOnError(response: HttpResponse, context: string): never {
 	throw new Error(
-		`PlanetScale API returned ${String(response.status)} for ${context}: ${body}`,
+		`PlanetScale API returned ${String(response.status)} for ${context}: ${response.body}`,
 	)
 }
 
@@ -70,7 +69,8 @@ async function createDatabase(
 	logger.info(
 		`Creating PlanetScale Postgres database "${database}" in organization "${organization}"`,
 	)
-	const response = await fetch(databasesUrl(organization), {
+	const response = await fetchBounded(databasesUrl(organization), {
+		operation: `PlanetScale API: create database "${database}"`,
 		method: 'POST',
 		headers: planetscaleHeaders(input.serviceTokenId, input.serviceToken),
 		body: JSON.stringify({
@@ -80,9 +80,7 @@ async function createDatabase(
 			...(region && { region }),
 		}),
 	})
-	if (!response.ok) {
-		await throwOnError(response, `create database "${database}"`)
-	}
+	if (!response.ok) throwOnError(response, `create database "${database}"`)
 }
 
 /* eslint-disable no-await-in-loop -- sequential polling is intentional */
@@ -91,18 +89,18 @@ async function waitUntilReady(
 ): Promise<void> {
 	const { organization, database } = input
 	const headers = planetscaleHeaders(input.serviceTokenId, input.serviceToken)
+	const context = `poll database "${database}" readiness`
+	const operation = `PlanetScale API: ${context}`
 	for (let attempt = 1; attempt <= READY_POLL_ATTEMPTS; attempt++) {
-		const response = await fetch(databaseUrl(organization, database), {
-			headers,
-		})
-		if (!response.ok) {
-			await throwOnError(
-				response,
-				`poll database "${database}" readiness`,
-			)
-		}
-		const body: unknown = await response.json()
-		if (isReady(body)) return
+		const response = await fetchBounded(
+			databaseUrl(organization, database),
+			{
+				operation,
+				headers,
+			},
+		)
+		if (!response.ok) throwOnError(response, context)
+		if (isReady(parseJsonOrThrow(response.body, operation))) return
 		await sleep(READY_POLL_INTERVAL_MS)
 	}
 	const timeoutSeconds =
@@ -133,9 +131,13 @@ export async function ensurePlanetscaleDatabase(
 	const headers = planetscaleHeaders(input.serviceTokenId, input.serviceToken)
 	const context = `PlanetScale database "${database}"`
 
-	const getResponse = await fetch(databaseUrl(organization, database), {
-		headers,
-	})
+	const getResponse = await fetchBounded(
+		databaseUrl(organization, database),
+		{
+			operation: `PlanetScale API: read database "${database}"`,
+			headers,
+		},
+	)
 
 	if (getResponse.status === HTTP_NOT_FOUND) {
 		await createDatabase(input)
@@ -144,11 +146,9 @@ export async function ensurePlanetscaleDatabase(
 		return { handled: true, detail: `created "${database}"` }
 	}
 
-	if (!getResponse.ok) {
-		await throwOnError(getResponse, context)
-	}
+	if (!getResponse.ok) throwOnError(getResponse, context)
 
-	if (!isReady(await getResponse.json())) {
+	if (!isReady(parseJsonOrThrow(getResponse.body, context))) {
 		await waitUntilReady(input)
 	}
 	logger.info(`${context} already exists`)

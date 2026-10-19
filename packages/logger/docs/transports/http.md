@@ -9,13 +9,20 @@ import {
 	createConsoleTransport,
 	createLogger,
 } from '@nextnode-solutions/logger'
-import { createHttpTransport } from '@nextnode-solutions/logger/transports/http'
+import {
+	createHttpTransport,
+	DroppedEntriesError,
+} from '@nextnode-solutions/logger/transports/http'
 
 const http = createHttpTransport({
 	endpoint: 'https://logs.example.com/ingest',
 	headers: { Authorization: 'Bearer TOKEN' },
 	onError: (error, entries) => {
-		console.error(`Dropped ${entries.length} log entries: ${error.message}`)
+		const lost =
+			error instanceof DroppedEntriesError
+				? error.droppedCount
+				: entries.length
+		console.error(`Lost ${lost} log entries: ${error.message}`)
 	},
 })
 
@@ -32,21 +39,25 @@ await logger.dispose()
 
 `createHttpTransport` and `new HttpTransport` take an `HttpTransportConfig`. Only `endpoint` is required. The defaults of the other options are documented on `HttpTransportConfig`.
 
-| Option          | Effect                                                                |
-| --------------- | --------------------------------------------------------------------- |
-| `endpoint`      | The URL every batch is posted to.                                     |
-| `headers`       | Extra request headers, such as an authorization token.                |
-| `batchSize`     | A full batch of this many entries is sent at once.                    |
-| `flushInterval` | The buffer is also sent on a timer with this period.                  |
-| `timeout`       | Each request is aborted after this time.                              |
-| `maxRetries`    | The total number of attempts per batch, the first one included.       |
-| `onError`       | Receives the error and the entries of a batch that could not be sent. |
-| `onSuccess`     | Receives the number of entries in a batch that was sent.              |
+| Option          | Effect                                                                                                                                    |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `endpoint`      | The URL every batch is posted to.                                                                                                         |
+| `headers`       | Extra request headers, such as an authorization token.                                                                                    |
+| `batchSize`     | A full batch of this many entries is sent at once.                                                                                        |
+| `flushInterval` | The buffer is also sent on a timer with this period.                                                                                      |
+| `timeout`       | Each request is aborted after this time.                                                                                                  |
+| `maxRetries`    | How many times a failed batch is sent again after its first attempt. Each retry waits twice as long as the one before, up to a fixed cap. |
+| `maxBufferSize` | The buffer holds at most this many entries, then drops the oldest ones.                                                                   |
+| `onError`       | Receives the error and the entries that could not be sent, or a `DroppedEntriesError` that counts the dropped ones.                       |
+| `onSuccess`     | Receives the number of entries in a batch that was sent.                                                                                  |
+
+The constructor checks every numeric option it is given. `batchSize` must be a positive integer and `maxRetries` a non-negative integer. `flushInterval` and `timeout` are milliseconds, so each must be a positive integer no longer than the longest delay a timer accepts. A longer delay would overflow, and the timer would fire almost at once. `maxBufferSize` must be a positive integer no smaller than `batchSize`, so the buffer can always hold a full batch. Without it, the limit is its default or `batchSize`, whichever is larger.
 
 ## What crosses the boundary
 
 - Each batch is one `POST` to `endpoint`, with a JSON content type and the configured `headers`.
-- The body is a JSON object whose `logs` array holds the raw `LogEntry` objects. It is not the flattened JSON line the console prints.
+- The body is a JSON object whose `logs` array holds the raw `LogEntry` objects. It is not the flattened JSON line the console prints, but it follows the JSON formatter's rules, so a `bigint` becomes its decimal string, a circular reference becomes a marker, and a field whose getter or `toJSON` method throws becomes a marker that names the error.
+- Each entry is serialized once per flush, before the first attempt, so every retry sends the same body.
 - A response outside the success range counts as a failure, like a network error or a timeout.
 - The endpoint must be an `http` or `https` URL. The constructor refuses any other protocol, so a mistyped URL cannot reach a non-HTTP scheme.
 - The constructor refuses headers that the HTTP layer manages, such as `Host`, so configuration cannot inject them.
@@ -60,7 +71,7 @@ stateDiagram-v2
     state Flushing {
         [*] --> Attempt
         Attempt --> Backoff: the request fails and attempts remain
-        Backoff --> Attempt: exponential delay
+        Backoff --> Attempt: exponential delay, up to a cap
         Attempt --> Sent: the collector accepts the batch
         Attempt --> Lost: the last attempt fails
         state "Lost, handed to onError" as Lost
@@ -68,7 +79,7 @@ stateDiagram-v2
         Lost --> [*]
     }
     Flushing --> Collecting: the batch is settled
-    Collecting --> Disposed: dispose stops the timer and flushes
+    Collecting --> Disposed: dispose stops the timer, waits for a running flush, then flushes
     state "Disposed, timer stopped" as Disposed
     note right of Disposed
         Entries logged after dispose are still buffered,
@@ -77,7 +88,9 @@ stateDiagram-v2
     Disposed --> [*]
 ```
 
-`log` only appends to the buffer, so a log call never waits for the network. A flush takes every buffered entry at once. Entries logged during a flush wait for the next one, and a flush requested while another runs is skipped. The buffer has no size limit, so a slow collector makes it grow.
+`log` only appends to the buffer, so a log call never waits for the network. A flush takes every buffered entry at once. Entries logged during a flush wait for the next one, and a flush requested while another runs is skipped. `dispose` does not skip: it waits for the running flush, then flushes what is left, so no entry buffered before the call stays behind. Calling `dispose` again, or twice at once, sends nothing twice, and each call resolves once the last flush settles.
+
+The buffer holds at most `maxBufferSize` entries, so a slow collector cannot make it grow without bound. A flush that starts empties the buffer, so the limit is only reached while a batch is in flight. Each entry logged past the limit then drops the oldest one, and the newest entries survive. The transport counts the drops and reports them once, when the flush settles: `onError` receives a `DroppedEntriesError` that carries the count, with an empty entry list. The dropped entries themselves are not kept, because holding them until the report would let memory grow again. Without `onError`, nothing reports the drops, as with every other loss.
 
 The timer does not keep a Node process alive. A process that exits without `dispose` therefore ends on time, but it loses the entries still in the buffer.
 
@@ -94,12 +107,15 @@ sequenceDiagram
     alt a flush is running or the buffer is empty
         T-->>Trigger: return
     else otherwise
-        T->>T: take every buffered entry
+        T->>T: take every buffered entry and serialize each one
+        opt a field of an entry cannot be serialized
+            T->>T: replace that field by a marker and report it on the console
+        end
         loop until sent or out of attempts
             T->>C: POST the batch within the timeout
             C-->>T: response or error
             opt failure and attempts remain
-                T->>T: wait with exponential backoff
+                T->>T: wait with exponential backoff, up to a cap
             end
         end
         alt sent
@@ -107,16 +123,21 @@ sequenceDiagram
         else every attempt failed
             T->>Hooks: onError with the error and the entries
         end
+        opt the full buffer dropped entries during the flush
+            T->>Hooks: onError with a DroppedEntriesError and no entries
+        end
     end
 ```
 
 ## Failures
 
-| Failure                                 | What is left                                                                                                                                                         |
-| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Invalid endpoint or managed header      | No transport. The constructor throws an `Error` that names the value.                                                                                                |
-| Network error, failed status or timeout | A retry after an exponential delay, until attempts run out.                                                                                                          |
-| Every attempt fails                     | The batch is gone from the buffer. `onError` receives it with the last error. Without `onError`, nothing reports the loss.                                           |
-| `onSuccess` throws                      | `onError` receives that error with the entries, although they were sent.                                                                                             |
-| `onError` throws                        | The flush promise rejects. After a timer tick or a full batch, nothing awaits it, so it becomes an unhandled rejection. From `dispose`, the dispose promise rejects. |
-| The process exits without `dispose`     | The entries still in the buffer are lost.                                                                                                                            |
+| Failure                                                               | What is left                                                                                                                                                                                                                           |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Invalid endpoint, managed header or numeric option                    | No transport. The constructor throws an `Error` that names the value.                                                                                                                                                                  |
+| A getter or a `toJSON` method in an entry throws during serialization | The entry is still sent. The field of its object that holds the failing value becomes a marker that names the error, and a `console.error` line lists the replaced fields. `onError` is not called, since the entry reached the batch. |
+| Network error, failed status or timeout                               | A retry after an exponential delay, until attempts run out. The delay stops growing at a fixed cap, so a long run of retries never overflows the timer and fires back to back.                                                         |
+| Every attempt fails                                                   | The batch is gone from the buffer. `onError` receives it with the last error. Without `onError`, nothing reports the loss.                                                                                                             |
+| The buffer is full while a batch is in flight                         | Each new entry drops the oldest one. When the flush settles, `onError` receives a `DroppedEntriesError` with the drop count and no entries. Without `onError`, nothing reports the drops.                                              |
+| `onSuccess` throws                                                    | The batch still counts as sent, and `onError` is not called. A `console.error` line with the `[logger]` prefix reports the throw.                                                                                                      |
+| `onError` throws                                                      | The loss is still reported once. A `console.error` line with the `[logger]` prefix reports the throw, and the flush and dispose promises still resolve.                                                                                |
+| The process exits without `dispose`                                   | The entries still in the buffer are lost.                                                                                                                                                                                              |

@@ -32,7 +32,7 @@ flowchart LR
 
 A `Logger` has one method per level and a `child` method. Each level method takes a message and an optional `LogObject`. Once a logger exists, a log call never throws.
 
-The log object splits in two on its way into the entry. `scope` and `requestId` are lifted onto the entry and win over the logger's own values for that one entry. `details`, `status` and every other key stay together as the entry's `object`. The logger's `prefix` is put in front of the message, separated by a space.
+The log object splits in two on its way into the entry. `scope` and `requestId` are lifted onto the entry and win over the logger's own values for that one entry. `details`, `status` and every other key stay together as the entry's `object`. A key whose getter throws while the object is split takes a marker that names the error as its value, so every format shows it. The logger's `prefix` is put in front of the message, separated by a space.
 
 `child()` returns a new logger that shares the parent's transports. It inherits the environment, the location setting, silence, the prefix, the minimum level and the request id. It can override the scope, the prefix, the minimum level and the request id.
 
@@ -92,12 +92,14 @@ Each level maps to a console method, and each format has a writer that calls its
 
 - The Node formatter returns one ANSI-colored line, then one indented line per key of the entry's object. It serializes values with `safeStringify`, which survives circular references.
 - The browser formatter returns a `%c` format string, the CSS for each part and the objects to inspect. Its writer prints an entry that carries an object as a collapsed group, so DevTools can expand the object.
-- The JSON formatter returns one line. It flattens the keys of the entry's object onto the top level, so a log store can query them. It skips undefined values and keys that could pollute an object prototype.
+- The JSON formatter returns one line. It flattens the keys of the entry's object onto the top level, so a log store can query them. A key named like a base field is written as `object.<key>`, so it never replaces the entry's own level, message, timestamp, location, request id or scope. It skips undefined values and keys that could pollute an object prototype. A `bigint` becomes its decimal string, and a circular reference becomes the marker the Node formatter prints. A field of the object whose getter or `toJSON` method throws becomes a marker that names the error, the rest of the line is kept, and the console transport reports the replaced fields once per line. The HTTP transport serializes its request body with the same rules.
 - The console formatters color the scope from a bounded cache, so a scope keeps its color while the cache holds it.
 
 ### Caller location
 
-Every entry records the function that called the logger. With `includeLocation`, it also records the file name and the line. The logger reads both from `new Error().stack` on every call, even when only the function name is kept. It skips frames from `node_modules` and from its own source files. A call made from one of your files that has the same name as one of the logger's files is skipped as well, and the location then points to the next frame.
+Every entry records the function that called the logger. With `includeLocation`, it also records the file name and the line. The logger captures the stack on every call, even when only the function name is kept. It cuts the stack at the level method you called, with `Error.captureStackTrace`, so none of its own frames remain, whether it runs from source, from its build or from inside your bundle. The location is the first frame left that does not come from `node_modules`. A frame that names no function, such as top-level module code or an anonymous callback, records the function as `anonymous`. A runtime without `Error.captureStackTrace` gets the same cut from the plain stack: the logger finds the first frame named like the level method and keeps the frames below it. The parser reads both frame formats, `at name (file:line:column)` from V8 and `name@file:line:column` from SpiderMonkey and JavaScriptCore, and drops the query or hash a dev server adds to a file URL.
+
+`parseLocation` called directly locates its own caller, from the frame right after its own.
 
 ## Operations
 
@@ -124,6 +126,9 @@ sequenceDiagram
         opt the buffer holds a full batch
             Http-)Http: start a flush without waiting
         end
+        opt a batch is in flight and the buffer is over its limit
+            Http->>Http: drop the oldest entry and count it
+        end
         Logger-->>Caller: return
     end
 ```
@@ -149,16 +154,20 @@ sequenceDiagram
 
 ## What a failure leaves behind
 
-| Failure                                                          | What is left                                                                                                                                                                                          |
-| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A transport throws in `log`                                      | A `console.error` line. The other transports still received the entry. The caller saw nothing.                                                                                                        |
-| A transport's `log` promise rejects                              | An unhandled rejection. The logger never sees it.                                                                                                                                                     |
-| The stack cannot be parsed                                       | An entry whose location is `unknown`, and a `console.warn` line that says why.                                                                                                                        |
-| A value in the object cannot be serialized by the Node formatter | A placeholder that names the error, in place of the value. Circular references become a marker.                                                                                                       |
-| A value in the object cannot be serialized by the JSON formatter | No line for that entry. The JSON formatter calls `JSON.stringify` directly, so a circular reference or a `bigint` makes the console transport throw, and the logger reports it as a failed transport. |
-| Web Crypto is missing and no `requestId` option was given        | No logger. `generateRequestId` throws from the constructor.                                                                                                                                           |
-| A transport's configuration is invalid                           | No transport. Its constructor throws.                                                                                                                                                                 |
-| Every HTTP attempt for a batch fails                             | The batch is gone from the buffer, and `onError` receives it with the error.                                                                                                                          |
+| Failure                                                                      | What is left                                                                                                                                                                                                                                           |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A transport throws in `log`                                                  | A `console.error` line. The other transports still received the entry. The caller saw nothing.                                                                                                                                                         |
+| A transport's `log` promise rejects                                          | An unhandled rejection. The logger never sees it.                                                                                                                                                                                                      |
+| The stack cannot be parsed                                                   | An entry whose location is `unknown`, and a `console.warn` line that says why.                                                                                                                                                                         |
+| No frame is named like the level method                                      | Entries whose location is `unknown`, rather than a frame inside the logger. Without `Error.captureStackTrace`, a bundler that renames the level methods causes it.                                                                                     |
+| A value in the object cannot be serialized by the Node formatter             | A placeholder that names the error, in place of the value. Circular references become a marker.                                                                                                                                                        |
+| A value in the object is a `bigint` or holds a cycle                         | Nothing is lost. JSON output writes the `bigint` as its decimal string and the circular reference as a marker.                                                                                                                                         |
+| A getter of the log object throws while the logger reads it                  | The entry is still logged, in every format. That key holds a marker that names the error, and a `console.error` line lists the replaced keys. The caller sees nothing.                                                                                 |
+| A getter or a `toJSON` method in the object throws during JSON serialization | The JSON line and the HTTP entry keep every other field. The field of the object that holds the failing value becomes a marker that names the error, and a `console.error` line lists the replaced fields, once per JSON line and once per HTTP entry. |
+| Web Crypto is missing and no `requestId` option was given                    | No logger. `generateRequestId` throws from the constructor.                                                                                                                                                                                            |
+| A transport's configuration is invalid                                       | No transport. Its constructor throws.                                                                                                                                                                                                                  |
+| Every HTTP attempt for a batch fails                                         | The batch is gone from the buffer, and `onError` receives it with the error.                                                                                                                                                                           |
+| The HTTP buffer is full while a batch is in flight                           | The oldest entries are dropped, and `onError` receives their count once the flush settles.                                                                                                                                                             |
 
 ## Guarantees
 

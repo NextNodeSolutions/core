@@ -1,5 +1,6 @@
 import { setTimeout as sleep } from 'node:timers/promises'
 
+import { fetchBounded } from '#/adapters/http/fetch.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
 import type { SmokeCheckTarget } from '#/domain/cloudflare/workers/smoke-check.ts'
@@ -13,8 +14,10 @@ const logger = createLogger()
 // certificate issued on demand - observed at 3-6 minutes on a first greenfield
 // deploy. The budget bounds that wait (the loop exits on the first 2xx) before
 // declaring the service genuinely unhealthy.
-export const SMOKE_CHECK_MAX_ATTEMPTS = 40
-export const SMOKE_CHECK_RETRY_DELAY_MS = 15_000
+const SMOKE_CHECK_MAX_ATTEMPTS = 40
+const SMOKE_CHECK_RETRY_DELAY_MS = 15_000
+// A health endpoint answers at once; one that stalls is a failed attempt.
+const SMOKE_CHECK_ATTEMPT_TIMEOUT_MS = 10_000
 const SMOKE_CHECK_BODY_MAX_LENGTH = 500
 
 export interface SmokeCheckOptions {
@@ -29,10 +32,13 @@ function truncate(body: string): string {
 
 async function attempt(url: string): Promise<string | undefined> {
 	try {
-		const response = await fetch(url, { method: 'GET' })
+		const response = await fetchBounded(url, {
+			operation: `GET ${url}`,
+			method: 'GET',
+			timeoutMs: SMOKE_CHECK_ATTEMPT_TIMEOUT_MS,
+		})
 		if (response.ok) return undefined
-		const body = truncate(await response.text())
-		return `HTTP ${String(response.status)} - ${body}`
+		return `HTTP ${String(response.status)} - ${truncate(response.body)}`
 	} catch (error) {
 		return error instanceof Error ? error.message : String(error)
 	}

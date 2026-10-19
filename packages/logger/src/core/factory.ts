@@ -29,7 +29,7 @@ import type { LoggerConfig } from '../types.js'
  *
  * @example
  * // With custom transports
- * import { HttpTransport } from '@nextnode/logger/transports/http'
+ * import { HttpTransport } from '@nextnode-solutions/logger/transports/http'
  * const logger = createLogger({
  *   transports: [
  *     new ConsoleTransport(),

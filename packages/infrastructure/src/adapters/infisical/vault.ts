@@ -1,5 +1,8 @@
+import { fetchBounded } from '#/adapters/http/fetch.ts'
 import { isRecord } from '#/kernel/guards.ts'
+import { parseJsonOrThrow } from '#/kernel/json.ts'
 
+import type { HttpResponse } from '#/adapters/http/fetch.ts'
 import type { SecretVault, VaultProject } from '#/domain/vault/secret-vault.ts'
 
 const INFISICAL_API_BASE = 'https://app.infisical.com/api'
@@ -27,11 +30,10 @@ function authHeaders(accessToken: string): Record<string, string> {
 	}
 }
 
-async function requireOk(response: Response, context: string): Promise<void> {
+function requireOk(response: HttpResponse, context: string): void {
 	if (response.ok) return
-	const body = await response.text()
 	throw new Error(
-		`${context}: Infisical API returned ${response.status}: ${body}`,
+		`${context}: Infisical API returned ${response.status}: ${response.body}`,
 	)
 }
 
@@ -46,17 +48,18 @@ export async function loginInfisicalWithOidc(
 	jwt: string,
 ): Promise<string> {
 	const context = 'Infisical OIDC login'
-	const response = await fetch(
+	const response = await fetchBounded(
 		`${INFISICAL_API_BASE}/v1/auth/oidc-auth/login`,
 		{
+			operation: context,
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ identityId, jwt }),
 		},
 	)
-	await requireOk(response, context)
+	requireOk(response, context)
 
-	const responseBody: unknown = await response.json()
+	const responseBody = parseJsonOrThrow(response.body, context)
 	if (
 		!isRecord(responseBody) ||
 		typeof responseBody['accessToken'] !== 'string'
@@ -87,13 +90,13 @@ export async function listInfisicalProjects(
 ): Promise<ReadonlyArray<VaultProject>> {
 	const context = 'Infisical list projects'
 	const query = new URLSearchParams({ type: SECRET_MANAGER_PROJECT_TYPE })
-	const response = await fetch(
+	const response = await fetchBounded(
 		`${INFISICAL_API_BASE}/v1/workspace?${query.toString()}`,
-		{ headers: authHeaders(accessToken) },
+		{ operation: context, headers: authHeaders(accessToken) },
 	)
-	await requireOk(response, context)
+	requireOk(response, context)
 
-	const responseBody: unknown = await response.json()
+	const responseBody = parseJsonOrThrow(response.body, context)
 	if (!isRecord(responseBody) || !Array.isArray(responseBody['workspaces'])) {
 		throw new Error(`${context}: \`workspaces\` must be an array`)
 	}
@@ -161,13 +164,13 @@ async function listSecrets(
 		environment: session.environment,
 		secretPath: ROOT_PATH,
 	})
-	const response = await fetch(
+	const response = await fetchBounded(
 		`${INFISICAL_API_BASE}/v4/secrets?${query.toString()}`,
-		{ headers: authHeaders(session.accessToken) },
+		{ operation: context, headers: authHeaders(session.accessToken) },
 	)
-	await requireOk(response, context)
+	requireOk(response, context)
 
-	const responseBody: unknown = await response.json()
+	const responseBody = parseJsonOrThrow(response.body, context)
 	if (!isRecord(responseBody)) {
 		throw new Error(`${context}: response body is not an object`)
 	}
@@ -181,26 +184,28 @@ async function setSecrets(
 	session: InfisicalSession,
 	secrets: Readonly<Record<string, string>>,
 ): Promise<void> {
-	const response = await fetch(`${INFISICAL_API_BASE}/v4/secrets/batch`, {
-		method: 'PATCH',
-		headers: authHeaders(session.accessToken),
-		body: JSON.stringify({
-			projectId: session.projectId,
-			environment: session.environment,
-			secretPath: ROOT_PATH,
-			mode: 'upsert',
-			secrets: Object.entries(secrets).map(
-				([secretKey, secretValue]) => ({
-					secretKey,
-					secretValue,
-				}),
-			),
-		}),
-	})
-	await requireOk(
-		response,
-		`Infisical set secrets (project ${session.projectId}, environment "${session.environment}")`,
+	const context = `Infisical set secrets (project ${session.projectId}, environment "${session.environment}")`
+	const response = await fetchBounded(
+		`${INFISICAL_API_BASE}/v4/secrets/batch`,
+		{
+			operation: context,
+			method: 'PATCH',
+			headers: authHeaders(session.accessToken),
+			body: JSON.stringify({
+				projectId: session.projectId,
+				environment: session.environment,
+				secretPath: ROOT_PATH,
+				mode: 'upsert',
+				secrets: Object.entries(secrets).map(
+					([secretKey, secretValue]) => ({
+						secretKey,
+						secretValue,
+					}),
+				),
+			}),
+		},
 	)
+	requireOk(response, context)
 }
 
 export function createInfisicalVault(

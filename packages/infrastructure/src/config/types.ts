@@ -24,10 +24,10 @@ export interface CloudflareWorkersDeployableConfig extends NextNodeConfig {
 
 export type DeployableConfig = CloudflareWorkersDeployableConfig
 
-export const DEPLOYABLE_PROJECT_TYPES = ['app', 'static'] as const
+const DEPLOYABLE_PROJECT_TYPES = ['app', 'static'] as const
 export type DeployableProjectType = (typeof DEPLOYABLE_PROJECT_TYPES)[number]
 
-export const NON_DEPLOYABLE_PROJECT_TYPES = ['package'] as const
+const NON_DEPLOYABLE_PROJECT_TYPES = ['package'] as const
 export type NonDeployableProjectType =
 	(typeof NON_DEPLOYABLE_PROJECT_TYPES)[number]
 
@@ -41,7 +41,6 @@ export const PROJECT_TYPES = [
 export const DEPLOY_TARGETS = ['cloudflare-workers'] as const
 export type DeployTargetType = (typeof DEPLOY_TARGETS)[number]
 export const DEFAULT_WORKER_ENTRY = 'dist/server/entry.mjs'
-export const R2_BUCKET_LOCATION_HINT = 'weur'
 
 export interface ProjectSection {
 	readonly name: string

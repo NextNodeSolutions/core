@@ -6,7 +6,7 @@
 
 import { formatForBrowser } from '../formatters/console-browser.js'
 import { formatForNode } from '../formatters/console-node.js'
-import { formatAsJson } from '../formatters/json.js'
+import { formatJsonLine } from '../formatters/json.js'
 
 import type { LogEntry } from '../types.js'
 
@@ -20,7 +20,16 @@ export type ConsoleMethod = keyof Pick<
 export type ConsoleWriter = (entry: LogEntry, method: ConsoleMethod) => void
 
 const writeAsJson: ConsoleWriter = (entry, method) => {
-	console[method](formatAsJson(entry))
+	const { json, failures } = formatJsonLine(entry)
+	console[method](json)
+
+	if (failures.length) {
+		// Business rule: a field replaced by its marker is reported once per
+		// line, so the loss is seen even where nobody reads the marker.
+		console.error(
+			`[logger] JSON output replaced fields it cannot serialize: ${failures.join(', ')}`,
+		)
+	}
 }
 
 const writeAsNode: ConsoleWriter = (entry, method) => {
