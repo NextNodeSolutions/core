@@ -47,7 +47,8 @@ export interface HttpTransportConfig {
 	timeout?: number
 
 	/**
-	 * Maximum number of retry attempts for failed requests.
+	 * Number of retries after a failed first attempt, so a batch gets up to
+	 * `maxRetries + 1` attempts. Must be a non-negative integer.
 	 * Defaults to 3.
 	 */
 	maxRetries?: number
@@ -107,6 +108,7 @@ export class HttpTransport implements Transport {
 		// Validate configuration before storing
 		this.validateEndpoint(config.endpoint)
 		this.validateHeaders(config.headers)
+		this.validateMaxRetries(config.maxRetries)
 
 		this.config = resolveConfig(config)
 
@@ -146,6 +148,16 @@ export class HttpTransport implements Transport {
 					`Header "${key}" is restricted and cannot be overridden`,
 				)
 			}
+		}
+	}
+
+	private validateMaxRetries(maxRetries?: number): void {
+		if (typeof maxRetries === 'undefined') return
+
+		if (!Number.isInteger(maxRetries) || maxRetries < 0) {
+			throw new Error(
+				`Invalid maxRetries ${maxRetries}. Only non-negative integers are allowed`,
+			)
 		}
 	}
 
@@ -203,7 +215,7 @@ export class HttpTransport implements Transport {
 	}
 
 	private async backoffBeforeRetry(attempt: number): Promise<void> {
-		const isLastAttempt = attempt >= this.config.maxRetries - 1
+		const isLastAttempt = attempt >= this.config.maxRetries
 		if (isLastAttempt) return
 
 		// Exponential backoff: 100ms, 200ms, 400ms, etc.
@@ -211,21 +223,19 @@ export class HttpTransport implements Transport {
 	}
 
 	private async sendWithRetry(entries: LogEntry[]): Promise<void> {
-		let lastError: Error | null = null
+		let lastError: unknown
 
-		for (let attempt = 0; attempt < this.config.maxRetries; attempt++) {
+		for (let attempt = 0; attempt <= this.config.maxRetries; attempt++) {
 			try {
 				await this.send(entries)
 				return
 			} catch (error) {
-				lastError =
-					error instanceof Error ? error : new Error(String(error))
-
+				lastError = error
 				await this.backoffBeforeRetry(attempt)
 			}
 		}
 
-		throw lastError ?? new Error('Failed to send logs after retries')
+		throw lastError
 	}
 
 	private async send(entries: LogEntry[]): Promise<void> {

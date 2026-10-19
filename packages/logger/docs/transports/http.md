@@ -39,7 +39,7 @@ await logger.dispose()
 | `batchSize`     | A full batch of this many entries is sent at once.                    |
 | `flushInterval` | The buffer is also sent on a timer with this period.                  |
 | `timeout`       | Each request is aborted after this time.                              |
-| `maxRetries`    | The total number of attempts per batch, the first one included.       |
+| `maxRetries`    | How many times a failed batch is sent again after its first attempt.  |
 | `onError`       | Receives the error and the entries of a batch that could not be sent. |
 | `onSuccess`     | Receives the number of entries in a batch that was sent.              |
 
@@ -112,11 +112,11 @@ sequenceDiagram
 
 ## Failures
 
-| Failure                                 | What is left                                                                                                                                                         |
-| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Invalid endpoint or managed header      | No transport. The constructor throws an `Error` that names the value.                                                                                                |
-| Network error, failed status or timeout | A retry after an exponential delay, until attempts run out.                                                                                                          |
-| Every attempt fails                     | The batch is gone from the buffer. `onError` receives it with the last error. Without `onError`, nothing reports the loss.                                           |
-| `onSuccess` throws                      | `onError` receives that error with the entries, although they were sent.                                                                                             |
-| `onError` throws                        | The flush promise rejects. After a timer tick or a full batch, nothing awaits it, so it becomes an unhandled rejection. From `dispose`, the dispose promise rejects. |
-| The process exits without `dispose`     | The entries still in the buffer are lost.                                                                                                                            |
+| Failure                                          | What is left                                                                                                                                                         |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Invalid endpoint, managed header or `maxRetries` | No transport. The constructor throws an `Error` that names the value.                                                                                                |
+| Network error, failed status or timeout          | A retry after an exponential delay, until attempts run out.                                                                                                          |
+| Every attempt fails                              | The batch is gone from the buffer. `onError` receives it with the last error. Without `onError`, nothing reports the loss.                                           |
+| `onSuccess` throws                               | `onError` receives that error with the entries, although they were sent.                                                                                             |
+| `onError` throws                                 | The flush promise rejects. After a timer tick or a full batch, nothing awaits it, so it becomes an unhandled rejection. From `dispose`, the dispose promise rejects. |
+| The process exits without `dispose`              | The entries still in the buffer are lost.                                                                                                                            |
