@@ -53,6 +53,7 @@ stateDiagram-v2
         [*] --> Reported: a transport throws
         Buffered --> Sent: a batch is accepted
         Buffered --> Lost: every attempt fails
+        Buffered --> Lost: dropped from a full buffer
         state "Failed, reported on the console" as Reported
         state "Lost, handed to onError" as Lost
         Printed --> [*]
@@ -69,7 +70,7 @@ stateDiagram-v2
 3. The logger builds a `LogEntry`. It holds the message with its prefix, a timestamp, the caller's location, the scope, the request id and the rest of the log object.
 4. The logger hands the entry to each transport in order. A transport that throws is reported on the console, and the next one still runs.
 5. The console transport prints JSON in production, ANSI-colored text in Node and styled, expandable output in browser DevTools.
-6. The HTTP transport buffers entries and posts them to a collector in batches.
+6. The HTTP transport buffers entries up to a limit and posts them to a collector in batches. A full buffer drops its oldest entries while a batch is in flight.
 
 The parts, the contracts between them and what each failure leaves behind are in [the architecture guide](docs/architecture.md). Every option, and how the environment is detected, is in [the configuration guide](docs/configuration.md). The HTTP transport has [its own page](docs/transports/http.md). [Testing code that logs](docs/test-doubles.md) covers the spy, mock and no-op loggers.
 

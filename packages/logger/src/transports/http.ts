@@ -6,6 +6,7 @@
 import { stringifyJson } from '../utils/serialization.js'
 
 import {
+	validateBufferCapacity,
 	validateEndpoint,
 	validateHeaders,
 	validateIntegerOption,
@@ -62,12 +63,37 @@ export interface HttpTransportConfig {
 	 * Defaults to 3.
 	 */
 	maxRetries?: number
+
+	/**
+	 * Maximum number of entries the buffer holds while a batch is in flight.
+	 * When it is full, each new entry drops the oldest one, and onError
+	 * receives a DroppedEntriesError with the count once the flush settles.
+	 * Must be an integer no smaller than batchSize.
+	 * Defaults to 1000, or to batchSize when that is larger.
+	 */
+	maxBufferSize?: number
+}
+
+/**
+ * The error onError receives after the buffer dropped entries. The dropped
+ * entries are not kept, so that memory stays bounded, and only their count is
+ * reported, with an empty entry list.
+ */
+export class DroppedEntriesError extends Error {
+	readonly droppedCount: number
+
+	constructor(droppedCount: number) {
+		super(`Buffer full, dropped the oldest log entries: ${droppedCount}`)
+		this.name = 'DroppedEntriesError'
+		this.droppedCount = droppedCount
+	}
 }
 
 const DEFAULT_BATCH_SIZE = 10
 const DEFAULT_FLUSH_INTERVAL = 5000
 const DEFAULT_TIMEOUT = 10000
 const DEFAULT_MAX_RETRIES = 3
+const DEFAULT_MAX_BUFFER_SIZE = 1000
 
 /**
  * Fully-resolved HTTP transport configuration with all defaults applied.
@@ -80,6 +106,7 @@ interface ResolvedHttpTransportConfig {
 	readonly flushInterval: number
 	readonly timeout: number
 	readonly maxRetries: number
+	readonly maxBufferSize: number
 	readonly onError?: (error: Error, entries: LogEntry[]) => void
 	readonly onSuccess?: (count: number) => void
 }
@@ -91,16 +118,23 @@ interface SerializedBatch {
 
 const resolveConfig = (
 	config: HttpTransportConfig,
-): ResolvedHttpTransportConfig => ({
-	endpoint: config.endpoint,
-	batchSize: config.batchSize ?? DEFAULT_BATCH_SIZE,
-	flushInterval: config.flushInterval ?? DEFAULT_FLUSH_INTERVAL,
-	timeout: config.timeout ?? DEFAULT_TIMEOUT,
-	maxRetries: config.maxRetries ?? DEFAULT_MAX_RETRIES,
-	...(config.headers && { headers: config.headers }),
-	...(config.onError && { onError: config.onError }),
-	...(config.onSuccess && { onSuccess: config.onSuccess }),
-})
+): ResolvedHttpTransportConfig => {
+	const batchSize = config.batchSize ?? DEFAULT_BATCH_SIZE
+
+	return {
+		endpoint: config.endpoint,
+		batchSize,
+		flushInterval: config.flushInterval ?? DEFAULT_FLUSH_INTERVAL,
+		timeout: config.timeout ?? DEFAULT_TIMEOUT,
+		maxRetries: config.maxRetries ?? DEFAULT_MAX_RETRIES,
+		maxBufferSize:
+			config.maxBufferSize ??
+			Math.max(DEFAULT_MAX_BUFFER_SIZE, batchSize),
+		...(config.headers && { headers: config.headers }),
+		...(config.onError && { onError: config.onError }),
+		...(config.onSuccess && { onSuccess: config.onSuccess }),
+	}
+}
 
 export class HttpTransport implements Transport {
 	private readonly config: ResolvedHttpTransportConfig
@@ -108,6 +142,7 @@ export class HttpTransport implements Transport {
 	private buffer: LogEntry[] = []
 	private flushTimer: ReturnType<typeof setTimeout> | null = null
 	private isFlushing = false
+	private droppedCount = 0
 
 	constructor(config: HttpTransportConfig) {
 		// Validate configuration before storing
@@ -117,8 +152,10 @@ export class HttpTransport implements Transport {
 		validateIntegerOption('flushInterval', config.flushInterval)
 		validateIntegerOption('timeout', config.timeout)
 		validateIntegerOption('maxRetries', config.maxRetries)
+		validateIntegerOption('maxBufferSize', config.maxBufferSize)
 
 		this.config = resolveConfig(config)
+		validateBufferCapacity(this.config.maxBufferSize, this.config.batchSize)
 
 		// Start flush interval timer
 		this.startFlushTimer()
@@ -129,6 +166,13 @@ export class HttpTransport implements Transport {
 
 		if (this.buffer.length >= this.config.batchSize) {
 			void this.flush()
+		}
+
+		// A flush that starts takes the whole buffer at once, so the buffer stays
+		// over its limit only while a batch is in flight.
+		if (this.buffer.length > this.config.maxBufferSize) {
+			this.buffer.shift()
+			this.droppedCount++
 		}
 	}
 
@@ -146,6 +190,8 @@ export class HttpTransport implements Transport {
 		} finally {
 			this.isFlushing = false
 		}
+
+		this.reportDrops()
 	}
 
 	async dispose(): Promise<void> {
@@ -207,6 +253,14 @@ export class HttpTransport implements Transport {
 		this.callHook('onSuccess', () =>
 			this.config.onSuccess?.(batch.entries.length),
 		)
+	}
+
+	private reportDrops(): void {
+		if (!this.droppedCount) return
+
+		const error = new DroppedEntriesError(this.droppedCount)
+		this.droppedCount = 0
+		this.reportLoss(error, [])
 	}
 
 	private reportLoss(error: unknown, entries: LogEntry[]): void {

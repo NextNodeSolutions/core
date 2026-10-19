@@ -124,6 +124,9 @@ sequenceDiagram
         opt the buffer holds a full batch
             Http-)Http: start a flush without waiting
         end
+        opt a batch is in flight and the buffer is over its limit
+            Http->>Http: drop the oldest entry and count it
+        end
         Logger-->>Caller: return
     end
 ```
@@ -160,6 +163,7 @@ sequenceDiagram
 | Web Crypto is missing and no `requestId` option was given                    | No logger. `generateRequestId` throws from the constructor.                                                                                                                                         |
 | A transport's configuration is invalid                                       | No transport. Its constructor throws.                                                                                                                                                               |
 | Every HTTP attempt for a batch fails                                         | The batch is gone from the buffer, and `onError` receives it with the error.                                                                                                                        |
+| The HTTP buffer is full while a batch is in flight                           | The oldest entries are dropped, and `onError` receives their count once the flush settles.                                                                                                          |
 
 ## Guarantees
 

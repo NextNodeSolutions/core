@@ -61,6 +61,12 @@ interface IntegerRange {
 	readonly allowed: string
 }
 
+const POSITIVE_INTEGER_RANGE: IntegerRange = {
+	min: 1,
+	max: Number.MAX_SAFE_INTEGER,
+	allowed: 'positive integers',
+}
+
 const TIMER_DELAY_RANGE: IntegerRange = {
 	min: 1,
 	max: MAX_TIMER_DELAY_MS,
@@ -68,11 +74,7 @@ const TIMER_DELAY_RANGE: IntegerRange = {
 }
 
 const INTEGER_OPTION_RANGES = {
-	batchSize: {
-		min: 1,
-		max: Number.MAX_SAFE_INTEGER,
-		allowed: 'positive integers',
-	},
+	batchSize: POSITIVE_INTEGER_RANGE,
 	flushInterval: TIMER_DELAY_RANGE,
 	timeout: TIMER_DELAY_RANGE,
 	maxRetries: {
@@ -80,6 +82,7 @@ const INTEGER_OPTION_RANGES = {
 		max: Number.MAX_SAFE_INTEGER,
 		allowed: 'non-negative integers',
 	},
+	maxBufferSize: POSITIVE_INTEGER_RANGE,
 } as const satisfies Record<string, IntegerRange>
 
 /**
@@ -101,5 +104,20 @@ export const validateIntegerOption = (
 
 	throw new Error(
 		`Invalid ${option} ${optionValue}. Only ${allowed} are allowed`,
+	)
+}
+
+/**
+ * Validates that the buffer holds at least one full batch. A smaller buffer
+ * would drop entries before a batch could form.
+ */
+export const validateBufferCapacity = (
+	maxBufferSize: number,
+	batchSize: number,
+): void => {
+	if (maxBufferSize >= batchSize) return
+
+	throw new Error(
+		`Invalid maxBufferSize ${maxBufferSize}. It must be at least batchSize, ${batchSize}`,
 	)
 }
