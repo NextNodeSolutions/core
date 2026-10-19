@@ -241,19 +241,40 @@ export class HttpTransport implements Transport {
 
 		try {
 			await this.sendWithRetry(batch.body)
-			this.config.onSuccess?.(batch.entries.length)
 		} catch (error) {
 			// Business rule: nothing awaits a flush started by the timer or a full
 			// batch, so a lost batch goes to onError instead of rejecting.
 			this.reportLoss(error, batch.entries)
+			return
 		}
+
+		this.callHook('onSuccess', () =>
+			this.config.onSuccess?.(batch.entries.length),
+		)
 	}
 
 	private reportLoss(error: unknown, entries: LogEntry[]): void {
-		this.config.onError?.(
-			error instanceof Error ? error : new Error(String(error)),
-			entries,
+		const lossError =
+			error instanceof Error ? error : new Error(String(error))
+		this.callHook('onError', () =>
+			this.config.onError?.(lossError, entries),
 		)
+	}
+
+	private callHook(
+		hookName: 'onError' | 'onSuccess',
+		invokeHook: () => void,
+	): void {
+		try {
+			invokeHook()
+		} catch (error) {
+			// Business rule: a hook is caller code, so its throw is reported here
+			// and never rejects the flush, which nothing awaits after a timer tick
+			// or a full batch.
+			console.error(
+				`[logger] HTTP transport ${hookName} hook threw: ${error instanceof Error ? error.message : String(error)}`,
+			)
+		}
 	}
 
 	private async backoffBeforeRetry(attempt: number): Promise<void> {

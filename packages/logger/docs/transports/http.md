@@ -116,12 +116,12 @@ sequenceDiagram
 
 ## Failures
 
-| Failure                                                               | What is left                                                                                                                                                         |
-| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Invalid endpoint, managed header or `maxRetries`                      | No transport. The constructor throws an `Error` that names the value.                                                                                                |
-| A getter or a `toJSON` method in an entry throws during serialization | That entry is left out of the batch. `onError` receives it alone with the error, and the rest of the batch is sent. Without `onError`, nothing reports the loss.     |
-| Network error, failed status or timeout                               | A retry after an exponential delay, until attempts run out.                                                                                                          |
-| Every attempt fails                                                   | The batch is gone from the buffer. `onError` receives it with the last error. Without `onError`, nothing reports the loss.                                           |
-| `onSuccess` throws                                                    | `onError` receives that error with the entries, although they were sent.                                                                                             |
-| `onError` throws                                                      | The flush promise rejects. After a timer tick or a full batch, nothing awaits it, so it becomes an unhandled rejection. From `dispose`, the dispose promise rejects. |
-| The process exits without `dispose`                                   | The entries still in the buffer are lost.                                                                                                                            |
+| Failure                                                               | What is left                                                                                                                                                     |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Invalid endpoint, managed header or `maxRetries`                      | No transport. The constructor throws an `Error` that names the value.                                                                                            |
+| A getter or a `toJSON` method in an entry throws during serialization | That entry is left out of the batch. `onError` receives it alone with the error, and the rest of the batch is sent. Without `onError`, nothing reports the loss. |
+| Network error, failed status or timeout                               | A retry after an exponential delay, until attempts run out.                                                                                                      |
+| Every attempt fails                                                   | The batch is gone from the buffer. `onError` receives it with the last error. Without `onError`, nothing reports the loss.                                       |
+| `onSuccess` throws                                                    | The batch still counts as sent, and `onError` is not called. A `console.error` line with the `[logger]` prefix reports the throw.                                |
+| `onError` throws                                                      | The loss is still reported once. A `console.error` line with the `[logger]` prefix reports the throw, and the flush and dispose promises still resolve.          |
+| The process exits without `dispose`                                   | The entries still in the buffer are lost.                                                                                                                        |
