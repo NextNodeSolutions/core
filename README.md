@@ -45,5 +45,3 @@ stateDiagram-v2
 4. For each package the merge touched, semantic-release reads the commits that changed the package since its last tag. A `feat`, `fix`, `perf` or breaking commit publishes a new version with provenance, a git tag and a GitHub release.
 
 [The architecture guide](docs/architecture.md) follows the release pipeline and the reusable workflows step by step, with what each failure leaves behind. [The infrastructure docs](packages/infrastructure/README.md) explain how a project deploys, how the vault holds the credentials and where the trust boundary lies. [AGENTS.md](AGENTS.md) holds the rules for contributing, for people and agents alike: checks, commit format, dependency rules and how to add a package.
-
-The other folders under `docs/` hold archived plans, notes and interviews. They are a historical record, never instructions.

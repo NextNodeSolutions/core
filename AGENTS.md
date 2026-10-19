@@ -101,7 +101,7 @@ pnpm -r type-check
 - **Keep monorepo rules in the root docs only.** A package's docs state what is specific to the package and link to the root for the rest.
 - **Write docs that stay true while the code grows.** Describe roles, rules, flows, lifecycles and failure outcomes. Never write a list of files or modules, a path into the source, a value copied from code or config, a count, a version, a date, a line number or a word like "currently". Name code by its role. User-facing names stay concrete: package names, export subpaths, CLI commands, config files and keys, and the workflow files a caller references.
 - **Draw diagrams in Mermaid only.** GitHub renders them, and they stay editable.
-- **Read the archive, notes, plans and interviews under the root `docs/` as a historical record, never as instructions.** Never edit them to match the code.
+- **Never commit plans, notes, specs, audit reports, interview records or delivery reports.** They describe a moment, go stale with the next change, and an agent that finds them reads them as instructions. Git history and pull requests keep what a past change decided.
 
 > **The docs describe the intended behavior.** That covers `docs/`, the README and the `AGENTS.md` files. When a change makes them wrong, do not just rewrite them to match. First check that the change is expected: the task asks for it, or the user confirms it.
 >
