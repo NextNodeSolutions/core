@@ -63,8 +63,13 @@ const cleanFunctionName = (rawName: string): string => {
 	return functionName.slice(lastDotIndex + 1) || functionName
 }
 
+// A V8 frame without parentheses holds only a location, as top-level module
+// code and anonymous callbacks do, so it names no function.
+const LOCATION_ONLY_FRAME = /at\s+(?:async\s+)?[^()]+:\d+:\d+$/
+
 const extractFunctionName = (stackLine: string): string => {
 	const safeLine = truncateStackLine(stackLine)
+	if (LOCATION_ONLY_FRAME.test(safeLine)) return 'anonymous'
 
 	for (const pattern of STACK_TRACE_PATTERNS.function) {
 		const match = pattern.exec(safeLine)

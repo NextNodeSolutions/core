@@ -97,7 +97,7 @@ Each level maps to a console method, and each format has a writer that calls its
 
 ### Caller location
 
-Every entry records the function that called the logger. With `includeLocation`, it also records the file name and the line. The logger captures the stack on every call, even when only the function name is kept. It cuts the stack at the level method you called, with `Error.captureStackTrace`, so none of its own frames remain, whether it runs from source, from its build or from inside your bundle. The location is the first frame left that does not come from `node_modules`. A runtime without `Error.captureStackTrace` cannot cut the stack, so its entries carry an unknown location rather than one inside the logger.
+Every entry records the function that called the logger. With `includeLocation`, it also records the file name and the line. The logger captures the stack on every call, even when only the function name is kept. It cuts the stack at the level method you called, with `Error.captureStackTrace`, so none of its own frames remain, whether it runs from source, from its build or from inside your bundle. The location is the first frame left that does not come from `node_modules`. A frame that names no function, such as top-level module code or an anonymous callback, records the function as `anonymous`. A runtime without `Error.captureStackTrace` cannot cut the stack, so its entries carry an unknown location rather than one inside the logger.
 
 `parseLocation` called directly locates its own caller, from the frame right after its own.
 
