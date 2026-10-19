@@ -116,7 +116,7 @@ Some actions change shared state or cannot be undone. Each needs the user's go-a
 - **Merging to `main` changes the pipeline of every NextNode project** on its next run.
 - **Dispatching the teardown workflow destroys a project's Workers and resources.** With data wipe enabled it also destroys its databases and buckets.
 - **Dispatching the vault seeding workflow writes into the vault.**
-- **Running a pipeline CLI command with real credentials changes Cloudflare, Terraform state, PlanetScale or pull request comments.** Run it only on an isolated target, and remove what it created afterwards.
+- **Running a pipeline CLI command with real credentials changes Cloudflare, Terraform state, PlanetScale or pull request comments.** Run it only through CI, on an isolated target, never from a local machine, and remove what it created afterwards. Local credentials are for read-only inspection.
 - **Pushing a tag or creating a GitHub release by hand** shifts the base from which every later version is computed.
 
 ## Extending
