@@ -1,10 +1,6 @@
 import { spawnSync } from 'node:child_process'
 
-export interface ExecResult {
-	readonly exitCode: number
-	readonly stdout: string
-	readonly stderr: string
-}
+import type { ExecResult } from '#/adapters/process/exec.ts'
 
 export interface GhRunner {
 	(args: ReadonlyArray<string>, stdin?: string): Promise<ExecResult>

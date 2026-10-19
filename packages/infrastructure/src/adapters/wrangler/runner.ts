@@ -1,8 +1,7 @@
-import { execFile } from 'node:child_process'
-
+import { execBounded } from '#/adapters/process/exec.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
-import type { ExecFileException } from 'node:child_process'
+import type { ExecResult } from '#/adapters/process/exec.ts'
 import type { ResourceOutcome } from '#/domain/deploy/resource-outcome.ts'
 
 const logger = createLogger()
@@ -28,12 +27,6 @@ const SCRIPT_NOT_FOUND_FINGERPRINTS = [
 // ("Authentication error"). On the first-ever Workers deploy this is the token
 // missing Workers permissions rather than an invalid token.
 const AUTH_ERROR_FINGERPRINT = '[code: 10000]'
-
-export interface ExecResult {
-	readonly exitCode: number
-	readonly stdout: string
-	readonly stderr: string
-}
 
 export function assertWranglerOk(exec: ExecResult, label: string): void {
 	if (exec.exitCode === 0) return
@@ -67,37 +60,13 @@ function timeoutMessage(args: ReadonlyArray<string>): string {
 // `ps` and CI logs). `pnpm dlx wrangler` resolves the CLI in an isolated
 // temporary environment without relying on npm's npx cache PATH.
 export const defaultWranglerRunner: WranglerRunner = (args, options) =>
-	new Promise<ExecResult>((resolve, reject) => {
-		const child = execFile(
-			'pnpm',
-			['dlx', 'wrangler', ...args],
-			{
-				cwd: options?.cwd,
-				env: process.env,
-				encoding: 'utf8',
-				maxBuffer: WRANGLER_MAX_BUFFER_BYTES,
-				timeout: WRANGLER_TIMEOUT_MS,
-				killSignal: 'SIGKILL',
-			},
-			(error: ExecFileException | null, stdout, stderr) => {
-				if (error === null) {
-					resolve({ exitCode: 0, stdout, stderr })
-					return
-				}
-				if (error.killed === true) {
-					reject(new Error(timeoutMessage(args)))
-					return
-				}
-				if (typeof error.code !== 'number') {
-					reject(error)
-					return
-				}
-				resolve({ exitCode: error.code, stdout, stderr })
-			},
-		)
-		if (typeof options?.stdin !== 'undefined') {
-			child.stdin?.end(options.stdin)
-		}
+	execBounded('pnpm', ['dlx', 'wrangler', ...args], {
+		cwd: options?.cwd,
+		env: process.env,
+		stdin: options?.stdin,
+		maxBufferBytes: WRANGLER_MAX_BUFFER_BYTES,
+		timeoutMs: WRANGLER_TIMEOUT_MS,
+		timeoutMessage: timeoutMessage(args),
 	})
 
 /**
