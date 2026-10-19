@@ -48,7 +48,7 @@ const createJsonSafeReplacer = (): JsonReplacer => {
  * Serializes a value as JSON. A bigint or a cycle never makes it throw, so
  * every JSON output of the logger goes through it.
  */
-export const stringifyJson = (subject: unknown, indent?: number): string =>
+const stringifyJson = (subject: unknown, indent?: number): string =>
 	JSON.stringify(subject, createJsonSafeReplacer(), indent)
 
 const errorMessage = (error: unknown): string =>
