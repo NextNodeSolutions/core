@@ -23,7 +23,6 @@ This package holds the presets that every NextNode project extends and the `next
 - **Give a fixture case its own sample file names when its rule already has a case, when the rule reads the file name, or when an override glob must match.** Default names derive from the diagnostic code, so two cases of one rule overwrite each other's samples, and an override would not apply to the default name.
 - **Test rules only by linting samples through the lint preset.** A test that imports a rule module skips registration and severity, which are the parts that break.
 - **In a rule case, assert only on that case's rule.** Other rules may fire on the same sample. Only the non-functional suite asserts that a whole module stays clean.
-- **Run the tests locally before pushing.** This package's `nextnode.toml` decides which scripts CI runs, so CI may not run the suite.
 - **Keep the package's own `.lintstagedrc.js`.** lint-staged uses the nearest config and runs its commands from that directory, so staged files here are linted with this package's own oxlint config, which allows default exports in the source.
 
 ## Conventions
