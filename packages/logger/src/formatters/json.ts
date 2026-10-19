@@ -14,6 +14,15 @@ import type { SerializedJson } from '../utils/serialization.js'
  */
 const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
 
+const BASE_KEYS: ReadonlySet<string> = new Set([
+	'level',
+	'message',
+	'timestamp',
+	'location',
+	'requestId',
+	'scope',
+])
+
 export interface JsonLogOutput {
 	level: string
 	message: string
@@ -68,7 +77,13 @@ const buildJsonOutput = (
 	}
 
 	if (object) {
-		Object.assign(output, safeObjectEntries(object))
+		for (const [key, fieldValue] of Object.entries(
+			safeObjectEntries(object),
+		)) {
+			// A key named like a base field must not replace it, so log stores
+			// keep querying the real level, message, time and location.
+			output[BASE_KEYS.has(key) ? `object.${key}` : key] = fieldValue
+		}
 	}
 
 	return output
