@@ -39,17 +39,17 @@ await logger.dispose()
 
 `createHttpTransport` and `new HttpTransport` take an `HttpTransportConfig`. Only `endpoint` is required. The defaults of the other options are documented on `HttpTransportConfig`.
 
-| Option          | Effect                                                                                                              |
-| --------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `endpoint`      | The URL every batch is posted to.                                                                                   |
-| `headers`       | Extra request headers, such as an authorization token.                                                              |
-| `batchSize`     | A full batch of this many entries is sent at once.                                                                  |
-| `flushInterval` | The buffer is also sent on a timer with this period.                                                                |
-| `timeout`       | Each request is aborted after this time.                                                                            |
-| `maxRetries`    | How many times a failed batch is sent again after its first attempt.                                                |
-| `maxBufferSize` | The buffer holds at most this many entries, then drops the oldest ones.                                             |
-| `onError`       | Receives the error and the entries that could not be sent, or a `DroppedEntriesError` that counts the dropped ones. |
-| `onSuccess`     | Receives the number of entries in a batch that was sent.                                                            |
+| Option          | Effect                                                                                                                                    |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `endpoint`      | The URL every batch is posted to.                                                                                                         |
+| `headers`       | Extra request headers, such as an authorization token.                                                                                    |
+| `batchSize`     | A full batch of this many entries is sent at once.                                                                                        |
+| `flushInterval` | The buffer is also sent on a timer with this period.                                                                                      |
+| `timeout`       | Each request is aborted after this time.                                                                                                  |
+| `maxRetries`    | How many times a failed batch is sent again after its first attempt. Each retry waits twice as long as the one before, up to a fixed cap. |
+| `maxBufferSize` | The buffer holds at most this many entries, then drops the oldest ones.                                                                   |
+| `onError`       | Receives the error and the entries that could not be sent, or a `DroppedEntriesError` that counts the dropped ones.                       |
+| `onSuccess`     | Receives the number of entries in a batch that was sent.                                                                                  |
 
 The constructor checks every numeric option it is given. `batchSize` must be a positive integer and `maxRetries` a non-negative integer. `flushInterval` and `timeout` are milliseconds, so each must be a positive integer no longer than the longest delay a timer accepts. A longer delay would overflow, and the timer would fire almost at once. `maxBufferSize` must be a positive integer no smaller than `batchSize`, so the buffer can always hold a full batch. Without it, the limit is its default or `batchSize`, whichever is larger.
 
@@ -71,7 +71,7 @@ stateDiagram-v2
     state Flushing {
         [*] --> Attempt
         Attempt --> Backoff: the request fails and attempts remain
-        Backoff --> Attempt: exponential delay
+        Backoff --> Attempt: exponential delay, up to a cap
         Attempt --> Sent: the collector accepts the batch
         Attempt --> Lost: the last attempt fails
         state "Lost, handed to onError" as Lost
@@ -115,7 +115,7 @@ sequenceDiagram
             T->>C: POST the batch within the timeout
             C-->>T: response or error
             opt failure and attempts remain
-                T->>T: wait with exponential backoff
+                T->>T: wait with exponential backoff, up to a cap
             end
         end
         alt sent
@@ -135,7 +135,7 @@ sequenceDiagram
 | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Invalid endpoint, managed header or numeric option                    | No transport. The constructor throws an `Error` that names the value.                                                                                                                     |
 | A getter or a `toJSON` method in an entry throws during serialization | That entry is left out of the batch. `onError` receives it alone with the error, and the rest of the batch is sent. Without `onError`, nothing reports the loss.                          |
-| Network error, failed status or timeout                               | A retry after an exponential delay, until attempts run out.                                                                                                                               |
+| Network error, failed status or timeout                               | A retry after an exponential delay, until attempts run out. The delay stops growing at a fixed cap, so a long run of retries never overflows the timer and fires back to back.            |
 | Every attempt fails                                                   | The batch is gone from the buffer. `onError` receives it with the last error. Without `onError`, nothing reports the loss.                                                                |
 | The buffer is full while a batch is in flight                         | Each new entry drops the oldest one. When the flush settles, `onError` receives a `DroppedEntriesError` with the drop count and no entries. Without `onError`, nothing reports the drops. |
 | `onSuccess` throws                                                    | The batch still counts as sent, and `onError` is not called. A `console.error` line with the `[logger]` prefix reports the throw.                                                         |

@@ -59,7 +59,8 @@ export interface HttpTransportConfig {
 
 	/**
 	 * Number of retries after a failed first attempt, so a batch gets up to
-	 * `maxRetries + 1` attempts. Must be a non-negative integer.
+	 * `maxRetries + 1` attempts. Each retry waits twice as long as the one
+	 * before, from 100 ms up to 30 seconds. Must be a non-negative integer.
 	 * Defaults to 3.
 	 */
 	maxRetries?: number
@@ -94,6 +95,13 @@ const DEFAULT_FLUSH_INTERVAL = 5000
 const DEFAULT_TIMEOUT = 10000
 const DEFAULT_MAX_RETRIES = 3
 const DEFAULT_MAX_BUFFER_SIZE = 1000
+
+const INITIAL_BACKOFF_MS = 100
+/**
+ * Longest wait between two attempts. Without it the doubling delay of a long
+ * retry run would overflow the timer, which then fires almost at once.
+ */
+const MAX_BACKOFF_MS = 30_000
 
 /**
  * Fully-resolved HTTP transport configuration with all defaults applied.
@@ -291,8 +299,10 @@ export class HttpTransport implements Transport {
 		const isLastAttempt = attempt >= this.config.maxRetries
 		if (isLastAttempt) return
 
-		// Exponential backoff: 100ms, 200ms, 400ms, etc.
-		await this.sleep(100 * 2 ** attempt)
+		// Exponential backoff: 100ms, 200ms, 400ms, etc., up to the cap
+		await this.sleep(
+			Math.min(INITIAL_BACKOFF_MS * 2 ** attempt, MAX_BACKOFF_MS),
+		)
 	}
 
 	private async sendWithRetry(body: string): Promise<void> {
