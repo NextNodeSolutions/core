@@ -5,6 +5,12 @@
 
 import { stringifyJson } from '../utils/serialization.js'
 
+import {
+	validateEndpoint,
+	validateHeaders,
+	validateMaxRetries,
+} from './http-validation.js'
+
 import type { LogEntry, Transport } from '../types.js'
 
 export interface HttpTransportConfig {
@@ -62,16 +68,6 @@ const DEFAULT_TIMEOUT = 10000
 const DEFAULT_MAX_RETRIES = 3
 
 /**
- * Headers that cannot be overridden by user configuration.
- * These are either security-sensitive or managed by the transport.
- */
-const RESTRICTED_HEADERS = new Set([
-	'host',
-	'content-length',
-	'transfer-encoding',
-])
-
-/**
  * Fully-resolved HTTP transport configuration with all defaults applied.
  * Used internally after merging user config with defaults.
  */
@@ -113,59 +109,14 @@ export class HttpTransport implements Transport {
 
 	constructor(config: HttpTransportConfig) {
 		// Validate configuration before storing
-		this.validateEndpoint(config.endpoint)
-		this.validateHeaders(config.headers)
-		this.validateMaxRetries(config.maxRetries)
+		validateEndpoint(config.endpoint)
+		validateHeaders(config.headers)
+		validateMaxRetries(config.maxRetries)
 
 		this.config = resolveConfig(config)
 
 		// Start flush interval timer
 		this.startFlushTimer()
-	}
-
-	/**
-	 * Validates that the endpoint is a valid HTTP or HTTPS URL.
-	 * Prevents SSRF attacks by rejecting non-HTTP protocols.
-	 */
-	private validateEndpoint(endpoint: string): void {
-		let url: URL
-		try {
-			url = new URL(endpoint)
-		} catch {
-			throw new Error(`Invalid endpoint URL: ${endpoint}`)
-		}
-
-		if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-			throw new Error(
-				`Invalid protocol "${url.protocol}". Only http: and https: are allowed`,
-			)
-		}
-	}
-
-	/**
-	 * Validates that custom headers don't include restricted headers.
-	 * Prevents header injection attacks.
-	 */
-	private validateHeaders(headers?: Record<string, string>): void {
-		if (!headers) return
-
-		for (const key of Object.keys(headers)) {
-			if (RESTRICTED_HEADERS.has(key.toLowerCase())) {
-				throw new Error(
-					`Header "${key}" is restricted and cannot be overridden`,
-				)
-			}
-		}
-	}
-
-	private validateMaxRetries(maxRetries?: number): void {
-		if (typeof maxRetries === 'undefined') return
-
-		if (!Number.isInteger(maxRetries) || maxRetries < 0) {
-			throw new Error(
-				`Invalid maxRetries ${maxRetries}. Only non-negative integers are allowed`,
-			)
-		}
 	}
 
 	log(entry: LogEntry): void {
