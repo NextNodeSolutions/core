@@ -36,9 +36,30 @@ const STACK_TRACE_PATTERNS = {
  */
 export type StackEntryPoint = (...args: never[]) => unknown
 
+// V8 writes a frame as `at name (location)` or `at location`.
+const V8_FRAME = /^\s*at\s/
+
+// SpiderMonkey and JavaScriptCore write a frame as `name@location:line:column`,
+// with an empty name for an anonymous function.
+const AT_SIGN_FRAME = /^\s*([^@]*)@(.+):(\d+):\d+$/
+
+// Names those engines give to code that runs outside any function
+const TOP_LEVEL_CODE_NAMES: ReadonlySet<string> = new Set([
+	'global code',
+	'module code',
+	'eval code',
+])
+
+const isFrame = (line: string): boolean =>
+	V8_FRAME.test(line) || AT_SIGN_FRAME.test(line)
+
+// A V8 frame can hold an @ in its path, so it is never read in the @ format
+const atSignFrameOf = (line: string): RegExpExecArray | null => {
+	if (V8_FRAME.test(line)) return null
+	return AT_SIGN_FRAME.exec(line)
+}
+
 const isValidStackLine = (line: string): boolean =>
-	typeof line === 'string' &&
-	line.includes('at ') &&
 	!line.includes('node_modules')
 
 /**
@@ -67,8 +88,24 @@ const cleanFunctionName = (rawName: string): string => {
 // code and anonymous callbacks do, so it names no function.
 const LOCATION_ONLY_FRAME = /at\s+(?:async\s+)?[^()]+:\d+:\d+$/
 
+// Firefox marks an anonymous function by its enclosing one, as `outer/<`, and
+// an async continuation with an `async*` prefix.
+const cleanAtSignFunctionName = (rawName: string): string => {
+	const functionName = rawName.replace(/^async\*/, '').trim()
+	if (
+		!functionName ||
+		functionName.includes('/<') ||
+		TOP_LEVEL_CODE_NAMES.has(functionName)
+	) {
+		return 'anonymous'
+	}
+	return cleanFunctionName(functionName)
+}
+
 const extractFunctionName = (stackLine: string): string => {
 	const safeLine = truncateStackLine(stackLine)
+	const atSignFrame = atSignFrameOf(safeLine)
+	if (atSignFrame) return cleanAtSignFunctionName(atSignFrame[1] ?? '')
 	if (LOCATION_ONLY_FRAME.test(safeLine)) return 'anonymous'
 
 	for (const pattern of STACK_TRACE_PATTERNS.function) {
@@ -81,41 +118,65 @@ const extractFunctionName = (stackLine: string): string => {
 
 const extractFileInfo = (stackLine: string): { file: string; line: number } => {
 	const safeLine = truncateStackLine(stackLine)
+	const atSignFrame = atSignFrameOf(safeLine)
+	if (atSignFrame?.[2] && atSignFrame[3]) {
+		return {
+			file: fileNameOf(atSignFrame[2]),
+			line: Number(atSignFrame[3]),
+		}
+	}
 
 	for (const pattern of STACK_TRACE_PATTERNS.file) {
 		const match = pattern.exec(safeLine)
 		if (match?.[1] && match[2]) {
-			const [, fullPath] = match
-			const line = Number(match[2])
-
-			// Extract filename from path efficiently
-			const lastSeparatorIndex = Math.max(
-				fullPath.lastIndexOf('/'),
-				fullPath.lastIndexOf('\\'),
-			)
-			const file =
-				lastSeparatorIndex === -1
-					? fullPath
-					: fullPath.slice(lastSeparatorIndex + 1)
-
-			return { file, line }
+			return { file: fileNameOf(match[1]), line: Number(match[2]) }
 		}
 	}
 
 	return { file: 'unknown', line: 0 }
 }
 
-// Drops the first line, which holds the error name and message, not a frame
+// Keeps the last path segment, without the query or hash a dev server adds
+function fileNameOf(fullPath: string): string {
+	const lastSeparatorIndex = Math.max(
+		fullPath.lastIndexOf('/'),
+		fullPath.lastIndexOf('\\'),
+	)
+	const fileName = fullPath.slice(lastSeparatorIndex + 1)
+	return fileName.split(/[?#]/)[0] ?? fileName
+}
+
+// Keeps the frames only: V8 opens a stack with the error's name and message,
+// and JavaScriptCore lists native code frames without a location.
 const toFrames = (stack: string | undefined): string[] =>
-	(stack ?? '').split('\n').slice(1)
+	(stack ?? '').split('\n').filter(isFrame)
+
+/**
+ * Finds the entry point's frame by its function name, for a runtime without
+ * Error.captureStackTrace. The logger's own frames sit above it, so the first
+ * frame with that name is the entry point's.
+ */
+const framesBelowNamed = (
+	frames: readonly string[],
+	entryPointName: string,
+): string[] => {
+	const entryIndex = entryPointName
+		? frames.findIndex(
+				frame => extractFunctionName(frame) === entryPointName,
+			)
+		: -1
+	return entryIndex === -1 ? [] : frames.slice(entryIndex + 1)
+}
 
 /**
  * Returns the frames below the entry point, so the first one is its caller.
- * Without Error.captureStackTrace the entry point cannot be found, and no
- * frame is returned rather than one inside the logger.
+ * When the entry point cannot be found, no frame is returned rather than one
+ * inside the logger.
  */
 const captureFramesBelow = (entryPoint: StackEntryPoint): string[] => {
-	if (typeof Error.captureStackTrace !== 'function') return []
+	if (typeof Error.captureStackTrace !== 'function') {
+		return framesBelowNamed(toFrames(new Error().stack), entryPoint.name)
+	}
 
 	const holder: { stack?: string } = {}
 	Error.captureStackTrace(holder, entryPoint)
