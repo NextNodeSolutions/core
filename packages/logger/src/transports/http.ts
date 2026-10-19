@@ -182,6 +182,8 @@ export class HttpTransport implements Transport {
 			await this.sendWithRetry(entries)
 			this.config.onSuccess?.(entries.length)
 		} catch (error) {
+			// Business rule: nothing awaits a flush started by the timer or a full
+			// batch, so a lost batch goes to onError instead of rejecting.
 			this.config.onError?.(
 				error instanceof Error ? error : new Error(String(error)),
 				entries,
