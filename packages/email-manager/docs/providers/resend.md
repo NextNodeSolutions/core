@@ -69,13 +69,12 @@ sequenceDiagram
     participant SDK as Resend SDK
     App->>A: validateConfig
     A->>SDK: list the account domains
-    alt the call throws
-        A->>A: log the cause
+    alt SDK returns an error object or throws
+        A->>A: log the error message
         A-->>App: false
-    else the call returns
+    else SDK returns data
         A-->>App: true
     end
-    Note over A,SDK: The error field of the returned value is not inspected
 ```
 
-Because the Resend SDK returns API and network errors instead of throwing them, the check resolves `true` even when Resend rejects the key or cannot be reached. Only an unexpected throw from the SDK makes it resolve `false`.
+The check resolves `false` when Resend rejects the key, when Resend cannot be reached and when the SDK throws. A key restricted to sending also fails it, because Resend refuses such a key the domain list.

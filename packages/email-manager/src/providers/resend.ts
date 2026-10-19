@@ -242,8 +242,13 @@ export const createResendProvider = (
 
 		async validateConfig(): Promise<boolean> {
 			try {
-				await resendClient.domains.list()
-				return true
+				const { error } = await resendClient.domains.list()
+				if (error) {
+					logger.error('Resend validateConfig failed', {
+						details: { error: error.message },
+					})
+				}
+				return !error
 			} catch (error) {
 				logger.error('Resend validateConfig failed', {
 					details: { error: errorMessageOf(error) },

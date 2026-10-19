@@ -21,7 +21,7 @@ These rules cover the email library, where an email manager renders React Email 
 ## Traps
 
 - **Build the workspace dependencies before running type-check, lint or test.** They resolve `@nextnode-solutions/logger` from its built output and fail with "Cannot find module" without it. `type-check` is not a turbo task, so nothing builds it for you.
-- **Check the returned `error` field of every Resend SDK call, not only `catch`.** The SDK returns API and network errors as values. The Resend adapter's credentials check ignores that field, which [docs/providers/resend.md](docs/providers/resend.md#check-credentials) describes.
+- **Check the returned `error` field of every Resend SDK call, not only `catch`.** The SDK returns API and network errors as values, so a call that resolves can still have failed.
 - **The provider registry's dispatch on the name does not narrow the provider config.** Once `ProviderConfigMap` has several entries, the config is a union in every branch. Narrow it with a type guard, because the shared lint config forbids `as`.
 - **The renderer calls the template as a plain function, not as a React component.** A hook in a template's own body throws and becomes `TEMPLATE_ERROR`, so test templates must keep hooks in nested components.
 - **The manager copies the outgoing message field by field.** A new message field that the manager does not copy never reaches a provider, and no type error warns you.
