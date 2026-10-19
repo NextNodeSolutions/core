@@ -31,7 +31,7 @@
     "type-check": "tsgo --noEmit"
   },
   "dependencies": {
-    "@nextnode-solutions/logger": "^1.0.0",
+    "@nextnode-solutions/logger": "^2.0.0",
     "smol-toml": "^1.6.1",
     "valibot": "^1.4.1"
   },

@@ -95,8 +95,8 @@ importers:
   packages/infrastructure:
     dependencies:
       '@nextnode-solutions/logger':
-        specifier: ^1.0.0
-        version: 1.2.1
+        specifier: ^2.0.0
+        version: 2.0.1
       smol-toml:
         specifier: ^1.6.1
         version: 1.6.1
@@ -809,10 +809,6 @@ packages:
     peerDependencies:
       '@emnapi/core': ^1.7.1
       '@emnapi/runtime': ^1.7.1
-
-  '@nextnode-solutions/logger@1.2.1':
-    resolution: {integrity: sha512-chmGAU4HslwqcIkG2ERVE/UPHLsHGCNFP0tA6EV8E2c9aqdQtILuiQ4PF9SuRKXzj6LN1bJA0gWXe5MNH5QGvA==}
-    engines: {node: '>=24.0.0'}
 
   '@nextnode-solutions/logger@2.0.1':
     resolution: {integrity: sha512-QG5rrhiGjBYCcuTU+7VrfgEcAyli7brEBRKTRv0EFG4XhiE/Em4pFXULAGNyTmYfe0tHHP5MTLq/U+ZebYfETQ==}
@@ -5368,8 +5364,6 @@ snapshots:
       '@emnapi/runtime': 1.10.0
       '@tybys/wasm-util': 0.10.1
     optional: true
-
-  '@nextnode-solutions/logger@1.2.1': {}
 
   '@nextnode-solutions/logger@2.0.1': {}
 
