@@ -97,7 +97,9 @@ Each level maps to a console method, and each format has a writer that calls its
 
 ### Caller location
 
-Every entry records the function that called the logger. With `includeLocation`, it also records the file name and the line. The logger reads both from `new Error().stack` on every call, even when only the function name is kept. It skips frames from `node_modules` and from its own source files. A call made from one of your files that has the same name as one of the logger's files is skipped as well, and the location then points to the next frame.
+Every entry records the function that called the logger. With `includeLocation`, it also records the file name and the line. The logger captures the stack on every call, even when only the function name is kept. It cuts the stack at the level method you called, with `Error.captureStackTrace`, so none of its own frames remain, whether it runs from source, from its build or from inside your bundle. The location is the first frame left that does not come from `node_modules`. A runtime without `Error.captureStackTrace` cannot cut the stack, so its entries carry an unknown location rather than one inside the logger.
+
+`parseLocation` called directly locates its own caller, from the frame right after its own.
 
 ## Operations
 
@@ -157,6 +159,7 @@ sequenceDiagram
 | A transport throws in `log`                                                  | A `console.error` line. The other transports still received the entry. The caller saw nothing.                                                                                                      |
 | A transport's `log` promise rejects                                          | An unhandled rejection. The logger never sees it.                                                                                                                                                   |
 | The stack cannot be parsed                                                   | An entry whose location is `unknown`, and a `console.warn` line that says why.                                                                                                                      |
+| The runtime has no `Error.captureStackTrace`                                 | Entries whose location is `unknown`. The stack cannot be cut at the level method, and no frame inside the logger is reported instead.                                                               |
 | A value in the object cannot be serialized by the Node formatter             | A placeholder that names the error, in place of the value. Circular references become a marker.                                                                                                     |
 | A value in the object is a `bigint` or holds a cycle                         | Nothing is lost. JSON output writes the `bigint` as its decimal string and the circular reference as a marker.                                                                                      |
 | A getter or a `toJSON` method in the object throws during JSON serialization | No JSON line for that entry. The console transport throws, and the logger reports it as a failed transport. The HTTP transport hands that entry alone to `onError` and sends the rest of its batch. |

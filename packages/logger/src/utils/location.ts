@@ -29,26 +29,17 @@ const STACK_TRACE_PATTERNS = {
 	],
 } as const
 
-// Internal files to skip when parsing stack traces
-const INTERNAL_FILES = [
-	'logger.ts',
-	'nextnode-logger.ts',
-	'factory.ts',
-	'create-log-entry.ts',
-	'location.ts',
-	'console-node.ts',
-	'console-browser.ts',
-	'console.ts',
-	'test-utils.ts',
-] as const
+/**
+ * The function a caller invoked to log. The stack is cut at its frame, so the
+ * first frame left is the code that called it, however the logger's own files
+ * were bundled or renamed.
+ */
+export type StackEntryPoint = (...args: never[]) => unknown
 
 const isValidStackLine = (line: string): boolean =>
 	typeof line === 'string' &&
 	line.includes('at ') &&
 	!line.includes('node_modules')
-
-const isInternalFile = (line: string): boolean =>
-	INTERNAL_FILES.some(file => line.includes(file))
 
 /**
  * Truncates a stack line if it exceeds the maximum length.
@@ -109,27 +100,40 @@ const extractFileInfo = (stackLine: string): { file: string; line: number } => {
 	return { file: 'unknown', line: 0 }
 }
 
-const getCallerStackLine = (stack: string): string => {
-	const lines = stack.split('\n')
+// Drops the first line, which holds the error name and message, not a frame
+const toFrames = (stack: string | undefined): string[] =>
+	(stack ?? '').split('\n').slice(1)
 
-	// Find first non-internal stack line (skip Error line)
-	for (let i = 1; i < lines.length; i++) {
-		const line = lines[i]
-		if (line && isValidStackLine(line) && !isInternalFile(line)) {
-			return line
-		}
-	}
+/**
+ * Returns the frames below the entry point, so the first one is its caller.
+ * Without Error.captureStackTrace the entry point cannot be found, and no
+ * frame is returned rather than one inside the logger.
+ */
+const captureFramesBelow = (entryPoint: StackEntryPoint): string[] => {
+	if (typeof Error.captureStackTrace !== 'function') return []
 
-	// Fallback to first line after Error if no valid line found
-	return lines[1] ?? ''
+	const holder: { stack?: string } = {}
+	Error.captureStackTrace(holder, entryPoint)
+	return toFrames(holder.stack)
 }
 
+const getCallerStackLine = (frames: readonly string[]): string =>
+	frames.find(isValidStackLine) ?? frames[0] ?? ''
+
+/**
+ * Locates the code that called the entry point. Without one, it locates the
+ * code that called parseLocation itself: that caller is the frame right after
+ * this function's own, so no cut is needed.
+ */
 export const parseLocation = (
 	isProduction: boolean,
+	entryPoint?: StackEntryPoint,
 ): DevelopmentLocationInfo | ProductionLocationInfo => {
 	try {
-		const stack = new Error().stack ?? ''
-		const stackLine = getCallerStackLine(stack)
+		const frames = entryPoint
+			? captureFramesBelow(entryPoint)
+			: toFrames(new Error().stack).slice(1)
+		const stackLine = getCallerStackLine(frames)
 
 		const functionName = extractFunctionName(stackLine)
 

@@ -65,6 +65,7 @@ export class NextNodeLogger implements Logger {
 			defaultScope: this.scope,
 			prefix: this.prefix,
 			includeLocation: this.includeLocation,
+			entryPoint: this[level],
 		})
 
 		for (const transport of this.transports) {

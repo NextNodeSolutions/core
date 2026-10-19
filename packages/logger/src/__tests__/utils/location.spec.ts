@@ -73,7 +73,7 @@ describe('parseLocation', () => {
 		})
 	})
 
-	it('should skip internal logger files', () => {
+	it('should report the caller of parseLocation when no entry point is given', () => {
 		const mockStack = `Error
     at parseLocation (/path/to/location.ts:45:12)
     at log (/path/to/logger.ts:80:5)
@@ -85,9 +85,9 @@ describe('parseLocation', () => {
 		const location = parseLocation(false)
 
 		expect(location).toEqual({
-			function: 'userFunction',
-			file: 'app.ts',
-			line: 30,
+			function: 'log',
+			file: 'logger.ts',
+			line: 80,
 		})
 	})
 

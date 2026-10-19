@@ -89,8 +89,19 @@ export const createSpyLogger = (
 			object,
 			defaultRequestId: instanceRequestId,
 			...(parentScope && { defaultScope: parentScope }),
+			entryPoint: levelMethods[level],
 		})
 		calls.push(entry)
+	}
+
+	const levelMethods: Record<
+		LogLevel,
+		(message: string, object?: LogObject) => void
+	> = {
+		debug: (message, object) => log('debug', message, object),
+		info: (message, object) => log('info', message, object),
+		warn: (message, object) => log('warn', message, object),
+		error: (message, object) => log('error', message, object),
 	}
 
 	return {
@@ -98,21 +109,7 @@ export const createSpyLogger = (
 			return calls
 		},
 
-		debug(message: string, object?: LogObject): void {
-			log('debug', message, object)
-		},
-
-		info(message: string, object?: LogObject): void {
-			log('info', message, object)
-		},
-
-		warn(message: string, object?: LogObject): void {
-			log('warn', message, object)
-		},
-
-		error(message: string, object?: LogObject): void {
-			log('error', message, object)
-		},
+		...levelMethods,
 
 		...createSpyQueries(calls),
 
