@@ -3,6 +3,10 @@
  * Uses only JavaScript built-ins, so it runs in every runtime
  */
 
+const CIRCULAR_REFERENCE_MARKER = '[Circular Reference]'
+
+type JsonReplacer = (this: unknown, key: string, value: unknown) => unknown
+
 // Centralized string conversion for special types
 const typeToString = (subject: unknown): string | undefined => {
 	if (subject === null) return 'null'
@@ -12,6 +16,31 @@ const typeToString = (subject: unknown): string | undefined => {
 	if (typeof subject === 'symbol') return subject.toString()
 	if (typeof subject === 'bigint') return subject.toString()
 	return undefined
+}
+
+/**
+ * Creates a JSON.stringify replacer that turns an object nested inside itself
+ * into the circular reference marker. It tracks the path from the root to the
+ * current value, so an object shared by two branches is serialized in both.
+ * Each JSON.stringify call needs its own replacer.
+ */
+const createJsonSafeReplacer = (): JsonReplacer => {
+	const ancestors: object[] = []
+
+	return function replaceUnserializable(_key, fieldValue) {
+		if (typeof fieldValue !== 'object' || fieldValue === null)
+			return fieldValue
+
+		// JSON.stringify calls the replacer with the parent object as `this`, so
+		// every object stacked above that parent belongs to a finished branch.
+		while (ancestors.length > 0 && ancestors.at(-1) !== this)
+			ancestors.pop()
+
+		if (ancestors.includes(fieldValue)) return CIRCULAR_REFERENCE_MARKER
+		ancestors.push(fieldValue)
+
+		return fieldValue
+	}
 }
 
 export const safeStringify = (subject: unknown): string => {
@@ -26,21 +55,16 @@ export const safeStringify = (subject: unknown): string => {
 			return String(subject)
 		}
 
-		// Complex object serialization with circular reference protection
-		const seen = new WeakSet<object>()
+		const replaceUnserializable = createJsonSafeReplacer()
 
-		const replacer = (_key: string, val: unknown): unknown => {
-			// Early return for non-objects
-			if (typeof val !== 'object' || val === null) {
-				const specialString = typeToString(val)
-				return specialString ?? val
-			}
-
-			// Circular reference check
-			if (seen.has(val)) return '[Circular Reference]'
-			seen.add(val)
-
-			return val
+		const replacer: JsonReplacer = function replaceForDisplay(
+			key,
+			fieldValue,
+		) {
+			return (
+				typeToString(fieldValue) ??
+				replaceUnserializable.call(this, key, fieldValue)
+			)
 		}
 
 		return JSON.stringify(subject, replacer, 2)
