@@ -55,6 +55,8 @@ runs:
           uses: actions/checkout@v6
           with:
               repository: NextNodeSolutions/core
+              # End-to-end harness only: the CLI of the branch under test.
+              ref: e2e/container-workloads
               path: .infra
               sparse-checkout: |
                   packages/infrastructure

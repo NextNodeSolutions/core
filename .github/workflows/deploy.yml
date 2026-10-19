@@ -60,7 +60,7 @@ jobs:
             package_dir: ${{ steps.plan.outputs.package_dir }}
             config_name: ${{ steps.plan.outputs.config_name }}
         steps:
-            - uses: NextNodeSolutions/core/.github/actions/setup@main
+            - uses: NextNodeSolutions/core/.github/actions/setup@e2e/container-workloads
               with:
                   infra: 'true'
                   deps: 'false'
@@ -83,7 +83,7 @@ jobs:
             matrix:
                 task: ${{ fromJSON(needs.plan.outputs.quality_matrix) }}
         steps:
-            - uses: NextNodeSolutions/core/.github/actions/setup@main
+            - uses: NextNodeSolutions/core/.github/actions/setup@e2e/container-workloads
               with:
                   # Per task, not `has_prod_gate`: a project script (lint, test)
                   # runs in the caller's clean tree, while only pipeline-CLI
@@ -109,7 +109,7 @@ jobs:
         # `deploy` as an artifact; the Worker bundle must be self-contained,
         # `deploy` never installs the caller's dependencies.
         steps:
-            - uses: NextNodeSolutions/core/.github/actions/setup@main
+            - uses: NextNodeSolutions/core/.github/actions/setup@e2e/container-workloads
 
             # Public settings only: a DSN is not a secret.
             - name: Build
@@ -144,7 +144,7 @@ jobs:
         # archives travel to `deploy`, which pushes them with the Cloudflare
         # token and never builds.
         steps:
-            - uses: NextNodeSolutions/core/.github/actions/setup@main
+            - uses: NextNodeSolutions/core/.github/actions/setup@e2e/container-workloads
               with:
                   infra: 'true'
                   deps: 'false'
@@ -181,7 +181,7 @@ jobs:
         environment:
             name: ${{ inputs.environment }}
         steps:
-            - uses: NextNodeSolutions/core/.github/actions/setup@main
+            - uses: NextNodeSolutions/core/.github/actions/setup@e2e/container-workloads
               with:
                   infra: 'true'
                   deps: 'false'
@@ -235,7 +235,7 @@ jobs:
         environment:
             name: ${{ inputs.environment }}
         steps:
-            - uses: NextNodeSolutions/core/.github/actions/setup@main
+            - uses: NextNodeSolutions/core/.github/actions/setup@e2e/container-workloads
               with:
                   infra: 'true'
                   # D1 migrations are SQL files applied by wrangler: no caller
@@ -288,7 +288,7 @@ jobs:
         environment:
             name: ${{ inputs.environment }}
         steps:
-            - uses: NextNodeSolutions/core/.github/actions/setup@main
+            - uses: NextNodeSolutions/core/.github/actions/setup@e2e/container-workloads
               with:
                   infra: 'true'
                   deps: 'false'
