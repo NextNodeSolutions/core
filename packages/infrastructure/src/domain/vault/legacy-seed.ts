@@ -1,5 +1,5 @@
 // TRANSITIONAL - delete with the `seed-platform-secrets` command once the
-// GitHub secrets are removed (see README.md, "Secrets").
+// GitHub secrets are removed (see docs/infisical/vault.md, "Moving off GitHub secrets").
 
 // The org-level GitHub secrets the workflows consumed before the vault: the
 // fleet-wide infra credentials, now read from the CI project. Names
