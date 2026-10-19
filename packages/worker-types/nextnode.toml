@@ -8,4 +8,3 @@ test = false
 
 [package]
 access = "public"
-canary_on_label = true
