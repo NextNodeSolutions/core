@@ -1,7 +1,7 @@
 // A GitHub PR comment body caps at 65 536 characters; keep a margin for the
 // header + code fences so a large plan is truncated by us (with a pointer to
 // the full log) rather than rejected wholesale by the API.
-export const INFRA_PLAN_MAX_CHARS = 60_000
+const INFRA_PLAN_MAX_CHARS = 60_000
 
 export interface InfraPlanReportInput {
 	readonly projectName: string

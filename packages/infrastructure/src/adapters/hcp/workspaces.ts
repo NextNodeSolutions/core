@@ -9,7 +9,7 @@ import type { ResourceOutcome } from '#/domain/deploy/resource-outcome.ts'
 
 const logger = createLogger()
 
-export const TERRAFORM_CLOUD_API_BASE = 'https://app.terraform.io/api/v2'
+const TERRAFORM_CLOUD_API_BASE = 'https://app.terraform.io/api/v2'
 
 const HCP_CONTENT_TYPE = 'application/vnd.api+json'
 

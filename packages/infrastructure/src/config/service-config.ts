@@ -65,7 +65,7 @@ export const SERVICE_SUPPORTED_TARGETS: {
 	planetscale: ['cloudflare-workers'],
 }
 
-export const SERVICE_IMPLIABLE_FROM_NEEDS: {
+const SERVICE_IMPLIABLE_FROM_NEEDS: {
 	readonly [K in ServiceName]: boolean
 } = {
 	r2: false,

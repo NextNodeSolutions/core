@@ -12,7 +12,7 @@ const MS_PER_SECOND = 1_000
 // A single `wrangler delete`/`deploy` against the Cloudflare API is quick, but
 // npx may first download the wrangler package; the bound only exists to kill a
 // genuinely hung process rather than block the CI job forever.
-export const WRANGLER_TIMEOUT_MS = 300_000
+const WRANGLER_TIMEOUT_MS = 300_000
 
 const WRANGLER_MAX_BUFFER_BYTES = 67_108_864
 

@@ -24,10 +24,10 @@ export interface CloudflareWorkersDeployableConfig extends NextNodeConfig {
 
 export type DeployableConfig = CloudflareWorkersDeployableConfig
 
-export const DEPLOYABLE_PROJECT_TYPES = ['app', 'static'] as const
+const DEPLOYABLE_PROJECT_TYPES = ['app', 'static'] as const
 export type DeployableProjectType = (typeof DEPLOYABLE_PROJECT_TYPES)[number]
 
-export const NON_DEPLOYABLE_PROJECT_TYPES = ['package'] as const
+const NON_DEPLOYABLE_PROJECT_TYPES = ['package'] as const
 export type NonDeployableProjectType =
 	(typeof NON_DEPLOYABLE_PROJECT_TYPES)[number]
 

@@ -13,8 +13,8 @@ const logger = createLogger()
 // certificate issued on demand - observed at 3-6 minutes on a first greenfield
 // deploy. The budget bounds that wait (the loop exits on the first 2xx) before
 // declaring the service genuinely unhealthy.
-export const SMOKE_CHECK_MAX_ATTEMPTS = 40
-export const SMOKE_CHECK_RETRY_DELAY_MS = 15_000
+const SMOKE_CHECK_MAX_ATTEMPTS = 40
+const SMOKE_CHECK_RETRY_DELAY_MS = 15_000
 const SMOKE_CHECK_BODY_MAX_LENGTH = 500
 
 export interface SmokeCheckOptions {

@@ -20,8 +20,8 @@ import type { TerraformMainConfig } from './terraform-main-config.ts'
 // The Cloudflare provider is pinned to its major (v5). The generated config is
 // the only place the provider version is materialised; a major bump is a
 // deliberate, reviewed change - never a floating `>=`.
-export const CLOUDFLARE_PROVIDER_SOURCE = 'cloudflare/cloudflare'
-export const CLOUDFLARE_PROVIDER_VERSION = '~> 5.0'
+const CLOUDFLARE_PROVIDER_SOURCE = 'cloudflare/cloudflare'
+const CLOUDFLARE_PROVIDER_VERSION = '~> 5.0'
 
 /**
  * Transform a cloudflare-workers deployable config + environment into the

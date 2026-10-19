@@ -3,7 +3,7 @@ import { computeSiteUrl } from '#/domain/deploy/domain.ts'
 import type { WorkerServiceConfig } from '#/config/types.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 
-export const HEALTHZ_PATH = '/healthz'
+const HEALTHZ_PATH = '/healthz'
 
 export interface SmokeCheckTarget {
 	readonly service: string

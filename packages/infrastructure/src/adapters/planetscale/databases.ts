@@ -8,7 +8,7 @@ import type { ResourceOutcome } from '#/domain/deploy/resource-outcome.ts'
 
 const logger = createLogger()
 
-export const PLANETSCALE_API_BASE = 'https://api.planetscale.com/v1'
+const PLANETSCALE_API_BASE = 'https://api.planetscale.com/v1'
 
 // PlanetScale Postgres is the only engine this integration provisions; `kind`
 // selects it (the API value is "postgresql", not "postgres").

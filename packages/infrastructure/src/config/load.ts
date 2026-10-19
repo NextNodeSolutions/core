@@ -31,7 +31,7 @@ import type {
 	ProjectSection,
 } from './types.ts'
 
-export function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
+function parseConfig(raw: Record<string, unknown>): ParseConfigResult {
 	const projectResult = validateProjectSection(raw['project'])
 	const scriptsResult = validateScriptsSection(raw['scripts'])
 	const envResult = validateEnvironmentSection(raw['environment'])

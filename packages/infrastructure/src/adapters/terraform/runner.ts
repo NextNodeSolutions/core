@@ -17,11 +17,11 @@ const MS_PER_SECOND = 1_000
 // A `terraform apply` against Cloudflare can run for minutes (15 min); the bound
 // only exists to kill a genuinely hung process (held lock, unreachable provider
 // API) rather than block the CI job forever.
-export const TERRAFORM_TIMEOUT_MS = 900_000
+const TERRAFORM_TIMEOUT_MS = 900_000
 
 // Bounded wait for the HCP state lock. Terraform blocks up to this long for a
 // concurrent run to release the lock before failing instead of erroring at once.
-export const TERRAFORM_LOCK_TIMEOUT = '5m'
+const TERRAFORM_LOCK_TIMEOUT = '5m'
 
 const TERRAFORM_MAX_BUFFER_BYTES = 67_108_864
 const TERRAFORM_CONFIG_FILENAME = 'main.tf.json'

@@ -66,7 +66,7 @@ export async function wranglerDeploy(
 	)
 }
 
-export interface WranglerSecretOptions {
+interface WranglerSecretOptions {
 	readonly cwd: string
 	readonly workerName: string
 }
@@ -108,7 +108,7 @@ async function listWorkerSecretNames(
  * argv (a secret in argv leaks to `ps` and CI logs) and never a file. A
  * non-zero exit throws the wrangler stderr verbatim.
  */
-export async function syncWorkerSecrets(
+async function syncWorkerSecrets(
 	configPath: string,
 	secrets: Readonly<Record<string, string>>,
 	runner: WranglerRunner,
