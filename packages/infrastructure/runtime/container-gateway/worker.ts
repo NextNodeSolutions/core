@@ -79,9 +79,9 @@ function parsePort(raw: string): number {
 export class ServiceContainer extends Container<GatewayEnv> {
 	private readonly listenPort: number
 	private readonly envDigest: Promise<string>
-	// A request that arrives during an env restart joins it instead of
-	// stopping the instance being started.
-	private envRestart: Promise<void> | undefined
+	// The stop or restart in progress, if any: a request waits for it instead
+	// of reaching a container that is being stopped or replaced.
+	private transition: Promise<void> | undefined
 
 	constructor(ctx: DurableObject['ctx'], env: GatewayEnv) {
 		const port = parsePort(env[CONTAINER_PORT_VAR])
@@ -112,46 +112,81 @@ export class ServiceContainer extends Container<GatewayEnv> {
 		return super.fetch(request)
 	}
 
+	// Idle for `sleep_after`. The class's default only sends SIGTERM, which a
+	// PID 1 without an init (node, for one) ignores: the instance would keep
+	// running, and billing, until the host recycles it. Escalate to SIGKILL.
+	override async onActivityExpired(): Promise<void> {
+		if (!this.isRunning()) return
+		console.log(
+			`Idle for ${String(this.sleepAfter)}: stopping the container`,
+		)
+		await this.runTransition(() => this.stopGracefully())
+	}
+
 	// The env is fixed when the Durable Object is built and applied only when
 	// the container starts, so a container still running with another env (a
 	// rotated secret, a new deploy) is restarted with this one.
 	private async ensureListening(abort: AbortSignal): Promise<void> {
 		const digest = await this.envDigest
-		// Once the old process has exited, `running` is false: a request that
-		// checked it here would start its own container, which the restart in
-		// progress would then kill. Join the restart first.
-		if (this.envRestart) return this.joinEnvRestart(digest)
-		const isRunning = this.ctx.container?.running ?? false
+		// During a stop or a restart `running` can read false while the old
+		// process lives on: a request starting its own container here would be
+		// killed by the transition. Wait for it, then look again.
+		await this.waitForTransition()
 		const applied = await this.ctx.storage.get(CONTAINER_ENV_DIGEST_KEY)
-		if (isRunning && applied !== digest) return this.joinEnvRestart(digest)
-		if (isRunning && (await this.getState()).status === 'healthy') return
+		if (this.isRunning() && applied !== digest)
+			return this.runTransition(() => this.restartWithEnv(digest))
+		if (this.isRunning() && (await this.getState()).status === 'healthy')
+			return
 		await this.startListening(abort)
 		await this.ctx.storage.put(CONTAINER_ENV_DIGEST_KEY, digest)
 	}
 
-	private async joinEnvRestart(digest: string): Promise<void> {
-		this.envRestart ??= this.restartWithEnv(digest)
+	// One transition at a time: a caller that finds one in progress shares it.
+	private runTransition(work: () => Promise<void>): Promise<void> {
+		this.transition ??= this.settle(work)
+		return this.transition
+	}
+
+	private async settle(work: () => Promise<void>): Promise<void> {
 		try {
-			await this.envRestart
+			await work()
 		} finally {
-			this.envRestart = undefined
+			this.transition = undefined
 		}
 	}
 
-	// `stop()` only sends SIGTERM: wait for the exit, then kill what is left,
-	// so the start cannot take the already-running path with the old process.
+	// A failed transition is not this request's error: the checks after it
+	// start a fresh container.
+	private async waitForTransition(): Promise<void> {
+		try {
+			await this.transition
+		} catch {
+			// Ignored on purpose, see above.
+		}
+	}
+
 	private async restartWithEnv(digest: string): Promise<void> {
+		await this.stopGracefully()
+		await this.startListening(undefined)
+		await this.ctx.storage.put(CONTAINER_ENV_DIGEST_KEY, digest)
+	}
+
+	// `stop()` only sends SIGTERM: wait for the exit, then kill what is left,
+	// so a start cannot take the already-running path with the old process.
+	private async stopGracefully(): Promise<void> {
 		await this.stop()
 		for (
 			let waited = 0;
-			(this.ctx.container?.running ?? false) && waited < STOP_GRACE_MS;
+			this.isRunning() && waited < STOP_GRACE_MS;
 			waited += STOP_POLL_MS
 		)
 			// eslint-disable-next-line no-await-in-loop -- polls the exit of one process
 			await scheduler.wait(STOP_POLL_MS)
-		if (this.ctx.container?.running) await this.destroy()
-		await this.startListening(undefined)
-		await this.ctx.storage.put(CONTAINER_ENV_DIGEST_KEY, digest)
+		if (this.isRunning()) await this.destroy()
+	}
+
+	private isRunning(): boolean {
+		return this.ctx.container?.running ?? false
 	}
 
 	private startListening(abort: AbortSignal | undefined): Promise<void> {
