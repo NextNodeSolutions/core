@@ -1,4 +1,3 @@
-import { R2_BUCKET_LOCATION_HINT } from '#/config/types.ts'
 import { computeR2CustomDomainHostname } from '#/domain/cloudflare/r2/custom-domain.ts'
 import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
 import {
@@ -42,6 +41,8 @@ import type {
 	ZoneDataSource,
 } from './terraform-main-config.ts'
 import type { WorkerRateLimitRule } from './terraform-rate-limit.ts'
+
+const R2_BUCKET_LOCATION_HINT = 'weur'
 
 export interface WorkersDerivedResources {
 	readonly projectName: string

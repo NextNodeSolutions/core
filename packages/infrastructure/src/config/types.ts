@@ -41,7 +41,6 @@ export const PROJECT_TYPES = [
 export const DEPLOY_TARGETS = ['cloudflare-workers'] as const
 export type DeployTargetType = (typeof DEPLOY_TARGETS)[number]
 export const DEFAULT_WORKER_ENTRY = 'dist/server/entry.mjs'
-export const R2_BUCKET_LOCATION_HINT = 'weur'
 
 export interface ProjectSection {
 	readonly name: string
