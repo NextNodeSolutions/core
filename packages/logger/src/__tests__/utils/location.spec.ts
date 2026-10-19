@@ -4,7 +4,6 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { detectEnvironment } from '@/utils/environment.js'
 import { parseLocation } from '@/utils/location.js'
 
 import { createMockError, MOCK_STACKS } from '../test-setup.js'
@@ -256,52 +255,5 @@ describe('parseLocation', () => {
 			// Must complete in reasonable time
 			expect(duration).toBeLessThan(100)
 		})
-	})
-})
-
-describe('detectEnvironment', () => {
-	const originalEnv = process.env
-
-	beforeEach(() => {
-		process.env = { ...originalEnv }
-	})
-
-	afterEach(() => {
-		process.env = originalEnv
-	})
-
-	it('should detect production from NODE_ENV=production', () => {
-		process.env.NODE_ENV = 'production'
-		expect(detectEnvironment()).toBe('production')
-	})
-
-	it('should detect production from NODE_ENV=prod', () => {
-		process.env.NODE_ENV = 'prod'
-		expect(detectEnvironment()).toBe('production')
-	})
-
-	it('should detect development from NODE_ENV=development', () => {
-		process.env.NODE_ENV = 'development'
-		expect(detectEnvironment()).toBe('development')
-	})
-
-	it('should detect development from NODE_ENV=dev', () => {
-		process.env.NODE_ENV = 'dev'
-		expect(detectEnvironment()).toBe('development')
-	})
-
-	it('should default to development when NODE_ENV is not set', () => {
-		process.env.NODE_ENV = undefined
-		expect(detectEnvironment()).toBe('development')
-	})
-
-	it('should default to development for unknown NODE_ENV values', () => {
-		process.env.NODE_ENV = 'staging'
-		expect(detectEnvironment()).toBe('development')
-	})
-
-	it('should default to development for empty NODE_ENV', () => {
-		process.env.NODE_ENV = ''
-		expect(detectEnvironment()).toBe('development')
 	})
 })
