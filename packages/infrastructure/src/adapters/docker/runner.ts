@@ -5,10 +5,10 @@ import type { ExecResult } from '#/adapters/wrangler/runner.ts'
 
 const MS_PER_SECOND = 1_000
 
-// A cold image build pulls base layers and installs dependencies. The bound
-// kills a hung build before the job's own 30-minute limit does, so the log
-// says why.
-export const DOCKER_TIMEOUT_MS = 1_500_000
+// Loading a saved image unpacks its layers into the local store; the bound
+// kills a hung daemon call before the job's own limit does, so the log says
+// why.
+export const DOCKER_TIMEOUT_MS = 600_000
 
 const DOCKER_MAX_BUFFER_BYTES = 67_108_864
 

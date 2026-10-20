@@ -1,6 +1,6 @@
 import { IMAGE_TAG_PATTERN } from './container-image.ts'
 
-import type { ContainerApplicationLookup } from './container-application-lookup.ts'
+import type { ContainerApplicationSummary } from './container-application.ts'
 
 // The last path segment of an image reference: `<name>:<tag>`, optionally
 // pinned with `@<digest>`.
@@ -25,31 +25,22 @@ export function imageTagIn(
 	return tag
 }
 
-function runningTag(
-	lookup: Extract<ContainerApplicationLookup, { kind: 'found' }>,
-	repository: string,
-): string | undefined {
-	const { image } = lookup.application
-	if (!image) return undefined
-	return imageTagIn(image, repository)
-}
-
 /**
  * Which tags of a container service's image survive the prune after a
  * deploy: the tag just deployed and the tag the application ran before it,
  * read before the push. A first deploy (no application) keeps only the new
- * tag. Undefined, meaning "prune nothing", when the previous image cannot be
- * identified: the application is past the listed page, or its image is not a
- * tag of this repository.
+ * tag. Undefined, meaning "prune nothing", when the image the application
+ * runs is not a tag of this repository.
  */
 export function planImagePrune(
 	repository: string,
 	deployedTag: string,
-	lookup: ContainerApplicationLookup,
+	application: ContainerApplicationSummary | undefined,
 ): ImagePrunePlan | undefined {
-	if (lookup.kind === 'unlisted') return undefined
-	if (lookup.kind === 'absent') return { repository, keepTags: [deployedTag] }
-	const previousTag = runningTag(lookup, repository)
+	if (!application) return { repository, keepTags: [deployedTag] }
+	const previousTag = application.image
+		? imageTagIn(application.image, repository)
+		: undefined
 	if (!previousTag) return undefined
 	return { repository, keepTags: [...new Set([deployedTag, previousTag])] }
 }

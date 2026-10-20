@@ -1,6 +1,6 @@
 import { writeSummary } from '#/adapters/github/output.ts'
 import { buildMigrateSummary } from '#/domain/deploy/migrate-summary.ts'
-import { DEFAULT_MIGRATE_COMMAND } from '#/domain/deploy/target.ts'
+import { planetscaleMigrateCommand } from '#/domain/deploy/migrations.ts'
 
 import { resolveDeployContext } from './resolve-deploy-context.ts'
 
@@ -26,14 +26,13 @@ export async function migrateRemoteCommand(
 			}),
 		)
 	}
-	if (config.services.planetscale) {
+	const migrateCommand = planetscaleMigrateCommand(config.services)
+	if (migrateCommand) {
 		const migration = await target.runMigrate({
 			kind: 'planetscale',
 			projectName,
 			environment,
-			migrateCommand:
-				config.services.planetscale.migrateCommand ??
-				DEFAULT_MIGRATE_COMMAND,
+			migrateCommand,
 		})
 		writeSummary(
 			buildMigrateSummary({

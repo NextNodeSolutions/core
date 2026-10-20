@@ -17,6 +17,7 @@ import { createLogger } from '@nextnode-solutions/logger'
 
 import { resolveContainerGatewayEntry } from './container-gateway-entry.ts'
 
+import type { CloudflareApiAccess } from '#/adapters/cloudflare/api.ts'
 import type { DockerRunner } from '#/adapters/docker/runner.ts'
 import type { WranglerRunner } from '#/adapters/wrangler/runner.ts'
 import type { ContainerServiceConfig } from '#/config/types.ts'
@@ -25,11 +26,16 @@ import type { AppEnvironment } from '#/domain/environment.ts'
 
 const logger = createLogger()
 
+export type { CloudflareApiAccess }
+
 // The images the `containers` job built and `deploy` downloaded.
 export interface ContainerImageSource {
 	readonly archiveDir: string
 	// The tag they were built with: the commit SHA.
 	readonly imageTag: string
+	// The release the gateway answers the health check with: the tag, and the
+	// workflow run when CI names one.
+	readonly release: string
 }
 
 export interface ContainerServiceDeploy {
@@ -99,6 +105,7 @@ export async function deployContainerService(
 		vars: job.vars,
 		gatewayEntry: resolveContainerGatewayEntry(),
 		image,
+		release: job.images.release,
 	})
 	await wranglerDeploy({
 		document,

@@ -2,7 +2,9 @@ import {
 	CONTAINER_GATEWAY_CLASS_NAME,
 	CONTAINER_NAMESPACE_BINDING,
 	CONTAINER_PORT_VAR,
+	CONTAINER_RELEASE_VAR,
 	CONTAINER_SLEEP_AFTER_VAR,
+	CONTAINER_VERSION_BINDING,
 } from '../../../../runtime/container-gateway/contract.ts'
 
 import { buildWranglerScriptBase } from './wrangler-script-base.ts'
@@ -59,6 +61,11 @@ function containerApplication(
  * container application it drives. The public vars travel with the gateway's
  * control vars; the gateway forwards all but the control vars to the
  * container. No other binding is emitted: a container cannot read one.
+ *
+ * The Durable Object is replaced at once on a deploy (`immediate`), not kept
+ * on the previous version for up to five minutes, and the gateway reads its
+ * version through `version_metadata` to reset an object the platform kept
+ * anyway: a rotated secret reaches the container at the first request.
  */
 export function buildContainerWranglerConfig(
 	input: ContainerWranglerConfigInput,
@@ -69,6 +76,7 @@ export function buildContainerWranglerConfig(
 		...input.vars,
 		[CONTAINER_PORT_VAR]: String(input.service.port),
 		[CONTAINER_SLEEP_AFTER_VAR]: input.service.sleepAfter,
+		[CONTAINER_RELEASE_VAR]: input.release,
 	}
 	document.containers = [
 		containerApplication(document.name, input.service, input.image),
@@ -80,6 +88,7 @@ export function buildContainerWranglerConfig(
 				class_name: CONTAINER_GATEWAY_CLASS_NAME,
 			},
 		],
+		code_update_strategy: { mode: 'immediate' },
 	}
 	document.exports = {
 		[CONTAINER_GATEWAY_CLASS_NAME]: {
@@ -87,5 +96,6 @@ export function buildContainerWranglerConfig(
 			storage: 'sqlite',
 		},
 	}
+	document.version_metadata = { binding: CONTAINER_VERSION_BINDING }
 	return document
 }

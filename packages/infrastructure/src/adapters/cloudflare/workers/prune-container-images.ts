@@ -1,14 +1,13 @@
-import { listContainerApplications } from '#/adapters/wrangler/container-applications.ts'
+import { findContainerApplication } from '#/adapters/cloudflare/containers/applications.ts'
 import { deleteContainerImageTags } from '#/adapters/wrangler/containers.ts'
-import { lookupContainerApplication } from '#/domain/cloudflare/workers/container-application-lookup.ts'
 import { planImagePrune } from '#/domain/cloudflare/workers/container-image-prune.ts'
 import { containerServiceEntries } from '#/domain/cloudflare/workers/container-services.ts'
 import { computeWorkerScriptName } from '#/domain/cloudflare/workers/worker-name.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
+import type { CloudflareApiAccess } from '#/adapters/cloudflare/api.ts'
 import type { WranglerRunner } from '#/adapters/wrangler/runner.ts'
 import type { DeployServiceConfig } from '#/config/types.ts'
-import type { ContainerApplicationListing } from '#/domain/cloudflare/workers/container-application-lookup.ts'
 import type { ImagePrunePlan } from '#/domain/cloudflare/workers/container-image-prune.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 
@@ -20,17 +19,35 @@ export interface ContainerImagePruneInput {
 	readonly services: Readonly<Record<string, DeployServiceConfig>>
 	// The tag this deploy pushes and every container will run.
 	readonly deployedTag: string
-	readonly runner: WranglerRunner
+	readonly cloudflareApi: CloudflareApiAccess
 }
 
-async function readListing(
-	runner: WranglerRunner,
-): Promise<ContainerApplicationListing | undefined> {
+// A service whose application cannot be read, or whose image is not a tag of
+// its own repository, is left unpruned: a prune never guesses.
+async function planOne(
+	input: ContainerImagePruneInput,
+	serviceName: string,
+): Promise<ImagePrunePlan | undefined> {
+	const repository = computeWorkerScriptName(
+		input.projectName,
+		input.environment,
+		serviceName,
+	)
 	try {
-		return await listContainerApplications(runner)
+		const application = await findContainerApplication(
+			input.cloudflareApi,
+			repository,
+		)
+		const plan = planImagePrune(repository, input.deployedTag, application)
+		if (!plan) {
+			logger.warn(
+				`Not pruning container image "${repository}": its application runs "${application?.image ?? 'no image'}", not a tag of that repository`,
+			)
+		}
+		return plan
 	} catch (error) {
 		logger.warn(
-			`Not pruning container images: the applications could not be listed: ${String(error)}`,
+			`Not pruning container image "${repository}": its application could not be read: ${String(error)}`,
 		)
 		return undefined
 	}
@@ -40,29 +57,16 @@ async function readListing(
  * Read, before the push, which image each container application runs, and
  * plan the prune that follows a successful deploy: every container service,
  * routed or not, keeps its new tag and the tag it ran before, for a rollback.
- * A service whose previous image cannot be identified is left unpruned.
  */
 export async function planContainerImagePrune(
 	input: ContainerImagePruneInput,
 ): Promise<ReadonlyArray<ImagePrunePlan>> {
-	const containers = containerServiceEntries(input.services)
-	if (!containers.length) return []
-	const listing = await readListing(input.runner)
-	if (!listing) return []
-	return containers.flatMap(([serviceName]) => {
-		const repository = computeWorkerScriptName(
-			input.projectName,
-			input.environment,
-			serviceName,
-		)
-		const lookup = lookupContainerApplication(listing, repository)
-		const plan = planImagePrune(repository, input.deployedTag, lookup)
-		if (plan) return [plan]
-		logger.warn(
-			`Not pruning container image "${repository}": the image its application runs could not be identified (${lookup.kind})`,
-		)
-		return []
-	})
+	const plans = await Promise.all(
+		containerServiceEntries(input.services).map(([serviceName]) =>
+			planOne(input, serviceName),
+		),
+	)
+	return plans.flatMap(plan => (plan ? [plan] : []))
 }
 
 /**

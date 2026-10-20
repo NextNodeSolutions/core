@@ -42,7 +42,10 @@ import type {
 import type { TeardownResult } from '#/domain/deploy/teardown-result.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 import type { ServiceEnv } from '#/domain/services/service.ts'
-import type { ContainerImageSource } from './deploy-container-service.ts'
+import type {
+	CloudflareApiAccess,
+	ContainerImageSource,
+} from './deploy-container-service.ts'
 import type { OutputsReader, WorkersTerraformContext } from './terraform-ops.ts'
 
 export interface CloudflareWorkersTargetConfig {
@@ -168,6 +171,7 @@ export class CloudflareWorkersTarget implements DeployTarget {
 			outputs,
 			secrets: input.secrets,
 			accountId: this.accountId,
+			cloudflareApi: this.cloudflareApi(),
 			wranglerRunner: this.wrangler,
 			projectDir: this.requireProjectDir(),
 			containerImages: this.containerImages,
@@ -192,6 +196,10 @@ export class CloudflareWorkersTarget implements DeployTarget {
 				deriveWorkersBackingConfig(this.config.services),
 			) || hasInternalWorker(this.config.deploy.services)
 		)
+	}
+
+	private cloudflareApi(): CloudflareApiAccess {
+		return { accountId: this.accountId, apiToken: this.cloudflareApiToken }
 	}
 
 	private terraformContext(): WorkersTerraformContext {
@@ -232,10 +240,7 @@ export class CloudflareWorkersTarget implements DeployTarget {
 			services: this.config.deploy.services,
 			wranglerRunner: this.wrangler,
 			terraformContext: this.terraformContext(),
-			r2Access: {
-				accountId: this.accountId,
-				apiToken: this.cloudflareApiToken,
-			},
+			cloudflareApi: this.cloudflareApi(),
 		})
 	}
 	planDiff(): Promise<InfraPlan> {

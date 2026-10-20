@@ -4,25 +4,20 @@ import type { PipelineEnvironment } from '#/domain/environment.ts'
 export interface PipelineContext {
 	readonly environment: PipelineEnvironment
 	readonly developmentEnabled: boolean
-	readonly prodGateCommand: string
 	readonly drizzleCheckCommand?: string
 }
 
+// A project script, run in the caller's clean tree: the quality job never
+// checks core out, so a lint that scans the repository root sees the
+// caller's sources only.
 export interface QualityTask {
 	id: string
 	name: string
 	cmd: string
-	/**
-	 * Whether the command runs the pipeline CLI from core's own checkout.
-	 * The setup action places that checkout at `.infra/` inside the caller's
-	 * workspace, so tasks without it must run in the caller's clean tree:
-	 * a project script such as lint scans the repo root and would otherwise
-	 * fail on core's own sources under core's checkout. Drives the quality
-	 * job's `with: infra:` in the deploy workflows.
-	 */
-	readonly infra: boolean
 }
 
+// The caller's own checks, run in parallel with the build and the
+// provisioning: the deploy waits for them, the infrastructure does not.
 export function buildQualityMatrix(
 	scripts: ScriptsSection,
 	project: ProjectSection,
@@ -35,7 +30,6 @@ export function buildQualityMatrix(
 			id: 'lint',
 			name: 'Lint',
 			cmd: buildCommand(scripts.lint, project.filter),
-			infra: false,
 		})
 	}
 
@@ -44,7 +38,6 @@ export function buildQualityMatrix(
 			id: 'test',
 			name: 'Test',
 			cmd: buildCommand(scripts.test, project.filter),
-			infra: false,
 		})
 	}
 
@@ -53,24 +46,19 @@ export function buildQualityMatrix(
 			id: 'drizzle-check',
 			name: 'Drizzle Check',
 			cmd: pipeline.drizzleCheckCommand,
-			infra: false,
-		})
-	}
-
-	if (pipeline.environment === 'production' && pipeline.developmentEnabled) {
-		tasks.push({
-			id: 'prod-gate',
-			name: 'Prod Gate',
-			cmd: pipeline.prodGateCommand,
-			infra: true,
 		})
 	}
 
 	return tasks
 }
 
-export function hasProdGate(tasks: ReadonlyArray<QualityTask>): boolean {
-	return tasks.some(task => task.id === 'prod-gate')
+// A production deploy of a project with a development environment first
+// checks that the same commit deployed to development. Its own job gates the
+// provisioning, so no production change happens before it passes.
+export function hasProdGate(
+	pipeline: Pick<PipelineContext, 'environment' | 'developmentEnabled'>,
+): boolean {
+	return pipeline.environment === 'production' && pipeline.developmentEnabled
 }
 
 function buildCommand(script: string, filter: string | false): string {

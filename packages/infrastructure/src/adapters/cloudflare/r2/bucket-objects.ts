@@ -1,96 +1,154 @@
-import { isRecord } from '#/kernel/guards.ts'
+import { createHash } from 'node:crypto'
+
+import { computeR2Host } from '#/domain/cloudflare/r2/addressing.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
+import { fetchWithRetry } from '../api.ts'
+
+import { signS3Request } from './s3-signer.ts'
+
 import type { ResourceOutcome } from '#/domain/deploy/resource-outcome.ts'
+import type { S3Credentials, S3Request } from './s3-signer.ts'
 
 const logger = createLogger()
 
-const CLOUDFLARE_API_BASE = 'https://api.cloudflare.com/client/v4'
-// The most objects one list call returns.
-const LIST_PAGE_SIZE = 1000
-// The REST API deletes one object per call: a page is deleted this many at a
-// time.
-const DELETE_CONCURRENCY = 16
+// The most keys one `ListObjectsV2` page and one `DeleteObjects` call carry.
+const PAGE_SIZE = 1000
+const HTTP_OK = 200
 const HTTP_NOT_FOUND = 404
+const KEY_PATTERN = /<Key>([^<]*)<\/Key>/g
+const ERROR_PATTERN = /<Error>([\s\S]*?)<\/Error>/
+const XML_ESCAPES: Readonly<Record<string, string>> = {
+	'&': '&amp;',
+	'<': '&lt;',
+	'>': '&gt;',
+	'"': '&quot;',
+	"'": '&apos;',
+}
+const XML_ENTITIES: Readonly<Record<string, string>> = {
+	'&amp;': '&',
+	'&lt;': '<',
+	'&gt;': '>',
+	'&quot;': '"',
+	'&apos;': "'",
+}
 
-export interface R2Access {
+export interface R2S3Access {
 	readonly accountId: string
-	readonly apiToken: string
+	readonly credentials: S3Credentials
 }
 
-function bucketUrl(access: R2Access, bucket: string): string {
-	return `${CLOUDFLARE_API_BASE}/accounts/${access.accountId}/r2/buckets/${encodeURIComponent(bucket)}`
-}
-
-function authHeaders(access: R2Access): Record<string, string> {
-	return { Authorization: `Bearer ${access.apiToken}` }
-}
-
-async function requireOk(response: Response, context: string): Promise<void> {
-	if (response.ok) return
-	const body = await response.text()
-	throw new Error(
-		`${context}: Cloudflare API returned ${String(response.status)}: ${body}`,
+function escapeXml(text: string): string {
+	return text.replaceAll(
+		/[&<>"']/g,
+		character => XML_ESCAPES[character] ?? character,
 	)
 }
 
-function parseKeys(responseBody: unknown, context: string): Array<string> {
-	if (!isRecord(responseBody) || !Array.isArray(responseBody['result']))
-		throw new Error(`${context}: \`result\` must be an array`)
-	return responseBody['result'].map(rawObject => {
-		if (!isRecord(rawObject) || typeof rawObject['key'] !== 'string')
-			throw new Error(`${context}: an object is missing \`key\``)
-		return rawObject['key']
-	})
+function unescapeXml(text: string): string {
+	return text.replaceAll(
+		/&(?:amp|lt|gt|quot|apos);/g,
+		entity => XML_ENTITIES[entity] ?? entity,
+	)
+}
+
+// Keys are listed URL-encoded (`encoding-type=url`), so no character of a key
+// can break the XML; `+` stands for a space in that encoding.
+function decodeKey(encoded: string): string {
+	return decodeURIComponent(unescapeXml(encoded).replaceAll('+', ' '))
+}
+
+async function sendS3(
+	access: R2S3Access,
+	request: Omit<S3Request, 'host'>,
+	label: string,
+): Promise<Response> {
+	const host = computeR2Host(access.accountId)
+	const signed: S3Request = { ...request, host }
+	const query = new URLSearchParams(request.query).toString()
+	const url = `https://${host}${request.path}${query ? `?${query}` : ''}`
+	return fetchWithRetry(
+		url,
+		{
+			method: request.method,
+			headers: signS3Request(access.credentials, signed),
+			...(request.body && { body: request.body }),
+		},
+		label,
+	)
 }
 
 // The first page of keys, or undefined when the bucket does not exist.
 async function listKeys(
-	access: R2Access,
+	access: R2S3Access,
 	bucket: string,
 ): Promise<ReadonlyArray<string> | undefined> {
-	const context = `List the objects of R2 bucket "${bucket}"`
-	const query = new URLSearchParams({ per_page: String(LIST_PAGE_SIZE) })
-	const response = await fetch(
-		`${bucketUrl(access, bucket)}/objects?${query.toString()}`,
-		{ headers: authHeaders(access) },
+	const response = await sendS3(
+		access,
+		{
+			method: 'GET',
+			path: `/${bucket}`,
+			query: {
+				'list-type': '2',
+				'encoding-type': 'url',
+				'max-keys': String(PAGE_SIZE),
+			},
+			body: '',
+			headers: {},
+		},
+		`List the objects of R2 bucket "${bucket}"`,
 	)
+	const body = await response.text()
 	if (response.status === HTTP_NOT_FOUND) return undefined
-	await requireOk(response, context)
-	return parseKeys(await response.json(), context)
-}
-
-async function deleteObject(
-	access: R2Access,
-	bucket: string,
-	key: string,
-): Promise<void> {
-	const response = await fetch(
-		`${bucketUrl(access, bucket)}/objects/${encodeURIComponent(key)}`,
-		{ method: 'DELETE', headers: authHeaders(access) },
+	if (response.status !== HTTP_OK) {
+		throw new Error(
+			`List the objects of R2 bucket "${bucket}": S3 returned HTTP ${String(response.status)}: ${body}`,
+		)
+	}
+	return Array.from(body.matchAll(KEY_PATTERN), ([, key]) =>
+		decodeKey(key ?? ''),
 	)
-	if (response.status === HTTP_NOT_FOUND) return
-	await requireOk(response, `Delete "${key}" from R2 bucket "${bucket}"`)
 }
 
+// One `DeleteObjects` call for up to PAGE_SIZE keys. Quiet mode answers with
+// the failures only, so any `<Error>` in a 200 is a failure to report.
 async function deleteKeys(
-	access: R2Access,
+	access: R2S3Access,
 	bucket: string,
 	keys: ReadonlyArray<string>,
 ): Promise<void> {
-	for (let start = 0; start < keys.length; start += DELETE_CONCURRENCY) {
-		// eslint-disable-next-line no-await-in-loop -- one batch at a time bounds the concurrent calls
-		await Promise.all(
-			keys
-				.slice(start, start + DELETE_CONCURRENCY)
-				.map(key => deleteObject(access, bucket, key)),
+	const body = `<?xml version="1.0" encoding="UTF-8"?><Delete><Quiet>true</Quiet>${keys
+		.map(key => `<Object><Key>${escapeXml(key)}</Key></Object>`)
+		.join('')}</Delete>`
+	const label = `Delete ${String(keys.length)} object(s) from R2 bucket "${bucket}"`
+	const response = await sendS3(
+		access,
+		{
+			method: 'POST',
+			path: `/${bucket}`,
+			query: { delete: '' },
+			body,
+			headers: {
+				'content-md5': createHash('md5').update(body).digest('base64'),
+			},
+		},
+		label,
+	)
+	const text = await response.text()
+	if (response.status !== HTTP_OK)
+		throw new Error(
+			`${label}: S3 returned HTTP ${String(response.status)}: ${text}`,
 		)
-	}
+	const failure = ERROR_PATTERN.exec(text)?.[1]
+	if (failure) throw new Error(`${label}: S3 refused an object: ${failure}`)
 }
 
 // Lists the first page and deletes it until a list comes back empty: R2
 // listings are strongly consistent, so no cursor is needed.
-async function emptyBucket(access: R2Access, bucket: string): Promise<string> {
+async function emptyBucket(
+	access: R2S3Access,
+	bucket: string,
+): Promise<string> {
 	let deleted = 0
 	for (;;) {
 		// eslint-disable-next-line no-await-in-loop -- each page is listed after the previous one is deleted
@@ -104,13 +162,13 @@ async function emptyBucket(access: R2Access, bucket: string): Promise<string> {
 }
 
 /**
- * Delete every object of each bucket, so that `terraform destroy` can delete
- * the buckets: Cloudflare refuses to delete a bucket that holds objects, and
- * its Terraform provider has no force option. A bucket already gone counts as
- * empty.
+ * Delete every object of each bucket through R2's S3 API, a thousand per
+ * call, so that `terraform destroy` can delete the buckets: Cloudflare refuses
+ * to delete a bucket that holds objects, and its Terraform provider has no
+ * force option. A bucket already gone counts as empty.
  */
 export async function emptyR2Buckets(
-	access: R2Access,
+	access: R2S3Access,
 	buckets: ReadonlyArray<string>,
 ): Promise<ResourceOutcome> {
 	const details: Array<string> = []
@@ -120,6 +178,5 @@ export async function emptyR2Buckets(
 		logger.info(`R2 bucket ${detail}`)
 		details.push(detail)
 	}
-	if (!details.length) return { handled: false, detail: 'no bucket' }
-	return { handled: true, detail: details.join('; ') }
+	return { handled: details.length > 0, detail: details.join('; ') }
 }

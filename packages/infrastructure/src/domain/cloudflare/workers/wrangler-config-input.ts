@@ -47,4 +47,7 @@ export interface ContainerWranglerConfigInput {
 	readonly gatewayEntry: string
 	// The Cloudflare registry reference the push step produced.
 	readonly image: string
+	// The release this deploy ships, which the gateway's health check answers
+	// with: the image tag, suffixed with the workflow run when CI sets one.
+	readonly release: string
 }

@@ -31,7 +31,10 @@ import type { WorkersTerraformOutputs } from '#/domain/cloudflare/workers/output
 import type { WranglerDocument } from '#/domain/cloudflare/workers/wrangler-document.ts'
 import type { DeployedWorker, DeployResult } from '#/domain/deploy/target.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
-import type { ContainerImageSource } from './deploy-container-service.ts'
+import type {
+	CloudflareApiAccess,
+	ContainerImageSource,
+} from './deploy-container-service.ts'
 
 export interface WorkersDeployInput {
 	readonly projectName: string
@@ -51,6 +54,8 @@ export interface WorkersDeployInput {
 	readonly secrets: Readonly<Record<string, string>> | undefined
 	// The Cloudflare account id, needed to derive R2_ENDPOINT for the backing vars.
 	readonly accountId: string
+	// The REST API access the container applications are read with.
+	readonly cloudflareApi: CloudflareApiAccess
 	readonly wranglerRunner: WranglerRunner | undefined
 	// The project package dir `wrangler deploy` runs from.
 	readonly projectDir: string
@@ -193,7 +198,6 @@ function deployContainer(
 // the smoke checks keeps it for a rollback.
 function containerPrunePlans(
 	input: WorkersDeployInput,
-	runner: WranglerRunner,
 ): Promise<ReadonlyArray<ImagePrunePlan>> {
 	if (!input.containerImages) return Promise.resolve([])
 	return planContainerImagePrune({
@@ -201,7 +205,7 @@ function containerPrunePlans(
 		environment: input.environment,
 		services: input.services,
 		deployedTag: input.containerImages.imageTag,
-		runner,
+		cloudflareApi: input.cloudflareApi,
 	})
 }
 
@@ -230,7 +234,8 @@ async function deployOneService(
  * (see `deployContainerService`). A failed deploy
  * throws and stops the run (later services are not deployed). Once every service
  * is deployed, each public routed service is smoke-checked on `/healthz` (retried
- * until one shared deadline); an unhealthy service throws so the deploy job fails. Only then are
+ * until one shared deadline, and a container must answer with this deploy's
+ * release); an unhealthy service throws so the deploy job fails. Only then are
  * the older registry tags of each container image pruned, keeping the new tag
  * and the one each application ran before the deploy. Returns a single
  * `worker` deployed-environment carrying every service's resolved URL.
@@ -241,7 +246,7 @@ export async function deployWorkers(
 	const start = Date.now()
 	const runner = input.wranglerRunner ?? defaultWranglerRunner
 	const order = orderWorkerDeploy(input.services)
-	const prunePlans = await containerPrunePlans(input, runner)
+	const prunePlans = await containerPrunePlans(input)
 
 	const deployed: Array<DeployedWorker> = []
 	for (const serviceName of order) {
@@ -254,7 +259,11 @@ export async function deployWorkers(
 	}
 
 	await smokeCheckWorkers(
-		computeSmokeCheckUrls(input.services, input.environment),
+		computeSmokeCheckUrls(
+			input.services,
+			input.environment,
+			input.containerImages?.release,
+		),
 		{ sleep: input.smokeCheckSleep },
 	)
 	await pruneContainerImages(prunePlans, runner)

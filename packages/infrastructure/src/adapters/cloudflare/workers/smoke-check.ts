@@ -2,6 +2,8 @@ import { setTimeout as sleep } from 'node:timers/promises'
 
 import { createLogger } from '@nextnode-solutions/logger'
 
+import { CONTAINER_RELEASE_HEADER } from '../../../../runtime/container-gateway/contract.ts'
+
 import type { SmokeCheckTarget } from '#/domain/cloudflare/workers/smoke-check.ts'
 
 const logger = createLogger()
@@ -29,16 +31,29 @@ function truncate(body: string): string {
 	return `${body.slice(0, SMOKE_CHECK_BODY_MAX_LENGTH)}… (truncated)`
 }
 
+// A container's gateway names the release that served the health check: a
+// 2xx from the previous release (an object the platform kept on the old
+// version) is not this deploy's pass.
+function releaseMismatch(
+	target: SmokeCheckTarget,
+	response: Response,
+): string | undefined {
+	if (!target.expectedRelease) return undefined
+	const served = response.headers.get(CONTAINER_RELEASE_HEADER)
+	if (served === target.expectedRelease) return undefined
+	return `release "${served ?? 'none'}" served, expected "${target.expectedRelease}"`
+}
+
 async function attempt(
-	url: string,
+	target: SmokeCheckTarget,
 	timeoutMs: number,
 ): Promise<string | undefined> {
 	try {
-		const response = await fetch(url, {
+		const response = await fetch(target.url, {
 			method: 'GET',
 			signal: AbortSignal.timeout(timeoutMs),
 		})
-		if (response.ok) return undefined
+		if (response.ok) return releaseMismatch(target, response)
 		const body = truncate(await response.text())
 		return `HTTP ${String(response.status)} - ${body}`
 	} catch (error) {
@@ -60,7 +75,7 @@ async function smokeCheckOne(
 	let failure: string | undefined
 	for (let tries = 1; Date.now() < deadline; tries += 1) {
 		// eslint-disable-next-line no-await-in-loop -- one request per attempt, awaited before deciding to retry
-		failure = await attempt(target.url, deadline - Date.now())
+		failure = await attempt(target, deadline - Date.now())
 		if (typeof failure === 'undefined') return
 		logger.warn(
 			`Smoke check for "${target.service}" (${target.url}) failed on attempt ${String(tries)}, ${secondsLeft(deadline)} s left: ${failure}`,
@@ -70,16 +85,17 @@ async function smokeCheckOne(
 		await wait(SMOKE_CHECK_RETRY_DELAY_MS)
 	}
 	throw new Error(
-		`Smoke check failed for service "${target.service}" at ${target.url}: no 2xx within ${String(SMOKE_CHECK_BUDGET_MS / MS_PER_SECOND)} s of the deploy. Last failure: ${failure ?? 'the deadline passed before its first attempt'}`,
+		`Smoke check failed for service "${target.service}" at ${target.url}: no 2xx${target.expectedRelease ? ` of release "${target.expectedRelease}"` : ''} within ${String(SMOKE_CHECK_BUDGET_MS / MS_PER_SECOND)} s of the deploy. Last failure: ${failure ?? 'the deadline passed before its first attempt'}`,
 	)
 }
 
 /**
  * GET `/healthz` on every routed service after deploy, retrying until one
  * shared deadline (a just-attached Custom Domain propagates in seconds). A
- * service still non-2xx (or unreachable) at the deadline throws, carrying the
- * last status + truncated body so the deploy job turns red with the HTTP
- * response in the log. An empty target list is a no-op.
+ * container service must also answer with this deploy's release. A service
+ * still failing (or unreachable) at the deadline throws, carrying the last
+ * status + truncated body so the deploy job turns red with the HTTP response
+ * in the log. An empty target list is a no-op.
  */
 export async function smokeCheckWorkers(
 	targets: ReadonlyArray<SmokeCheckTarget>,

@@ -7,9 +7,6 @@ import { buildQualityMatrix } from '#/domain/pipeline/quality-matrix.ts'
 
 import type { NextNodeConfig } from '#/config/types.ts'
 
-const PROD_GATE_COMMAND =
-	'cd .infra/packages/infrastructure && node src/index.ts prod-gate'
-
 export function planCommand(config: NextNodeConfig): void {
 	const environment = resolveEnvironment(
 		config.project.type,
@@ -22,10 +19,9 @@ export function planCommand(config: NextNodeConfig): void {
 	const tasks = buildQualityMatrix(config.scripts, config.project, {
 		environment,
 		developmentEnabled: config.environment.development,
-		prodGateCommand: PROD_GATE_COMMAND,
 		...(config.services.d1?.checkCommand && {
 			drizzleCheckCommand: config.services.d1.checkCommand,
 		}),
 	})
-	writePlanOutputs({ config, tasks, packageDir, configName })
+	writePlanOutputs({ config, environment, tasks, packageDir, configName })
 }

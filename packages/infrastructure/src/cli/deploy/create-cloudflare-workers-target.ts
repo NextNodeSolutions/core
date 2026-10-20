@@ -1,5 +1,6 @@
 import { CloudflareWorkersTarget } from '#/adapters/cloudflare/workers/target.ts'
 import { getEnv, requireEnv } from '#/cli/env.ts'
+import { computeContainerRelease } from '#/domain/cloudflare/workers/container-image.ts'
 
 import { resolveConfigDir } from './config-dir.ts'
 import { resolveOrganization } from './organization.ts'
@@ -16,17 +17,20 @@ function projectDirOption(
 	return { projectDir }
 }
 
-// The deploy job sets both after downloading the `containers` job's artifact;
-// every other job sets neither.
+// The deploy job sets both after downloading the `containers` job's
+// artifacts, with DEPLOY_ID naming the workflow run; every other job sets
+// none.
 function containerImagesOption():
 	| { containerImages: ContainerImageSource }
 	| undefined {
 	if (!getEnv('CONTAINER_IMAGES_DIR') && !getEnv('IMAGE_TAG'))
 		return undefined
+	const imageTag = requireEnv('IMAGE_TAG')
 	return {
 		containerImages: {
 			archiveDir: requireEnv('CONTAINER_IMAGES_DIR'),
-			imageTag: requireEnv('IMAGE_TAG'),
+			imageTag,
+			release: computeContainerRelease(imageTag, getEnv('DEPLOY_ID')),
 		},
 	}
 }

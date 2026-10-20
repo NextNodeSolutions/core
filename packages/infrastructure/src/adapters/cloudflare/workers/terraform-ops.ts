@@ -8,20 +8,32 @@ import {
 	terraformInit,
 	terraformOutputJson,
 	terraformPlan,
+	terraformStateList,
 	writeTerraformConfig,
 } from '#/adapters/terraform/runner.ts'
 import { parseTerraformOutputs } from '#/domain/cloudflare/workers/outputs-env.ts'
 import { buildTerraformMainConfig } from '#/domain/cloudflare/workers/terraform-config.ts'
+import { rolesToConvergeBeforeDestroy } from '#/domain/cloudflare/workers/terraform-teardown.ts'
+import { createLogger } from '@nextnode-solutions/logger'
 
 import type { TerraformRunner } from '#/adapters/terraform/runner.ts'
 import type { OrganizationConfig } from '#/config/organization.ts'
 import type { CloudflareWorkersDeployableConfig } from '#/config/types.ts'
 import type { WorkersTerraformOutputs } from '#/domain/cloudflare/workers/outputs-env.ts'
+import type { TerraformMainConfig } from '#/domain/cloudflare/workers/terraform-main-config.ts'
 import type { ResourceOutcome } from '#/domain/deploy/resource-outcome.ts'
 import type { InfraPlan } from '#/domain/deploy/target.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 
+const logger = createLogger()
+
 const WORKDIR_PREFIX = 'nn-workers-tf-'
+
+interface TerraformWorkdir {
+	readonly workdir: string
+	readonly vars: Readonly<Record<string, string>>
+	readonly mainConfig: TerraformMainConfig
+}
 
 export interface WorkersTerraformContext {
 	readonly organization: OrganizationConfig
@@ -40,7 +52,7 @@ export interface WorkersTerraformContext {
 // condition (the generated `variable` block) instead of passing blindly.
 async function withWorkdir<T>(
 	ctx: WorkersTerraformContext,
-	run: (workdir: string, vars: Record<string, string>) => Promise<T>,
+	run: (prepared: TerraformWorkdir) => Promise<T>,
 ): Promise<T> {
 	const mainConfig = buildTerraformMainConfig(
 		ctx.config,
@@ -53,7 +65,7 @@ async function withWorkdir<T>(
 	try {
 		await writeTerraformConfig(workdir, mainConfig)
 		await terraformInit(workdir, ctx.runner)
-		return await run(workdir, vars)
+		return await run({ workdir, vars, mainConfig })
 	} finally {
 		await rm(workdir, { recursive: true, force: true })
 	}
@@ -62,17 +74,46 @@ async function withWorkdir<T>(
 export async function applyWorkersTerraform(
 	ctx: WorkersTerraformContext,
 ): Promise<ResourceOutcome> {
-	await withWorkdir(ctx, (workdir, vars) =>
+	await withWorkdir(ctx, ({ workdir, vars }) =>
 		terraformApply(workdir, ctx.runner, vars),
 	)
 	return { handled: true, detail: 'applied' }
+}
+
+// Record the successor of the PlanetScale roles the state holds (see
+// `rolesToConvergeBeforeDestroy`). A failure here only warns: the destroy
+// that follows drops the roles with whatever the state holds, and fails
+// loudly itself when a role owning tables has no successor recorded.
+async function convergeRolesBeforeDestroy(
+	ctx: WorkersTerraformContext,
+	prepared: TerraformWorkdir,
+): Promise<void> {
+	try {
+		const addresses = rolesToConvergeBeforeDestroy(
+			prepared.mainConfig,
+			await terraformStateList(prepared.workdir, ctx.runner),
+		)
+		if (!addresses.length) return
+		await terraformApply(
+			prepared.workdir,
+			ctx.runner,
+			prepared.vars,
+			addresses,
+		)
+	} catch (error) {
+		logger.warn(
+			`The PlanetScale roles could not be converged before the destroy; destroying with the state as it is: ${String(error)}`,
+		)
+	}
 }
 
 export function withWorkersTerraformTeardown<T>(
 	ctx: WorkersTerraformContext,
 	run: (destroyTerraform: () => Promise<ResourceOutcome>) => Promise<T>,
 ): Promise<T> {
-	return withWorkdir(ctx, async (workdir, vars) => {
+	return withWorkdir(ctx, async prepared => {
+		const { workdir, vars } = prepared
+		await convergeRolesBeforeDestroy(ctx, prepared)
 		await terraformPlan(workdir, ctx.runner, vars)
 		return run(async () => {
 			await terraformDestroy(workdir, ctx.runner, vars)
@@ -84,7 +125,7 @@ export function withWorkersTerraformTeardown<T>(
 export function planWorkersTerraform(
 	ctx: WorkersTerraformContext,
 ): Promise<InfraPlan> {
-	return withWorkdir(ctx, (workdir, vars) =>
+	return withWorkdir(ctx, ({ workdir, vars }) =>
 		terraformPlan(workdir, ctx.runner, vars),
 	)
 }
@@ -92,7 +133,7 @@ export function planWorkersTerraform(
 export function readWorkersTerraformOutputs(
 	ctx: WorkersTerraformContext,
 ): Promise<WorkersTerraformOutputs> {
-	return withWorkdir(ctx, async workdir => {
+	return withWorkdir(ctx, async ({ workdir }) => {
 		const raw = await terraformOutputJson(workdir, ctx.runner)
 		return parseTerraformOutputs(raw)
 	})
