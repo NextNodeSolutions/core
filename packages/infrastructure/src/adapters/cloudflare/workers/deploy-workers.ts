@@ -229,8 +229,8 @@ async function deployOneService(
  * pushes its prebuilt image and deploys core's gateway Worker in front of it
  * (see `deployContainerService`). A failed deploy
  * throws and stops the run (later services are not deployed). Once every service
- * is deployed, each public routed service is smoke-checked on `/healthz` (bounded
- * retries); an unhealthy service throws so the deploy job fails. Only then are
+ * is deployed, each public routed service is smoke-checked on `/healthz` (retried
+ * until one shared deadline); an unhealthy service throws so the deploy job fails. Only then are
  * the older registry tags of each container image pruned, keeping the new tag
  * and the one each application ran before the deploy. Returns a single
  * `worker` deployed-environment carrying every service's resolved URL.
