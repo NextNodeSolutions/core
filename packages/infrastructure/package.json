@@ -28,14 +28,16 @@
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "lint": "oxlint --type-aware",
-    "type-check": "tsgo --noEmit"
+    "type-check": "tsgo --noEmit && tsgo --noEmit -p runtime/container-gateway"
   },
   "dependencies": {
+    "@cloudflare/containers": "^0.3.7",
     "@nextnode-solutions/logger": "^1.0.0",
     "smol-toml": "^1.6.1",
     "valibot": "^1.4.1"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261019.1",
     "@nextnode-solutions/standards": "workspace:*",
     "@types/node": "^24.13.3",
     "@typescript/native-preview": "7.0.0-dev.20260407.1",

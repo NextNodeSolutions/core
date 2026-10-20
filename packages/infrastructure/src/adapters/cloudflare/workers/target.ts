@@ -23,6 +23,7 @@ import {
 } from './terraform-ops.ts'
 import { runWorkersProvision } from './workers-provision.ts'
 
+import type { DockerRunner } from '#/adapters/docker/runner.ts'
 import type { TerraformRunner } from '#/adapters/terraform/runner.ts'
 import type { WranglerRunner } from '#/adapters/wrangler/runner.ts'
 import type { OrganizationConfig } from '#/config/organization.ts'
@@ -41,46 +42,57 @@ import type {
 import type { TeardownResult } from '#/domain/deploy/teardown-result.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 import type { ServiceEnv } from '#/domain/services/service.ts'
+import type { ContainerImageSource } from './deploy-container-service.ts'
 import type { OutputsReader, WorkersTerraformContext } from './terraform-ops.ts'
 
 export interface CloudflareWorkersTargetConfig {
 	readonly organization: OrganizationConfig
 	readonly accountId: string
+	readonly cloudflareApiToken: string
 	readonly hcpToken: string
 	readonly planetscaleServiceTokenId?: string
 	readonly planetscaleServiceToken?: string
 	readonly environment: AppEnvironment
 	readonly config: CloudflareWorkersDeployableConfig
 	readonly projectDir?: string
+	// The images the `containers` job built; set only in the deploy job.
+	readonly containerImages?: ContainerImageSource
 	readonly terraformRunner?: TerraformRunner
 	readonly wranglerRunner?: WranglerRunner
+	readonly dockerRunner?: DockerRunner
 }
 
 export class CloudflareWorkersTarget implements DeployTarget {
 	readonly name = 'cloudflare-workers'
 	private readonly organization: OrganizationConfig
 	private readonly accountId: string
+	private readonly cloudflareApiToken: string
 	private readonly hcpToken: string
 	private readonly planetscaleServiceTokenId: string | undefined
 	private readonly planetscaleServiceToken: string | undefined
 	private readonly environment: AppEnvironment
 	private readonly config: CloudflareWorkersDeployableConfig
 	private readonly projectDir: string | undefined
+	private readonly containerImages: ContainerImageSource | undefined
 	private readonly runner: TerraformRunner
 	private readonly wrangler: WranglerRunner | undefined
+	private readonly docker: DockerRunner | undefined
 	private readonly loadTerraformOutputs: OutputsReader
 
 	constructor(config: CloudflareWorkersTargetConfig) {
 		this.organization = config.organization
 		this.accountId = config.accountId
+		this.cloudflareApiToken = config.cloudflareApiToken
 		this.hcpToken = config.hcpToken
 		this.planetscaleServiceTokenId = config.planetscaleServiceTokenId
 		this.planetscaleServiceToken = config.planetscaleServiceToken
 		this.environment = config.environment
 		this.config = config.config
 		this.projectDir = config.projectDir
+		this.containerImages = config.containerImages
 		this.runner = config.terraformRunner ?? defaultTerraformRunner
 		this.wrangler = config.wranglerRunner
+		this.docker = config.dockerRunner
 		this.loadTerraformOutputs = memoizeOutputsReader(() =>
 			this.hasTerraformOutputs()
 				? readWorkersTerraformOutputs(this.terraformContext())
@@ -158,6 +170,8 @@ export class CloudflareWorkersTarget implements DeployTarget {
 			accountId: this.accountId,
 			wranglerRunner: this.wrangler,
 			projectDir: this.requireProjectDir(),
+			containerImages: this.containerImages,
+			dockerRunner: this.docker,
 		})
 	}
 
@@ -215,9 +229,13 @@ export class CloudflareWorkersTarget implements DeployTarget {
 		return teardownWorkers({
 			projectName,
 			environment: this.environment,
-			serviceNames: Object.keys(this.config.deploy.services),
+			services: this.config.deploy.services,
 			wranglerRunner: this.wrangler,
 			terraformContext: this.terraformContext(),
+			r2Access: {
+				accountId: this.accountId,
+				apiToken: this.cloudflareApiToken,
+			},
 		})
 	}
 	planDiff(): Promise<InfraPlan> {

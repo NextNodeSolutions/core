@@ -1,9 +1,9 @@
 import { validateCronJobs } from '../cron.ts'
 
-import type { WorkerServiceConfig } from '#/config/types.ts'
+import type { CronJobConfig, DeployServiceConfig } from '#/config/types.ts'
 import type { DeployProviderValidator } from './registry.ts'
 function validateWorkerServiceUrls(
-	services: Record<string, WorkerServiceConfig>,
+	services: Record<string, DeployServiceConfig>,
 	domain: string | undefined,
 ): string[] {
 	const errors: string[] = []
@@ -39,13 +39,13 @@ const FREE_PLAN_RATE_LIMIT_RULES = 1
 const FREE_PLAN_CUSTOM_RULES = 5
 interface ZoneBarrier {
 	readonly field: string
-	readonly isDeclaredBy: (service: WorkerServiceConfig) => boolean
+	readonly isDeclaredBy: (service: DeployServiceConfig) => boolean
 	readonly ceiling: number
 	readonly ceilingReason: string
 }
 
 function zoneBarrierErrors(
-	services: Record<string, WorkerServiceConfig>,
+	services: Record<string, DeployServiceConfig>,
 	{ field, isDeclaredBy, ceiling, ceilingReason }: ZoneBarrier,
 ): string[] {
 	const declaring = Object.entries(services).filter(([, service]) =>
@@ -66,7 +66,7 @@ function zoneBarrierErrors(
 }
 
 function validateZoneBarriers(
-	services: Record<string, WorkerServiceConfig>,
+	services: Record<string, DeployServiceConfig>,
 ): string[] {
 	return [
 		...zoneBarrierErrors(services, {
@@ -107,6 +107,27 @@ function unsupportedContainerFieldErrors(
 	return errors
 }
 
+// A native cron trigger invokes the Worker's scheduled handler, which the
+// container gateway does not implement: a job resolving to a container service
+// (by `service`, or as the first declared service when it is omitted) would
+// never run.
+function containerCronErrors(
+	cron: ReadonlyArray<CronJobConfig>,
+	services: Record<string, DeployServiceConfig>,
+): string[] {
+	const [primary] = Object.keys(services)
+	return cron.flatMap(job => {
+		const target = job.service ?? primary
+		const isContainer =
+			typeof target !== 'undefined' &&
+			services[target]?.kind === 'container'
+		if (!isContainer) return []
+		return [
+			`deploy.cron job "${job.name}" targets container service "${target}" - native cron triggers need a scheduled handler the container gateway does not implement yet; set \`service\` to a Worker service`,
+		]
+	})
+}
+
 export const cloudflareWorkers: DeployProviderValidator = {
 	requiresDomain: true,
 	requiresServices: true,
@@ -120,7 +141,9 @@ export const cloudflareWorkers: DeployProviderValidator = {
 			...unsupportedContainerFieldErrors(deployRecord),
 			...validateWorkerServiceUrls(workerServices, domain),
 			...validateZoneBarriers(workerServices),
-			...(cronResult.ok ? [] : cronResult.errors),
+			...(cronResult.ok
+				? containerCronErrors(cronResult.section, workerServices)
+				: cronResult.errors),
 		]
 
 		return {

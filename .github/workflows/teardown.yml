@@ -2,8 +2,11 @@ name: Teardown Cloudflare Workers
 
 # Tears down a single Cloudflare Workers project for a target NextNode repo:
 # deletes every Worker script via wrangler, then runs `terraform destroy` to
-# remove the D1/KV/Queues/R2 + Redirect Rules. The HCP Terraform workspace is
-# kept so the state history survives. `wipe_data` must be set when the project
+# remove the D1/KV/Queues/R2 + Redirect Rules. For a container service, the
+# same `teardown` command first deletes its container application, then its
+# gateway Worker, then every tag of its registry image; this needs no Docker
+# and no extra step here. The HCP Terraform workspace is kept so the state
+# history survives. `wipe_data` must be set when the project
 # declares D1 or R2 — otherwise the teardown refuses to destroy stateful data.
 #
 # Run manually from the GitHub UI — access to this workflow is controlled by
