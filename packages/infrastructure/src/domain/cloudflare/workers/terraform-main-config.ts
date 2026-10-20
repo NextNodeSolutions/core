@@ -102,6 +102,8 @@ export interface PlanetscaleBranchRoleResource {
 	readonly branch: string
 	readonly name: string
 	readonly inherited_roles: ReadonlyArray<string>
+	// The role that takes over what this one owns when it is destroyed.
+	readonly successor: string
 }
 
 // The Hyperdrive origin: discrete credentials, not a DSN. `host`/`database`/
