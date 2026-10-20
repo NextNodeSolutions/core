@@ -38,6 +38,22 @@ export interface ZoneDataSource {
 	readonly filter: { readonly name: string }
 }
 
+// `cloudflare_api_token_permission_groups_list`, filtered by URL-encoded name.
+export interface PermissionGroupsDataSource {
+	readonly name: string
+}
+
+// A user-owned `cloudflare_api_token`. `resources` is a JSON document as a
+// string, the provider's own shape.
+export interface ApiTokenResource {
+	readonly name: string
+	readonly policies: ReadonlyArray<{
+		readonly effect: 'allow'
+		readonly permission_groups: ReadonlyArray<{ readonly id: string }>
+		readonly resources: string
+	}>
+}
+
 export interface D1ReadReplication {
 	readonly mode: 'auto' | 'disabled'
 }
@@ -210,6 +226,7 @@ export interface TerraformResourceBlock {
 	>
 	readonly cloudflare_dns_record?: Readonly<Record<string, DnsRecordResource>>
 	readonly cloudflare_ruleset?: Readonly<Record<string, RulesetResource>>
+	readonly cloudflare_api_token?: Readonly<Record<string, ApiTokenResource>>
 }
 
 export type TerraformResourceDraft = {
@@ -227,6 +244,9 @@ export interface TerraformMainConfig {
 	readonly variable?: { readonly account_id: VariableDeclaration }
 	readonly data: {
 		readonly cloudflare_zone: Readonly<Record<string, ZoneDataSource>>
+		readonly cloudflare_api_token_permission_groups_list?: Readonly<
+			Record<string, PermissionGroupsDataSource>
+		>
 	}
 	readonly resource?: TerraformResourceBlock
 	readonly output?: Readonly<Record<string, OutputValue>>

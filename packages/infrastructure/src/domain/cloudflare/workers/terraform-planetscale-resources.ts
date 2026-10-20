@@ -12,6 +12,7 @@ import { ACCOUNT_ID_REF } from './terraform-refs.ts'
 import type {
 	HyperdriveConfigResource,
 	PlanetscaleBranchRoleResource,
+	TerraformResourceDraft,
 } from './terraform-main-config.ts'
 import type { WorkersDerivedResources } from './terraform-resources.ts'
 
@@ -31,7 +32,7 @@ export const PLANETSCALE_MIGRATOR_REF = `planetscale_postgres_branch_role.${PLAN
 // that nothing uses.
 export const PLANETSCALE_RUNTIME_REF = `planetscale_postgres_branch_role.${PLANETSCALE_LABEL}`
 
-export function buildPlanetscaleBranchRole(
+function buildPlanetscaleBranchRole(
 	derived: WorkersDerivedResources,
 	organization: string | undefined,
 ): Record<string, PlanetscaleBranchRoleResource> {
@@ -65,7 +66,7 @@ export function buildPlanetscaleBranchRole(
 	}
 }
 
-export function buildHyperdriveConfig(
+function buildHyperdriveConfig(
 	derived: WorkersDerivedResources,
 ): Record<string, HyperdriveConfigResource> {
 	return {
@@ -84,5 +85,26 @@ export function buildHyperdriveConfig(
 				password: `\${${PLANETSCALE_RUNTIME_REF}.password}`,
 			},
 		},
+	}
+}
+
+// The roles of the project's database, and the Hyperdrive config when a Worker
+// connects through it.
+export function buildPlanetscaleResources(
+	derived: WorkersDerivedResources,
+	organization: string | undefined,
+): Pick<
+	TerraformResourceDraft,
+	'planetscale_postgres_branch_role' | 'cloudflare_hyperdrive_config'
+> {
+	if (!derived.hasPlanetscale) return {}
+	return {
+		planetscale_postgres_branch_role: buildPlanetscaleBranchRole(
+			derived,
+			organization,
+		),
+		...(derived.hasHyperdrive && {
+			cloudflare_hyperdrive_config: buildHyperdriveConfig(derived),
+		}),
 	}
 }

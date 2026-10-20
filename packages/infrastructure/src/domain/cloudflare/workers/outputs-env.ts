@@ -1,16 +1,25 @@
 import { computeR2Endpoint } from '#/domain/cloudflare/r2/addressing.ts'
 import { computeR2ServiceBuckets } from '#/domain/services/r2.ts'
-import { isRecord } from '#/kernel/guards.ts'
 
 import {
 	PLANETSCALE_MIGRATOR_OUTPUT_PREFIX,
 	PLANETSCALE_RUNTIME_OUTPUT_PREFIX,
 } from './planetscale.ts'
 import { ACCESS_AUDIENCES_OUTPUT } from './terraform-access.ts'
+import {
+	asString,
+	extractValue,
+	optionalStringMap,
+} from './terraform-output-values.ts'
+import {
+	R2_S3_ACCESS_KEY_ID_OUTPUT,
+	R2_S3_SECRET_ACCESS_KEY_OUTPUT,
+} from './terraform-r2-credentials.ts'
 
 import type { ServicesConfig } from '#/config/service-config.ts'
 import type { ServiceEnv } from '#/domain/services/service.ts'
 import type { PlanetscaleRoleCredentials } from './planetscale.ts'
+import type { R2S3Credentials } from './terraform-r2-credentials.ts'
 
 /**
  * The Terraform outputs the cloudflare-workers `main.tf.json` emits, narrowed
@@ -25,6 +34,9 @@ export interface WorkersTerraformOutputs {
 	// The runtime role, emitted only when a container service needs PlanetScale:
 	// a container has no Hyperdrive binding and connects with a URL instead.
 	readonly planetscaleRuntime?: PlanetscaleRoleCredentials
+	// The S3 key pair of the project's R2 token, emitted only when a container
+	// service needs r2: a Worker reaches its buckets through bindings.
+	readonly r2S3Credentials?: R2S3Credentials
 	readonly d1DatabaseId?: string
 	// The `cloudflare_hyperdrive_config` id - consumed by the `hyperdrive` wrangler
 	// binding, never projected as an env var (the Worker reaches Postgres through
@@ -126,60 +138,6 @@ export function typesPlaceholderOutputs(
 	}
 }
 
-function extractValue(
-	raw: Readonly<Record<string, unknown>>,
-	name: string,
-): unknown {
-	const entry = raw[name]
-	if (typeof entry === 'undefined') return undefined
-	if (!isRecord(entry) || !('value' in entry)) {
-		throw new Error(
-			`terraform output "${name}": entry is missing a "value" field`,
-		)
-	}
-	return entry.value
-}
-
-function asString(outputValue: unknown, name: string): string {
-	if (typeof outputValue !== 'string') {
-		throw new Error(`terraform output "${name}": expected a string value`)
-	}
-	return outputValue
-}
-
-function asStringMap(
-	outputValue: unknown,
-	name: string,
-): Record<string, string> {
-	if (!isRecord(outputValue)) {
-		throw new Error(`terraform output "${name}": expected an object value`)
-	}
-	const map: Record<string, string> = {}
-	for (const [key, entry] of Object.entries(outputValue)) {
-		if (typeof entry !== 'string') {
-			throw new Error(
-				`terraform output "${name}": entry "${key}" is not a string`,
-			)
-		}
-		map[key] = entry
-	}
-	return map
-}
-
-/**
- * Narrow the raw `terraform output -json` object into the typed outputs. A
- * declared-but-absent output is NOT an error here (the map is simply empty);
- * the "declared service missing its output" check lives in
- * `buildWorkersBackingEnv`, where the config says what MUST be present.
- */
-function optionalStringMap(
-	outputValue: unknown,
-	name: string,
-): Record<string, string> {
-	if (typeof outputValue === 'undefined') return {}
-	return asStringMap(outputValue, name)
-}
-
 type WorkersTerraformOutputsDraft = {
 	-readonly [K in keyof WorkersTerraformOutputs]: WorkersTerraformOutputs[K]
 }
@@ -217,7 +175,24 @@ export function parseTerraformOutputs(
 	if (migrator) outputs.planetscaleMigrator = migrator
 	const runtime = parseRoleCredentials(raw, PLANETSCALE_RUNTIME_OUTPUT_PREFIX)
 	if (runtime) outputs.planetscaleRuntime = runtime
+	const r2S3 = parseR2S3Credentials(raw)
+	if (r2S3) outputs.r2S3Credentials = r2S3
 	return outputs
+}
+
+// The two R2 key outputs, absent together when no container needs r2.
+function parseR2S3Credentials(
+	raw: Readonly<Record<string, unknown>>,
+): R2S3Credentials | undefined {
+	const accessKeyId = extractValue(raw, R2_S3_ACCESS_KEY_ID_OUTPUT)
+	if (typeof accessKeyId === 'undefined') return undefined
+	return {
+		accessKeyId: asString(accessKeyId, R2_S3_ACCESS_KEY_ID_OUTPUT),
+		secretAccessKey: asString(
+			extractValue(raw, R2_S3_SECRET_ACCESS_KEY_OUTPUT),
+			R2_S3_SECRET_ACCESS_KEY_OUTPUT,
+		),
+	}
 }
 
 // The four `<prefix>_{host,database,user,password}` outputs of a branch role,

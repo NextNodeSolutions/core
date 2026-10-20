@@ -6,6 +6,7 @@ import {
 import { buildAccessOutputs } from './terraform-access.ts'
 import { buildInternalResources } from './terraform-internal-resources.ts'
 import { buildOutputs } from './terraform-outputs.ts'
+import { buildR2PermissionGroupData } from './terraform-r2-credentials.ts'
 import {
 	buildResourceBlock,
 	buildZoneData,
@@ -16,6 +17,7 @@ import type { OrganizationConfig } from '#/config/organization.ts'
 import type { CloudflareWorkersDeployableConfig } from '#/config/types.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 import type { TerraformMainConfig } from './terraform-main-config.ts'
+import type { WorkersDerivedResources } from './terraform-resources.ts'
 
 // The Cloudflare provider is pinned to its major (v5). The generated config is
 // the only place the provider version is materialised; a major bump is a
@@ -74,7 +76,7 @@ export function buildTerraformMainConfig(
 			cloudflare: {},
 			...(derived.hasPlanetscale && { planetscale: {} }),
 		},
-		data: { cloudflare_zone: buildZoneData(derived) },
+		data: buildDataBlock(derived),
 	}
 	if (Object.keys(resource).length > 0) mainConfig.resource = resource
 	if (Object.keys(output).length > 0) mainConfig.output = output
@@ -85,6 +87,19 @@ export function buildTerraformMainConfig(
 		mainConfig.variable = { account_id: { type: 'string' } }
 	}
 	return mainConfig
+}
+
+// The zone lookups, and the R2 permission groups a container's token needs.
+function buildDataBlock(
+	derived: WorkersDerivedResources,
+): TerraformMainConfig['data'] {
+	return {
+		cloudflare_zone: buildZoneData(derived),
+		...(derived.hasR2Container && {
+			cloudflare_api_token_permission_groups_list:
+				buildR2PermissionGroupData(),
+		}),
+	}
 }
 
 type TerraformMainConfigDraft = {
