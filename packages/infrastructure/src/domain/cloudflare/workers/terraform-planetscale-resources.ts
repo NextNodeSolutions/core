@@ -32,6 +32,12 @@ export const PLANETSCALE_MIGRATOR_REF = `planetscale_postgres_branch_role.${PLAN
 // that nothing uses.
 export const PLANETSCALE_RUNTIME_REF = `planetscale_postgres_branch_role.${PLANETSCALE_LABEL}`
 
+// Postgres refuses to drop a role that owns objects, and the tables a
+// migration or a container creates belong to the role that created them.
+// Destroying a role first reassigns what it owns to the database's default
+// role, so a teardown removes the roles and keeps the database and its data.
+const PLANETSCALE_ROLE_SUCCESSOR = 'postgres'
+
 function buildPlanetscaleBranchRole(
 	derived: WorkersDerivedResources,
 	organization: string | undefined,
@@ -54,6 +60,7 @@ function buildPlanetscaleBranchRole(
 				branch: PLANETSCALE_DEFAULT_BRANCH,
 				name: PLANETSCALE_HYPERDRIVE_ROLE,
 				inherited_roles: [...PLANETSCALE_ROLE_INHERITED_ROLES],
+				successor: PLANETSCALE_ROLE_SUCCESSOR,
 			},
 		}),
 		[PLANETSCALE_MIGRATOR_LABEL]: {
@@ -62,6 +69,7 @@ function buildPlanetscaleBranchRole(
 			branch: PLANETSCALE_DEFAULT_BRANCH,
 			name: PLANETSCALE_MIGRATOR_LABEL,
 			inherited_roles: ['postgres'],
+			successor: PLANETSCALE_ROLE_SUCCESSOR,
 		},
 	}
 }
