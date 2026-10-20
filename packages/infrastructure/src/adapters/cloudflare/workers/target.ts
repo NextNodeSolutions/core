@@ -48,6 +48,7 @@ import type { OutputsReader, WorkersTerraformContext } from './terraform-ops.ts'
 export interface CloudflareWorkersTargetConfig {
 	readonly organization: OrganizationConfig
 	readonly accountId: string
+	readonly cloudflareApiToken: string
 	readonly hcpToken: string
 	readonly planetscaleServiceTokenId?: string
 	readonly planetscaleServiceToken?: string
@@ -65,6 +66,7 @@ export class CloudflareWorkersTarget implements DeployTarget {
 	readonly name = 'cloudflare-workers'
 	private readonly organization: OrganizationConfig
 	private readonly accountId: string
+	private readonly cloudflareApiToken: string
 	private readonly hcpToken: string
 	private readonly planetscaleServiceTokenId: string | undefined
 	private readonly planetscaleServiceToken: string | undefined
@@ -80,6 +82,7 @@ export class CloudflareWorkersTarget implements DeployTarget {
 	constructor(config: CloudflareWorkersTargetConfig) {
 		this.organization = config.organization
 		this.accountId = config.accountId
+		this.cloudflareApiToken = config.cloudflareApiToken
 		this.hcpToken = config.hcpToken
 		this.planetscaleServiceTokenId = config.planetscaleServiceTokenId
 		this.planetscaleServiceToken = config.planetscaleServiceToken
@@ -229,6 +232,10 @@ export class CloudflareWorkersTarget implements DeployTarget {
 			services: this.config.deploy.services,
 			wranglerRunner: this.wrangler,
 			terraformContext: this.terraformContext(),
+			r2Access: {
+				accountId: this.accountId,
+				apiToken: this.cloudflareApiToken,
+			},
 		})
 	}
 	planDiff(): Promise<InfraPlan> {

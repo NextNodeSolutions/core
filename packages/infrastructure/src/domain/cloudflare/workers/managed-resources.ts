@@ -20,8 +20,10 @@ export type WorkersManagedResource = (typeof WORKERS_MANAGED_RESOURCES)[number]
 /**
  * Resources the Cloudflare Workers teardown tears down, in execution order:
  * `workers` deletes the deployed Worker scripts via wrangler FIRST (so no live
- * traffic hits resources Terraform is about to destroy), then `terraform`
- * destroys the backing infrastructure (D1/KV/Queues/R2 + Redirect Rules, plus
+ * traffic hits resources Terraform is about to destroy), `r2-objects` empties
+ * the declared buckets (Cloudflare refuses to delete a bucket that holds
+ * objects, and teardown only runs with `wipe_data` once a bucket is declared),
+ * then `terraform` destroys the backing infrastructure (D1/KV/Queues/R2 + Redirect Rules, plus
  * the PlanetScale branch-role + Hyperdrive config). The HCP workspace is
  * deliberately absent - it is preserved so the Terraform state stays historised.
  * The PlanetScale DATABASE is likewise preserved: it is created out-of-band (not
@@ -29,7 +31,11 @@ export type WorkersManagedResource = (typeof WORKERS_MANAGED_RESOURCES)[number]
  * config wired to it - the database and its data survive and are deleted manually,
  * the same safe-by-default stance as the historised HCP state.
  */
-export const WORKERS_TEARDOWN_RESOURCES = ['workers', 'terraform'] as const
+export const WORKERS_TEARDOWN_RESOURCES = [
+	'workers',
+	'r2-objects',
+	'terraform',
+] as const
 
 export type WorkersTeardownResource =
 	(typeof WORKERS_TEARDOWN_RESOURCES)[number]

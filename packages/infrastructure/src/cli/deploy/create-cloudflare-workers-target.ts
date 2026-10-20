@@ -49,10 +49,10 @@ export function createCloudflareWorkersTarget(
 	config: CloudflareWorkersDeployableConfig,
 	environment: AppEnvironment,
 ): CloudflareWorkersTarget {
-	requireEnv('CLOUDFLARE_API_TOKEN')
 	return new CloudflareWorkersTarget({
 		organization: resolveOrganization(config),
 		accountId: requireEnv('CLOUDFLARE_ACCOUNT_ID'),
+		cloudflareApiToken: requireEnv('CLOUDFLARE_API_TOKEN'),
 		hcpToken: requireEnv('TF_TOKEN_app_terraform_io'),
 		...planetscaleCredentials(config),
 		...projectDirOption(resolveConfigDir()),
