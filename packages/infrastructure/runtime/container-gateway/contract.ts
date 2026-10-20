@@ -1,6 +1,6 @@
-// The names the generated wrangler document and the gateway Worker must agree
-// on. This file imports nothing: wrangler bundles it into the gateway, and the
-// CLI reads it to generate the document, so neither side restates a name.
+// The names the CLI and the gateway Worker must agree on. This file imports
+// nothing: wrangler bundles it into the gateway, and the CLI reads it to
+// generate the document, so neither side restates a name.
 
 // The Durable Object class the gateway exports (`worker.ts`). A rename here
 // must rename the class too: wrangler rejects a `class_name` the bundle lacks.
@@ -29,3 +29,9 @@ export const CONTAINER_TARGET_PORT_HEADER = 'cf-container-target-port'
 // The Durable Object storage key of the digest of the env the running
 // container was started with.
 export const CONTAINER_ENV_DIGEST_KEY = `${CONTAINER_CONTROL_PREFIX}ENV_DIGEST`
+
+// The path every routed service answers for the deploy smoke check. The
+// gateway also probes it to know that the container listens: the probe follows
+// redirects, and an app that redirects `/` to its public https URL would send
+// it to an https URL, which a container port refuses.
+export const HEALTH_CHECK_PATH = '/healthz'
