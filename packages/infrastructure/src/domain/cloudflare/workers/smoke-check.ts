@@ -1,9 +1,9 @@
 import { computeSiteUrl } from '#/domain/deploy/domain.ts'
 
+import { HEALTH_CHECK_PATH } from '../../../../runtime/container-gateway/contract.ts'
+
 import type { DeployServiceConfig } from '#/config/types.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
-
-export const HEALTHZ_PATH = '/healthz'
 
 export interface SmokeCheckTarget {
 	readonly service: string
@@ -27,7 +27,7 @@ export function computeSmokeCheckUrls(
 		if (typeof config.url === 'undefined' || config.internal) continue
 		targets.push({
 			service,
-			url: `${computeSiteUrl(config.url, environment)}${HEALTHZ_PATH}`,
+			url: `${computeSiteUrl(config.url, environment)}${HEALTH_CHECK_PATH}`,
 		})
 	}
 	return targets

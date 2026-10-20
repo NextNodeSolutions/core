@@ -11,11 +11,13 @@ const logger = createLogger()
 // zone is covered by the existing Universal SSL wildcard and answers in
 // seconds, but a two-label-deep host (e.g. dev.admin.example.com) needs its own
 // certificate issued on demand - observed at 3-6 minutes on a first greenfield
-// deploy. The budget bounds that wait (the loop exits on the first 2xx) before
-// declaring the service genuinely unhealthy.
-export const SMOKE_CHECK_MAX_ATTEMPTS = 40
+// deploy. A container's first request also waits for its boot. The budget is
+// wall-clock time shared by every service, and each request is cut at its end:
+// a request that hangs cannot stretch the check past the job's timeout.
+export const SMOKE_CHECK_BUDGET_MS = 600_000
 export const SMOKE_CHECK_RETRY_DELAY_MS = 15_000
 const SMOKE_CHECK_BODY_MAX_LENGTH = 500
+const MS_PER_SECOND = 1000
 
 export interface SmokeCheckOptions {
 	// Injection point for tests; production waits with a real timer.
@@ -27,9 +29,15 @@ function truncate(body: string): string {
 	return `${body.slice(0, SMOKE_CHECK_BODY_MAX_LENGTH)}… (truncated)`
 }
 
-async function attempt(url: string): Promise<string | undefined> {
+async function attempt(
+	url: string,
+	timeoutMs: number,
+): Promise<string | undefined> {
 	try {
-		const response = await fetch(url, { method: 'GET' })
+		const response = await fetch(url, {
+			method: 'GET',
+			signal: AbortSignal.timeout(timeoutMs),
+		})
 		if (response.ok) return undefined
 		const body = truncate(await response.text())
 		return `HTTP ${String(response.status)} - ${body}`
@@ -38,43 +46,50 @@ async function attempt(url: string): Promise<string | undefined> {
 	}
 }
 
+function secondsLeft(deadline: number): string {
+	return String(
+		Math.max(0, Math.round((deadline - Date.now()) / MS_PER_SECOND)),
+	)
+}
+
 async function smokeCheckOne(
 	target: SmokeCheckTarget,
+	deadline: number,
 	wait: (ms: number) => Promise<void>,
 ): Promise<void> {
 	let failure: string | undefined
-	for (let tries = 1; tries <= SMOKE_CHECK_MAX_ATTEMPTS; tries += 1) {
-		if (tries > 1) {
-			// eslint-disable-next-line no-await-in-loop -- retries are strictly sequential with a bounded backoff
-			await wait(SMOKE_CHECK_RETRY_DELAY_MS)
-		}
+	for (let tries = 1; Date.now() < deadline; tries += 1) {
 		// eslint-disable-next-line no-await-in-loop -- one request per attempt, awaited before deciding to retry
-		failure = await attempt(target.url)
+		failure = await attempt(target.url, deadline - Date.now())
 		if (typeof failure === 'undefined') return
 		logger.warn(
-			`Smoke check for "${target.service}" (${target.url}) failed on attempt ${String(tries)}/${String(SMOKE_CHECK_MAX_ATTEMPTS)}: ${failure}`,
+			`Smoke check for "${target.service}" (${target.url}) failed on attempt ${String(tries)}, ${secondsLeft(deadline)} s left: ${failure}`,
 		)
+		if (deadline - Date.now() <= SMOKE_CHECK_RETRY_DELAY_MS) break
+		// eslint-disable-next-line no-await-in-loop -- retries are strictly sequential with a bounded backoff
+		await wait(SMOKE_CHECK_RETRY_DELAY_MS)
 	}
 	throw new Error(
-		`Smoke check failed for service "${target.service}" at ${target.url} after ${String(SMOKE_CHECK_MAX_ATTEMPTS)} attempts: ${failure ?? 'unknown error'}`,
+		`Smoke check failed for service "${target.service}" at ${target.url}: no 2xx within ${String(SMOKE_CHECK_BUDGET_MS / MS_PER_SECOND)} s of the deploy. Last failure: ${failure ?? 'the deadline passed before its first attempt'}`,
 	)
 }
 
 /**
- * GET `/healthz` on every routed service after deploy, retrying each a bounded
- * number of times (a just-attached Custom Domain propagates in seconds). A
- * service still non-2xx (or unreachable) once its attempts are exhausted throws,
- * carrying the last status + truncated body so the deploy job turns red with the
- * HTTP response in the log. An empty target list is a no-op.
+ * GET `/healthz` on every routed service after deploy, retrying until one
+ * shared deadline (a just-attached Custom Domain propagates in seconds). A
+ * service still non-2xx (or unreachable) at the deadline throws, carrying the
+ * last status + truncated body so the deploy job turns red with the HTTP
+ * response in the log. An empty target list is a no-op.
  */
 export async function smokeCheckWorkers(
 	targets: ReadonlyArray<SmokeCheckTarget>,
 	options: SmokeCheckOptions = {},
 ): Promise<void> {
 	const wait = options.sleep ?? sleep
+	const deadline = Date.now() + SMOKE_CHECK_BUDGET_MS
 	for (const target of targets) {
 		// eslint-disable-next-line no-await-in-loop -- services checked one at a time so a failure surfaces its own service
-		await smokeCheckOne(target, wait)
+		await smokeCheckOne(target, deadline, wait)
 		logger.info(
 			`Smoke check passed for "${target.service}" (${target.url})`,
 		)

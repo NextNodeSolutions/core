@@ -7,6 +7,7 @@ import {
 	CONTAINER_PORT_VAR,
 	CONTAINER_SLEEP_AFTER_VAR,
 	CONTAINER_TARGET_PORT_HEADER,
+	HEALTH_CHECK_PATH,
 } from './contract.ts'
 
 import type { DurableObject } from 'cloudflare:workers'
@@ -19,6 +20,10 @@ const PORT_READY_TIMEOUT_MS = 120_000
 const STOP_GRACE_MS = 15_000
 const STOP_POLL_MS = 250
 const LISTEN_HOST = '0.0.0.0'
+// The host and path the class requests to know that the port answers. Its
+// default, `/`, is often a redirect to the app's public https URL, which the
+// probe follows and a container port refuses.
+const PING_ENDPOINT = `ping${HEALTH_CHECK_PATH}`
 const SERVICE_UNAVAILABLE = 503
 const HEX_RADIX = 16
 const HEX_BYTE_WIDTH = 2
@@ -93,6 +98,7 @@ export class ServiceContainer extends Container<GatewayEnv> {
 		})
 		this.listenPort = port
 		this.envDigest = envDigest(envVars)
+		this.pingEndpoint = PING_ENDPOINT
 	}
 
 	// Boot with the long timeouts, then forward through `super.fetch`, the
@@ -125,7 +131,10 @@ export class ServiceContainer extends Container<GatewayEnv> {
 
 	// The env is fixed when the Durable Object is built and applied only when
 	// the container starts, so a container still running with another env (a
-	// rotated secret, a new deploy) is restarted with this one.
+	// rotated secret, a new deploy) is restarted with this one. The digest is
+	// recorded as the container starts, not once its port answers: a boot that
+	// outlasts the port timeout keeps running with this env, and the next
+	// request waits for it instead of restarting it.
 	private async ensureListening(abort: AbortSignal): Promise<void> {
 		const digest = await this.envDigest
 		// During a stop or a restart `running` can read false while the old
@@ -137,8 +146,9 @@ export class ServiceContainer extends Container<GatewayEnv> {
 			return this.runTransition(() => this.restartWithEnv(digest))
 		if (this.isRunning() && (await this.getState()).status === 'healthy')
 			return
+		if (!this.isRunning())
+			await this.ctx.storage.put(CONTAINER_ENV_DIGEST_KEY, digest)
 		await this.startListening(abort)
-		await this.ctx.storage.put(CONTAINER_ENV_DIGEST_KEY, digest)
 	}
 
 	// One transition at a time: a caller that finds one in progress shares it.
@@ -167,8 +177,8 @@ export class ServiceContainer extends Container<GatewayEnv> {
 
 	private async restartWithEnv(digest: string): Promise<void> {
 		await this.stopGracefully()
-		await this.startListening(undefined)
 		await this.ctx.storage.put(CONTAINER_ENV_DIGEST_KEY, digest)
+		await this.startListening(undefined)
 	}
 
 	// `stop()` only sends SIGTERM: wait for the exit, then kill what is left,
