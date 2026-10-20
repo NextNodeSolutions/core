@@ -6,7 +6,7 @@ import {
 	computeR2ServiceBuckets,
 } from '#/domain/services/r2.ts'
 
-import { containerServiceEntries } from './container-services.ts'
+import { deriveBackingConsumers } from './backing-consumers.ts'
 import { buildFirewallResources } from './terraform-firewall.ts'
 import {
 	indexBy,
@@ -14,10 +14,8 @@ import {
 	redirectZoneLabel,
 	toTerraformLabel,
 } from './terraform-labels.ts'
-import {
-	buildHyperdriveConfig,
-	buildPlanetscaleBranchRole,
-} from './terraform-planetscale-resources.ts'
+import { buildPlanetscaleResources } from './terraform-planetscale-resources.ts'
+import { buildR2S3Token } from './terraform-r2-credentials.ts'
 import { buildRateLimitResources } from './terraform-rate-limit.ts'
 import { buildRedirectResources } from './terraform-redirects.ts'
 import {
@@ -32,6 +30,7 @@ import type { OrganizationConfig } from '#/config/organization.ts'
 import type { R2BucketConfig } from '#/config/service-config.ts'
 import type { CloudflareWorkersDeployableConfig } from '#/config/types.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
+import type { BackingConsumers } from './backing-consumers.ts'
 import type { WorkerPublicPathsRule } from './terraform-firewall.ts'
 import type {
 	D1DatabaseResource,
@@ -44,7 +43,7 @@ import type {
 } from './terraform-main-config.ts'
 import type { WorkerRateLimitRule } from './terraform-rate-limit.ts'
 
-export interface WorkersDerivedResources {
+export interface WorkersDerivedResources extends BackingConsumers {
 	readonly projectName: string
 	readonly domain: string
 	readonly environment: AppEnvironment
@@ -55,13 +54,6 @@ export interface WorkersDerivedResources {
 	readonly queueNames: ReadonlyArray<string>
 	readonly hasD1: boolean
 	readonly hasPlanetscale: boolean
-	// A Worker reaches Postgres through the Hyperdrive binding, so the config
-	// exists only when a Worker needs planetscale. A container connects with a
-	// URL and never needs it.
-	readonly hasHyperdrive: boolean
-	// A container service connects as the runtime role: its credentials are
-	// output. A container on the migrator role reads the migrator's outputs.
-	readonly hasPlanetscaleRuntimeContainer: boolean
 	readonly redirectDomains: ReadonlyArray<string>
 	readonly rateLimitRules: ReadonlyArray<WorkerRateLimitRule>
 	readonly publicPathsRules: ReadonlyArray<WorkerPublicPathsRule>
@@ -95,18 +87,10 @@ export function deriveWorkersResources(
 		queueNames,
 		hasD1,
 		hasPlanetscale,
-		hasHyperdrive:
-			hasPlanetscale &&
-			Object.values(config.deploy.services).some(
-				service =>
-					service.kind === 'worker' &&
-					service.needs.includes('planetscale'),
-			),
-		hasPlanetscaleRuntimeContainer:
-			hasPlanetscale &&
-			containerServiceEntries(config.deploy.services).some(
-				([, service]) => service.postgresRole === 'runtime',
-			),
+		...deriveBackingConsumers(config.deploy.services, {
+			hasPlanetscale,
+			hasBuckets: buckets.length > 0,
+		}),
 		// Redirect Rules materialise the apex+www .fr -> .com concept, which only
 		// exists in production; a dev zone has no record to redirect, so both the
 		// rulesets and their support records (and their redirect zone lookups) are
@@ -228,15 +212,13 @@ export function buildResourceBlock(
 	if (derived.hasD1) {
 		resource.cloudflare_d1_database = d1Resources(derived)
 	}
-	if (derived.hasPlanetscale) {
-		resource.planetscale_postgres_branch_role = buildPlanetscaleBranchRole(
+	Object.assign(
+		resource,
+		buildPlanetscaleResources(
 			derived,
 			organization.planetscaleOrganization,
-		)
-	}
-	if (derived.hasHyperdrive) {
-		resource.cloudflare_hyperdrive_config = buildHyperdriveConfig(derived)
-	}
+		),
+	)
 	if (derived.kvNames.length > 0) {
 		resource.cloudflare_workers_kv_namespace = kvResources(derived)
 	}
@@ -248,6 +230,9 @@ export function buildResourceBlock(
 	}
 	if (derived.cdnBuckets.length > 0) {
 		resource.cloudflare_r2_custom_domain = r2CustomDomainResources(derived)
+	}
+	if (derived.hasR2Container) {
+		resource.cloudflare_api_token = buildR2S3Token(derived)
 	}
 	const redirects = buildRedirectResources(
 		derived.domain,

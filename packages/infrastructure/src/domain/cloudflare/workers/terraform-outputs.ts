@@ -12,6 +12,7 @@ import {
 	PLANETSCALE_MIGRATOR_REF,
 	PLANETSCALE_RUNTIME_REF,
 } from './terraform-planetscale-resources.ts'
+import { buildR2S3Outputs } from './terraform-r2-credentials.ts'
 
 import type { OutputValue } from './terraform-main-config.ts'
 import type { WorkersDerivedResources } from './terraform-resources.ts'
@@ -124,5 +125,6 @@ export function buildOutputs(
 	if (derived.cdnBuckets.length > 0) {
 		output['r2_cdn_urls'] = r2CdnUrlsOutput(derived)
 	}
+	if (derived.hasR2Container) Object.assign(output, buildR2S3Outputs())
 	return output
 }
