@@ -3,40 +3,41 @@ interface DependsOnNode {
 }
 
 /**
- * Order services so every service deploys AFTER the ones it lists in
- * `depends_on`. A stable topological sort: at each step it emits, in declaration
- * order, every not-yet-emitted service whose dependencies are all already
- * emitted - so two independent services keep their nextnode.toml order and the
- * result is deterministic run to run.
+ * Group services into deploy levels so every service deploys AFTER the ones
+ * it lists in `depends_on`: each level holds, in declaration order, every
+ * service whose dependencies all sit in the levels before it, so the services
+ * of one level depend on none of each other and deploy together. A stable
+ * topological sort: two independent services keep their nextnode.toml order
+ * and the result is deterministic run to run.
  *
  * Throws on a dependency cycle (naming the services still tangled) - a cycle has
  * no valid deploy order, so failing loud beats deploying in an arbitrary one.
  * `depends_on` refs are validated against the declared set upstream, so an
  * unknown ref never reaches here.
  */
-export function orderServicesByDependsOn(
+export function levelServicesByDependsOn(
 	services: Readonly<Record<string, DependsOnNode>>,
-): ReadonlyArray<string> {
+): ReadonlyArray<ReadonlyArray<string>> {
 	const entries = Object.entries(services)
 	const pending = new Set(entries.map(([name]) => name))
-	const ordered: string[] = []
+	const levels: Array<ReadonlyArray<string>> = []
 
 	while (pending.size > 0) {
-		const ready = entries.filter(
-			([name, node]) =>
-				pending.has(name) &&
-				node.dependsOn.every(dep => !pending.has(dep)),
-		)
+		const ready = entries
+			.filter(
+				([name, node]) =>
+					pending.has(name) &&
+					node.dependsOn.every(dep => !pending.has(dep)),
+			)
+			.map(([name]) => name)
 		if (!ready.length) {
 			throw new Error(
 				`deploy.services depends_on forms a cycle among: ${[...pending].join(', ')} - remove a dependency so the services can deploy in order.`,
 			)
 		}
-		for (const [name] of ready) {
-			ordered.push(name)
-			pending.delete(name)
-		}
+		levels.push(ready)
+		for (const name of ready) pending.delete(name)
 	}
 
-	return ordered
+	return levels
 }

@@ -1,7 +1,10 @@
+import {
+	createRegistryCredentials,
+	pruneImageTags,
+} from '#/adapters/cloudflare/containers/registry.ts'
 import { emptyR2Buckets } from '#/adapters/cloudflare/r2/bucket-objects.ts'
 import { deriveS3Credentials } from '#/adapters/cloudflare/r2/s3-credentials.ts'
 import { deleteContainerApplication } from '#/adapters/wrangler/container-applications.ts'
-import { deleteContainerImageTags } from '#/adapters/wrangler/containers.ts'
 import {
 	defaultWranglerRunner,
 	wranglerDelete,
@@ -14,6 +17,7 @@ import { computeR2BucketName } from '#/domain/services/r2.ts'
 import { withWorkersTerraformTeardown } from './terraform-ops.ts'
 
 import type { CloudflareApiAccess } from '#/adapters/cloudflare/api.ts'
+import type { RegistryCredentials } from '#/adapters/cloudflare/containers/registry.ts'
 import type { WranglerRunner } from '#/adapters/wrangler/runner.ts'
 import type { DeployServiceConfig } from '#/config/types.ts'
 import type { ResourceOutcome } from '#/domain/deploy/resource-outcome.ts'
@@ -39,6 +43,35 @@ export interface WorkersTeardownInput {
 interface TeardownTools {
 	readonly cloudflareApi: CloudflareApiAccess
 	readonly runner: WranglerRunner
+	// One registry login for the teardown, minted at the first image.
+	readonly registryCredentials: () => Promise<RegistryCredentials>
+}
+
+function memoizeRegistryCredentials(
+	cloudflareApi: CloudflareApiAccess,
+): () => Promise<RegistryCredentials> {
+	let credentials: Promise<RegistryCredentials> | undefined
+	return () => (credentials ??= createRegistryCredentials(cloudflareApi))
+}
+
+async function deleteImage(
+	scriptName: string,
+	tools: TeardownTools,
+): Promise<ResourceOutcome> {
+	const deleted = await pruneImageTags(
+		await tools.registryCredentials(),
+		scriptName,
+		[],
+	)
+	if (!deleted.length)
+		return {
+			handled: false,
+			detail: `no tag to delete in image "${scriptName}"`,
+		}
+	return {
+		handled: true,
+		detail: `deleted ${String(deleted.length)} tag(s) of image "${scriptName}"`,
+	}
 }
 
 // A container service is three resources under one name: the application
@@ -55,7 +88,7 @@ async function deleteContainerService(
 		tools.runner,
 	)
 	const gateway = await wranglerDelete(scriptName, tools.runner)
-	const image = await deleteContainerImageTags(scriptName, [], tools.runner)
+	const image = await deleteImage(scriptName, tools)
 	return [application, gateway, image]
 }
 
@@ -119,6 +152,7 @@ export async function teardownWorkers(
 	const tools: TeardownTools = {
 		cloudflareApi: input.cloudflareApi,
 		runner: input.wranglerRunner ?? defaultWranglerRunner,
+		registryCredentials: memoizeRegistryCredentials(input.cloudflareApi),
 	}
 	const outcome = await withWorkersTerraformTeardown(
 		input.terraformContext,

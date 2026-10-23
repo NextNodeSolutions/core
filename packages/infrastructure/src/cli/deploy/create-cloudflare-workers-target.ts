@@ -5,7 +5,7 @@ import { computeContainerRelease } from '#/domain/cloudflare/workers/container-i
 import { resolveConfigDir } from './config-dir.ts'
 import { resolveOrganization } from './organization.ts'
 
-import type { ContainerImageSource } from '#/adapters/cloudflare/workers/deploy-container-service.ts'
+import type { ContainerImageSource } from '#/adapters/cloudflare/workers/publish-container-images.ts'
 import type { CloudflareWorkersDeployableConfig } from '#/config/types.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 import type { TargetDefinition } from './target.ts'

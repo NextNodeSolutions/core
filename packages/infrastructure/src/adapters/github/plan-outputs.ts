@@ -3,6 +3,7 @@ import { createLogger } from '@nextnode-solutions/logger'
 const logger = createLogger()
 
 import { planContainerBuilds } from '#/domain/cloudflare/workers/container-image.ts'
+import { hasWorkerService } from '#/domain/cloudflare/workers/container-services.ts'
 import {
 	hasMigrations,
 	planetscaleMigrateCommand,
@@ -86,6 +87,14 @@ export function writePlanOutputs({
 		String(Boolean(planetscaleMigrateCommand(config.services))),
 	)
 	writeOutput('has_containers', String(containers.length > 0))
+	// A project whose services all run as containers ships nothing from the
+	// caller's build: the build job uploads the package directory as it is.
+	writeOutput(
+		'has_worker_build',
+		String(
+			config.deploy ? hasWorkerService(config.deploy.services) : false,
+		),
+	)
 	writeOutput('containers_matrix', JSON.stringify(containers))
 	writeOutput('domain', config.project.domain ?? '')
 	writeOutput('package_dir', packageDir)

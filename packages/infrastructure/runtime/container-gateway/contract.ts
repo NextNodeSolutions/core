@@ -24,6 +24,11 @@ export const CONTAINER_SLEEP_AFTER_VAR =
 export const CONTAINER_RELEASE_VAR =
 	`${CONTAINER_CONTROL_PREFIX}RELEASE` as const
 
+// The image reference the application runs. The gateway includes it in the
+// digest of what the container was started with: a new image restarts the
+// container at the first request, so the deploy smoke check meets it.
+export const CONTAINER_IMAGE_VAR = `${CONTAINER_CONTROL_PREFIX}IMAGE` as const
+
 // The Durable Object namespace binding of the gateway class.
 export const CONTAINER_NAMESPACE_BINDING =
 	`${CONTAINER_CONTROL_PREFIX}NAMESPACE` as const

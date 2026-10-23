@@ -119,18 +119,41 @@ function parseEnvelope(
 	return { ...envelope.output, status }
 }
 
-/** GET a REST endpoint and read its `{ success, errors, result }` envelope. */
-export async function cloudflareGet(
+export interface CloudflareRequest {
+	readonly method: 'GET' | 'POST'
+	readonly path: string
+	// Sent as JSON.
+	readonly body?: unknown
+}
+
+/** Call a REST endpoint and read its `{ success, errors, result }` envelope. */
+export async function cloudflareRequest(
+	access: CloudflareApiAccess,
+	request: CloudflareRequest,
+	label: string,
+): Promise<CloudflareEnvelope> {
+	const hasBody = typeof request.body !== 'undefined'
+	const response = await fetchWithRetry(
+		`${CLOUDFLARE_API_BASE}${request.path}`,
+		{
+			method: request.method,
+			headers: {
+				authorization: `Bearer ${access.apiToken}`,
+				...(hasBody && { 'content-type': 'application/json' }),
+			},
+			...(hasBody && { body: JSON.stringify(request.body) }),
+		},
+		label,
+	)
+	return parseEnvelope(await response.text(), response.status, label)
+}
+
+export function cloudflareGet(
 	access: CloudflareApiAccess,
 	path: string,
 	label: string,
 ): Promise<CloudflareEnvelope> {
-	const response = await fetchWithRetry(
-		`${CLOUDFLARE_API_BASE}${path}`,
-		{ headers: { authorization: `Bearer ${access.apiToken}` } },
-		label,
-	)
-	return parseEnvelope(await response.text(), response.status, label)
+	return cloudflareRequest(access, { method: 'GET', path }, label)
 }
 
 /** The `result` of a successful envelope, checked against `schema`. */

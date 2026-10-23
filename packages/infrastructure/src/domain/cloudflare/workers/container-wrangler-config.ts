@@ -1,5 +1,6 @@
 import {
 	CONTAINER_GATEWAY_CLASS_NAME,
+	CONTAINER_IMAGE_VAR,
 	CONTAINER_NAMESPACE_BINDING,
 	CONTAINER_PORT_VAR,
 	CONTAINER_RELEASE_VAR,
@@ -23,6 +24,11 @@ import type {
 // setting.
 export const CONTAINER_MAX_INSTANCES = 1
 
+// One instance: a rollout has one step, and the application runs the new
+// image from the deploy on. The default, 10 % then 100 %, is meant for a
+// fleet.
+const CONTAINER_ROLLOUT_STEP_PERCENTAGE = 100
+
 function toWranglerInstanceType(
 	instance: ContainerInstanceType,
 ): WranglerContainer['instance_type'] {
@@ -37,8 +43,7 @@ function toWranglerInstanceType(
 
 // `name` is the Worker script name, so teardown finds the application by it.
 // `scheduling_policy` is omitted: the `default` policy is the only one the
-// gateway's `Container` class supports. Rollout fields keep their defaults,
-// right for a single instance.
+// gateway's `Container` class supports.
 function containerApplication(
 	name: string,
 	service: ContainerServiceConfig,
@@ -50,6 +55,7 @@ function containerApplication(
 		image,
 		max_instances: CONTAINER_MAX_INSTANCES,
 		instance_type: toWranglerInstanceType(service.instance),
+		rollout_step_percentage: CONTAINER_ROLLOUT_STEP_PERCENTAGE,
 		...(service.regions && { constraints: { regions: service.regions } }),
 	}
 }
@@ -65,7 +71,9 @@ function containerApplication(
  * The Durable Object is replaced at once on a deploy (`immediate`), not kept
  * on the previous version for up to five minutes, and the gateway reads its
  * version through `version_metadata` to reset an object the platform kept
- * anyway: a rotated secret reaches the container at the first request.
+ * anyway: a rotated secret reaches the container at the first request. The
+ * image reference travels as a var too, so the gateway restarts a container
+ * running the previous image rather than wait for the platform's rollout.
  */
 export function buildContainerWranglerConfig(
 	input: ContainerWranglerConfigInput,
@@ -77,6 +85,7 @@ export function buildContainerWranglerConfig(
 		[CONTAINER_PORT_VAR]: String(input.service.port),
 		[CONTAINER_SLEEP_AFTER_VAR]: input.service.sleepAfter,
 		[CONTAINER_RELEASE_VAR]: input.release,
+		[CONTAINER_IMAGE_VAR]: input.image,
 	}
 	document.containers = [
 		containerApplication(document.name, input.service, input.image),

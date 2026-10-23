@@ -30,8 +30,15 @@ function readProjectSecrets(): Readonly<Record<string, string>> | undefined {
 	return readJsonRecordEnv('PROJECT_SECRETS')
 }
 
+export interface DeployContextOptions {
+	// Set by the deploy command: the target starts the work that needs no
+	// input (the image push) while the backing env is read.
+	readonly prepareDeploy?: boolean
+}
+
 export async function resolveDeployContext(
 	config: DeployableConfig,
+	options: DeployContextOptions = {},
 ): Promise<DeployContext> {
 	const environment = resolveEnvironment(
 		config.project.type,
@@ -40,6 +47,7 @@ export async function resolveDeployContext(
 	const target = TARGET_DEFINITIONS[config.deploy.target].build(config, {
 		environment,
 	})
+	if (options.prepareDeploy) target.prepareDeploy?.(config.project.name)
 	const projectSecrets = readProjectSecrets()
 	const merged = mergeServiceEnvs([
 		await target.contributeEnv(config.project.name),

@@ -6,12 +6,12 @@ import { computeWorkerScriptName } from './worker-name.ts'
 import type { DeployServiceConfig } from '#/config/types.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 
-// The managed registry `wrangler containers push` writes to; images are
+// The managed registry the deploy pushes to; images are
 // namespaced by account id inside it.
 export const CLOUDFLARE_CONTAINER_REGISTRY = 'registry.cloudflare.com'
 
 // The OCI tag grammar. The tag comes from the environment (the commit SHA in
-// CI), so it is checked before Docker rejects it with a less helpful message.
+// CI), so it is checked before the registry rejects it with a less helpful message.
 export const IMAGE_TAG_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/
 
 const IMAGE_ARCHIVE_EXTENSION = '.tar'
@@ -44,7 +44,7 @@ export function computeContainerImageTag(image: ContainerImageName): string {
 	return `${repository}:${image.imageTag}`
 }
 
-/** The reference `wrangler containers push <localTag>` publishes. */
+/** The reference of `localTag` in the account's registry, as `deploy` pushes it. */
 export function computeContainerImageReference(
 	accountId: string,
 	localTag: string,
@@ -68,10 +68,6 @@ export function computeContainerRelease(
 ): string {
 	if (!deployId) return imageTag
 	return `${imageTag}${RELEASE_SEPARATOR}${deployId}`
-}
-
-export function dockerLoadArgs(archivePath: string): ReadonlyArray<string> {
-	return ['load', '-i', archivePath]
 }
 
 // One entry of the `containers` job matrix: what the Docker build action

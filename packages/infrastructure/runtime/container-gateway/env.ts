@@ -22,17 +22,18 @@ export function containerEnvVars(
 	return { ...forwarded, PORT: String(port), HOST: LISTEN_HOST }
 }
 
-// SHA-256 of the env sorted by name: equal envs give equal digests, and no
-// value is stored in clear.
+// SHA-256 of the image reference and the env sorted by name: what a running
+// container was started with, compared without storing a value in clear.
 export async function envDigest(
 	envVars: Readonly<Record<string, string>>,
+	image: string,
 ): Promise<string> {
 	const sorted = Object.keys(envVars)
 		.toSorted()
 		.map(name => [name, envVars[name]])
 	const digest = await crypto.subtle.digest(
 		'SHA-256',
-		new TextEncoder().encode(JSON.stringify(sorted)),
+		new TextEncoder().encode(JSON.stringify([image, sorted])),
 	)
 	return Array.from(new Uint8Array(digest), byte =>
 		byte.toString(HEX_RADIX).padStart(HEX_BYTE_WIDTH, '0'),

@@ -1,4 +1,4 @@
-import { orderServicesByDependsOn } from './depends-on-order.ts'
+import { levelServicesByDependsOn } from './depends-on-order.ts'
 
 interface OrderableWorker {
 	readonly needs: ReadonlyArray<string>
@@ -33,17 +33,18 @@ export function deriveBoundSiblings(
 }
 
 /**
- * Deploy order for a project's Workers: a Worker deploys AFTER every Worker it
- * binds (a service binding's target must already exist as a script) and after
- * any explicit `depends_on`. The binding graph is the single source of truth -
- * declaring a sibling in `needs` both wires the binding and orders the deploy,
- * so `depends_on` never has to restate a binding. Reuses the generic
- * topological sort (stable, declaration-order tie-break); a binding cycle throws
- * there, naming the tangled workers.
+ * Deploy levels for a project's Workers: a Worker deploys AFTER every Worker
+ * it binds (a service binding's target must already exist as a script) and
+ * after any explicit `depends_on`; the Workers of one level wait for none of
+ * each other and deploy together. The binding graph is the single source of
+ * truth - declaring a sibling in `needs` both wires the binding and orders the
+ * deploy, so `depends_on` never has to restate a binding. Reuses the generic
+ * topological sort (stable, declaration-order tie-break); a binding cycle
+ * throws there, naming the tangled workers.
  */
-export function orderWorkerDeploy(
+export function orderWorkerDeployLevels(
 	services: Readonly<Record<string, OrderableWorker>>,
-): ReadonlyArray<string> {
+): ReadonlyArray<ReadonlyArray<string>> {
 	const names = Object.keys(services)
 	const nodes: Record<string, { dependsOn: ReadonlyArray<string> }> =
 		Object.fromEntries(
@@ -59,5 +60,5 @@ export function orderWorkerDeploy(
 				},
 			]),
 		)
-	return orderServicesByDependsOn(nodes)
+	return levelServicesByDependsOn(nodes)
 }

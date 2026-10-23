@@ -65,6 +65,10 @@ export const DEFAULT_MIGRATE_COMMAND = 'pnpm drizzle-kit migrate'
 
 export interface DeployTarget {
 	readonly name: string
+	// Start what a deploy can do before its inputs are resolved (pushing the
+	// container images while the backing env is read). The work is awaited by
+	// `deploy`, where its failure surfaces; nothing is deployed by it.
+	prepareDeploy?(projectName: string): void
 	contributeEnv(projectName: string): TargetEnv | Promise<TargetEnv>
 	ensureInfra(projectName: string): Promise<ProvisionResult>
 	loadBackingEnv(projectName: string): Promise<ServiceEnv>

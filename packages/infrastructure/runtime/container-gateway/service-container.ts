@@ -9,6 +9,7 @@ import {
 import {
 	CONTAINER_BACKOFF_KEY,
 	CONTAINER_ENV_DIGEST_KEY,
+	CONTAINER_IMAGE_VAR,
 	CONTAINER_PORT_VAR,
 	CONTAINER_RELEASE_HEADER,
 	CONTAINER_RELEASE_VAR,
@@ -34,6 +35,9 @@ const STOP_POLL_MS = 250
 // probe follows and a container port refuses.
 const PING_ENDPOINT = `ping${HEALTH_CHECK_PATH}`
 const SERVICE_UNAVAILABLE = 503
+// A container still booting when a request's wait ends: the boot goes on,
+// the client comes back soon.
+const STILL_STARTING_RETRY_SECONDS = 5
 const STALE_OBJECT_REASON =
 	'The gateway object was built on a previous Worker version'
 
@@ -49,6 +53,7 @@ export interface GatewayEnv {
 	readonly [CONTAINER_PORT_VAR]: string
 	readonly [CONTAINER_SLEEP_AFTER_VAR]: string
 	readonly [CONTAINER_RELEASE_VAR]: string
+	readonly [CONTAINER_IMAGE_VAR]: string
 	readonly [name: string]: unknown
 }
 
@@ -84,7 +89,7 @@ export class ServiceContainer extends Container<GatewayEnv> {
 			envVars,
 		})
 		this.listenPort = port
-		this.envDigest = envDigest(envVars)
+		this.envDigest = envDigest(envVars, env[CONTAINER_IMAGE_VAR])
 		this.versionId = env[CONTAINER_VERSION_BINDING].id
 		this.release = env[CONTAINER_RELEASE_VAR]
 		this.pingEndpoint = PING_ENDPOINT
@@ -129,25 +134,18 @@ export class ServiceContainer extends Container<GatewayEnv> {
 		throw new Error(STALE_OBJECT_REASON)
 	}
 
-	// The env is fixed when the Durable Object is built and applied only when
-	// the container starts, so a container still running with another env (a
-	// rotated secret, a new deploy) is restarted with this one. The digest is
-	// recorded as the container starts, not once its port answers: a boot that
-	// outlasts the port timeout keeps running with this env, and the next
-	// request waits for it instead of restarting it.
+	// A running container serves when it was started with this env and image
+	// (`reuseRunning`). Otherwise a start is due, unless the last ones failed
+	// and the backoff holds. The digest is recorded as the container starts,
+	// not once its port answers: a boot that outlasts the port wait keeps
+	// running with this env, and the next request waits for it again.
 	private async ensureListening(abort: AbortSignal): Promise<ListenOutcome> {
 		const digest = await this.envDigest
 		// During a stop or a restart `running` can read false while the old
 		// process lives on: a request starting its own container here would be
 		// killed by the transition. Wait for it, then look again.
 		await this.waitForTransition()
-		const applied = await this.ctx.storage.get(CONTAINER_ENV_DIGEST_KEY)
-		if (this.isRunning() && applied !== digest) {
-			await this.runTransition(() => this.restartWithEnv(digest))
-			return { kind: 'listening' }
-		}
-		if (this.isRunning() && (await this.getState()).status === 'healthy')
-			return { kind: 'listening' }
+		if (this.isRunning()) return this.reuseRunning(digest, abort)
 		const backoffMs = remainingBackoffMs(
 			await this.readBackoff(),
 			this.release,
@@ -159,20 +157,46 @@ export class ServiceContainer extends Container<GatewayEnv> {
 				retryAfterSeconds: toRetryAfterSeconds(backoffMs),
 			}
 		}
-		if (!this.isRunning())
-			await this.ctx.storage.put(CONTAINER_ENV_DIGEST_KEY, digest)
+		await this.ctx.storage.put(CONTAINER_ENV_DIGEST_KEY, digest)
 		await this.startListening(abort)
 		await this.ctx.storage.delete(CONTAINER_BACKOFF_KEY)
 		return { kind: 'listening' }
 	}
 
-	// A start that failed on its own, not because the client left, pushes the
+	// The env and the image are fixed when the Durable Object is built and
+	// applied only when the container starts: a container running with others
+	// (a rotated secret, a new deploy) is restarted with these. One still
+	// booting is waited for: the boot goes on across requests.
+	private async reuseRunning(
+		digest: string,
+		abort: AbortSignal,
+	): Promise<ListenOutcome> {
+		const applied = await this.ctx.storage.get(CONTAINER_ENV_DIGEST_KEY)
+		if (applied !== digest) {
+			await this.runTransition(() => this.restartWithEnv(digest))
+			return { kind: 'listening' }
+		}
+		if ((await this.getState()).status !== 'healthy')
+			await this.startListening(abort)
+		return { kind: 'listening' }
+	}
+
+	// A start that failed on its own, not because the client left. A container
+	// still running is still booting (a first pull of the image can outlast
+	// the wait): the next request waits again. One that is not pushes the
 	// next attempt back: an image that cannot boot is billed for every boot.
 	private async startFailure(
 		error: unknown,
 		abort: AbortSignal,
 	): Promise<Response> {
 		if (abort.aborted) throw error
+		if (this.isRunning()) {
+			console.warn(
+				`The container is still starting after ${String(PORT_READY_TIMEOUT_MS)} ms; the next request waits again`,
+				error,
+			)
+			return unavailable(STILL_STARTING_RETRY_SECONDS)
+		}
 		const backoff = nextStartBackoff(
 			await this.readBackoff(),
 			this.release,

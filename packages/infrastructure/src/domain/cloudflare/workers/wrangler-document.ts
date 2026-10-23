@@ -174,6 +174,9 @@ export interface WranglerContainer {
 	readonly constraints?: {
 		readonly regions: ReadonlyArray<ContainerRegion>
 	}
+	// The share of instances each rollout step updates: one number for equal
+	// steps, or the cumulative share per step, ending at 100.
+	readonly rollout_step_percentage?: number | ReadonlyArray<number>
 }
 
 export interface WranglerDurableObjectBinding {

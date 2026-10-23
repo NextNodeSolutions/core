@@ -1,12 +1,15 @@
 import { findContainerApplication } from '#/adapters/cloudflare/containers/applications.ts'
-import { deleteContainerImageTags } from '#/adapters/wrangler/containers.ts'
+import {
+	createRegistryCredentials,
+	pruneImageTags,
+} from '#/adapters/cloudflare/containers/registry.ts'
 import { planImagePrune } from '#/domain/cloudflare/workers/container-image-prune.ts'
 import { containerServiceEntries } from '#/domain/cloudflare/workers/container-services.ts'
 import { computeWorkerScriptName } from '#/domain/cloudflare/workers/worker-name.ts'
 import { createLogger } from '@nextnode-solutions/logger'
 
 import type { CloudflareApiAccess } from '#/adapters/cloudflare/api.ts'
-import type { WranglerRunner } from '#/adapters/wrangler/runner.ts'
+import type { RegistryCredentials } from '#/adapters/cloudflare/containers/registry.ts'
 import type { DeployServiceConfig } from '#/config/types.ts'
 import type { ImagePrunePlan } from '#/domain/cloudflare/workers/container-image-prune.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
@@ -69,29 +72,40 @@ export async function planContainerImagePrune(
 	return plans.flatMap(plan => (plan ? [plan] : []))
 }
 
+async function pruneOne(
+	plan: ImagePrunePlan,
+	credentials: RegistryCredentials,
+): Promise<void> {
+	try {
+		await pruneImageTags(credentials, plan.repository, plan.keepTags)
+	} catch (error) {
+		logger.warn(
+			`Pruning the old tags of container image "${plan.repository}" failed; the next deploy retries: ${String(error)}`,
+		)
+	}
+}
+
 /**
  * Delete every tag the plans do not keep: every deploy pushes a new tag, and
- * the account's image storage is capped at 50 GB. Called only once every
- * service is deployed and smoke-checked, so a failed deploy leaves the tags
- * in place. A failed prune warns instead of failing a deploy that is already
- * live; the next deploy prunes again.
+ * the account's image storage is capped at 50 GB. Runs once every service is
+ * deployed, alongside the smoke checks: the tag each application ran before
+ * stays for a rollback whether they pass or not. A failed prune warns
+ * instead of failing a deploy that is already live; the next deploy prunes
+ * again.
  */
 export async function pruneContainerImages(
 	plans: ReadonlyArray<ImagePrunePlan>,
-	runner: WranglerRunner,
+	cloudflareApi: CloudflareApiAccess,
 ): Promise<void> {
-	for (const plan of plans) {
-		try {
-			// eslint-disable-next-line no-await-in-loop -- one image at a time keeps the registry calls and the log in order
-			await deleteContainerImageTags(
-				plan.repository,
-				plan.keepTags,
-				runner,
-			)
-		} catch (error) {
-			logger.warn(
-				`Pruning the old tags of container image "${plan.repository}" failed; the next deploy retries: ${String(error)}`,
-			)
-		}
+	if (!plans.length) return
+	let credentials: RegistryCredentials
+	try {
+		credentials = await createRegistryCredentials(cloudflareApi)
+	} catch (error) {
+		logger.warn(
+			`Pruning the old container image tags failed; the next deploy retries: ${String(error)}`,
+		)
+		return
 	}
+	await Promise.all(plans.map(plan => pruneOne(plan, credentials)))
 }

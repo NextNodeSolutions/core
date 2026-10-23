@@ -41,14 +41,14 @@ concurrency:
 # core's pipeline CLI only, never the caller's scripts or dependency lifecycle
 # hooks: the caller's code builds in `build`, with no credential and no token
 # endpoint, and `deploy` ships the uploaded result. A container service's
-# Dockerfile builds in `containers` on the same terms; `deploy` loads and pushes
-# the saved image without building. The one exception is a PlanetScale
-# migration, which runs the caller's migrate command in `migrate`.
+# Dockerfile builds in `containers` on the same terms; `deploy` pushes the
+# saved image without building or loading it. The one exception is a
+# PlanetScale migration, which runs the caller's migrate command in `migrate`.
 #
-# Shape: `plan` reads nextnode.toml, then everything that needs no other job
-# runs at once - the caller's checks, its build, its container images and
-# the provisioning - and `deploy` waits for all of them. A production deploy
-# first passes `gate`, which the provisioning waits for.
+# Shape: `plan` reads nextnode.toml and, for a production deploy, passes the
+# production gate; then everything that needs no other job runs at once - the
+# caller's checks, its build, its container images and the provisioning - and
+# `deploy` waits for all of them.
 jobs:
     plan:
         name: Plan
@@ -62,6 +62,7 @@ jobs:
             has_migrations: ${{ steps.plan.outputs.has_migrations }}
             has_planetscale_migration: ${{ steps.plan.outputs.has_planetscale_migration }}
             has_containers: ${{ steps.plan.outputs.has_containers }}
+            has_worker_build: ${{ steps.plan.outputs.has_worker_build }}
             containers_matrix: ${{ steps.plan.outputs.containers_matrix }}
             package_dir: ${{ steps.plan.outputs.package_dir }}
             config_name: ${{ steps.plan.outputs.config_name }}
@@ -78,6 +79,18 @@ jobs:
               env:
                   PIPELINE_CONFIG_FILE: ${{ github.workspace }}/${{ inputs.config_file }}
                   PIPELINE_ENVIRONMENT: ${{ inputs.environment }}
+
+            # A production deploy of a project with a development environment
+            # ships a commit only once the same commit deployed to development.
+            # A step of `plan`, so every job after it, the provisioning that
+            # changes production included, waits for it.
+            - name: Check the development deploy of this commit
+              if: steps.plan.outputs.has_prod_gate == 'true'
+              run: node src/index.ts prod-gate
+              working-directory: .infra/packages/infrastructure
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  DEV_WORKFLOW_FILE: ${{ inputs.dev_workflow_file }}
 
     quality:
         name: ${{ matrix.task.name }}
@@ -97,29 +110,6 @@ jobs:
             - name: ${{ matrix.task.name }}
               run: ${{ matrix.task.cmd }}
 
-    gate:
-        name: Production gate
-        needs: plan
-        # A production deploy of a project with a development environment
-        # ships a commit only once the same commit deployed to development.
-        # The gate is its own job so that the provisioning, which changes
-        # production, waits for it and for nothing else.
-        if: needs.plan.outputs.has_prod_gate == 'true'
-        runs-on: ubuntu-latest
-        timeout-minutes: 10
-        steps:
-            - uses: NextNodeSolutions/core/.github/actions/setup@main
-              with:
-                  infra: 'true'
-                  deps: 'false'
-
-            - name: Check the development deploy of this commit
-              run: node src/index.ts prod-gate
-              working-directory: .infra/packages/infrastructure
-              env:
-                  GH_TOKEN: ${{ github.token }}
-                  DEV_WORKFLOW_FILE: ${{ inputs.dev_workflow_file }}
-
     build:
         name: Build
         needs: plan
@@ -129,12 +119,17 @@ jobs:
         # `id-token: write` and no secret: nothing this job executes can reach
         # the vault. The package directory, minus its dependencies, travels to
         # `deploy` as an artifact; the Worker bundle must be self-contained,
-        # `deploy` never installs the caller's dependencies.
+        # `deploy` never installs the caller's dependencies. A project whose
+        # services all run as containers has no Worker to build: the package
+        # directory travels as it is, for its nextnode.toml.
         steps:
             - uses: NextNodeSolutions/core/.github/actions/setup@main
+              with:
+                  deps: ${{ needs.plan.outputs.has_worker_build }}
 
             # Public settings only: a DSN is not a secret.
             - name: Build
+              if: needs.plan.outputs.has_worker_build == 'true'
               run: pnpm build
               env:
                   PUBLIC_SENTRY_DSN: ${{ vars.PUBLIC_SENTRY_DSN }}
@@ -168,7 +163,7 @@ jobs:
         # `id-token: write` and no secret, so nothing it executes can reach the
         # vault. Each service builds in its own job, with its layers cached in
         # the Actions cache under its own scope, so a commit that leaves a
-        # build stage unchanged restores it instead of rebuilding it. The
+        # build stage unchanged restores it instead of rebuilding it. The OCI
         # archive travels to `deploy`, which pushes it with the Cloudflare
         # token and never builds.
         steps:
@@ -181,7 +176,8 @@ jobs:
 
             # The tag is the one `deploy` pushes: the image repository is the
             # service's Worker script name, the tag the commit. `provenance`
-            # off keeps the output a plain image that `docker load` restores.
+            # off keeps the archive a single image manifest, which `deploy`
+            # pushes straight from the file.
             - name: Build image
               uses: docker/build-push-action@v7
               with:
@@ -190,27 +186,24 @@ jobs:
                   platforms: linux/amd64
                   provenance: false
                   tags: ${{ matrix.container.repository }}:${{ github.sha }}
-                  outputs: type=docker,dest=${{ runner.temp }}/containers/${{ matrix.container.archive }}
+                  outputs: type=oci,dest=${{ runner.temp }}/containers/${{ matrix.container.archive }}
                   cache-from: type=gha,scope=${{ matrix.container.repository }}
                   cache-to: type=gha,scope=${{ matrix.container.repository }},mode=max
 
-            # An image archive is mostly already-compressed layers: the
-            # lightest compression keeps the upload short.
+            # The OCI layers are already gzip: compressing them again only
+            # slows the upload.
             - name: Upload image
               uses: actions/upload-artifact@v7
               with:
                   name: containers-${{ needs.plan.outputs.project_name }}-${{ inputs.environment }}--${{ matrix.container.service }}
                   path: ${{ runner.temp }}/containers/${{ matrix.container.archive }}
-                  compression-level: 1
+                  compression-level: 0
                   if-no-files-found: error
                   retention-days: 1
 
     provision:
         name: Provision
-        # A skipped gate (no production gate) does not block the provisioning;
-        # a failed one does.
-        needs: [plan, gate]
-        if: ${{ !cancelled() && !failure() }}
+        needs: plan
         runs-on: ubuntu-latest
         timeout-minutes: 30
         permissions:
@@ -319,9 +312,9 @@ jobs:
 
     deploy:
         name: Deploy
-        # A skipped `gate`, `containers` or `migrate` job is neither cancelled
-        # nor failed, so it does not block the deploy; a failed one does.
-        needs: [plan, quality, gate, build, containers, provision, migrate]
+        # A skipped `containers` or `migrate` job is neither cancelled nor
+        # failed, so it does not block the deploy; a failed one does.
+        needs: [plan, quality, build, containers, provision, migrate]
         if: ${{ !cancelled() && !failure() }}
         runs-on: ubuntu-latest
         timeout-minutes: 30
@@ -350,8 +343,8 @@ jobs:
 
             # The image archives saved by `containers`, one artifact per
             # service, merged into one directory outside the checkout for the
-            # same reason. `deploy` only loads and pushes them: no Dockerfile
-            # step runs in this job.
+            # same reason. `deploy` only pushes them: no Dockerfile step and
+            # no Docker daemon runs in this job.
             - name: Download container images
               if: needs.plan.outputs.has_containers == 'true'
               uses: actions/download-artifact@v8
@@ -377,10 +370,10 @@ jobs:
 
             # The SEO guard is injected per service inside `deploy` (before each
             # asset upload), so there is no separate seo-guard step here. A
-            # container service loads its archive from CONTAINER_IMAGES_DIR and
-            # pushes it as IMAGE_TAG with `wrangler containers push`, which
-            # logs in to the registry with the Cloudflare token: no Docker login
-            # step. Both are left empty for a project without containers.
+            # container service's archive in CONTAINER_IMAGES_DIR is pushed as
+            # IMAGE_TAG with skopeo, under registry credentials the deploy
+            # mints with the Cloudflare token: no login step. Both are left
+            # empty for a project without containers.
             # DEPLOY_ID tells a re-run of the same commit from the previous one:
             # the gateway answers the health check with the release, and the
             # smoke check accepts only this run's.

@@ -89,13 +89,24 @@ async function smokeCheckOne(
 	)
 }
 
+async function smokeCheckAndLog(
+	target: SmokeCheckTarget,
+	deadline: number,
+	wait: (ms: number) => Promise<void>,
+): Promise<void> {
+	await smokeCheckOne(target, deadline, wait)
+	logger.info(`Smoke check passed for "${target.service}" (${target.url})`)
+}
+
 /**
- * GET `/healthz` on every routed service after deploy, retrying until one
- * shared deadline (a just-attached Custom Domain propagates in seconds). A
- * container service must also answer with this deploy's release. A service
- * still failing (or unreachable) at the deadline throws, carrying the last
- * status + truncated body so the deploy job turns red with the HTTP response
- * in the log. An empty target list is a no-op.
+ * GET `/healthz` on every routed service after deploy, all at once, each
+ * retrying until one shared deadline (a just-attached Custom Domain
+ * propagates in seconds; a container's first boot takes longer, and the other
+ * services are not waiting behind it). A container service must also answer
+ * with this deploy's release. A service still failing (or unreachable) at the
+ * deadline throws, carrying the last status + truncated body so the deploy
+ * job turns red with the HTTP response in the log; every failing service is
+ * named. An empty target list is a no-op.
  */
 export async function smokeCheckWorkers(
 	targets: ReadonlyArray<SmokeCheckTarget>,
@@ -103,11 +114,11 @@ export async function smokeCheckWorkers(
 ): Promise<void> {
 	const wait = options.sleep ?? sleep
 	const deadline = Date.now() + SMOKE_CHECK_BUDGET_MS
-	for (const target of targets) {
-		// eslint-disable-next-line no-await-in-loop -- services checked one at a time so a failure surfaces its own service
-		await smokeCheckOne(target, deadline, wait)
-		logger.info(
-			`Smoke check passed for "${target.service}" (${target.url})`,
-		)
-	}
+	const outcomes = await Promise.allSettled(
+		targets.map(target => smokeCheckAndLog(target, deadline, wait)),
+	)
+	const failures = outcomes.flatMap(outcome =>
+		outcome.status === 'rejected' ? [String(outcome.reason)] : [],
+	)
+	if (failures.length) throw new Error(failures.join('\n'))
 }
