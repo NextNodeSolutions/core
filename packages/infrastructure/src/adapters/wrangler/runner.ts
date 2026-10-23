@@ -1,4 +1,6 @@
 import { execFile } from 'node:child_process'
+import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
 
 import { createLogger } from '@nextnode-solutions/logger'
 
@@ -9,10 +11,26 @@ const logger = createLogger()
 
 const MS_PER_SECOND = 1_000
 
-// A single `wrangler delete`/`deploy` against the Cloudflare API is quick, but
-// npx may first download the wrangler package; the bound only exists to kill a
-// genuinely hung process rather than block the CI job forever.
+// A single `wrangler delete`/`deploy` against the Cloudflare API is quick; the
+// bound only exists to kill a genuinely hung process rather than block the CI
+// job forever.
 export const WRANGLER_TIMEOUT_MS = 300_000
+
+// The wrangler this package depends on, pinned by the lockfile: the same
+// version in every job and every run, installed with the package, so no job
+// fetches it. Resolved on first use: a command that never calls wrangler does
+// not need it installed.
+let wranglerBin: string | undefined
+function resolveWranglerBin(): string {
+	wranglerBin ??= join(
+		dirname(
+			createRequire(import.meta.url).resolve('wrangler/package.json'),
+		),
+		'bin',
+		'wrangler.js',
+	)
+	return wranglerBin
+}
 
 const WRANGLER_MAX_BUFFER_BYTES = 67_108_864
 
@@ -94,14 +112,13 @@ function timeoutMessage(
 
 // Auth is ambient: wrangler reads CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID
 // from the forwarded process env, never from argv (a token in argv leaks to
-// `ps` and CI logs). `pnpm dlx wrangler` resolves the CLI in an isolated
-// temporary environment without relying on npm's npx cache PATH.
+// `ps` and CI logs). Runs with the node that runs the CLI.
 export const defaultWranglerRunner: WranglerRunner = (args, options) =>
 	new Promise<ExecResult>((resolve, reject) => {
 		const timeoutMs = options?.timeoutMs ?? WRANGLER_TIMEOUT_MS
 		const child = execFile(
-			'pnpm',
-			['dlx', 'wrangler', ...args],
+			process.execPath,
+			[resolveWranglerBin(), ...args],
 			{
 				cwd: options?.cwd,
 				env: process.env,

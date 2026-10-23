@@ -29,7 +29,9 @@ export interface QueuesServiceConfig {
 }
 
 export interface PlanetscaleServiceConfig {
-	readonly migrateCommand?: string
+	// The project's migration command, `false` when nothing migrates: the
+	// image owns its schema, so no `migrate` job runs.
+	readonly migrateCommand?: string | false
 	readonly clusterSize?: string
 	readonly region?: string
 }

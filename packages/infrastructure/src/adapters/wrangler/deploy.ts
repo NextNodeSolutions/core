@@ -1,11 +1,15 @@
+import { writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
+
 import {
-	buildWorkerSecretSync,
-	removedSecretNames,
+	buildSecretDeletion,
+	staleSecretNames,
 } from '#/domain/cloudflare/workers/secret-sync.ts'
-import { isRecord } from '#/kernel/guards.ts'
 import { createLogger } from '@nextnode-solutions/logger'
+import { array, object, string } from 'valibot'
 
 import { withWranglerConfig } from './ephemeral-config.ts'
+import { parseWranglerJsonArray } from './json-output.ts'
 import { assertWranglerOk } from './runner.ts'
 
 import type { WranglerDocument } from '#/domain/cloudflare/workers/wrangler-document.ts'
@@ -14,6 +18,13 @@ import type { WranglerRunner } from './runner.ts'
 const logger = createLogger()
 
 const CONFIG_DIR_PREFIX = 'nn-wrangler-cfg-'
+const SECRETS_FILENAME = 'secrets.json'
+// Readable by the runner's user only, for the time of the deploy.
+const SECRETS_FILE_MODE = 0o600
+
+// `wrangler secret list` prints `[{ name, type }]`: only the names are read,
+// the values never leave Cloudflare.
+const secretNamesSchema = array(object({ name: string() }))
 
 export interface WranglerDeployInput {
 	readonly document: WranglerDocument
@@ -21,114 +32,106 @@ export interface WranglerDeployInput {
 	// The project package directory (where the built bundle + assets live).
 	// wrangler runs here and the absolutised paths resolve against it.
 	readonly cwd: string
-	// The secrets this Worker must hold, exactly: synced right after the deploy
-	// against the SAME ephemeral config (the Worker must exist first). Omitted
-	// when the Worker's secrets are left as they are, so no secret call is made.
+	// The secrets this Worker must hold, exactly: uploaded with the code, then
+	// the names absent from here are deleted. Omitted when the Worker's
+	// secrets are left as they are, so no secret call is made.
 	readonly secrets?: Readonly<Record<string, string>>
+}
+
+interface WorkerCommand {
+	readonly configPath: string
+	readonly cwd: string
+	readonly workerName: string
+	readonly runner: WranglerRunner
+}
+
+// The secrets travel in a file beside the ephemeral config, in the scratch
+// directory `withWranglerConfig` removes: never argv (a value in argv leaks to
+// `ps` and CI logs). An empty set uploads nothing: wrangler refuses an empty
+// file, and the stale names are deleted afterwards anyway.
+async function writeSecretsFile(
+	configPath: string,
+	secrets: Readonly<Record<string, string>> | undefined,
+): Promise<ReadonlyArray<string>> {
+	if (!secrets || !Object.keys(secrets).length) return []
+	const path = join(dirname(configPath), SECRETS_FILENAME)
+	await writeFile(path, JSON.stringify(secrets), { mode: SECRETS_FILE_MODE })
+	return ['--secrets-file', path]
+}
+
+async function listWorkerSecretNames(
+	command: WorkerCommand,
+): Promise<ReadonlyArray<string>> {
+	const label = `secret list (worker "${command.workerName}")`
+	const listExec = await command.runner(
+		['secret', 'list', '--config', command.configPath],
+		{ cwd: command.cwd },
+	)
+	assertWranglerOk(listExec, label)
+	return parseWranglerJsonArray(
+		listExec.stdout,
+		secretNamesSchema,
+		label,
+	).map(secret => secret.name)
+}
+
+// A name the Worker holds that `secrets` lacks is deleted by one
+// `wrangler secret bulk` call reading `{ name: null }` on stdin. The call
+// publishes a secrets-only version, so it is made only when a name is stale.
+async function deleteStaleSecrets(
+	command: WorkerCommand,
+	secrets: Readonly<Record<string, string>>,
+): Promise<void> {
+	const stale = staleSecretNames(
+		secrets,
+		await listWorkerSecretNames(command),
+	)
+	if (!stale.length) return
+	logger.info(
+		`wrangler secret bulk "${command.workerName}": removing ${stale.join(', ')}`,
+	)
+	const bulkExec = await command.runner(
+		['secret', 'bulk', '--config', command.configPath],
+		{ cwd: command.cwd, stdin: JSON.stringify(buildSecretDeletion(stale)) },
+	)
+	assertWranglerOk(bulkExec, `secret bulk (worker "${command.workerName}")`)
 }
 
 /**
  * Deploy one Worker: write its generated config to an ephemeral JSON file
  * (removed in `finally`, never committed) and run `wrangler deploy --config`
- * from the project directory. A non-zero exit throws the wrangler stderr
- * verbatim so the CI log carries the actual provider error.
+ * from the project directory. The secrets upload with the code, as one
+ * version: no version ever runs new code with old secrets or the reverse, and
+ * a container's Durable Object is replaced once. A non-zero exit throws the
+ * wrangler stderr verbatim so the CI log carries the actual provider error.
  */
 export async function wranglerDeploy(
 	input: WranglerDeployInput,
 ): Promise<void> {
+	const workerName = input.document.name
 	await withWranglerConfig(
 		input.document,
 		input.cwd,
 		CONFIG_DIR_PREFIX,
 		async configPath => {
-			logger.info(`wrangler deploy "${input.document.name}" started`)
+			const command: WorkerCommand = {
+				configPath,
+				cwd: input.cwd,
+				workerName,
+				runner: input.runner,
+			}
+			const secretsArgs = await writeSecretsFile(
+				configPath,
+				input.secrets,
+			)
+			logger.info(`wrangler deploy "${workerName}" started`)
 			const deployExec = await input.runner(
-				['deploy', '--config', configPath],
+				['deploy', '--config', configPath, ...secretsArgs],
 				{ cwd: input.cwd },
 			)
-			assertWranglerOk(
-				deployExec,
-				`deploy (worker "${input.document.name}")`,
-			)
-			logger.info(`wrangler deploy "${input.document.name}" completed`)
-			if (typeof input.secrets !== 'undefined') {
-				await syncWorkerSecrets(
-					configPath,
-					input.secrets,
-					input.runner,
-					{
-						cwd: input.cwd,
-						workerName: input.document.name,
-					},
-				)
-			}
+			assertWranglerOk(deployExec, `deploy (worker "${workerName}")`)
+			logger.info(`wrangler deploy "${workerName}" completed`)
+			if (input.secrets) await deleteStaleSecrets(command, input.secrets)
 		},
 	)
-}
-
-export interface WranglerSecretOptions {
-	readonly cwd: string
-	readonly workerName: string
-}
-
-// `wrangler secret list` prints a JSON array of `{ name, type }` by default.
-// Only the names are read; the values never leave Cloudflare.
-function parseSecretNames(stdout: string, workerName: string): string[] {
-	const context = `wrangler secret list (worker "${workerName}")`
-	const start = stdout.indexOf('[')
-	if (start === -1) throw new Error(`${context}: no JSON array in the output`)
-	const parsed: unknown = JSON.parse(stdout.slice(start))
-	if (!Array.isArray(parsed)) {
-		throw new Error(`${context}: output is not a JSON array`)
-	}
-	return parsed.map(entry => {
-		if (!isRecord(entry) || typeof entry['name'] !== 'string') {
-			throw new Error(`${context}: an entry is missing \`name\``)
-		}
-		return entry['name']
-	})
-}
-
-async function listWorkerSecretNames(
-	configPath: string,
-	runner: WranglerRunner,
-	options: WranglerSecretOptions,
-): Promise<string[]> {
-	const listExec = await runner(['secret', 'list', '--config', configPath], {
-		cwd: options.cwd,
-	})
-	assertWranglerOk(listExec, `secret list (worker "${options.workerName}")`)
-	return parseSecretNames(listExec.stdout, options.workerName)
-}
-
-/**
- * Make the Worker hold exactly `secrets`: list the names it holds, then one
- * `wrangler secret bulk --config` call sets every value and deletes every name
- * absent from `secrets` (a `null` value). The JSON travels on STDIN - never
- * argv (a secret in argv leaks to `ps` and CI logs) and never a file. A
- * non-zero exit throws the wrangler stderr verbatim.
- */
-export async function syncWorkerSecrets(
-	configPath: string,
-	secrets: Readonly<Record<string, string>>,
-	runner: WranglerRunner,
-	options: WranglerSecretOptions,
-): Promise<void> {
-	const existingNames = await listWorkerSecretNames(
-		configPath,
-		runner,
-		options,
-	)
-	const payload = buildWorkerSecretSync(secrets, existingNames)
-	if (!Object.keys(payload).length) return
-
-	const removed = removedSecretNames(payload)
-	logger.info(
-		`wrangler secret bulk "${options.workerName}": ${Object.keys(secrets).length} set${removed.length ? `, removed ${removed.join(', ')}` : ''}`,
-	)
-	const bulkExec = await runner(['secret', 'bulk', '--config', configPath], {
-		cwd: options.cwd,
-		stdin: JSON.stringify(payload),
-	})
-	assertWranglerOk(bulkExec, `secret bulk (worker "${options.workerName}")`)
 }

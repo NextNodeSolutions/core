@@ -11,7 +11,9 @@ import { resolveDeployContext } from './resolve-deploy-context.ts'
 import type { DeployableConfig } from '#/config/types.ts'
 
 export async function deployCommand(config: DeployableConfig): Promise<void> {
-	const { target, env, input, merged } = await resolveDeployContext(config)
+	const { target, env, input, merged } = await resolveDeployContext(config, {
+		prepareDeploy: true,
+	})
 
 	// Only the public values reach GITHUB_ENV: the secrets go to the Workers
 	// through `wrangler secret bulk` and nowhere else.

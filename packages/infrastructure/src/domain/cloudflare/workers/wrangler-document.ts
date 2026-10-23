@@ -174,6 +174,9 @@ export interface WranglerContainer {
 	readonly constraints?: {
 		readonly regions: ReadonlyArray<ContainerRegion>
 	}
+	// The share of instances each rollout step updates: one number for equal
+	// steps, or the cumulative share per step, ending at 100.
+	readonly rollout_step_percentage?: number | ReadonlyArray<number>
 }
 
 export interface WranglerDurableObjectBinding {
@@ -181,8 +184,22 @@ export interface WranglerDurableObjectBinding {
 	readonly class_name: string
 }
 
+// How a deploy reaches the Durable Objects already running: `deferred`, the
+// default, keeps an active object on its previous version for up to
+// `max_delay` seconds (300 by default); `immediate` replaces it at once.
+export interface WranglerDurableObjectCodeUpdateStrategy {
+	readonly mode: 'immediate' | 'deferred'
+	readonly max_delay?: number
+}
+
 export interface WranglerDurableObjects {
 	readonly bindings: ReadonlyArray<WranglerDurableObjectBinding>
+	readonly code_update_strategy?: WranglerDurableObjectCodeUpdateStrategy
+}
+
+// The binding exposing the Worker version's `id`, `tag` and `timestamp`.
+export interface WranglerVersionMetadata {
+	readonly binding: string
 }
 
 // The declarative registration of a Durable Object class (wrangler 4.107+).
@@ -232,6 +249,7 @@ export interface WranglerDocument {
 	readonly containers?: ReadonlyArray<WranglerContainer>
 	readonly durable_objects?: WranglerDurableObjects
 	readonly exports?: Readonly<Record<string, WranglerDurableObjectExport>>
+	readonly version_metadata?: WranglerVersionMetadata
 }
 
 export type WranglerDocumentDraft = {

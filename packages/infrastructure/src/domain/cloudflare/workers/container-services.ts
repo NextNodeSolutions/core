@@ -12,6 +12,13 @@ export function containerServiceEntries(
 	)
 }
 
+/** Whether any service of the project is a Worker script or assets. */
+export function hasWorkerService(
+	services: Readonly<Record<string, DeployServiceConfig>>,
+): boolean {
+	return Object.values(services).some(service => service.kind === 'worker')
+}
+
 /** Whether any service of the project runs as a Cloudflare Container. */
 export function hasContainerService(
 	services: Readonly<Record<string, DeployServiceConfig>>,

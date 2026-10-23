@@ -38,6 +38,10 @@ const STATE_LOCK_NOT_FOUND_FINGERPRINT = 'resource not found'
 const TERRAFORM_PLAN_NO_CHANGES_EXIT = 0
 const TERRAFORM_PLAN_CHANGES_EXIT = 2
 
+// `terraform state list` exits 1 with this when the workspace was never
+// applied: an empty state, not a failure.
+const NO_STATE_FINGERPRINT = 'No state file was found'
+
 export interface ExecResult {
 	readonly exitCode: number
 	readonly stdout: string
@@ -163,10 +167,16 @@ export async function terraformInit(
 	)
 }
 
+/**
+ * Apply the config, or with `targets` only the resources at those addresses
+ * (`-target`), as a teardown does to record a role's successor before the
+ * destroy.
+ */
 export async function terraformApply(
 	workdir: string,
 	runner: TerraformRunner,
 	vars: Readonly<Record<string, string>>,
+	targets: ReadonlyArray<string> = [],
 ): Promise<void> {
 	await runTerraformCommand(
 		[
@@ -175,6 +185,7 @@ export async function terraformApply(
 			'-no-color',
 			'-auto-approve',
 			`-lock-timeout=${TERRAFORM_LOCK_TIMEOUT}`,
+			...targets.map(address => `-target=${address}`),
 		],
 		workdir,
 		runner,
@@ -231,6 +242,32 @@ export async function terraformPlan(
 		hasChanges: execResult.exitCode === TERRAFORM_PLAN_CHANGES_EXIT,
 		planText: execResult.stdout,
 	}
+}
+
+/** The resource addresses the state holds; none when it was never written. */
+export async function terraformStateList(
+	workdir: string,
+	runner: TerraformRunner,
+): Promise<ReadonlyArray<string>> {
+	const startedAt = Date.now()
+	logger.info(`terraform state list started in "${workdir}"`)
+	const execResult = await runner(['state', 'list', '-no-color'], {
+		cwd: workdir,
+		env: {},
+	})
+	if (
+		execResult.exitCode !== 0 &&
+		!execResult.stderr.includes(NO_STATE_FINGERPRINT)
+	) {
+		throw new Error(formatFailure('state list', execResult))
+	}
+	logger.info(
+		`terraform state list completed in ${String(Date.now() - startedAt)}ms`,
+	)
+	return execResult.stdout
+		.split('\n')
+		.map(line => line.trim())
+		.filter(line => line.length > 0)
 }
 
 export async function terraformOutputJson(

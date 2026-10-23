@@ -1,19 +1,21 @@
+import { posix } from 'node:path'
+
+import { containerServiceEntries } from './container-services.ts'
 import { computeWorkerScriptName } from './worker-name.ts'
 
+import type { DeployServiceConfig } from '#/config/types.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 
-// The managed registry `wrangler containers push` writes to; images are
+// The managed registry the deploy pushes to; images are
 // namespaced by account id inside it.
 export const CLOUDFLARE_CONTAINER_REGISTRY = 'registry.cloudflare.com'
 
-// The only platform Cloudflare Containers run.
-export const CONTAINER_IMAGE_PLATFORM = 'linux/amd64'
-
 // The OCI tag grammar. The tag comes from the environment (the commit SHA in
-// CI), so it is checked before Docker rejects it with a less helpful message.
+// CI), so it is checked before the registry rejects it with a less helpful message.
 export const IMAGE_TAG_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/
 
 const IMAGE_ARCHIVE_EXTENSION = '.tar'
+const RELEASE_SEPARATOR = '+'
 
 export interface ContainerImageName {
 	readonly projectName: string
@@ -42,7 +44,7 @@ export function computeContainerImageTag(image: ContainerImageName): string {
 	return `${repository}:${image.imageTag}`
 }
 
-/** The reference `wrangler containers push <localTag>` publishes. */
+/** The reference of `localTag` in the account's registry, as `deploy` pushes it. */
 export function computeContainerImageReference(
 	accountId: string,
 	localTag: string,
@@ -50,45 +52,54 @@ export function computeContainerImageReference(
 	return `${CLOUDFLARE_CONTAINER_REGISTRY}/${accountId}/${localTag}`
 }
 
-/** The `docker save` archive of one service, inside the images directory. */
+/** The image archive of one service, inside the images directory. */
 export function containerImageArchiveName(serviceName: string): string {
 	return `${serviceName}${IMAGE_ARCHIVE_EXTENSION}`
 }
 
-export interface DockerBuildInput {
-	// Absolute paths: docker runs from core's checkout, not the project.
+/**
+ * The release a deploy ships, which the gateway's health check answers with:
+ * the image tag alone identifies the commit, and the workflow run suffix
+ * tells a re-run of the same commit from the previous one.
+ */
+export function computeContainerRelease(
+	imageTag: string,
+	deployId: string | undefined,
+): string {
+	if (!deployId) return imageTag
+	return `${imageTag}${RELEASE_SEPARATOR}${deployId}`
+}
+
+// One entry of the `containers` job matrix: what the Docker build action
+// needs, as paths relative to the workflow's workspace.
+export interface ContainerBuild {
+	readonly service: string
+	// `<project>-<env>-<service>`: the image repository and the cache scope.
+	readonly repository: string
 	readonly dockerfile: string
 	readonly context: string
-	readonly tag: string
+	readonly archive: string
 }
 
-// What wrangler itself runs to build a container image: `--load` keeps the
-// image in the local store whatever the builder driver, and
-// `--provenance=false` keeps the manifest a single-platform image.
-export function dockerBuildArgs(
-	input: DockerBuildInput,
-): ReadonlyArray<string> {
-	return [
-		'build',
-		'--load',
-		'--platform',
-		CONTAINER_IMAGE_PLATFORM,
-		'--provenance=false',
-		'-f',
-		input.dockerfile,
-		'-t',
-		input.tag,
-		input.context,
-	]
-}
-
-export function dockerSaveArgs(
-	archivePath: string,
-	tag: string,
-): ReadonlyArray<string> {
-	return ['save', '-o', archivePath, tag]
-}
-
-export function dockerLoadArgs(archivePath: string): ReadonlyArray<string> {
-	return ['load', '-i', archivePath]
+/**
+ * The images the `containers` job builds, one matrix entry per container
+ * service. `image` and `context` are relative to nextnode.toml, which sits in
+ * `packageDir` relative to the workspace.
+ */
+export function planContainerBuilds(
+	services: Readonly<Record<string, DeployServiceConfig>>,
+	image: Omit<ContainerImageName, 'serviceName' | 'imageTag'>,
+	packageDir: string,
+): ReadonlyArray<ContainerBuild> {
+	return containerServiceEntries(services).map(([service, config]) => ({
+		service,
+		repository: computeWorkerScriptName(
+			image.projectName,
+			image.environment,
+			service,
+		),
+		dockerfile: posix.join(packageDir, config.image),
+		context: posix.join(packageDir, config.context),
+		archive: containerImageArchiveName(service),
+	}))
 }

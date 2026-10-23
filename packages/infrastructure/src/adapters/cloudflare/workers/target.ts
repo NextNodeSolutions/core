@@ -13,6 +13,7 @@ import {
 } from '#/domain/cloudflare/workers/outputs-env.ts'
 import { computeSiteUrl } from '#/domain/deploy/domain.ts'
 
+import { createContainerPublish } from './container-publish.ts'
 import { deployWorkers } from './deploy-workers.ts'
 import { migrateWorkers } from './migrate-workers.ts'
 import { teardownWorkers } from './teardown-workers.ts'
@@ -23,7 +24,7 @@ import {
 } from './terraform-ops.ts'
 import { runWorkersProvision } from './workers-provision.ts'
 
-import type { DockerRunner } from '#/adapters/docker/runner.ts'
+import type { CloudflareApiAccess } from '#/adapters/cloudflare/api.ts'
 import type { TerraformRunner } from '#/adapters/terraform/runner.ts'
 import type { WranglerRunner } from '#/adapters/wrangler/runner.ts'
 import type { OrganizationConfig } from '#/config/organization.ts'
@@ -42,7 +43,10 @@ import type {
 import type { TeardownResult } from '#/domain/deploy/teardown-result.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 import type { ServiceEnv } from '#/domain/services/service.ts'
-import type { ContainerImageSource } from './deploy-container-service.ts'
+import type {
+	ContainerImageSource,
+	ContainerPublish,
+} from './container-publish.ts'
 import type { OutputsReader, WorkersTerraformContext } from './terraform-ops.ts'
 
 export interface CloudflareWorkersTargetConfig {
@@ -59,45 +63,61 @@ export interface CloudflareWorkersTargetConfig {
 	readonly containerImages?: ContainerImageSource
 	readonly terraformRunner?: TerraformRunner
 	readonly wranglerRunner?: WranglerRunner
-	readonly dockerRunner?: DockerRunner
 }
 
 export class CloudflareWorkersTarget implements DeployTarget {
 	readonly name = 'cloudflare-workers'
-	private readonly organization: OrganizationConfig
 	private readonly accountId: string
-	private readonly cloudflareApiToken: string
 	private readonly hcpToken: string
 	private readonly planetscaleServiceTokenId: string | undefined
 	private readonly planetscaleServiceToken: string | undefined
 	private readonly environment: AppEnvironment
 	private readonly config: CloudflareWorkersDeployableConfig
 	private readonly projectDir: string | undefined
-	private readonly containerImages: ContainerImageSource | undefined
-	private readonly runner: TerraformRunner
 	private readonly wrangler: WranglerRunner | undefined
-	private readonly docker: DockerRunner | undefined
+	private readonly terraform: WorkersTerraformContext
+	private readonly cloudflareApi: CloudflareApiAccess
 	private readonly loadTerraformOutputs: OutputsReader
+	private readonly publishContainers: ContainerPublish
 
 	constructor(config: CloudflareWorkersTargetConfig) {
-		this.organization = config.organization
 		this.accountId = config.accountId
-		this.cloudflareApiToken = config.cloudflareApiToken
 		this.hcpToken = config.hcpToken
 		this.planetscaleServiceTokenId = config.planetscaleServiceTokenId
 		this.planetscaleServiceToken = config.planetscaleServiceToken
 		this.environment = config.environment
 		this.config = config.config
 		this.projectDir = config.projectDir
-		this.containerImages = config.containerImages
-		this.runner = config.terraformRunner ?? defaultTerraformRunner
 		this.wrangler = config.wranglerRunner
-		this.docker = config.dockerRunner
+		this.terraform = {
+			config: config.config,
+			organization: config.organization,
+			environment: config.environment,
+			runner: config.terraformRunner ?? defaultTerraformRunner,
+			accountId: config.accountId,
+		}
+		this.cloudflareApi = {
+			accountId: config.accountId,
+			apiToken: config.cloudflareApiToken,
+		}
 		this.loadTerraformOutputs = memoizeOutputsReader(() =>
 			this.hasTerraformOutputs()
-				? readWorkersTerraformOutputs(this.terraformContext())
+				? readWorkersTerraformOutputs(this.terraform)
 				: Promise.resolve(EMPTY_WORKERS_TERRAFORM_OUTPUTS),
 		)
+		this.publishContainers = createContainerPublish({
+			environment: config.environment,
+			accountId: config.accountId,
+			services: config.config.deploy.services,
+			cloudflareApi: this.cloudflareApi,
+			images: config.containerImages,
+		})
+	}
+
+	// The push needs no provision output: started here, it runs while the
+	// backing env is read from Terraform, and `deploy` awaits it.
+	prepareDeploy(projectName: string): void {
+		void this.publishContainers(projectName)
 	}
 
 	contributeEnv(projectName: string): TargetEnv {
@@ -118,7 +138,7 @@ export class CloudflareWorkersTarget implements DeployTarget {
 		const workspaceName = `${projectName}-${this.environment}`
 
 		const outcome = await runWorkersProvision({
-			organization: this.organization,
+			organization: this.terraform.organization,
 			workspaceName,
 			projectName,
 			hcpToken: this.hcpToken,
@@ -126,7 +146,7 @@ export class CloudflareWorkersTarget implements DeployTarget {
 			environment: this.environment,
 			planetscaleServiceTokenId: this.planetscaleServiceTokenId,
 			planetscaleServiceToken: this.planetscaleServiceToken,
-			terraformContext: this.terraformContext(),
+			terraformContext: this.terraform,
 		})
 
 		logger.info(
@@ -144,9 +164,7 @@ export class CloudflareWorkersTarget implements DeployTarget {
 	async loadBackingEnv(projectName: string): Promise<ServiceEnv> {
 		void projectName
 		const backing = deriveWorkersBackingConfig(this.config.services)
-		if (!hasWorkersBacking(backing)) {
-			return { public: {}, secret: {} }
-		}
+		if (!hasWorkersBacking(backing)) return { public: {}, secret: {} }
 		const outputs = await this.loadTerraformOutputs()
 		return buildWorkersBackingEnv(outputs, this.accountId, backing)
 	}
@@ -157,7 +175,10 @@ export class CloudflareWorkersTarget implements DeployTarget {
 		env: DeployEnv,
 	): Promise<DeployResult> {
 		void env
-		const outputs = await this.loadTerraformOutputs()
+		const [outputs, containers] = await Promise.all([
+			this.loadTerraformOutputs(),
+			this.publishContainers(projectName),
+		])
 		return deployWorkers({
 			projectName,
 			environment: this.environment,
@@ -168,10 +189,10 @@ export class CloudflareWorkersTarget implements DeployTarget {
 			outputs,
 			secrets: input.secrets,
 			accountId: this.accountId,
+			cloudflareApi: this.cloudflareApi,
 			wranglerRunner: this.wrangler,
 			projectDir: this.requireProjectDir(),
-			containerImages: this.containerImages,
-			dockerRunner: this.docker,
+			containers,
 		})
 	}
 
@@ -192,16 +213,6 @@ export class CloudflareWorkersTarget implements DeployTarget {
 				deriveWorkersBackingConfig(this.config.services),
 			) || hasInternalWorker(this.config.deploy.services)
 		)
-	}
-
-	private terraformContext(): WorkersTerraformContext {
-		return {
-			config: this.config,
-			organization: this.organization,
-			environment: this.environment,
-			runner: this.runner,
-			accountId: this.accountId,
-		}
 	}
 
 	async runMigrate(input: MigrateInput): Promise<MigrateResult> {
@@ -231,14 +242,11 @@ export class CloudflareWorkersTarget implements DeployTarget {
 			environment: this.environment,
 			services: this.config.deploy.services,
 			wranglerRunner: this.wrangler,
-			terraformContext: this.terraformContext(),
-			r2Access: {
-				accountId: this.accountId,
-				apiToken: this.cloudflareApiToken,
-			},
+			terraformContext: this.terraform,
+			cloudflareApi: this.cloudflareApi,
 		})
 	}
 	planDiff(): Promise<InfraPlan> {
-		return planWorkersTerraform(this.terraformContext())
+		return planWorkersTerraform(this.terraform)
 	}
 }

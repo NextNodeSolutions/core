@@ -8,6 +8,9 @@ import type { AppEnvironment } from '#/domain/environment.ts'
 export interface SmokeCheckTarget {
 	readonly service: string
 	readonly url: string
+	// A container service: the health check must come from the gateway of
+	// this release, not from the version that served before the deploy.
+	readonly expectedRelease?: string
 }
 
 /**
@@ -16,11 +19,13 @@ export interface SmokeCheckTarget {
  * custom domain, and an internal one answers CI with an Access login, so both
  * are skipped. Each URL is env-resolved through `computeSiteUrl` (the same dev
  * subdomain convention the Custom Domain routes use), so the check hits the
- * exact hostname the deploy just wired.
+ * exact hostname the deploy just wired. A container service also names the
+ * release its gateway must answer with.
  */
 export function computeSmokeCheckUrls(
 	services: Readonly<Record<string, DeployServiceConfig>>,
 	environment: AppEnvironment,
+	containerRelease: string | undefined,
 ): ReadonlyArray<SmokeCheckTarget> {
 	const targets: Array<SmokeCheckTarget> = []
 	for (const [service, config] of Object.entries(services)) {
@@ -28,6 +33,8 @@ export function computeSmokeCheckUrls(
 		targets.push({
 			service,
 			url: `${computeSiteUrl(config.url, environment)}${HEALTH_CHECK_PATH}`,
+			...(config.kind === 'container' &&
+				containerRelease && { expectedRelease: containerRelease }),
 		})
 	}
 	return targets
