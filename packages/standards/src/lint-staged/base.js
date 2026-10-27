@@ -1,13 +1,17 @@
+const linted = 'js,mjs,cjs,jsx,ts,mts,cts,tsx,vue,svelte'
+
 export default {
 	'package.json': ['better-sort-package-json'],
-	'*.{js,mjs,cjs,jsx,ts,mts,cts,tsx,vue,svelte}': ['oxlint', 'oxfmt --write'],
+	[`*.{${linted}}`]: ['oxlint', 'oxfmt --write'],
 	// oxfmt 0.43.x does not support .astro files - it errors with
 	// "Expected at least one target file" when asked to format them.
 	// Run oxlint only on .astro until oxfmt gains astro support.
 	'*.astro': ['oxlint'],
-	// Exclude package.json: the dedicated `package.json` key above already
-	// handles it via better-sort-package-json. Letting oxfmt also run on
-	// package.json causes a flip-flop - the two tools disagree on key order
-	// and indentation, so every commit rewrites the file.
-	'!(package).json': ['oxfmt --write'],
+	// Every other file goes to oxfmt, which skips the types it does not know, so a commit
+	// passes the same `oxfmt --check .` as CI (Markdown, YAML, TOML, CSS...). package.json
+	// stays out: better-sort-package-json owns it and the two tools flip-flop its format.
+	// The globs are disjoint, because lint-staged runs the globs matching a file concurrently.
+	[`!(package.json|*.@(${linted.replaceAll(',', '|')}|astro))`]: [
+		'oxfmt --write --no-error-on-unmatched-pattern',
+	],
 }
