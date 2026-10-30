@@ -20,11 +20,45 @@ needs = ["d1"]
 
 `deploy.target` is optional and only accepts `cloudflare-workers`. Static assets use `entry = false` and an `assets` directory. Backing services are D1, KV, Queues, R2 and PlanetScale. Secrets are not declared here: every Worker receives the secrets of the repository's Infisical project, described under [Secrets](#secrets).
 
+### Container services
+
+A service that declares `image` runs as a Cloudflare Container instead of a Worker script:
+
+```toml
+[deploy.services.cms]
+image = "apps/cms/Dockerfile"
+port = 1337
+url = "cms.example.com"
+needs = ["planetscale", "r2"]
+instance = "basic"
+sleep_after = "15m"
+regions = ["WEUR"]
+
+[deploy.services.web]
+url = "example.com"
+needs = ["cms"]
+```
+
+- `image` is the Dockerfile path, relative to `nextnode.toml`. `context` is the build context, defaulting to the Dockerfile's directory. `port` is the port the image listens on, required. The container also receives it as `PORT`, with `HOST=0.0.0.0`.
+- `instance` is `lite` (the default), `basic` or `standard-1` to `standard-4`, or a custom size `{ vcpu = 1, memory_mib = 4096, disk_mb = 8000 }`: 1 to 4 vCPU, at least 3072 MiB per vCPU, at most 12288 MiB and 20000 MB of disk.
+- `sleep_after` is the idle time before the instance stops, `10m` by default, as digits then `s`, `m` or `h`. The next request starts it again, so the first one waits for the boot.
+- `regions` restricts placement to `ENAM`, `WNAM`, `EEUR`, `WEUR`, `APAC`, `SAM`, `ME`, `OC` and `AFR`. `ME`, `OC` and `AFR` need another region beside them.
+- `needs` accepts `planetscale` and `r2` only, because a container cannot read a Worker binding. `planetscale` gives the container a `DATABASE_URL` secret for the role `postgres_role` names. `r2` gives it the public `R2_ENDPOINT` and `R2_BUCKET_<ALIAS>` vars, and the `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` secrets. Terraform creates their Cloudflare API token, scoped to the project's buckets with object read and write, and teardown destroys it. The access key is the token id and the secret the SHA-256 of its value. A Worker reaches the container by listing the service in its own `needs`, like any sibling.
+- `postgres_role` is `runtime` (the default) or `migrator`, and is accepted only when `needs` lists `planetscale`. The runtime role reads and writes data but cannot change the schema. `migrator` connects the container as the migrator role, which inherits `postgres`: it grants DDL, so the container can create, alter and drop tables. Use it only for an image that owns its schema, such as Strapi, which creates and alters its tables at boot.
+- Core sets `DATABASE_URL`, `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` itself. If the repository's Infisical project also defines one of them, the deploy throws instead of choosing one.
+- The `migrate` job still runs for every PlanetScale project, with `services.planetscale.migrate_command`. A project whose container owns its schema sets that command to a no-op, `migrate_command = "true"`.
+- `entry`, `assets` and `rate_limiters` are refused on a container service, and `port`, `context`, `instance`, `sleep_after`, `regions` and `postgres_role` on a Worker. A `deploy.cron` job cannot target a container service.
+- A routed container answers `GET /healthz` with a 2xx status. The deploy smoke check retries every routed service until 10 minutes after the deploy, which covers the first boot and the first rollout. Every container, routed or not, answers `GET /healthz` without a redirect: the gateway requests it to know that the container listens, and takes any other answer as ready.
+
+Each container service runs one instance at most (`max_instances = 1`), behind a gateway Worker that core deploys with it from `runtime/container-gateway`. The gateway forwards every request to the container and passes it the service's vars and secrets as environment variables. It holds every secret of the repository's Infisical project, like a Worker, plus `DATABASE_URL`. When those values change, through a redeploy or a rotated secret, the next request restarts the running container with the new ones. A request waits up to 2 minutes for the container to listen, then gets a 503. A container still booting then keeps running, and the next request waits for the same boot. A client cannot pick the container port: the gateway drops the `cf-container-target-port` header. After `sleep_after` without a request, the gateway sends SIGTERM and kills the container 15 seconds later if it still runs, so an image whose PID 1 ignores SIGTERM, such as `node` started without an init, still stops. A restart for new values stops the old process the same way, and a request that arrives meanwhile waits for the new one. Memory and disk are billed only while the instance runs, and CPU on usage, so an idle service costs nothing until its next request.
+
+The `containers` job builds each image from the caller's checkout with no credential, and saves it as an artifact. `deploy` loads it, pushes it to the account's Cloudflare registry as `<project>-<env>-<service>:<commit SHA>` and deploys the gateway with that reference. Before pushing, `deploy` reads which image each container application runs. Once every service is deployed and smoke-checked, it deletes every other tag of each container service's image, routed or not, and keeps two: the one just deployed and the one the application ran before, for a rollback. A first deploy keeps only its own tag. The account's image storage is capped at 50 GB. A failed deploy or smoke check deletes nothing, and a failed cleanup only warns, to be retried by the next deploy. Teardown deletes the container application, then the gateway Worker, then every tag of the image. `wrangler containers list` returns a single page, so when it lists 25 applications or more without this one, teardown stops and names the application to delete by hand rather than assume it is gone.
+
 ## Organization settings
 
 GitHub organization Actions variables are the source of organization settings. Set `TF_CLOUD_ORGANIZATION` for every deployment. Set `PLANETSCALE_ORGANIZATION` when using PlanetScale. A project with an internal Worker additionally requires `COMPANY_DOMAIN` and `ACCESS_SESSION_DURATION` for its Access email policy and session lifetime. The CLI rejects missing settings, with no company-specific defaults.
 
-Deployment credentials live in the CI project of the vault: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `TF_CLOUD_TOKEN`, `NEXTNODE_APP_ID`, `NEXTNODE_APP_PRIVATE_KEY` and `NPM_TOKEN`. PlanetScale requires `PLANETSCALE_SERVICE_TOKEN_ID` and `PLANETSCALE_SERVICE_TOKEN`. The Terraform token must be a team or user token, not an organization token. Internal deployments need Cloudflare Access Apps and Policies permission.
+Deployment credentials live in the CI project of the vault: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `TF_CLOUD_TOKEN`, `NEXTNODE_APP_ID`, `NEXTNODE_APP_PRIVATE_KEY` and `NPM_TOKEN`. PlanetScale requires `PLANETSCALE_SERVICE_TOKEN_ID` and `PLANETSCALE_SERVICE_TOKEN`. The Terraform token must be a team or user token, not an organization token. Internal deployments need Cloudflare Access Apps and Policies permission. A container service needs the Workers Paid plan on the account, the only plan that runs Cloudflare Containers, and Account > Workers Containers: Edit on `CLOUDFLARE_API_TOKEN` to push images and manage applications. A container that needs `r2` also needs User > API Tokens: Edit, because Terraform creates its R2 token.
 
 ## Secrets
 
@@ -76,7 +110,7 @@ A caller of `plan-diff.yml` grants `contents: read`, `pull-requests: write` and 
 
 Any step of a job granted `id-token: write` can mint the job's OIDC token, and the vault accepts it. The identity reads every project it is a member of, so the boundary is what runs in such a job.
 
-- Such a job runs core's pipeline CLI only. The caller's dependencies install and its build runs in the `build` job of `deploy.yml`, which holds no credential. `deploy` ships the uploaded result and never installs the caller's dependencies, so the Worker bundle must be self-contained. The exception is a PlanetScale migration, which runs the caller's migrate command in `migrate`.
+- Such a job runs core's pipeline CLI only. The caller's dependencies install and its build runs in the `build` job of `deploy.yml`, which holds no credential. A container service's Dockerfile builds in the `containers` job on the same terms. `deploy` ships the uploaded result and never installs the caller's dependencies or builds an image, so the Worker bundle must be self-contained. The exception is a PlanetScale migration, which runs the caller's migrate command in `migrate`.
 - `publish-package.yml` is bound to core. Its `publish` job runs the package's release tooling, caller code by construction, so it refuses any other calling repository. Core's own code and lockfile are the trusted base, like the CLI.
 - The CLI picks the repository's project from `GITHUB_REPOSITORY`, which the runner sets, so a caller cannot point its pipeline at another repository's project.
 
@@ -113,9 +147,9 @@ Call `.github/workflows/deploy.yml` with `environment` and optional `config_file
 
 `internal = true` on a routed service puts it behind Cloudflare Access, with one Access application per service and environment. `project.internal = true` sets the default for every routed service, and a service's own `internal` overrides it either way, so an internal project can keep a webhook receiver public. An internal service needs a `url`. Each internal Worker receives the public var `ACCESS_AUD`, its application's audience tag, to verify the `Cf-Access-Jwt-Assertion` header without a hand-copied setting. The JWT issuer is the organization's Zero Trust team domain, which the Worker knows. Keep `ACCESS_AUD` out of the repository's Infisical project. Internal services skip the smoke check because CI has no Access login. Verify the Access login redirect separately.
 
-`.github/workflows/plan-diff.yml` reports Terraform changes on pull requests. It keeps one comment per project and environment and edits it on every run. A plan without changes posts nothing unless an earlier comment exists, which it then refreshes. The step summary always holds the plan. `.github/workflows/teardown.yml` is manually dispatched with target repository, environment and project-name confirmation. Stateful teardown additionally requires `wipe_data`. HCP workspace history remains after teardown.
+`.github/workflows/plan-diff.yml` reports Terraform changes on pull requests. It keeps one comment per project and environment and edits it on every run. A plan without changes posts nothing unless an earlier comment exists, which it then refreshes. The step summary always holds the plan. `.github/workflows/teardown.yml` is manually dispatched with target repository, environment and project-name confirmation. Stateful teardown additionally requires `wipe_data`. It deletes every object of the declared R2 buckets before `terraform destroy`, because Cloudflare refuses to delete a bucket that holds objects. Teardown keeps the PlanetScale database. Destroying a role first hands what it owns to `postgres`, because Postgres refuses to drop a role that owns tables. HCP workspace history remains after teardown.
 
-PlanetScale migrations use `services.planetscale.migrate_command`, defaulting to the command defined in `domain/deploy/target.ts`, from the directory containing `nextnode.toml`. Only the migration subprocess receives `DATABASE_URL` built from sensitive migrator outputs.
+PlanetScale migrations use `services.planetscale.migrate_command`, defaulting to the command defined in `domain/deploy/target.ts`, from the directory containing `nextnode.toml`. Only the migration subprocess receives `DATABASE_URL` built from sensitive migrator outputs. Terraform always creates the migrator role. The Hyperdrive config, and the runtime role it connects as, exist only when a Worker needs `planetscale`, so the CI token needs Hyperdrive permission only then. A container on the runtime role gets that role without a Hyperdrive config.
 
 ## Checks
 

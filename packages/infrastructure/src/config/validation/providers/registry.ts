@@ -1,9 +1,9 @@
 import { cloudflareWorkers } from './cloudflare-workers.ts'
 
 import type {
+	DeployServiceConfig,
 	DeploySection,
 	DeployTargetType,
-	WorkerServiceConfig,
 } from '#/config/types.ts'
 
 export interface DeployProviderResult {
@@ -11,7 +11,7 @@ export interface DeployProviderResult {
 	readonly deploy: DeploySection | undefined
 }
 export interface ParsedDeployInputs {
-	readonly workerServices: Record<string, WorkerServiceConfig>
+	readonly workerServices: Record<string, DeployServiceConfig>
 	readonly domain: string | undefined
 }
 

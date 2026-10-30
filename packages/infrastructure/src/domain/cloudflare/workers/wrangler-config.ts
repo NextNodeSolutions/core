@@ -1,5 +1,3 @@
-import { resolveDeployDomain } from '#/domain/deploy/domain.ts'
-
 import { deriveWorkerAssetsDirectory } from './assets-directory.ts'
 import {
 	d1Databases,
@@ -9,27 +7,16 @@ import {
 	r2Buckets,
 } from './backing-bindings.ts'
 import { deriveWorkersBackingConfig } from './outputs-env.ts'
-import { computeRateLimiterNamespaceId } from './rate-limiter-namespace.ts'
 import { deriveBoundSiblings } from './service-bindings.ts'
 import { computeWorkerScriptName } from './worker-name.ts'
-import {
-	DEFAULT_WORKER_CPU_MS,
-	DEFAULT_WORKER_SUBREQUESTS,
-	DEFAULT_WORKERS_COMPATIBILITY_DATE,
-	toBindingName,
-	WORKERS_ASSETS_BINDING,
-	WORKERS_COMPATIBILITY_FLAGS,
-} from './wrangler-document.ts'
+import { toBindingName, WORKERS_ASSETS_BINDING } from './wrangler-document.ts'
+import { buildWranglerScriptBase } from './wrangler-script-base.ts'
 
 import type { WorkerServiceConfig } from '#/config/types.ts'
-import type { AppEnvironment } from '#/domain/environment.ts'
 import type { WranglerConfigInput } from './wrangler-config-input.ts'
 import type {
 	WranglerAssets,
 	WranglerDocument,
-	WranglerLimits,
-	WranglerRateLimit,
-	WranglerRoute,
 	WranglerServiceBinding,
 } from './wrangler-document.ts'
 
@@ -52,19 +39,6 @@ function detectAssets(
 	const directory = deriveWorkerAssetsDirectory(service.entry)
 	if (typeof directory === 'undefined') return undefined
 	return { directory, binding: WORKERS_ASSETS_BINDING }
-}
-
-function buildRoutes(
-	service: WorkerServiceConfig,
-	environment: AppEnvironment,
-): ReadonlyArray<WranglerRoute> | undefined {
-	if (typeof service.url === 'undefined') return undefined
-	return [
-		{
-			pattern: resolveDeployDomain(service.url, environment),
-			custom_domain: true,
-		},
-	]
 }
 
 function serviceCrons(input: WranglerConfigInput): ReadonlyArray<string> {
@@ -98,46 +72,20 @@ function serviceBindings(
 	}))
 }
 
-function rateLimiters(
-	input: WranglerConfigInput,
-): ReadonlyArray<WranglerRateLimit> | undefined {
-	const declared = input.service.rateLimiters
-	if (!declared?.length) return undefined
-	return declared.map(limiter => ({
-		name: `RL_${toBindingName(limiter.name)}`,
-		namespace_id: computeRateLimiterNamespaceId(
-			input.projectName,
-			input.environment,
-			input.serviceName,
-			limiter.name,
-		),
-		simple: { limit: limiter.limit, period: limiter.period },
-	}))
-}
-
-function workerLimits(service: WorkerServiceConfig): WranglerLimits {
-	return {
-		cpu_ms: service.limits?.cpuMs ?? DEFAULT_WORKER_CPU_MS,
-		subrequests: service.limits?.subrequests ?? DEFAULT_WORKER_SUBREQUESTS,
-	}
-}
-
 /**
- * Build the wrangler configuration document for one service. Pure: the caller
- * (adapter) writes it to an ephemeral file and runs `wrangler deploy`. Name is
- * `<project>-<env>-<service>`; `workers_dev: false` is emitted unconditionally so
- * NO worker is reachable on `<name>.workers.dev` - a routed service (declaring
- * `url`) answers only on its Custom Domain, an internal one only through service
- * bindings. Bindings are filtered by the service's `needs` (a service that does
- * not `need` a resource never binds it); a sibling worker listed in `needs`
- * becomes a `services` binding - the only worker-to-worker channel; crons
- * targeting this service become `triggers.crons`.
+ * Build the wrangler configuration document for one Worker service. Pure: the
+ * caller (adapter) writes it to an ephemeral file and runs `wrangler deploy`.
+ * The envelope (name, routes, limits, `workers_dev: false`) comes from
+ * `buildWranglerScriptBase`. Bindings are filtered by the service's `needs` (a
+ * service that does not `need` a resource never binds it); a sibling service
+ * listed in `needs` becomes a `services` binding - the only worker-to-worker
+ * channel, a container's gateway included; crons targeting this service become
+ * `triggers.crons`.
  */
 export function buildWranglerConfig(
 	input: WranglerConfigInput,
 ): WranglerDocument {
 	const backing = deriveWorkersBackingConfig(input.services)
-	const routes = buildRoutes(input.service, input.environment)
 	const assets = detectAssets(input.service)
 	const crons = serviceCrons(input)
 	const services = serviceBindings(input)
@@ -146,27 +94,14 @@ export function buildWranglerConfig(
 	const kv = kvNamespaces(input, backing)
 	const r2 = r2Buckets(input, backing)
 	const queues = queueProducers(input, backing)
-	const limiters = rateLimiters(input)
 
-	const document: WranglerDocumentDraft = {
-		name: computeWorkerScriptName(
-			input.projectName,
-			input.environment,
-			input.serviceName,
-		),
-		compatibility_date: DEFAULT_WORKERS_COMPATIBILITY_DATE,
-		compatibility_flags: [...WORKERS_COMPATIBILITY_FLAGS],
-		workers_dev: false,
-		observability: { enabled: input.service.observability },
-	}
+	const document = buildWranglerScriptBase(input)
 	// A static-assets-only Worker has no script: no `main` and no script env,
 	// so the vars block (public env read by the script) is never emitted.
 	if (typeof input.service.entry === 'string') {
 		document.main = input.service.entry
 		if (Object.keys(input.vars).length > 0) document.vars = input.vars
 	}
-	if (input.service.limits) document.limits = workerLimits(input.service)
-	if (routes) document.routes = routes
 	if (assets) document.assets = assets
 	if (services) document.services = services
 	if (d1) document.d1_databases = d1
@@ -174,11 +109,6 @@ export function buildWranglerConfig(
 	if (kv) document.kv_namespaces = kv
 	if (r2) document.r2_buckets = r2
 	if (queues) document.queues = { producers: queues }
-	if (limiters) document.ratelimits = limiters
 	if (crons.length > 0) document.triggers = { crons }
 	return document
-}
-
-type WranglerDocumentDraft = {
-	-readonly [K in keyof WranglerDocument]: WranglerDocument[K]
 }

@@ -5,7 +5,7 @@ import { buildWranglerConfig } from '#/domain/cloudflare/workers/wrangler-config
 
 import type { WranglerRunner } from '#/adapters/wrangler/runner.ts'
 import type { ServicesConfig } from '#/config/service-config.ts'
-import type { CronJobConfig, WorkerServiceConfig } from '#/config/types.ts'
+import type { CronJobConfig, DeployServiceConfig } from '#/config/types.ts'
 import type { WorkersTerraformOutputs } from '#/domain/cloudflare/workers/outputs-env.ts'
 import type { MigrateResult } from '#/domain/deploy/target.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
@@ -15,7 +15,7 @@ export interface WorkersMigrateInput {
 	readonly environment: AppEnvironment
 	// Declared workers; the D1 migration runs against the config of the first one
 	// that lists `needs = ["d1"]`.
-	readonly services: Readonly<Record<string, WorkerServiceConfig>>
+	readonly services: Readonly<Record<string, DeployServiceConfig>>
 	// The [services.*] block (backing resources); the D1 binding is filtered in
 	// by the owning service's `needs` inside `buildWranglerConfig`.
 	readonly backingServices: ServicesConfig
@@ -41,9 +41,11 @@ export async function migrateWorkers(
 	const runner = input.wranglerRunner ?? defaultWranglerRunner
 	const ownerName = resolveD1MigrationServiceName(input.services)
 	const owner = input.services[ownerName]
-	if (!owner) {
+	// Validation refuses `d1` in a container service's needs, so the owner is
+	// always a Worker.
+	if (owner?.kind !== 'worker') {
 		throw new Error(
-			`Resolved D1 migration owner "${ownerName}" is not a declared service - wiring bug`,
+			`Resolved D1 migration owner "${ownerName}" is not a declared Worker service - wiring bug`,
 		)
 	}
 

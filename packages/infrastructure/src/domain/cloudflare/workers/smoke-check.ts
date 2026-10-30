@@ -1,9 +1,9 @@
 import { computeSiteUrl } from '#/domain/deploy/domain.ts'
 
-import type { WorkerServiceConfig } from '#/config/types.ts'
-import type { AppEnvironment } from '#/domain/environment.ts'
+import { HEALTH_CHECK_PATH } from '../../../../runtime/container-gateway/contract.ts'
 
-export const HEALTHZ_PATH = '/healthz'
+import type { DeployServiceConfig } from '#/config/types.ts'
+import type { AppEnvironment } from '#/domain/environment.ts'
 
 export interface SmokeCheckTarget {
 	readonly service: string
@@ -19,7 +19,7 @@ export interface SmokeCheckTarget {
  * exact hostname the deploy just wired.
  */
 export function computeSmokeCheckUrls(
-	services: Readonly<Record<string, WorkerServiceConfig>>,
+	services: Readonly<Record<string, DeployServiceConfig>>,
 	environment: AppEnvironment,
 ): ReadonlyArray<SmokeCheckTarget> {
 	const targets: Array<SmokeCheckTarget> = []
@@ -27,7 +27,7 @@ export function computeSmokeCheckUrls(
 		if (typeof config.url === 'undefined' || config.internal) continue
 		targets.push({
 			service,
-			url: `${computeSiteUrl(config.url, environment)}${HEALTHZ_PATH}`,
+			url: `${computeSiteUrl(config.url, environment)}${HEALTH_CHECK_PATH}`,
 		})
 	}
 	return targets

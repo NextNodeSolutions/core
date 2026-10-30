@@ -1,3 +1,8 @@
+import type {
+	ContainerInstanceType,
+	ContainerPostgresRole,
+	ContainerRegion,
+} from './container-service.ts'
 import type { ServicesConfig } from './service-config.ts'
 import type {
 	WorkerLimitsConfig,
@@ -76,15 +81,16 @@ export interface CronJobConfig {
 	readonly service?: string
 }
 
-export interface WorkerServiceConfig {
+// What every [deploy.services.<name>] carries, whatever runs behind it: the
+// routing, Access, ordering and firewall fields apply to the Worker script that
+// answers the hostname (the service itself, or a container's gateway).
+export interface DeployServiceBase {
 	readonly url?: string
 	// Behind Cloudflare Access. Resolved at parse time: the service's own
 	// `internal`, else `project.internal`, and always false without a `url`.
 	readonly internal: boolean
 	readonly needs: ReadonlyArray<string>
 	readonly dependsOn: ReadonlyArray<string>
-	readonly entry: string | false
-	readonly assets?: string
 	readonly observability: boolean
 	readonly rateLimit?: WorkerRateLimitConfig
 	readonly publicPaths?: ReadonlyArray<string>
@@ -92,9 +98,35 @@ export interface WorkerServiceConfig {
 	readonly rateLimiters?: ReadonlyArray<WorkerRateLimiterConfig>
 }
 
+export interface WorkerServiceConfig extends DeployServiceBase {
+	readonly kind: 'worker'
+	readonly entry: string | false
+	readonly assets?: string
+}
+
+// A Cloudflare Container fronted by the gateway Worker core ships. Paths are
+// relative to the directory holding nextnode.toml.
+export interface ContainerServiceConfig extends DeployServiceBase {
+	readonly kind: 'container'
+	// The Dockerfile the image is built from.
+	readonly image: string
+	// The Docker build context, defaulted to the Dockerfile's directory.
+	readonly context: string
+	// The port the image listens on.
+	readonly port: number
+	readonly instance: ContainerInstanceType
+	readonly sleepAfter: string
+	readonly regions?: ReadonlyArray<ContainerRegion>
+	// The PlanetScale role behind `DATABASE_URL`; set exactly when `needs`
+	// lists planetscale.
+	readonly postgresRole?: ContainerPostgresRole
+}
+
+export type DeployServiceConfig = WorkerServiceConfig | ContainerServiceConfig
+
 export interface CloudflareWorkersDeploySection {
 	readonly target: 'cloudflare-workers'
-	readonly services: Readonly<Record<string, WorkerServiceConfig>>
+	readonly services: Readonly<Record<string, DeployServiceConfig>>
 	readonly cron: ReadonlyArray<CronJobConfig>
 }
 

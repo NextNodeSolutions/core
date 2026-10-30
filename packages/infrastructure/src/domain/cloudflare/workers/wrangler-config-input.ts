@@ -1,6 +1,9 @@
 import type { ServicesConfig } from '#/config/service-config.ts'
-import type { CronJobConfig } from '#/config/types.ts'
-import type { WorkerServiceConfig } from '#/config/types.ts'
+import type {
+	ContainerServiceConfig,
+	CronJobConfig,
+	WorkerServiceConfig,
+} from '#/config/types.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 import type { WorkersTerraformOutputs } from './outputs-env.ts'
 
@@ -26,4 +29,22 @@ export interface WranglerConfigInput {
 	// Public runtime vars. Empty for now; US-3.2 fills SITE_URL + peer URLs +
 	// backing env. Emitted only when non-empty.
 	readonly vars: Readonly<Record<string, string>>
+}
+
+// Everything `buildContainerWranglerConfig` reads. A container binds nothing,
+// so neither the backing block, the outputs nor the sibling list is needed:
+// the backing env arrives already built in `vars`.
+export interface ContainerWranglerConfigInput {
+	readonly projectName: string
+	readonly environment: AppEnvironment
+	readonly serviceName: string
+	readonly service: ContainerServiceConfig
+	// The public env of the gateway (SITE_URL, R2 vars, ACCESS_AUD), forwarded
+	// to the container with the secrets.
+	readonly vars: Readonly<Record<string, string>>
+	// The absolute path of the gateway Worker shipped by core. Resolved by the
+	// adapter: the domain reads no filesystem location.
+	readonly gatewayEntry: string
+	// The Cloudflare registry reference the push step produced.
+	readonly image: string
 }

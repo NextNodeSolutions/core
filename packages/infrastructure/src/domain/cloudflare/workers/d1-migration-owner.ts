@@ -1,7 +1,7 @@
-import type { WorkerServiceConfig } from '#/config/types.ts'
+import type { DeployServiceConfig } from '#/config/types.ts'
 const D1_NEED = 'd1'
 export function resolveD1MigrationServiceName(
-	services: Readonly<Record<string, WorkerServiceConfig>>,
+	services: Readonly<Record<string, DeployServiceConfig>>,
 ): string {
 	for (const [name, service] of Object.entries(services)) {
 		if (service.needs.includes(D1_NEED)) return name

@@ -6,7 +6,7 @@ import { ACCOUNT_ID_REF } from './terraform-refs.ts'
 import type { OrganizationConfig } from '#/config/organization.ts'
 import type {
 	CloudflareWorkersDeployableConfig,
-	WorkerServiceConfig,
+	DeployServiceConfig,
 } from '#/config/types.ts'
 import type { AppEnvironment } from '#/domain/environment.ts'
 import type { OutputValue } from './terraform-main-config.ts'
@@ -40,7 +40,7 @@ export type AccessApplicationResource = {
 // every internal service carries the hostname its Access application guards.
 function internalHosts(
 	config: CloudflareWorkersDeployableConfig,
-): ReadonlyArray<readonly [string, WorkerServiceConfig]> {
+): ReadonlyArray<readonly [string, DeployServiceConfig]> {
 	return Object.entries(config.deploy.services).filter(
 		([, service]) => service.internal,
 	)

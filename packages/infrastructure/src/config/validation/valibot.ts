@@ -15,6 +15,7 @@ import type {
 	ErrorMessage,
 	GenericSchema,
 	InferOutput,
+	ObjectIssue,
 	UnionIssue,
 } from 'valibot'
 import type { ValidationResult } from './result.ts'
@@ -42,6 +43,29 @@ export function runSchema<TSchema extends GenericSchema>(
 	if (validation.success) return { ok: true, section: validation.output }
 	return { ok: false, errors: validation.issues.map(issue => issue.message) }
 }
+
+// Valibot reports a missing required key on the object schema, with the key
+// in double quotes as `expected`, not on the key's own schema.
+const MISSING_KEY_EXPECTATION = /^"(?<key>.+)"$/
+
+function missingKeyOf(issue: ObjectIssue): string | undefined {
+	return MISSING_KEY_EXPECTATION.exec(issue.expected)?.groups?.['key']
+}
+
+// The message of an `object()` schema whose required keys each keep their own
+// message when missing, instead of one generic text for the whole table.
+// `fallback` covers the other object issues (not a table); valibot's own text
+// when omitted.
+export const missingKeyMessages =
+	(
+		keyMessages: Readonly<Record<string, string>>,
+		fallback?: string,
+	): ((issue: ObjectIssue) => string) =>
+	issue => {
+		const key = missingKeyOf(issue)
+		const keyMessage = key ? keyMessages[key] : undefined
+		return keyMessage ?? fallback ?? issue.message
+	}
 
 // Flatten a set of per-field results into their combined error messages (empty
 // when all succeeded). The companion to the per-field `runSchema` pattern used

@@ -1,5 +1,6 @@
 import { createLogger } from '@nextnode-solutions/logger'
 
+import { buildContainersCommand } from './cli/deploy/build-containers.command.ts'
 import { deployCommand } from './cli/deploy/deploy.command.ts'
 import { generateWorkerTypesCommand } from './cli/deploy/generate-worker-types.command.ts'
 import { migrateRemoteCommand } from './cli/deploy/migrate-remote.command.ts'
@@ -37,6 +38,7 @@ const DEPLOY_COMMANDS: Record<string, DeployCommand> = {
 	deploy: deployCommand,
 	teardown: teardownCommand,
 	'generate-worker-types': generateWorkerTypesCommand,
+	'build-containers': buildContainersCommand,
 }
 
 const STANDALONE_COMMANDS: Record<string, StandaloneCommand> = {
