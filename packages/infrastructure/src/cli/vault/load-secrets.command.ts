@@ -57,7 +57,7 @@ async function loadProjectSecrets(environment: AppEnvironment): Promise<void> {
 	const lookup = await openProjectVault(repoName, environment)
 	if (lookup.kind === 'missing') {
 		writeWarning(
-			`no Infisical project named "${repoName}" is visible to the pipeline identity (visible: ${lookup.visible.join(', ') || 'none'}) - the Workers' secrets are left unchanged. Create the project and add the identity as a member (README, "Secrets").`,
+			`no Infisical project named "${repoName}" is visible to the pipeline identity (visible: ${lookup.visible.join(', ') || 'none'}) - the Workers' secrets are left unchanged. Create the project and add the identity as a member (packages/infrastructure/docs/infisical/vault.md in core, "A repository's secrets").`,
 		)
 		return
 	}

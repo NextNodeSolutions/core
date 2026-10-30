@@ -1,5 +1,5 @@
-// TRANSITIONAL - delete once the GitHub secrets are removed (see README.md,
-// "Secrets").
+// TRANSITIONAL - delete once the GitHub secrets are removed (see docs/infisical/vault.md,
+// "Moving off GitHub secrets").
 //
 // GitHub secret values are write-only: the only way to carry them over is from
 // inside a workflow run, where `toJSON(secrets)` exposes them. This command
